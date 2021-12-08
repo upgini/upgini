@@ -1,0 +1,728 @@
+import csv
+import logging
+import tempfile
+from hashlib import sha256
+from ipaddress import IPv4Address, ip_address
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from pandas.api.types import is_bool_dtype as is_bool
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_string_dtype as is_string
+
+from upgini.http import get_rest_client
+from upgini.metadata import (
+    SYSTEM_FAKE_DATE,
+    SYSTEM_RECORD_ID,
+    BinaryTask,
+    DataType,
+    FeaturesFilter,
+    FileColumnMeaningType,
+    FileColumnMetadata,
+    FileMetadata,
+    FileMetrics,
+    ModelLabelType,
+    ModelTaskType,
+    MulticlassTask,
+    NumericInterval,
+    RegressionTask,
+    SearchCustomization,
+)
+from upgini.search_task import SearchTask
+
+
+class Dataset(pd.DataFrame):
+    MIN_ROWS_COUNT: int = 1000
+
+    name: str
+    description: Optional[str]
+    meaning_types: Optional[Dict[str, FileColumnMeaningType]]
+    search_keys: Optional[List[Tuple[str, ...]]]
+    ignore_columns: List[str]
+    hierarchical_group_keys: List[Tuple[str, ...]]
+    hierarchical_subgroup_keys: List[Tuple[str, ...]]
+    task_type: Optional[ModelTaskType]
+    initial_data: pd.DataFrame
+    file_upload_id: Optional[str]
+    etalon_def: Optional[Dict[str, str]]
+
+    _metadata = [
+        "name",
+        "description",
+        "meaning_types",
+        "search_keys",
+        "ignore_columns",
+        "hierarchical_group_keys",
+        "hierarchical_subgroup_keys",
+        "task_type",
+        "initial_data",
+        "file_upload_id",
+        "etalon_def",
+        "endpoint",
+        "api_key",
+    ]
+
+    def __init__(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        df: Optional[pd.DataFrame] = None,
+        path: Optional[str] = None,
+        meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
+        search_keys: Optional[List[Tuple[str, ...]]] = None,
+        endpoint: Optional[str] = None,
+        api_key: Optional[str] = None,
+        **kwargs,
+    ):
+        if df is not None:
+            data = df.copy()
+        elif path is not None:
+            if "sep" in kwargs:
+                data = pd.read_csv(path, **kwargs)
+            else:
+                # try different separators: , ; \t ...
+                with open(path, mode="r") as csvfile:
+                    sep = csv.Sniffer().sniff(csvfile.read(2048)).delimiter
+                kwargs["sep"] = sep
+                data = pd.read_csv(path, **kwargs)
+        else:
+            raise ValueError("DataFrame or path to file should be passed.")
+        if isinstance(data, pd.DataFrame):
+            data.index.name = SYSTEM_RECORD_ID
+            super(Dataset, self).__init__(data)
+        else:
+            raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
+
+        self.name = name
+        self.description = description
+        self.meaning_types = meaning_types
+        self.search_keys = search_keys
+        self.ignore_columns = []
+        self.hierarchical_group_keys = []
+        self.hierarchical_subgroup_keys = []
+        self.task_type = None
+        self.initial_data = data.copy()
+        self.file_upload_id = None
+        self.etalon_def = None
+        self.endpoint = endpoint
+        self.api_key = api_key
+
+    @property
+    def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
+        if self.meaning_types is None:
+            raise ValueError("meaning_types is empty.")
+        else:
+            return self.meaning_types
+
+    @property
+    def search_keys_checked(self) -> List[Tuple[str, ...]]:
+        if self.search_keys is None:
+            raise ValueError("search_keys is empty.")
+        else:
+            return self.search_keys
+
+    @property
+    def etalon_def_checked(self) -> Dict[str, str]:
+        if self.etalon_def is None:
+            self.etalon_def = {
+                v.value: k for k, v in self.meaning_types_checked.items() if v != FileColumnMeaningType.FEATURE
+            }
+
+        return self.etalon_def
+
+    def __validate_rows_count(self):
+        logging.debug("Validate rows count")
+        if self.shape[0] < self.MIN_ROWS_COUNT:
+            raise ValueError(f"File should contain at least {self.MIN_ROWS_COUNT} rows.")
+
+    def __rename_columns(self):
+        logging.debug("Replace restricted symbols in column names")
+        for column in self.columns:
+            if len(column) == 0:
+                raise ValueError("Some of column names are empty. Fill them and try again, please.")
+            new_column = str(column).lower()
+            if ord(new_column[0]) not in range(ord("a"), ord("z")):
+                new_column = "a" + new_column
+            for idx, c in enumerate(new_column):
+                if ord(c) not in range(ord("a"), ord("z")) and ord(c) not in range(ord("0"), ord("9")):
+                    new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
+            self.rename(columns={column: new_column}, inplace=True)
+            self.meaning_types = {
+                (new_column if key == column else key): value for key, value in self.meaning_types_checked.items()
+            }
+            self.search_keys = [
+                tuple(new_column if key == column else key for key in keys) for keys in self.search_keys_checked
+            ]
+
+    def __validate_too_long_string_values(self):
+        """Check that string values less than 400 characters"""
+        logging.debug("Validate too long string values")
+        for col in self.columns:
+            if is_string(self[col]):
+                max_length: int = self[col].astype("str").str.len().max()
+                if max_length > 400:
+                    raise ValueError(
+                        f"Some of column {col} values are too long: {max_length} characters. "
+                        "Remove this column or trim values to 50 characters."
+                    )
+
+    def __clean_duplicates(self):
+        """Clean DataSet from full duplicates."""
+        nrows = len(self)
+        logging.debug("cleaning duplicates")
+        unique_columns = self.columns.tolist()
+        logging.info(f"Input data shape: {self.shape}")
+        self.drop_duplicates(subset=unique_columns, inplace=True)
+        logging.info(f"Data without duplicates: {self.shape}")
+        nrows_after_full_dedup = len(self)
+        share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
+        if share_full_dedup > 0:
+            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been deleted")
+        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
+        if target_column is not None:
+            unique_columns.remove(target_column)
+            self.drop_duplicates(subset=unique_columns, inplace=True)
+            nrows_after_tgt_dedup = len(self)
+            share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
+            if nrows_after_tgt_dedup < nrows_after_full_dedup:
+                logging.warn(
+                    f"{share_tgt_dedup:.5f}% of the rows have duplicated keys with different target events. "
+                    "Please check the dataframe and restart feature enricher"
+                )
+
+    def __convert_bools(self):
+        """Convert bool columns True -> 1, False -> 0"""
+        logging.debug("Converting bool to int")
+        for col in self.columns:
+            if is_bool(self[col]):
+                logging.debug(f"Converting {col} to int")
+                self[col] = self[col].astype(int)
+
+    def __correct_decimal_comma(self):
+        """Check DataSet for decimal commas and fix them"""
+        logging.debug("Correct decimal commas")
+        tmp = self.head(10)
+        # all columns with sep="," will have dtype == 'object', i.e string
+        # sep="." will be casted to numeric automatically
+        cls_to_check = [i for i in tmp.columns if is_string(tmp[i])]
+        for col in cls_to_check:
+            if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
+                logging.info(f"Correcting comma sep in {col}")
+                self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
+        return
+
+    def __to_millis(self):
+        """Parse date column and transform it to millis"""
+        logging.debug("Transform date column to millis")
+        date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        if date is not None and date in self.columns:
+            if is_string(self[date]):
+                self[date] = pd.to_datetime(self[date]).values.astype(np.int64) // 1_000_000
+            elif is_datetime(self[date]):
+                self[date] = self[date].view(np.int64) // 1_000_000
+
+    @staticmethod
+    def __email_to_hem(email: str):
+        if email is None or not isinstance(email, str) or email == "":
+            return ""
+        else:
+            return sha256(email.lower().encode("utf-8")).hexdigest()
+
+    def __hash_email(self):
+        """Add column with HEM if email presented in search keys"""
+        logging.debug("Hashing email")
+        email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
+        if email is not None and email in self.columns:
+            generated_hem_name = "generated_hem"
+            self[generated_hem_name] = self[email].apply(self.__email_to_hem)
+            self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
+            self.meaning_types_checked.pop(email)
+            self.etalon_def_checked[FileColumnMeaningType.HEM.value] = generated_hem_name
+            del self.etalon_def_checked[FileColumnMeaningType.EMAIL.value]
+            self.search_keys = [
+                tuple(key if key != email else generated_hem_name for key in search_group)
+                for search_group in self.search_keys_checked
+            ]
+            self["email_domain"] = self[email].str.split("@").str[1]
+            self.drop(columns=email, inplace=True)
+
+    @staticmethod
+    def __ip_to_int(ip: Union[str, int, IPv4Address]):
+        try:
+            return int(ip_address(ip))
+        except Exception:
+            return -1
+
+    def __convert_ip(self):
+        """Convert ip address to int"""
+        logging.debug("Convert ip address to int")
+        ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
+        if ip is not None and ip in self.columns:
+            self[ip] = self[ip].apply(self.__ip_to_int)
+
+    def __clean_empty_rows(self):
+        """Clean DataSet from empty date rows"""
+        logging.debug("cleaning empty rows")
+        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        if date_column is not None:
+            self.query(f"`{date_column}` != ''", inplace=True)
+            self.query(f"~`{date_column}`.isnull()", inplace=True, engine="python")
+            logging.info(f"df with valid date column: {self.shape}")
+
+    def __drop_ignore_columns(self):
+        """Drop ignore columns"""
+        logging.debug("Dropping ignore columns")
+        columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
+        self.drop(columns_to_drop, axis=1, inplace=True)
+
+    def __define_task(self) -> ModelTaskType:
+        logging.debug("defining task")
+        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
+        target: pd.Series = self[target_column]
+        # clean target from nulls
+        target.dropna(inplace=True)
+        if target.dtype in (np.int_, np.float_):
+            target = target.loc[np.isfinite(target)]
+        else:
+            target = target.loc[target != ""]
+        target_items = target.nunique()
+        if target_items > 50 and type(target[0]) in (np.int_, np.float_):
+            task = ModelTaskType.REGRESSION
+        elif target_items == 2:
+            if type(target[0]) in (np.int_, np.float_):
+                task = ModelTaskType.BINARY
+            else:
+                raise ValueError("Binary target should be numerical.")
+        elif target_items == 1:
+            raise ValueError("Target contains only one distinct value.")
+        elif target_items == 0:
+            raise ValueError("Target contains only NaN or incorrect values.")
+        else:
+            task = ModelTaskType.MULTICLASS
+        return task
+
+    def __correct_data_types(self):
+        logging.debug("Correcting keys data types")
+        msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
+        if msisdn_column is not None and msisdn_column in self.columns and not is_string(self[msisdn_column]):
+            self[msisdn_column] = self[msisdn_column].astype("Int64").astype(str)
+
+    def __validate_dataset(self, validate_target: bool):
+        """Validate DataSet"""
+        logging.debug("validating etalon")
+        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
+        score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
+        if self.task_type != ModelTaskType.MULTICLASS and validate_target:
+            if target is None:
+                raise ValueError("Target column is absent in meaning_types.")
+            self[target] = self[target].apply(pd.to_numeric, errors="coerce")
+        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
+        columns_to_validate = [date_millis, target, score]
+        columns_to_validate.extend(keys_to_validate)
+        columns_to_validate = set([i for i in columns_to_validate if i is not None])
+        columns_to_validate.discard(SYSTEM_FAKE_DATE)
+
+        nrows = len(self)
+        validation_stats = {}
+        self["is_valid"] = True
+        for col in columns_to_validate:
+            self[f"{col}_is_valid"] = ~self[col].isnull()
+            if validate_target and target is not None and col == target:
+                self.loc[self[target] == np.Inf, f"{col}_is_valid"] = False
+
+            invalid_values = self.loc[self[f"{col}_is_valid"] == 0, col].head().values
+            invalid_values = list(invalid_values)
+            valid_share = self[f"{col}_is_valid"].sum() / nrows
+            validation_stats[col] = {}
+            if valid_share == 1:
+                valid_status = "All valid"
+                valid_message = "All values in this column are good to go"
+            elif 0 < valid_share < 1:
+                valid_status = "Some invalid"
+                valid_message = (
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation and was deleted. "
+                    f"Some examples of invalid values: '{invalid_values}'"
+                )
+            else:
+                valid_status = "All invalid"
+                valid_message = (
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation and was deleted. "
+                    f"Some examples of invalid values: '{invalid_values}'"
+                )
+            validation_stats[col]["valid_status"] = valid_status
+            validation_stats[col]["valid_message"] = valid_message
+
+            self["is_valid"] = self["is_valid"] & self[f"{col}_is_valid"]
+            self.drop(columns=f"{col}_is_valid", inplace=True)
+
+        df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
+        df_stats.reset_index(inplace=True)
+        df_stats.columns = ["Key", "Status", "Description"]
+        colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
+        df_stats = df_stats.style.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
+        try:
+            from IPython.display import display  # type: ignore
+
+            display(df_stats)
+        except ImportError:
+            print(df_stats)
+
+    def __validate_meaning_types(self, validate_target: bool):
+        logging.debug("Validating meaning types")
+        if self.meaning_types is None or len(self.meaning_types) == 0:
+            raise ValueError("Please pass the `meaning_types` argument before validation.")
+        for column, _ in self.meaning_types.items():
+            if column not in self.columns:
+                raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}.")
+        if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
+            raise ValueError("Target column is not presented in meaning types. Specify it, please.")
+
+    def __validate_search_keys(self):
+        logging.debug("Validating search keys")
+        if self.search_keys is None or len(self.search_keys) == 0:
+            raise ValueError("Please pass `search_keys` argument before validation.")
+        for keys_group in self.search_keys:
+            for key in keys_group:
+                if key not in self.columns:
+                    raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
+
+    def validate(self, validate_target: bool = True, validate_count: bool = True, need_deduplication: bool = True):
+        logging.info("Validating dataset...")
+
+        if validate_count:
+            self.__validate_rows_count()
+
+        self.__validate_meaning_types(validate_target)
+
+        self.__validate_search_keys()
+
+        self.__drop_ignore_columns()
+
+        self.__rename_columns()
+
+        self.__validate_too_long_string_values()
+
+        self.__clean_empty_rows()
+
+        if need_deduplication:
+            self.__clean_duplicates()
+
+        self.__convert_bools()
+
+        self.__correct_decimal_comma()
+
+        if validate_target:
+            self.task_type = self.__define_task()
+
+        self.__to_millis()
+
+        self.__hash_email()
+
+        self.__convert_ip()
+
+        self.__correct_data_types()
+
+        self.__validate_dataset(validate_target)
+
+    def calculate_metrics(self) -> FileMetrics:
+        """Calculate initial metadata for DataSet
+
+        Returns:
+            InitialMetadata: initial metadata
+        """
+        logging.info("Calculating metrics...")
+        if self.etalon_def is None:
+            self.validate()
+        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value, "")
+        target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
+        score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
+        cls_metadata = [date_millis, target, score, "is_valid"]
+        cls_metadata = [i for i in cls_metadata if i is not None]
+        # df with columns for metadata calculation
+        df = self[cls_metadata].copy()
+        count = len(df)
+        valid_count = int(df["is_valid"].sum())
+        valid_rate = 100 * valid_count / count
+        avg_target = None
+        metrics_binary_etalon = None
+        metrics_regression_etalon = None
+        metrics_multiclass_etalon = None
+
+        if target is None:
+            raise ValueError("Target column is absent in meaning_types.")
+        target_values: pd.Series = df.loc[df.is_valid == 1, target]  # type: ignore
+        tgt = target_values.values
+        if self.task_type != ModelTaskType.MULTICLASS:
+            avg_target = target_values.mean()
+
+        if self.task_type == ModelTaskType.BINARY:
+            label = ModelLabelType.AUC
+        elif self.task_type == ModelTaskType.REGRESSION:
+            label = ModelLabelType.RMSE
+        else:
+            label = ModelLabelType.ACCURACY
+
+        if score is not None:
+            try:
+                from sklearn.metrics import (  # type: ignore
+                    accuracy_score,
+                    mean_squared_error,
+                    mean_squared_log_error,
+                    roc_auc_score,
+                )
+            except ModuleNotFoundError:
+                raise ModuleNotFoundError("To calculate score performance please install scikit-learn.")
+            sc = df.loc[df.is_valid == 1, score].values  # type: ignore
+            try:
+                if self.task_type == ModelTaskType.REGRESSION:
+                    sc = sc.astype(float)
+                    tgt = tgt.astype(float)
+                    metrics_regression_etalon = RegressionTask(
+                        mse=mean_squared_error(tgt, sc),
+                        rmse=np.sqrt(mean_squared_error(tgt, sc)),
+                        msle=mean_squared_log_error(tgt, sc),
+                        rmsle=np.sqrt(mean_squared_log_error(tgt, sc)),
+                    )
+                elif self.task_type == ModelTaskType.BINARY:
+                    auc = roc_auc_score(tgt, sc)
+                    auc = max(auc, 1 - auc)
+                    gini = 100 * (2 * auc - 1)
+                    metrics_binary_etalon = BinaryTask(auc=auc, gini=gini)
+                else:
+                    accuracy100 = 100 * max(0.0, accuracy_score(tgt, sc))
+                    metrics_multiclass_etalon = MulticlassTask(accuracy=accuracy100)
+            except Exception:
+                logging.error("Can't calculate etalon's score performance")
+        else:
+            sc = []
+
+        df["date_cut"], cuts = pd.cut(df[date_millis], bins=6, include_lowest=True, retbins=True)
+        # save bins for future
+        cuts = cuts.tolist()
+        df["date_cut"] = df.date_cut.apply(lambda x: x.mid).astype(int)
+        df["count_tgt"] = df.groupby("date_cut")[target].transform(lambda x: len(set(x)))
+
+        if self.task_type == ModelTaskType.MULTICLASS:
+            df_stat = df.groupby("date_cut").apply(
+                lambda x: pd.Series(
+                    {
+                        "count": len(x),
+                        "valid_count": x["is_valid"].sum(),
+                        "valid_rate": 100 * x["is_valid"].mean(),
+                    }
+                )
+            )
+        else:
+            df_stat = df.groupby("date_cut").apply(
+                lambda x: pd.Series(
+                    {
+                        "avg_target": x[target].mean(),
+                        "count": len(x),
+                        "valid_count": x["is_valid"].sum(),
+                        "valid_rate": 100 * x["is_valid"].mean(),
+                    }
+                )
+            )
+
+        if score is not None and len(sc) > 0:
+            df_stat["avg_score_etalon"] = df[df.is_valid == 1].groupby("date_cut")[score].mean()
+
+        df_stat.dropna(inplace=True)
+        interval = df_stat.reset_index().to_dict(orient="records")
+        return FileMetrics(
+            task_type=self.task_type,
+            label=label,
+            count=count,
+            valid_count=valid_count,
+            valid_rate=valid_rate,
+            avg_target=avg_target,
+            metrics_binary_etalon=metrics_binary_etalon,
+            metrics_regression_etalon=metrics_regression_etalon,
+            metrics_multiclass_etalon=metrics_multiclass_etalon,
+            cuts=cuts,
+            interval=interval,
+        )
+
+    def __construct_metadata(self) -> FileMetadata:
+        columns = []
+        for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
+            if column_name not in self.ignore_columns:
+                if column_name in self.meaning_types_checked:
+                    meaning_type = self.meaning_types_checked[column_name]
+                else:
+                    meaning_type = FileColumnMeaningType.FEATURE
+                if meaning_type in {
+                    FileColumnMeaningType.DATE,
+                    FileColumnMeaningType.DATETIME,
+                    FileColumnMeaningType.IP_ADDRESS,
+                }:
+                    min_max_values = NumericInterval(
+                        minValue=self[column_name].astype("int").min(),
+                        maxValue=self[column_name].astype("int").max(),
+                    )
+                else:
+                    min_max_values = None
+                column_meta = FileColumnMetadata(
+                    index=index,
+                    name=column_name,
+                    dataType=self.__get_data_type(str(column_type)),
+                    meaningType=meaning_type,
+                    minMaxValues=min_max_values,
+                )
+
+                columns.append(column_meta)
+        columns.append(
+            FileColumnMetadata(
+                index=len(columns),
+                name=SYSTEM_RECORD_ID,
+                dataType=DataType.INT,
+                meaningType=FileColumnMeaningType.SYSTEM_RECORD_ID,
+            )
+        )
+
+        return FileMetadata(
+            name=self.name,
+            description=self.description,
+            columns=columns,
+            searchKeys=self.search_keys,
+            hierarchicalGroupKeys=self.hierarchical_group_keys,
+            hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
+            taskType=self.task_type,
+        )
+
+    def __get_data_type(self, pandas_data_type) -> DataType:
+        if pandas_data_type in {"int64", "Int64", "int"}:
+            return DataType.INT
+        elif pandas_data_type in {"float64", "Float64", "float"}:
+            return DataType.DECIMAL
+        else:
+            return DataType.STRING
+
+    def __construct_search_customization(
+        self,
+        return_scores: bool,
+        extract_features: bool,
+        accurate_model: Optional[bool] = None,
+        filter_features: Optional[dict] = None,
+    ) -> SearchCustomization:
+        search_customization = SearchCustomization(
+            extractFeatures=extract_features, accurateModel=accurate_model, returnScores=return_scores
+        )
+        if filter_features:
+            if [
+                key
+                for key in filter_features
+                if key not in {"min_importance", "max_psi", "max_count", "selected_features"}
+            ]:
+                raise ValueError(
+                    "Unknown field in filter_features. "
+                    "Should be {'min_importance', 'max_psi', 'max_count', 'selected_features'}."
+                )
+            feature_filter = FeaturesFilter(
+                minImportance=filter_features.get("min_importance"),
+                maxPSI=filter_features.get("max_psi"),
+                maxCount=filter_features.get("max_count"),
+                selectedFeatures=filter_features.get("selected_features"),
+            )
+            search_customization.featuresFilter = feature_filter
+
+        return search_customization
+
+    def search(
+        self,
+        return_scores: bool = False,
+        extract_features: bool = False,
+        accurate_model: bool = False,
+        filter_features: Optional[dict] = None,
+    ) -> SearchTask:
+
+        if self.etalon_def is None:
+            self.validate()
+        file_metrics = self.calculate_metrics()
+        # keep only valid rows
+        if "is_valid" in self.columns:
+            self.query("is_valid == 1", inplace=True)
+            self.drop(["is_valid"], axis=1, inplace=True)
+
+        file_metadata = self.__construct_metadata()
+        search_customization = self.__construct_search_customization(
+            return_scores, extract_features, accurate_model, filter_features
+        )
+
+        if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
+            self.file_upload_id, file_metadata
+        ):
+            search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_without_upload_v2(
+                self.file_upload_id, file_metadata, file_metrics, search_customization
+            )
+        else:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
+                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                logging.debug(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
+                search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
+                    parquet_file_path, file_metadata, file_metrics, search_customization
+                )
+                self.file_upload_id = search_task_response.file_upload_id
+
+        search_task = SearchTask(
+            search_task_response.search_task_id,
+            self,
+            return_scores,
+            extract_features,
+            accurate_model,
+            task_type=self.task_type,
+            endpoint=self.endpoint,
+            api_key=self.api_key,
+        )
+        return search_task.poll_result()
+
+    def validation(
+        self, initial_search_task_id: str, return_scores: bool = True, extract_features: bool = False
+    ) -> SearchTask:
+        if self.etalon_def is None:
+            self.validate(
+                validate_target=not extract_features, validate_count=False, need_deduplication=not extract_features
+            )
+        if extract_features:
+            file_metrics = FileMetrics()
+        else:
+            file_metrics = self.calculate_metrics()
+        # keep only valid rows
+        if "is_valid" in self.columns:
+            self.query("is_valid == 1", inplace=True)
+            self.drop(["is_valid"], axis=1, inplace=True)
+
+        file_metadata = self.__construct_metadata()
+        search_customization = self.__construct_search_customization(return_scores, extract_features)
+
+        if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
+            self.file_upload_id, file_metadata
+        ):
+            search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_without_upload_v2(
+                self.file_upload_id, initial_search_task_id, file_metadata, file_metrics, search_customization
+            )
+        else:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
+                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                logging.debug(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
+                search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
+                    parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization
+                )
+                self.file_upload_id = search_task_response.file_upload_id
+
+        search_task = SearchTask(
+            search_task_response.search_task_id,
+            self,
+            return_scores,
+            extract_features,
+            initial_search_task_id=initial_search_task_id,
+            endpoint=self.endpoint,
+            api_key=self.api_key,
+        )
+
+        return search_task.poll_result()

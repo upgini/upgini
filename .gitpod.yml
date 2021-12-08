@@ -1,0 +1,9 @@
+# List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
+tasks:
+  - init: bash gitpod_init.sh
+    command: gp open notebooks/kaggle_example.ipynb
+
+# List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
+#ports:
+#  - port: 3000
+#    onOpen: open-preview
