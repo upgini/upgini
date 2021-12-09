@@ -16,3 +16,4 @@ pytest-datafiles==2.0
 pytest-timeout==1.4.2
 requests-mock==1.9.3
 unittest-xml-reporting==3.0.4
+Jinja2==3.0.2
