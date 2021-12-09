@@ -3,43 +3,51 @@ orbs:
 version: 2.1
 jobs:
   build_python:
-    machine:
-      image: ubuntu-1604:201903-01
+    docker:
+      - image: themattrix/tox
+    # machine:
+    #   image: ubuntu-1604:201903-01
     parallelism: 1
 
-    resource_class: medium
+    # resource_class: medium
     steps:
       - checkout
       - run:
-          name: Install pyenv
-          working_directory: ~/
-          command: |
-            rm -rf $(pyenv root)
-            curl https://pyenv.run | bash
-            export PATH="$HOME/.pyenv/bin:$PATH"
-            pyenv update
-            eval "$(pyenv init -)"
-            eval "$(pyenv virtualenv-init -)"
+          name: Install tox
+          command: pip install tox
       - run:
-          name: Prepare python
-          command: |
-            pyenv rehash
-            pyenv install -s 3.8.9
-            pyenv global 3.8.9
-            python -V
-            pip -V
-      - run: pip install --upgrade pip
-      - run: pip install -r requirements.txt
-      - run:
-          name: Check style-guide
-          command: |
-            black -l 120 --check src/upgini/
-      - run:
-          name: Python tests
-          no_output_timeout: 60m
-          command: |
-            mkdir test-results
-            PYTHONPATH=src pytest --cov=src/upgini/ --cov-config=.coveragerc --cov-fail-under 60 --cov-report html:test-results --junitxml=test-results/junit.xml tests
+          name: Run tox
+          command: tox
+      # - run:
+      #     name: Install pyenv
+      #     working_directory: ~/
+      #     command: |
+      #       rm -rf $(pyenv root)
+      #       curl https://pyenv.run | bash
+      #       export PATH="$HOME/.pyenv/bin:$PATH"
+      #       pyenv update
+      #       eval "$(pyenv init -)"
+      #       eval "$(pyenv virtualenv-init -)"
+      # - run:
+      #     name: Prepare python
+      #     command: |
+      #       pyenv rehash
+      #       pyenv install -s 3.8.9
+      #       pyenv global 3.8.9
+      #       python -V
+      #       pip -V
+      # - run: pip install --upgrade pip
+      # - run: pip install -r requirements.txt
+      # - run:
+      #     name: Check style-guide
+      #     command: |
+      #       black -l 120 --check src/upgini/
+      # - run:
+      #     name: Python tests
+      #     no_output_timeout: 60m
+      #     command: |
+      #       mkdir test-results
+      #       PYTHONPATH=src pytest --cov=src/upgini/ --cov-config=.coveragerc --cov-fail-under 60 --cov-report html:test-results --junitxml=test-results/junit.xml tests
       - store_test_results:
           path: test-results
       - store_artifacts:
