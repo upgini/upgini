@@ -30,7 +30,7 @@ jobs:
       - save_cache:
           key: v1-dep-{{ .Branch }}-{{ epoch }}
           paths:
-            - ~/.tox
+            - .tox
 
       - run:
           name: Save test results
