@@ -16,6 +16,10 @@ jobs:
           name: Install tox
           command: pip install tox
       - run:
+          name: Check style-guide
+          command: |
+            black -l 120 --check src/upgini/
+      - run:
           name: Run tox
           command: tox
       # - run:
@@ -38,10 +42,6 @@ jobs:
       #       pip -V
       # - run: pip install --upgrade pip
       # - run: pip install -r requirements.txt
-      # - run:
-      #     name: Check style-guide
-      #     command: |
-      #       black -l 120 --check src/upgini/
       # - run:
       #     name: Python tests
       #     no_output_timeout: 60m
