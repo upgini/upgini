@@ -10,17 +10,6 @@ jobs:
     resource_class: medium
     steps:
       - checkout
-      - run:
-          name: Install tox
-          command: pip install tox
-      - run:
-          name: Run tox
-          command: tox
-      - store_test_results:
-          path: test-results
-      - store_artifacts:
-          path: test-results
-      - run: mkdir -p /tmp/circleci-artifacts /tmp/circleci-test-results
       - restore_cache:
           keys:
             # This branch if available
@@ -29,17 +18,19 @@ jobs:
             - v1-dep-main-
             # Any branch if there are none on the default branch - this should be unnecessary if you have your default branch configured correctly
             - v1-dep-
+      - run:
+          name: Run tox
+          command: tox
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: test-results
+      - run: mkdir -p /tmp/circleci-artifacts /tmp/circleci-test-results
       # Save dependency cache
       - save_cache:
           key: v1-dep-{{ .Branch }}-{{ epoch }}
           paths:
-            - vendor/bundle
-            - ~/virtualenvs
-            - ~/.m2
-            - ~/.ivy2
-            - ~/.bundle
-            - ~/.go_workspace
-            - ~/.cache/bower
+            - .tox
 
       - run:
           name: Save test results
