@@ -76,7 +76,8 @@ class SearchTask:
         if not has_completed_provider_task:
             raise RuntimeError(
                 "All search tasks in the request have failed: "
-                + ",".join([self._error_message(x) for x in self._get_provider_summaries(self.summary)]) + "."
+                + ",".join([self._error_message(x) for x in self._get_provider_summaries(self.summary)])
+                + "."
             )
 
         return self
