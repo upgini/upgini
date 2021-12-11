@@ -206,9 +206,9 @@ class _RestClient:
         def open_and_send():
             with open(file_path, "rb") as file:
                 files = {
-                    "file": (metadata.name, file, "application/octet-stream"),
                     "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+                    "file": (metadata.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
@@ -257,9 +257,9 @@ class _RestClient:
         def open_and_send():
             with open(file_path, "rb") as file:
                 files = {
-                    "file": (metadata.name, file, "application/octet-stream"),
                     "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+                    "file": (metadata.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
