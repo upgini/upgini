@@ -1,5 +1,12 @@
-# Upgini : dataset search library for machine learning pipelines
-<p align="left"> <b>Automatically find and enrich ML algorithms with relevant <i>external</i> features from scraped data and public datasets </b> </p>
+<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : automated feature discovery & enrichment library for supervised machine learning on tabular data </h2>
+<p align="center"> <b>Automatically find and enrich ML model with relevant <i>external</i> features from scraped data and public datasets to improve machine learning model accuracy </b> </p>
+<p align="center">
+	<br />
+    <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Live DEMO in Colab »</strong></a> |
+    <a href="https://upgini.com/">Upgini.com</a> |
+    <a href="https://profile.upgini.com">Sign In</a> |
+    <a href="https://upgini.slack.com/messages/C02MW49ADSN">Slack Community</a> 
+ </p>
 
 [![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
 [![Python version](https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-380/)
@@ -9,19 +16,19 @@
 [![Slack upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)  
 ## ❔ Overview
 
-**Upgini** is a Python library for an automated data search to boost supervised ML tasks. It enriches your dataset with intelligently crafted features from a broad range of curated data sources, including public datasets and scraped data. The search is conducted for any combination of public IDs contained in your tabular dateset: IP, date, etc.
+**Upgini** is a Python library for an automated features search to boost accuracy of supervised ML models on tabular data. It enriches your dataset with intelligently crafted features from a broad range of curated data sources, including public datasets and scraped data. The search is conducted for any combination of public IDs contained in your tabular dateset: IP, date, etc.
 Only features that could improve the prediction power of your ML model are returned.  
-**Motivation:** for most ML tasks external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external data in ML pipelines.  
-We want radically simplify data search and delivery for ML pipelines to make external data & features a standard approach. Like a hyperparameter tuning for machine learning nowadays.
+**Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
+We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.
 
 ## 🚀 Awesome features
-⭐️ Automatically find only datasets and features that *give accuracy improvement for ML algorithm* according to metrics: ROC AUC, RMSE, Accuracy. Not just correlated with target variable data or features, which 9 out of 10 cases gives zero accuracy improvement for production ML cases  
-⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with found external data & features, right in search results   
+⭐️ Automatically find only features that *give accuracy improvement for ML algorithm* according to metrics: ROC AUC, RMSE, Accuracy. Not just correlated with target variable data or features, which 9 out of 10 cases gives zero accuracy improvement for production ML cases  
+⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with found external features, right in search results   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipelines   
-⭐️ Scikit-learn compatible interfaces for easy data delivery into your existing ML pipelines  
+⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
 ⭐️ Curated and updated data sources, including public datasets and scraped data  
 ⭐️ Support for several search key types (including <i>**SHA256 hashed email, IPv4, phone, date/datetime**</i>), more to come...  
-⭐️ Supported ML tasks:  
+⭐️ Supported supervised ML tasks:  
   - ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)  
   - ☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification)  
   - ☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)  
@@ -29,8 +36,8 @@ We want radically simplify data search and delivery for ML pipelines to make ext
   - 🔜 [recommender system](https://en.wikipedia.org/wiki/Recommender_system)  
 ## 🏁 Quick start with kaggle example
 
-### 🏎 Pre-build dev environment for quick start
-Pre-built dev environments with a kaggle example [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) right inside your browser:
+### 🏎 Live Demo with kaggle example
+Live Demo notebook [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
 
 [![Open in Binder](https://img.shields.io/badge/run_example_in-mybinder-red.svg?style=for-the-badge&logo=data:image/png;base64,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)](https://mybinder.org/v2/gh/upgini/upgini/HEAD?labpath=notebooks%2Fkaggle_example.ipynb)
 &nbsp;
@@ -39,8 +46,7 @@ Pre-built dev environments with a kaggle example [kaggle_example.ipynb](https://
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->
 
-### 🐍 Jupyter via PyPI
-Just install library from PyPi and read this doc 🤓  
+### 🐍 Install from PyPI
 ```python
 !pip install upgini
 import upgini
@@ -71,7 +77,7 @@ Competition dataset was splited into train (2013-2016 year) and test (2017 year)
 ## 💻 How it works?
 
 ### 1. 🔑 Get access - API key
-You'll need API key from User profile page https://profile.upgini.com  
+For full access beyond demo example, you'll need API key from User profile page https://profile.upgini.com  
 Pass API key via `api_key` parameter in [`FeaturesEnricher` class constructor](#4--start-your-first-data-search) or export as environment variable:  
 ... in python  
 ```python
@@ -86,9 +92,9 @@ export UPGINI_API_KEY = "your_long_string_api_key_goes_here"
 To simplify things, you can reuse your existing labeled training datasets "as is" to initiate the search. Under the hood, we'll search for relevant data using:
 - *[search keys](#-search-key-types-we-support-more-is-coming)* from training dataset to match records from potential external data sources and features
 - *labels* from training dataset to estimate relevancy of feature or dataset for your ML task and calculate metrics  
-- *your features* from training dataset columns to find datasets and features only give accuracy gain to your existing data in the ML model and estimate accuracy uplift ([optional](#-optional-find-datasets-and-features-only-give-accuracy-gain-to-your-existing-data-in-the-ml-model))  
+- *your features* from training dataset to find external datasets and features only give accuracy improvement to your existing data and estimate accuracy uplift ([optional](#-optional-find-datasets-and-features-only-give-accuracy-gain-to-your-existing-data-in-the-ml-model))  
 
-Just load training dataset into pandas dataframe and separate features' columns from label column:  
+Load training dataset into pandas dataframe and separate features' columns from label column:  
 ```python
 import pandas as pd
 # labeled training dataset - customer_churn_prediction_train.csv
@@ -261,7 +267,7 @@ upload_user_ads("test", sample_df, {
 })
 ```
 ## 🛠 Getting Help & Community
-Requests and support channels, in preferred order  
+Requests and support, in preferred order  
 [![Claim help in slack](https://img.shields.io/badge/slack-@upgini-orange.svg?style=for-the-badge&logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)
 [![Open GitHub issue](https://img.shields.io/badge/open%20issue%20on-github-blue?style=for-the-badge&logo=github)](https://github.com/upgini/upgini/issues)  
 Please try to create bug reports that are:
@@ -284,11 +290,10 @@ Some convinient ways to start contributing are:
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links
-- [Sign In](https://profile.upgini.com)
-- [Kaggle example](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 - [Quick start guide](https://upgini.com/#quick-start)
-- [Pricing](https://upgini.com/#pricing-individual)
+- [Kaggle example notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 - [Project on PyPI](https://pypi.org/project/upgini)
+- [Get API Key](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
 Please report it here.</a></sup>
