@@ -11,6 +11,7 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_string_dtype as is_string
+from pandas.api.types import is_integer_dtype, is_float_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -568,7 +569,7 @@ class Dataset(pd.DataFrame):
                 column_meta = FileColumnMetadata(
                     index=index,
                     name=column_name,
-                    dataType=self.__get_data_type(str(column_type)),
+                    dataType=self.__get_data_type(column_type),
                     meaningType=meaning_type,
                     minMaxValues=min_max_values,
                 )
@@ -594,9 +595,9 @@ class Dataset(pd.DataFrame):
         )
 
     def __get_data_type(self, pandas_data_type) -> DataType:
-        if pandas_data_type in {"int64", "Int64", "int"}:
+        if is_integer_dtype(pandas_data_type):
             return DataType.INT
-        elif pandas_data_type in {"float64", "Float64", "float"}:
+        elif is_float_dtype(pandas_data_type):
             return DataType.DECIMAL
         else:
             return DataType.STRING
