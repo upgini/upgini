@@ -87,6 +87,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
             raise TypeError(f"Only pandas.Series or numpy.ndarray or list supported for y, but {type(y)} was passed.")
 
+        if isinstance(y, pd.Series):
+            y_array = y.values
+        else:
+            y_array = y
+
+        if X.shape[0] != len(y_array):
+            raise ValueError("X and y should be the same size")
+
         validated_search_keys = self._prepare_search_keys(X)
 
         search_keys = []
@@ -99,11 +107,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         }
 
         df = X.copy()
-        df[self.TARGET_NAME] = pd.Series(y)
+        df[self.TARGET_NAME] = y_array
 
         df.reset_index(drop=True, inplace=True)
-        if X.index.name:
-            df.drop(columns=X.index.name, inplace=True)
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
