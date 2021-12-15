@@ -147,34 +147,26 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
 
-        no_data_found = False
         self.passed_features = [
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
         ]
 
-        try:
-            self._search_task = dataset.search(extract_features=extract_features, accurate_model=self.accurate_model)
-            metrics = self.get_metrics()
-            if metrics is not None:
-                print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
-                try:
-                    from IPython.display import display  # type: ignore
+        self._search_task = dataset.search(extract_features=extract_features, accurate_model=self.accurate_model)
+        metrics = self.get_metrics()
+        if metrics is not None:
+            print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
+            try:
+                from IPython.display import display  # type: ignore
 
-                    display(metrics)
-                except ImportError:
-                    print(metrics)
+                display(metrics)
+            except ImportError:
+                print(metrics)
 
-                if self.__is_uplift_present_in_metrics():
-                    print(
-                        "\nFollowing features was used for accuracy uplift estimation:",
-                        ", ".join(self.passed_features),
-                    )
-        except Exception as e:
-            if e.args[0] == {"userMessage": "File doesn't intersect with any ADS."}:
-                no_data_found = True
-            raise
-        finally:
-            self.__check_quality(no_data_found)
+            if self.__is_uplift_present_in_metrics():
+                print(
+                    "\nFollowing features was used for accuracy uplift estimation:",
+                    ", ".join(self.passed_features),
+                )
 
         return df_without_eval_set
 
