@@ -179,17 +179,18 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been deleted")
+            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been dropped")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
+            unique_columns.remove(SYSTEM_RECORD_ID)
             self.drop_duplicates(subset=unique_columns, inplace=True)
             nrows_after_tgt_dedup = len(self)
             share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
-                logging.warn(
-                    f"{share_tgt_dedup:.5f}% of the rows have duplicated keys with different target events. "
-                    "Please check the dataframe and restart feature enricher"
+                raise ValueError(
+                    f"{share_tgt_dedup:.5f}% of rows in X are duplicates with different y values. "
+                    "Please check the dataframe and restart fit"
                 )
 
     def __convert_bools(self):
@@ -374,7 +375,7 @@ class Dataset(pd.DataFrame):
         logging.debug("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
-        for column, _ in self.meaning_types.items():
+        for column in self.meaning_types:
             if column not in self.columns:
                 raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}.")
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():

@@ -250,14 +250,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
         # Don't pass features in backend on transform
         if feature_columns:
             df_without_features = df.drop(columns=feature_columns)
         else:
             df_without_features = df
-
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         dataset = Dataset(
             "sample_" + str(uuid.uuid4()), df=df_without_features, endpoint=self.endpoint, api_key=self.api_key
