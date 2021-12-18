@@ -149,6 +149,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
         dataset = Dataset("tds_" + str(uuid.uuid4()), df=df, endpoint=self.endpoint, api_key=self.api_key)
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
@@ -209,12 +212,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             result = pd.merge(
                 df.drop(columns=self.TARGET_NAME),
                 result_features,
-                left_index=True,
+                left_on=SYSTEM_RECORD_ID,
                 right_on=SYSTEM_RECORD_ID,
                 how="left",
             )
         else:
-            result = pd.merge(df, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left")
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
             result.drop(columns=etalon_columns, inplace=True)
 
         result.index = X.index
@@ -240,20 +243,21 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df = X.copy()
 
+        df = df.reset_index(drop=True)
+
         if FileColumnMeaningType.DATE not in meaning_types.values():
             df[SYSTEM_FAKE_DATE] = date.today()
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-        df = df.reset_index(drop=True)
-        if X.index.name:
-            df.drop(columns=X.index.name, inplace=True)
 
         # Don't pass features in backend on transform
         if feature_columns:
             df_without_features = df.drop(columns=feature_columns)
         else:
             df_without_features = df
+
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         dataset = Dataset(
             "sample_" + str(uuid.uuid4()), df=df_without_features, endpoint=self.endpoint, api_key=self.api_key
@@ -272,11 +276,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         if not self.keep_input:
             result = pd.merge(
-                df_without_features, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left"
+                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
             )
             result.drop(columns=etalon_columns, inplace=True)
         else:
-            result = pd.merge(df, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left")
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
 
         result.index = X.index
         if SYSTEM_RECORD_ID in result.columns:

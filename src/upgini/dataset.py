@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_float_dtype, is_integer_dtype
 from pandas.api.types import is_string_dtype as is_string
-from pandas.api.types import is_integer_dtype, is_float_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -91,7 +91,6 @@ class Dataset(pd.DataFrame):
         else:
             raise ValueError("DataFrame or path to file should be passed.")
         if isinstance(data, pd.DataFrame):
-            data.index.name = SYSTEM_RECORD_ID
             super(Dataset, self).__init__(data)
         else:
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
@@ -381,6 +380,10 @@ class Dataset(pd.DataFrame):
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
             raise ValueError("Target column is not presented in meaning types. Specify it, please.")
 
+        if FileColumnMeaningType.SYSTEM_RECORD_ID not in self.meaning_types.values():
+            self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
+            self.meaning_types[SYSTEM_RECORD_ID]
+
     def __validate_search_keys(self):
         logging.debug("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
@@ -390,7 +393,7 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True, validate_count: bool = True, need_deduplication: bool = True):
+    def validate(self, validate_target: bool = True, validate_count: bool = True):
         logging.info("Validating dataset...")
 
         if validate_count:
@@ -408,8 +411,7 @@ class Dataset(pd.DataFrame):
 
         self.__clean_empty_rows()
 
-        if need_deduplication:
-            self.__clean_duplicates()
+        self.__clean_duplicates()
 
         self.__convert_bools()
 
@@ -575,14 +577,6 @@ class Dataset(pd.DataFrame):
                 )
 
                 columns.append(column_meta)
-        columns.append(
-            FileColumnMetadata(
-                index=len(columns),
-                name=SYSTEM_RECORD_ID,
-                dataType=DataType.INT,
-                meaningType=FileColumnMeaningType.SYSTEM_RECORD_ID,
-            )
-        )
 
         return FileMetadata(
             name=self.name,
@@ -662,7 +656,7 @@ class Dataset(pd.DataFrame):
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.debug(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     parquet_file_path, file_metadata, file_metrics, search_customization
@@ -685,9 +679,7 @@ class Dataset(pd.DataFrame):
         self, initial_search_task_id: str, return_scores: bool = True, extract_features: bool = False
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(
-                validate_target=not extract_features, validate_count=False, need_deduplication=not extract_features
-            )
+            self.validate(validate_target=not extract_features, validate_count=False)
         if extract_features:
             file_metrics = FileMetrics()
         else:
@@ -709,7 +701,7 @@ class Dataset(pd.DataFrame):
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.debug(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization
