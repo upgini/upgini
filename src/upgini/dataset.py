@@ -375,15 +375,16 @@ class Dataset(pd.DataFrame):
         logging.debug("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
+
+        if SYSTEM_RECORD_ID not in self.columns:
+            self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
+            self.meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
         for column in self.meaning_types:
             if column not in self.columns:
                 raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}.")
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
             raise ValueError("Target column is not presented in meaning types. Specify it, please.")
-
-        if FileColumnMeaningType.SYSTEM_RECORD_ID not in self.meaning_types.values():
-            self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
-            self.meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
     def __validate_search_keys(self):
         logging.debug("Validating search keys")

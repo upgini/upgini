@@ -113,6 +113,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
         df_without_eval_set = df.copy()
 
         if eval_set is not None and len(eval_set) > 0:
@@ -141,6 +144,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     )
                 eval_df = eval_X.copy()
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
+                eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
@@ -148,9 +152,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             df[SYSTEM_FAKE_DATE] = date.today()
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         dataset = Dataset("tds_" + str(uuid.uuid4()), df=df, endpoint=self.endpoint, api_key=self.api_key)
         dataset.meaning_types = meaning_types
