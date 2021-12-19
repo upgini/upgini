@@ -50,6 +50,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         URL of Upgini API where search requests are submitted.
         If not specified then used the default value.
         Please don't overwrite it if you are unsure.
+
+    search_id: str, optional (default=None)
+        Identifier of fitted enricher.
+        If not specified transform could be called only after fit or fit_transform call
     """
 
     TARGET_NAME = "target"
@@ -65,14 +69,26 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         accurate_model: bool = False,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
+        search_id: Optional[str] = None,
     ):
         if len(search_keys) == 0:
-            raise ValueError("Key columns should be marked up by search_keys.")
+            if search_id:
+                raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
+            else:
+                raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
         self.accurate_model = accurate_model
         self.endpoint = endpoint
         self.api_key = api_key
+        if search_id:
+            search_task = SearchTask(
+                search_id,
+                endpoint=self.endpoint,
+                api_key=self.api_key,
+            )
+            self._search_task = search_task.poll_result()
+            self.__show_metrics()
 
     def _inner_fit(
         self,
@@ -162,21 +178,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         ]
 
         self._search_task = dataset.search(extract_features=extract_features, accurate_model=self.accurate_model)
-        metrics = self.get_metrics()
-        if metrics is not None:
-            print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
-            try:
-                from IPython.display import display  # type: ignore
-
-                display(metrics)
-            except ImportError:
-                print(metrics)
-
-            if self.__is_uplift_present_in_metrics():
-                print(
-                    "\nFollowing features was used for accuracy uplift estimation:",
-                    ", ".join(self.passed_features),
-                )
+        self.__show_metrics()
 
         return df_without_eval_set
 
@@ -347,6 +349,23 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         metrics_df.set_index("segment", inplace=True)
         metrics_df.rename_axis(None, inplace=True)
         return metrics_df
+
+    def __show_metrics(self):
+        metrics = self.get_metrics()
+        if metrics is not None:
+            print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
+            try:
+                from IPython.display import display  # type: ignore
+
+                display(metrics)
+            except ImportError:
+                print(metrics)
+
+            if self.__is_uplift_present_in_metrics():
+                print(
+                    "\nFollowing features was used for accuracy uplift estimation:",
+                    ", ".join(self.passed_features),
+                )
 
     def __is_uplift_present_in_metrics(self):
         uplift_presented = False
