@@ -383,7 +383,7 @@ class Dataset(pd.DataFrame):
 
         if FileColumnMeaningType.SYSTEM_RECORD_ID not in self.meaning_types.values():
             self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
-            self.meaning_types[SYSTEM_RECORD_ID]
+            self.meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
     def __validate_search_keys(self):
         logging.debug("Validating search keys")
