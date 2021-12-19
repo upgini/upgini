@@ -7,8 +7,6 @@ from upgini import FeaturesEnricher, SearchKey
 
 def test_features_enricher(requests_mock):
     url = "http://fake_url2"
-    # os.environ["UPGINI_URL"] = url
-    # os.environ["UPGINI_API_KEY"] = "fake_api_key"
 
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.csv.gz"
@@ -22,7 +20,7 @@ def test_features_enricher(requests_mock):
             "searchTaskId": "321",
             "searchType": "INITIAL",
             "status": "SUBMITTED",
-            "extractFeatures": "false",
+            "extractFeatures": "true",
             "returnScores": "false",
             "createdAt": 1633302145414,
         },

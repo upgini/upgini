@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_float_dtype, is_integer_dtype
 from pandas.api.types import is_string_dtype as is_string
-from pandas.api.types import is_integer_dtype, is_float_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -91,7 +91,6 @@ class Dataset(pd.DataFrame):
         else:
             raise ValueError("DataFrame or path to file should be passed.")
         if isinstance(data, pd.DataFrame):
-            data.index.name = SYSTEM_RECORD_ID
             super(Dataset, self).__init__(data)
         else:
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
@@ -180,17 +179,18 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been deleted")
+            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been dropped")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
+            unique_columns.remove(SYSTEM_RECORD_ID)
             self.drop_duplicates(subset=unique_columns, inplace=True)
             nrows_after_tgt_dedup = len(self)
             share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
-                logging.warn(
-                    f"{share_tgt_dedup:.5f}% of the rows have duplicated keys with different target events. "
-                    "Please check the dataframe and restart feature enricher"
+                raise ValueError(
+                    f"{share_tgt_dedup:.5f}% of rows in X are duplicates with different y values. "
+                    "Please check the dataframe and restart fit"
                 )
 
     def __convert_bools(self):
@@ -375,7 +375,12 @@ class Dataset(pd.DataFrame):
         logging.debug("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
-        for column, _ in self.meaning_types.items():
+
+        if SYSTEM_RECORD_ID not in self.columns:
+            self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
+            self.meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
+        for column in self.meaning_types:
             if column not in self.columns:
                 raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}.")
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
@@ -390,7 +395,7 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True, validate_count: bool = True, need_deduplication: bool = True):
+    def validate(self, validate_target: bool = True, validate_count: bool = True):
         logging.info("Validating dataset...")
 
         if validate_count:
@@ -408,8 +413,7 @@ class Dataset(pd.DataFrame):
 
         self.__clean_empty_rows()
 
-        if need_deduplication:
-            self.__clean_duplicates()
+        self.__clean_duplicates()
 
         self.__convert_bools()
 
@@ -575,14 +579,6 @@ class Dataset(pd.DataFrame):
                 )
 
                 columns.append(column_meta)
-        columns.append(
-            FileColumnMetadata(
-                index=len(columns),
-                name=SYSTEM_RECORD_ID,
-                dataType=DataType.INT,
-                meaningType=FileColumnMeaningType.SYSTEM_RECORD_ID,
-            )
-        )
 
         return FileMetadata(
             name=self.name,
@@ -662,7 +658,7 @@ class Dataset(pd.DataFrame):
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.debug(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     parquet_file_path, file_metadata, file_metrics, search_customization
@@ -685,9 +681,7 @@ class Dataset(pd.DataFrame):
         self, initial_search_task_id: str, return_scores: bool = True, extract_features: bool = False
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(
-                validate_target=not extract_features, validate_count=False, need_deduplication=not extract_features
-            )
+            self.validate(validate_target=not extract_features, validate_count=False)
         if extract_features:
             file_metrics = FileMetrics()
         else:
@@ -709,7 +703,7 @@ class Dataset(pd.DataFrame):
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.debug(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization

@@ -113,6 +113,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
         df_without_eval_set = df.copy()
 
         if eval_set is not None and len(eval_set) > 0:
@@ -141,6 +144,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     )
                 eval_df = eval_X.copy()
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
+                eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
@@ -209,12 +213,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             result = pd.merge(
                 df.drop(columns=self.TARGET_NAME),
                 result_features,
-                left_index=True,
+                left_on=SYSTEM_RECORD_ID,
                 right_on=SYSTEM_RECORD_ID,
                 how="left",
             )
         else:
-            result = pd.merge(df, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left")
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
             result.drop(columns=etalon_columns, inplace=True)
 
         result.index = X.index
@@ -240,14 +244,15 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df = X.copy()
 
+        df = df.reset_index(drop=True)
+
         if FileColumnMeaningType.DATE not in meaning_types.values():
             df[SYSTEM_FAKE_DATE] = date.today()
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
-        df = df.reset_index(drop=True)
-        if X.index.name:
-            df.drop(columns=X.index.name, inplace=True)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         # Don't pass features in backend on transform
         if feature_columns:
@@ -272,11 +277,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         if not self.keep_input:
             result = pd.merge(
-                df_without_features, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left"
+                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
             )
             result.drop(columns=etalon_columns, inplace=True)
         else:
-            result = pd.merge(df, result_features, left_index=True, right_on=SYSTEM_RECORD_ID, how="left")
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
 
         result.index = X.index
         if SYSTEM_RECORD_ID in result.columns:
