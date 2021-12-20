@@ -4,7 +4,6 @@ from .dataset import Dataset
 from .features_enricher import FeaturesEnricher  # noqa: F401
 from .metadata import FileColumnMeaningType, FileMetrics, SearchKey  # noqa: F401
 from .search_task import SearchTask
-from .normalizer import phone_normalizer
 
 
 def search_history() -> List[SearchTask]:
