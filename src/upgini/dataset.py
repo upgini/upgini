@@ -309,7 +309,7 @@ class Dataset(pd.DataFrame):
         """Convert phone/msisdn to int"""
         logging.debug("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
-        if msisdn_column is not None and msisdn_column in self.columns and not is_string(self[msisdn_column]):
+        if msisdn_column is not None and msisdn_column in self.columns:
             logging.debug(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
