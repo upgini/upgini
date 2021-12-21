@@ -32,6 +32,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.search_task import SearchTask
+from upgini.normalizer.phone_normalizer import phone_to_int
 
 
 class Dataset(pd.DataFrame):
@@ -304,11 +305,14 @@ class Dataset(pd.DataFrame):
             task = ModelTaskType.MULTICLASS
         return task
 
-    def __correct_data_types(self):
-        logging.debug("Correcting keys data types")
+    def __convert_phone(self):
+        """Convert phone/msisdn to int"""
+        logging.debug("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
-        if msisdn_column is not None and msisdn_column in self.columns and not is_string(self[msisdn_column]):
-            self[msisdn_column] = self[msisdn_column].astype("Int64").astype(str)
+        if msisdn_column is not None and msisdn_column in self.columns:
+            logging.debug(f"going to apply phone_to_int for column {msisdn_column}")
+            phone_to_int(self, msisdn_column)
+            self[msisdn_column] = self[msisdn_column].astype("Int64")
 
     def __validate_dataset(self, validate_target: bool):
         """Validate DataSet"""
@@ -428,7 +432,7 @@ class Dataset(pd.DataFrame):
 
         self.__convert_ip()
 
-        self.__correct_data_types()
+        self.__convert_phone()
 
         self.__validate_dataset(validate_target)
 
