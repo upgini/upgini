@@ -209,7 +209,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         result_features = self._search_task.get_all_initial_raw_features()
 
         if result_features is None:
-            raise RuntimeError("No provider supports feature enrichment.")
+            raise RuntimeError("Search engine crashed on this request.")
 
         if self.keep_input:
             result = pd.merge(
@@ -275,7 +275,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         result_features = validation_task.get_all_validation_raw_features()
 
         if result_features is None:
-            raise RuntimeError("No provider supports feature enrichment.")
+            raise RuntimeError("Search engine crashed on this request.")
 
         if not self.keep_input:
             result = pd.merge(
