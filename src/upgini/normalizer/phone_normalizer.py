@@ -6,7 +6,7 @@ from pandas.api.types import is_int64_dtype
 
 def phone_to_int(df: pd.DataFrame, phone_column_name: str) -> pd.DataFrame:
     """
-    Convention: phone number is always presented int number.
+    Convention: phone number is always presented as int number.
     phone_number = Country code + National Destination Code + Subscriber Number.
     Examples:
     41793834315     for Switzerland
