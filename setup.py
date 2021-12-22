@@ -51,7 +51,7 @@ setup(
     install_requires=[
         "python-dateutil>=2.8.0",
         "requests>=2.8.0",
-        "pandas>=1.2.0",
+        "pandas>=1.1.0",
         "numpy>=1.19.0",
         "pydantic>=1.8.2",
         "pyarrow>=5.0.0",
