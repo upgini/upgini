@@ -136,7 +136,7 @@ class Dataset(pd.DataFrame):
     def __validate_rows_count(self):
         logging.debug("Validate rows count")
         if self.shape[0] < self.MIN_ROWS_COUNT:
-            raise ValueError(f"File should contain at least {self.MIN_ROWS_COUNT} rows.")
+            raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows.")
 
     def __rename_columns(self):
         logging.debug("Replace restricted symbols in column names")
@@ -402,9 +402,6 @@ class Dataset(pd.DataFrame):
     def validate(self, validate_target: bool = True, validate_count: bool = True):
         logging.info("Validating dataset...")
 
-        if validate_count:
-            self.__validate_rows_count()
-
         self.__validate_meaning_types(validate_target)
 
         self.__validate_search_keys()
@@ -418,6 +415,9 @@ class Dataset(pd.DataFrame):
         self.__clean_empty_rows()
 
         self.__clean_duplicates()
+
+        if validate_count:
+            self.__validate_rows_count()
 
         self.__convert_bools()
 
