@@ -7,17 +7,22 @@ from typing import Optional
 from urllib.parse import urljoin
 
 import requests
-from pkg_resources import DistributionNotFound, get_distribution
 from pydantic import BaseModel
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
 from upgini.metadata import FileMetadata, FileMetrics, SearchCustomization
 
+
 try:
-    __version__ = get_distribution("upgini").version
-except DistributionNotFound:
-    __version__ = "Upgini wasn't installed"
+    from importlib_metadata import version
+    __version__ = version("upgini")
+except ImportError:
+    try:
+        from importlib.metadata import version
+        __version__ = version("upgini")
+    except ImportError:
+        __version__ = "Upgini wasn't installed"
 
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
