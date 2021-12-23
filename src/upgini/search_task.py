@@ -36,23 +36,26 @@ class SearchTask:
         self.endpoint = endpoint
         self.api_key = api_key
 
-    def poll_result(self) -> "SearchTask":
+    def poll_result(self, quiet: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
         failed_statuses = {"FAILED", "VALIDATION_FAILED"}
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
-        print(
-            f"Running {self.search_task_id} search request.\n"
-            "We'll email you once it's completed. Please wait a few minutes."
-        )
+        if not quiet:
+            print(
+                f"Running {self.search_task_id} search request.\n"
+                "We'll email you once it's completed. Please wait a few minutes."
+            )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
         try:
             time.sleep(1)
             self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
             while self.summary.status not in completed_statuses:
-                print("\\", end="\r")
+                if not quiet:
+                    print("\\", end="\r")
                 time.sleep(5)
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
-                print("/", end="\r")
+                if not quiet:
+                    print("/", end="\r")
                 if self.summary.status in failed_statuses:
                     raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
                 if self.summary.status in submitted_statuses and len(self._get_provider_summaries(self.summary)) == 0:

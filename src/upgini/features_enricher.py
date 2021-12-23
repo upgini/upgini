@@ -87,8 +87,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 endpoint=self.endpoint,
                 api_key=self.api_key,
             )
-            self._search_task = search_task.poll_result()
-            self.__show_metrics()
+            print("Checking existing search...")
+            self._search_task = search_task.poll_result(quiet=True)
+            print("Search found. Now you can use transform")
 
     def _inner_fit(
         self,
