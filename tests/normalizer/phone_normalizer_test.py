@@ -30,16 +30,16 @@ def test_phone_int_to_int_safe():
 def test_phone_str_to_int_safe():
     df = pd.DataFrame(
         data={
-            "phone_num": ["+4234567", "01 02 03 04", "223-45-67", "123456789012345", "abc"],
-            "something_else": ["a", "b", "c", "d", "e"],
+            "phone_num": ["+4(234)567", "01 02 03 04", "223-45-67", "+86 10 6764 5489", "123456789012345", "abc"],
+            "something_else": ["a", "b", "c", "d", "e", "f"],
         }
     )
     phone_to_int(df, "phone_num")
 
     expected_df = pd.DataFrame(
         data={
-            "phone_num": [4234567, 1020304, 2234567, 123456789012345, -1],
-            "something_else": ["a", "b", "c", "d", "e"],
+            "phone_num": [4234567, 1020304, 2234567, 861067645489, 123456789012345, -1],
+            "something_else": ["a", "b", "c", "d", "e", "f"],
         }
     )
     assert_frame_equal(df, expected_df)
