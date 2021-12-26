@@ -34,14 +34,14 @@ def phone_to_int(df: pd.DataFrame, phone_column_name: str) -> pd.DataFrame:
 
 def phone_float_to_int_safe(value: float) -> int:
     try:
-        return int(value)
+        return validate_length(int(value))
     except Exception:
         return -1
 
 
 def phone_int_to_int_safe(value: float) -> int:
     try:
-        return int(value)
+        return validate_length(int(value))
     except Exception:
         return -1
 
@@ -50,6 +50,13 @@ def phone_str_to_int_safe(value: str) -> int:
     try:
         numeric_filter = filter(str.isdigit, value)
         numeric_string = "".join(numeric_filter)
-        return int(numeric_string)
+        return validate_length(int(numeric_string))
     except Exception:
         return -1
+
+
+def validate_length(value: int) -> int:
+    if value < 10000000 or value > 999999999999999:
+        return -1
+    else:
+        return value
