@@ -1,5 +1,5 @@
-from datetime import date, datetime
 import ipaddress
+from datetime import date, datetime
 
 import pandas as pd
 import pytest

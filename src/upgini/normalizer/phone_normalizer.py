@@ -1,7 +1,5 @@
 import pandas as pd
-from pandas.api.types import is_string_dtype
-from pandas.api.types import is_float_dtype
-from pandas.api.types import is_int64_dtype
+from pandas.api.types import is_float_dtype, is_int64_dtype, is_string_dtype
 
 
 def phone_to_int(df: pd.DataFrame, phone_column_name: str) -> pd.DataFrame:

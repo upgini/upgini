@@ -32,8 +32,8 @@ from upgini.metadata import (
     RegressionTask,
     SearchCustomization,
 )
-from upgini.search_task import SearchTask
 from upgini.normalizer.phone_normalizer import phone_to_int
+from upgini.search_task import SearchTask
 
 
 class Dataset(pd.DataFrame):

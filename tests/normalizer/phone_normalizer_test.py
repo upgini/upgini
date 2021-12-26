@@ -1,6 +1,7 @@
 import pandas as pd
-from upgini.normalizer.phone_normalizer import phone_to_int
 from pandas.testing import assert_frame_equal
+
+from upgini.normalizer.phone_normalizer import phone_to_int
 
 
 def test_phone_float_to_int_safe():
@@ -17,7 +18,10 @@ def test_phone_float_to_int_safe():
 
 def test_phone_int_to_int_safe():
     df = pd.DataFrame(
-        data={"phone_num": [0, -2, 100, 123456789012345, 1234567890123456, None], "something_else": ["a", "b", "c", "d", "e", "f"]}
+        data={
+            "phone_num": [0, -2, 100, 123456789012345, 1234567890123456, None],
+            "something_else": ["a", "b", "c", "d", "e", "f"],
+        }
     )
     phone_to_int(df, "phone_num")
 
@@ -30,7 +34,15 @@ def test_phone_int_to_int_safe():
 def test_phone_str_to_int_safe():
     df = pd.DataFrame(
         data={
-            "phone_num": ["+4(234)5678", "01 02 03 04 05", "223-45-678", "+86 10 6764 5489", "123456789012345", "123", "abc"],
+            "phone_num": [
+                "+4(234)5678",
+                "01 02 03 04 05",
+                "223-45-678",
+                "+86 10 6764 5489",
+                "123456789012345",
+                "123",
+                "abc",
+            ],
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
