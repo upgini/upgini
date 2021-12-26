@@ -12,6 +12,7 @@ from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype
 from pandas.api.types import is_string_dtype as is_string
+from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -31,8 +32,8 @@ from upgini.metadata import (
     RegressionTask,
     SearchCustomization,
 )
-from upgini.search_task import SearchTask
 from upgini.normalizer.phone_normalizer import phone_to_int
+from upgini.search_task import SearchTask
 
 
 class Dataset(pd.DataFrame):
@@ -224,6 +225,8 @@ class Dataset(pd.DataFrame):
                 self[date] = pd.to_datetime(self[date]).values.astype(np.int64) // 1_000_000
             elif is_datetime(self[date]):
                 self[date] = self[date].view(np.int64) // 1_000_000
+            elif is_period_dtype(self[date]):
+                self[date] = pd.to_datetime(self[date].astype("string")).values.astype(np.int64) // 1_000_000
 
     @staticmethod
     def __email_to_hem(email: str):
