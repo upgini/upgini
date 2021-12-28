@@ -7,7 +7,7 @@ import pandas as pd
 
 from upgini import dataset
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
-from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType, RuntimeParameters
+from upgini.metadata import SYSTEM_RECORD_ID, FileMetadata, ModelTaskType, RuntimeParameters
 
 
 class SearchTask:
@@ -633,30 +633,30 @@ class SearchTask:
 
         return result_df
 
-    def _get_features(self, provider_summaries: List[ProviderTaskSummary]) -> pd.DataFrame:
-        _features = []
+    def _get_features(self, provider_summaries: List[ProviderTaskSummary]) -> List[Dict[str, Any]]:
+        features = []
         for provider_summary in provider_summaries:
             if provider_summary.status == "COMPLETED":
-                provider_id = provider_summary.provider_id
                 provider_features = get_rest_client(self.endpoint, self.api_key).get_search_features_meta_v2(
                     provider_summary.ads_search_task_id
                 )
                 for feature in provider_features["providerFeatures"] + provider_features["etalonFeatures"]:
                     feature_meta = {
-                        "provider_id": provider_id,
                         "feature_name": feature["name"],
-                        "importance": feature["importance"],
-                        "PSI": feature["psi"],
-                        "matched_in_percent": feature["matchedInPercent"],
+                        "shap_values": feature["importance"],
+                        "match_percent": feature["matchedInPercent"],
                         "type": feature["valueType"] if "valueType" in feature else None,
                     }
-                    _features.append(feature_meta)
-        return pd.DataFrame(_features)
+                    features.append(feature_meta)
+        return features
 
-    def initial_features(self) -> pd.DataFrame:
+    def initial_features(self) -> List[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         return self._get_features(provider_summaries)
 
-    def validation_features(self) -> pd.DataFrame:
+    def validation_features(self) -> List[Dict[str, Any]]:
         provider_summaries = self._check_finished_validation_search()
         return self._get_features(provider_summaries)
+
+    def get_file_metadata(self) -> FileMetadata:
+        return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id)

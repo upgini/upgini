@@ -13,7 +13,8 @@
 [![PyPI Latest Release](https://img.shields.io/badge/pypi-v0.10.0-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
 [![stability-release-candidate](https://img.shields.io/badge/stability-pre--release-br?logo=circleci&logoColor=white)](https://pypi.org/project/upgini/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
-[![Slack upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)  
+[![Slack upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)
+[![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
 ## ❔ Overview
 
 **Upgini** is a Python library for an automated features search to boost accuracy of supervised ML models on tabular data. It enriches your dataset with intelligently crafted features from a broad range of curated data sources, including public datasets and scraped data. The search is conducted for any combination of public IDs contained in your tabular dateset: IP, date, etc.

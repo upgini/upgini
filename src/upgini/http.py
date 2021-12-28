@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 
 import requests
 from pydantic import BaseModel
+from requests import api
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
@@ -154,6 +155,7 @@ class _RestClient:
     SEARCH_MODEL_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/models/{0}/file"
     SEARCH_SCORES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}/file"
     SEARCH_FEATURES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/rawfeatures/{0}/file"
+    SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
 
@@ -348,6 +350,11 @@ class _RestClient:
                 return self._send_post_file_req_v2(api_path, files)
 
         return self._with_unauth_retry(lambda: open_and_send())
+
+    def get_search_file_metadata(self, search_task_id: str) -> FileMetadata:
+        api_path = self.SEARCH_FILE_METADATA_URI_FMT_V2.format(search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        return FileMetadata.parse_obj(response)
 
     # ---
 

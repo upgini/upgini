@@ -182,7 +182,7 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated. They have been dropped")
+            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
