@@ -64,6 +64,17 @@ def test_features_enricher(requests_mock):
         },
     )
     requests_mock.get(
+        url + "/public/api/v2/search/features/432",
+        json={
+            "providerFeatures": [
+                {"name": "aaa", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
+            ],
+            "etalonFeatures": [
+                {"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}
+            ]
+        },
+    )
+    requests_mock.get(
         url + "/public/api/v2/search/rawfeatures/321",
         json={"adsSearchTaskFeaturesDTO": [{"searchType": "INITIAL", "adsSearchTaskFeaturesId": "333"}]},
     )
@@ -107,6 +118,9 @@ def test_features_enricher(requests_mock):
     )
 
     assert metrics is not None and metrics.equals(expected_metrics)
+
+    assert enricher.feature_names_ == ["SystemRecordId_473310000", "aaa"]
+    assert enricher.feature_importances_ == [1.0, 10.1]
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
