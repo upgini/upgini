@@ -643,7 +643,7 @@ class SearchTask:
                 for feature in provider_features["providerFeatures"] + provider_features["etalonFeatures"]:
                     feature_meta = {
                         "feature_name": feature["name"],
-                        "shap_values": feature["importance"],
+                        "shap_value": feature["importance"],
                         "match_percent": feature["matchedInPercent"],
                         "type": feature["valueType"] if "valueType" in feature else None,
                     }
