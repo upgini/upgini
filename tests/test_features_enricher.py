@@ -67,7 +67,7 @@ def test_features_enricher(requests_mock):
         url + "/public/api/v2/search/features/432",
         json={
             "providerFeatures": [
-                {"name": "aaa", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
+                {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
             ],
             "etalonFeatures": [
                 {"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}
@@ -105,7 +105,7 @@ def test_features_enricher(requests_mock):
     enriched_train_features = enricher.fit_transform(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.get_metrics()
     expected_metrics = pd.DataFrame(
@@ -119,8 +119,15 @@ def test_features_enricher(requests_mock):
 
     assert metrics is not None and metrics.equals(expected_metrics)
 
-    assert enricher.feature_names_ == ["SystemRecordId_473310000", "aaa"]
-    assert enricher.feature_importances_ == [1.0, 10.1]
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 2
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info["feature_name"] == "SystemRecordId_473310000"
+    assert first_feature_info["shap_value"] == 1.0
+    second_feature_info = enricher.features_info.iloc[1]
+    assert second_feature_info["feature_name"] == "feature"
+    assert second_feature_info["shap_value"] == 10.1
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):

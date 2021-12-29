@@ -229,6 +229,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if result_features is None:
             raise RuntimeError("Search engine crashed on this request.")
 
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
         if self.keep_input:
             result = pd.merge(
                 df.drop(columns=self.TARGET_NAME),
@@ -297,6 +300,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if result_features is None:
             raise RuntimeError("Search engine crashed on this request.")
 
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
         if not self.keep_input:
             result = pd.merge(
                 df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
@@ -332,10 +338,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         for x_column in x_columns:
             feature_metadata = feature_metadata_by_name(x_column)
             if feature_metadata:
-                if self.keep_input:
-                    self.feature_names_.append(x_column)
-                    self.feature_importances_.append(feature_metadata["shap_value"])
-                    features_info.append(feature_metadata)
+                features_info.append(feature_metadata)
                 importances.remove(feature_metadata)
 
         importances.sort(key=lambda m: m["feature_name"])
