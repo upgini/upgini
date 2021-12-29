@@ -17,7 +17,7 @@
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
 ## ❔ Overview
 
-**Upgini** is a Python library for an automated features search to boost accuracy of supervised ML models on tabular data. It enriches your dataset with intelligently crafted features from a broad range of curated data sources, including public datasets and scraped data. The search is conducted for any combination of public IDs contained in your tabular dateset: IP, date, etc.
+**Upgini** is a Python library for an automated features search to boost accuracy of supervised ML models on tabular data. It enriches your dataset with intelligently crafted features from a broad range of curated data sources, including public datasets and scraped data. The search is conducted for any combination of public IDs contained in your tabular dataset: IP, date, etc.
 Only features that could improve the prediction power of your ML model are returned.  
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
 We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.
@@ -35,12 +35,12 @@ We want radically simplify features search and delivery for ML pipelines to make
   - ☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)  
   - 🔜 [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)   
   - 🔜 [recommender system](https://en.wikipedia.org/wiki/Recommender_system)  
-## 🏁 Quick start with kaggle example
+## 🏁 Quick start with Kaggle example
 
-### 🏎 Live Demo with kaggle competition data
-Live Demo notebook [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
+### 🏎 Live demo with Kaggle competition data
+Live demo notebook [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
 
-[![Open example in google colab](https://img.shields.io/badge/run_example_in-colab-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
+[![Open example in Google Colab](https://img.shields.io/badge/run_example_in-colab-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 &nbsp;
 [![Open in Binder](https://img.shields.io/badge/run_example_in-mybinder-red.svg?style=for-the-badge&logo=data:image/png;base64,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)](https://mybinder.org/v2/gh/upgini/upgini/HEAD?labpath=notebooks%2Fkaggle_example.ipynb)
 &nbsp;
@@ -71,9 +71,9 @@ docker run -p 8888:8888 upgini
 Open http://localhost:8888?token=<your_token_from_console_output> in your browser
 
 #### *Kaggle notebook*
-Jupyter notebook with a kaggle example: [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb). The problem being solved is a Kaggle competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only). The goal is to predict future sales of different goods in different stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
+Jupyter notebook with a Kaggle example: [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb). The problem being solved is a Kaggle competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only). The goal is to predict future sales of different goods in different stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
 
-Competition dataset was splited into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML algorithm was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
+Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML algorithm was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
 ## 💻 How it works?
 
@@ -157,12 +157,12 @@ Our team works hard to introduce new search key types, currently we support:
 #### ⚠️ Requirements for search initialization dataset  
 We do dataset verification and cleaning under the hood, but still there are some requirements to follow:  
 - Pandas dataframe representation  
-- Correct label column types: integers or strings for binary and multiclass lables, floats for regression  
+- Correct label column types: integers or strings for binary and multiclass labels, floats for regression  
 - At least one column defined as a [search key](#-search-key-types-we-support-more-is-coming)  
 - Min size after deduplication by search key column and NAs removal: *1000 records*  
 - Max size after deduplication by search key column and NAs removal: *1 000 000 records*  
 ### 4. 🔍 Start your first data search!
-The main abstraction you interact is `FeaturesEnricher`. `FeaturesEnricher` is scikit-learn compatible estimator, so you can easily add it into your existing ML pipelines. First, create instance of the `FeaturesEnricher` class. Once it created call  
+The main abstraction you interact is `FeaturesEnricher`. `FeaturesEnricher` is a Scikit-learn compatible estimator, so you can easily add it into your existing ML pipelines. First, create instance of the `FeaturesEnricher` class. Once it created call  
 - `fit` to search relevant datasets & features  
 - than `transform` to enrich your dataset with features from search result  
 
@@ -239,7 +239,7 @@ enricher.fit(
 - Pandas dataframe representation  
 
 ### 🧹 Search dataset validation
-We validate and clean search initialization dataset uder the hood:  
+We validate and clean search initialization dataset under the hood:  
 ✂️ Check you *search keys* columns format   
 ✂️ Check dataset for full row duplicates. If we find any, we remove duplicated rows and make a note on share of row duplicates  
 ✂️ Check inconsistent labels  - rows with the same record keys (not search keys!) but different labels, we remove them and make a note on share of row duplicates
@@ -248,7 +248,7 @@ We calculate all the accuracy metrics and uplifts for non-linear machine learnin
 
 ## 💸 Why it's a paid service? Can I use it for free?
 The short answer is Yes! **We do have two options for that** 🤓  
-Let us explain. This is a part-time project for our small team, but as you might know, search is a very infrastructure-intensive service. We pay infrustructure cost for *every search request* generated on the platform, as we mostly use serverless components under the hood. Both storage and compute.  
+Let us explain. This is a part-time project for our small team, but as you might know, search is a very infrastructure-intensive service. We pay infrastructure cost for *every search request* generated on the platform, as we mostly use serverless components under the hood. Both storage and compute.  
 To cover these run costs we introduce paid plans with a certain amount of search requests, which we hope will be affordable for most of the data scientists & developers in the community.  
 #### First option. Participate in beta testing
 Now service is still in a beta stage, so *registered beta testers* will get an **80USD credits for 6 months**. Feel free to start with the registration form 👉 [here](https://profile.upgini.com/access-for-beta-testers)  Please note that number of slots for beta testing is limited and we wont' be able to handle all the requests.  
@@ -286,8 +286,8 @@ And we might need some help from community)
 So, we'll be happy about every **pull request** you open and **issue** you find to make this library **more awesome**. Please note that it might sometimes take us a while to get back to you.
 **For major changes**, please open an issue first to discuss what you would like to change
 #### Developing
-Some convinient ways to start contributing are:  
-⚙️ **Visual Studio Code** [![Open in Visual Studio Code](https://open.vscode.dev/badges/open-in-vscode.svg)](https://open.vscode.dev/upgini/upgini) You can remotely open this repo in VS Code without cloning or automaticaly clone and open it inside a docker container.  
+Some convenient ways to start contributing are:  
+⚙️ **Visual Studio Code** [![Open in Visual Studio Code](https://open.vscode.dev/badges/open-in-vscode.svg)](https://open.vscode.dev/upgini/upgini) You can remotely open this repo in VS Code without cloning or automatically clone and open it inside a docker container.  
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links

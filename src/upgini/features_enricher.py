@@ -334,14 +334,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             if feature_metadata:
                 if self.keep_input:
                     self.feature_names_.append(x_column)
-                    self.feature_importances_.append(feature_metadata["shap_values"])
+                    self.feature_importances_.append(feature_metadata["shap_value"])
                     features_info.append(feature_metadata)
                 importances.remove(feature_metadata)
 
         importances.sort(key=lambda m: m["feature_name"])
         for feature_metadata in importances:
             self.feature_names_.append(feature_metadata["feature_name"])
-            self.feature_importances_.append(feature_metadata["shap_values"])
+            self.feature_importances_.append(feature_metadata["shap_value"])
             features_info.append(feature_metadata)
 
         self.features_info = pd.DataFrame(features_info)

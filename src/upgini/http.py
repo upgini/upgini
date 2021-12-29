@@ -8,7 +8,6 @@ from urllib.parse import urljoin
 
 import requests
 from pydantic import BaseModel
-from requests import api
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
@@ -21,8 +20,7 @@ try:
     __version__ = version("upgini")
 except ImportError:
     try:
-        from importlib.metadata import version
-
+        from importlib.metadata import version  # type: ignore
         __version__ = version("upgini")
     except ImportError:
         __version__ = "Upgini wasn't installed"
