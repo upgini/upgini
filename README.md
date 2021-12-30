@@ -49,7 +49,7 @@ Live Demo notebook [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/
 
 ### 🐍 Install from PyPI
 ```python
-!pip install upgini
+!pip install -U upgini
 import upgini
 ```
 ### 🐳 Docker-way
