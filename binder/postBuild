@@ -1,0 +1,2 @@
+jupyter nbextension install --py jupyter_notebookparams --sys-prefix
+jupyter nbextension enable --py jupyter_notebookparams --sys-prefix
