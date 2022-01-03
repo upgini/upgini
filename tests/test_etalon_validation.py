@@ -1,3 +1,6 @@
+import ipaddress
+from datetime import date, datetime
+
 import pandas as pd
 import pytest
 
@@ -36,7 +39,7 @@ def test_email_to_hem_convertion():
     assert "email" not in dataset.columns.values
 
 
-def test_ip_to_int_conversion():
+def test_string_ip_to_int_conversion():
     df = pd.DataFrame(
         [
             {"ip": "192.168.1.1"},
@@ -49,12 +52,42 @@ def test_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
+    assert dataset["ip"].dtype == "int64"
     assert dataset["ip"].iloc[0] == 3232235777
     assert dataset["ip"].iloc[1] == -1
     assert dataset["ip"].iloc[2] == -1
 
 
-def test_date_to_timestamp_convertion():
+def test_python_ip_to_int_conversion():
+    df = pd.DataFrame(
+        [
+            {"ip": ipaddress.ip_address("192.168.1.1")},
+        ]
+    )
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "ip": FileColumnMeaningType.IP_ADDRESS,
+    }
+    dataset._Dataset__convert_ip()
+    assert dataset["ip"].dtype == "int64"
+    assert dataset["ip"].iloc[0] == 3232235777
+
+
+def test_int_ip_to_int_conversion():
+    df = pd.DataFrame(
+        [
+            {"ip": 3232235777},
+        ]
+    )
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "ip": FileColumnMeaningType.IP_ADDRESS,
+    }
+    dataset._Dataset__convert_ip()
+    assert dataset["ip"].iloc[0] == 3232235777
+
+
+def test_string_date_to_timestamp_convertion():
     df = pd.DataFrame(
         [
             {"date": "2020-01-01"},
@@ -72,3 +105,67 @@ def test_date_to_timestamp_convertion():
     assert dataset.shape[0] == 1
     assert dataset["date"].dtype == "int64"
     assert dataset["date"].iloc[0] == 1577836800000
+
+
+def test_string_datetime_to_timestamp_convertion():
+    df = pd.DataFrame(
+        [
+            {"date": "2020-01-01T00:00:00Z"},
+        ]
+    )
+    df["date"] = pd.to_datetime(df["date"])
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATE,
+    }
+    dataset._Dataset__clean_empty_rows()
+    dataset._Dataset__to_millis()
+    assert dataset.shape[0] == 1
+    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].iloc[0] == 1577836800000
+
+
+def test_period_range_to_timestamp_conversion():
+    df = pd.DataFrame({"date": pd.period_range(start="2020-01-01", periods=3, freq="D")})
+    print(df)
+    dataset = Dataset("test2", df=df)
+    dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
+    dataset._Dataset__to_millis()
+    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].iloc[0] == 1577836800000
+    assert dataset["date"].iloc[1] == 1577923200000
+    assert dataset["date"].iloc[2] == 1578009600000
+
+
+def test_python_date_to_timestamp_conversion():
+    df = pd.DataFrame(
+        [
+            {"date": date(2020, 1, 1)},
+            {"date": date(2020, 1, 2)},
+            {"date": date(2020, 1, 3)},
+        ]
+    )
+    dataset = Dataset("test3", df=df)
+    dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
+    dataset._Dataset__to_millis()
+    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].iloc[0] == 1577836800000
+    assert dataset["date"].iloc[1] == 1577923200000
+    assert dataset["date"].iloc[2] == 1578009600000
+
+
+def test_python_datetime_to_timestamp_conversion():
+    df = pd.DataFrame(
+        [
+            {"date": datetime(2020, 1, 1, 0, 0, 0)},
+            {"date": datetime(2020, 1, 2, 0, 0, 0)},
+            {"date": datetime(2020, 1, 3, 0, 0, 0)},
+        ]
+    )
+    dataset = Dataset("test3", df=df)
+    dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
+    dataset._Dataset__to_millis()
+    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].iloc[0] == 1577836800000
+    assert dataset["date"].iloc[1] == 1577923200000
+    assert dataset["date"].iloc[2] == 1578009600000
