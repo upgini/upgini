@@ -203,7 +203,8 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         if elem.url == initial_search_url:
             fit_req = elem
 
-    # TODO: can be better with https://metareal.blog/en/post/2020/05/03/validating-multipart-form-data-with-requests-mock/
+    # TODO: can be better with
+    #  https://metareal.blog/en/post/2020/05/03/validating-multipart-form-data-with-requests-mock/
     # It's do-able to parse req with cgi module and verify contents
     assert fit_req is not None
     assert "runtimeProperty1" in str(fit_req.body)
