@@ -7,7 +7,7 @@ import pandas as pd
 
 from upgini import dataset
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
-from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
+from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType, RuntimeParameters
 
 
 class SearchTask:
@@ -109,8 +109,18 @@ class SearchTask:
             else:
                 return "Internal error"
 
-    def validation(self, validation_dataset: "dataset.Dataset", extract_features: bool = False) -> "SearchTask":
-        return validation_dataset.validation(self.search_task_id, return_scores=True, extract_features=extract_features)
+    def validation(
+        self,
+        validation_dataset: "dataset.Dataset",
+        extract_features: bool = False,
+        runtime_parameters: Optional[RuntimeParameters] = None,
+    ) -> "SearchTask":
+        return validation_dataset.validation(
+            self.search_task_id,
+            return_scores=True,
+            extract_features=extract_features,
+            runtime_parameters=runtime_parameters,
+        )
 
     def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:
         if self.summary is None or len(self.summary.initial_important_providers) == 0:
@@ -119,7 +129,7 @@ class SearchTask:
 
     def _check_finished_validation_search(self) -> List[ProviderTaskSummary]:
         if self.summary is None or len(self.summary.validation_important_providers) == 0:
-            raise RuntimeError("Validation search didn't start.")
+            raise RuntimeError(f"Validation search didn't start. summary: {self.summary}")
         return self.summary.validation_important_providers
 
     @staticmethod

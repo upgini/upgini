@@ -22,6 +22,7 @@ from upgini.metadata import (
     FileColumnMeaningType,
     ModelTaskType,
     SearchKey,
+    RuntimeParameters,
 )
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
@@ -54,6 +55,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     search_id: str, optional (default=None)
         Identifier of fitted enricher.
         If not specified transform could be called only after fit or fit_transform call
+
+    runtime_parameters: Optional dict of str->str.
+        Not for public use. Ignore it. It's a way to argument requests with extra parameters.
+        Used to trigger experimental features at backend. Used by backend team.
     """
 
     TARGET_NAME = "target"
@@ -70,6 +75,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
+        runtime_parameters: Optional[RuntimeParameters] = None,
     ):
         if len(search_keys) == 0:
             if search_id:
@@ -90,6 +96,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             print("Checking existing search...")
             self._search_task = search_task.poll_result(quiet=True)
             print("Search found. Now you can use transform")
+        self.runtime_parameters = runtime_parameters
 
     def _inner_fit(
         self,
@@ -178,7 +185,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
         ]
 
-        self._search_task = dataset.search(extract_features=extract_features, accurate_model=self.accurate_model)
+        self._search_task = dataset.search(
+            extract_features=extract_features,
+            accurate_model=self.accurate_model,
+            runtime_parameters=self.runtime_parameters,
+        )
         self.__show_metrics()
 
         return df_without_eval_set
@@ -268,7 +279,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
-        validation_task = self._search_task.validation(dataset, extract_features=True)
+        validation_task = self._search_task.validation(
+            dataset, extract_features=True, runtime_parameters=self.runtime_parameters
+        )
 
         etalon_columns = list(self.search_keys.keys())
 

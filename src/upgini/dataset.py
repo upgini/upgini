@@ -30,6 +30,7 @@ from upgini.metadata import (
     NumericInterval,
     RegressionTask,
     SearchCustomization,
+    RuntimeParameters,
 )
 from upgini.search_task import SearchTask
 from upgini.normalizer.phone_normalizer import phone_to_int
@@ -608,9 +609,13 @@ class Dataset(pd.DataFrame):
         extract_features: bool,
         accurate_model: Optional[bool] = None,
         filter_features: Optional[dict] = None,
+        runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
         search_customization = SearchCustomization(
-            extractFeatures=extract_features, accurateModel=accurate_model, returnScores=return_scores
+            extractFeatures=extract_features,
+            accurateModel=accurate_model,
+            returnScores=return_scores,
+            runtimeParameters=runtime_parameters,
         )
         if filter_features:
             if [
@@ -638,6 +643,7 @@ class Dataset(pd.DataFrame):
         extract_features: bool = False,
         accurate_model: bool = False,
         filter_features: Optional[dict] = None,
+        runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
 
         if self.etalon_def is None:
@@ -650,7 +656,11 @@ class Dataset(pd.DataFrame):
 
         file_metadata = self.__construct_metadata()
         search_customization = self.__construct_search_customization(
-            return_scores, extract_features, accurate_model, filter_features
+            return_scores=return_scores,
+            extract_features=extract_features,
+            accurate_model=accurate_model,
+            filter_features=filter_features,
+            runtime_parameters=runtime_parameters,
         )
 
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
@@ -682,7 +692,11 @@ class Dataset(pd.DataFrame):
         return search_task.poll_result()
 
     def validation(
-        self, initial_search_task_id: str, return_scores: bool = True, extract_features: bool = False
+        self,
+        initial_search_task_id: str,
+        return_scores: bool = True,
+        extract_features: bool = False,
+        runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
         if self.etalon_def is None:
             self.validate(validate_target=not extract_features, validate_count=False)
@@ -696,7 +710,9 @@ class Dataset(pd.DataFrame):
             self.drop(["is_valid"], axis=1, inplace=True)
 
         file_metadata = self.__construct_metadata()
-        search_customization = self.__construct_search_customization(return_scores, extract_features)
+        search_customization = self.__construct_search_customization(
+            return_scores, extract_features, runtime_parameters=runtime_parameters
+        )
 
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
             self.file_upload_id, file_metadata

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel
 
@@ -123,16 +123,22 @@ class FeaturesFilter(BaseModel):
     selectedFeatures: Optional[List[str]]
 
 
+class RuntimeParameters(BaseModel):
+    properties: Optional[Dict[str, str]]
+
+
 class SearchCustomization(BaseModel):
     featuresFilter: Optional[FeaturesFilter]
     extractFeatures: Optional[bool]
     accurateModel: Optional[bool]
     returnScores: Optional[bool]
+    runtimeParameters: Optional[RuntimeParameters]
 
     def __repr__(self):
         return (
             f"Features filter: {self.featuresFilter}, "
             f"extract features: {self.extractFeatures}, "
             f"accurate model: {self.accurateModel}, "
-            f"return scores: {self.returnScores}"
+            f"return scores: {self.returnScores}, "
+            f"runtimeParameters: {self.runtimeParameters}"
         )
