@@ -49,8 +49,7 @@ Live Demo notebook [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/
 
 ### 🐍 Install from PyPI
 ```python
-!pip install -U upgini
-import upgini
+%pip install -Uq upgini catboost
 ```
 ### 🐳 Docker-way
 Clone `$ git clone https://github.com/upgini/upgini` or download upgini git repo locally and follow steps below to build docker container 👇  
@@ -100,7 +99,7 @@ Load training dataset into pandas dataframe and separate features' columns from 
 import pandas as pd
 # labeled training dataset - customer_churn_prediction_train.csv
 train_df = pd.read_csv("customer_churn_prediction_train.csv")
-train_features = train_df.drop(columns="label")
+train_ids_and_features = train_df.drop(columns="label")
 train_label = train_df["label"]
 ```
 ### 3. 🔦 Choose at least one column as a search key
@@ -187,7 +186,7 @@ enricher = FeaturesEnricher(
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
 # but don't worry - we'll send email notification. Accuracy metrics of trained model and uplifts
 # will be shown automaticly
-enricher.fit(train_features, train_target)
+enricher.fit(train_ids_and_features, train_target)
 
 ```
 
@@ -196,9 +195,9 @@ That's all). We have fitted `FeaturesEnricher` and any pandas dataframe, with ex
 ```python
 # load dataset for enrichment
 test_df = pd.read_csv("test.csv")
-test_features = test_df.drop(columns="target")
+test_ids_and_features = test_df.drop(columns="target")
 # enrich it!
-enriched_test_features = enricher.transform(test_features)
+enriched_test_features = enricher.transform(test_ids_and_features)
 enriched_test_features.head()
 ```
 You can get more details about `FeaturesEnricher` in runtime using docstrings, for example, via `help(FeaturesEnricher)` or `help(FeaturesEnricher.fit)`.
@@ -212,12 +211,12 @@ You can validate data quality from your search result on out-of-time dataset usi
 ```python
 # load train dataset
 train_df = pd.read_csv("train.csv")
-train_features = train_df.drop(columns="target")
+train_ids_and_features = train_df.drop(columns="target")
 train_target = train_df["target"]
 
 # load out-of-time validation dataset
 eval_df = pd.read_csv("validation.csv")
-eval_features = eval_df.drop(columns="eval_target")
+eval_ids_and_features = eval_df.drop(columns="eval_target")
 eval_target = eval_df["eval_target"]
 # create FeaturesEnricher
 enricher = FeaturesEnricher(
@@ -229,9 +228,9 @@ enricher = FeaturesEnricher(
 # the output will contain quality metrics for both the training data set and
 # the eval set (validation OOT data set)
 enricher.fit(
-  train_features,
+  train_ids_and_features,
   train_target,
-  eval_set = [(eval_features, eval_target)]
+  eval_set = [(eval_ids_and_features, eval_target)]
 )
 ```
 #### ⚠️ Requirements for out-of-time dataset  
