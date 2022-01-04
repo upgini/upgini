@@ -16,10 +16,12 @@ from upgini.metadata import FileMetadata, FileMetrics, SearchCustomization
 
 try:
     from importlib_metadata import version
+
     __version__ = version("upgini")
 except ImportError:
     try:
         from importlib.metadata import version
+
         __version__ = version("upgini")
     except ImportError:
         __version__ = "Upgini wasn't installed"
