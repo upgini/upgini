@@ -185,6 +185,17 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         },
     )
     requests_mock.get(
+        url + "/public/api/v2/search/features/432",
+        json={
+            "providerFeatures": [
+                {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
+            ],
+            "etalonFeatures": [
+                {"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}
+            ]
+        },
+    )
+    requests_mock.get(
         url + "/public/api/v2/search/rawfeatures/initialSearchTaskId",
         json={"adsSearchTaskFeaturesDTO": [{"searchType": "INITIAL", "adsSearchTaskFeaturesId": "333"}]},
     )
@@ -319,4 +330,4 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
 
-    assert transformed.shape == (10000, 5)
+    assert transformed.shape == (10000, 4)
