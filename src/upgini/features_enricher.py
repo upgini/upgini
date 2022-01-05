@@ -95,6 +95,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             )
             print("Checking existing search...")
             self._search_task = search_task.poll_result(quiet=True)
+            file_metadata = self._search_task.get_file_metadata()
+            x_columns = [c.name for c in file_metadata.columns]
+            self._prepare_feature_importances(x_columns)
+            # TODO validate search_keys with search_keys from file_metadata
             print("Search found. Now you can use transform")
         self.runtime_parameters = runtime_parameters
 
@@ -192,6 +196,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
         self.__show_metrics()
 
+        self._prepare_feature_importances(list(X.columns))
+
         return df_without_eval_set
 
     def fit(
@@ -222,6 +228,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         if result_features is None:
             raise RuntimeError("Search engine crashed on this request.")
+
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
         if self.keep_input:
             result = pd.merge(
@@ -291,6 +300,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if result_features is None:
             raise RuntimeError("Search engine crashed on this request.")
 
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
         if not self.keep_input:
             result = pd.merge(
                 df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
@@ -305,6 +317,37 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if SYSTEM_FAKE_DATE in result.columns:
             result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
         return result
+
+    def get_features_info(self) -> pd.DataFrame:
+        return self.features_info
+
+    def _prepare_feature_importances(self, x_columns: List[str]):
+        if self._search_task is None:
+            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
+        importances = self._search_task.initial_features()
+
+        def feature_metadata_by_name(name: str):
+            for f in importances:
+                if f["feature_name"] == name:
+                    return f
+
+        self.feature_names_ = []
+        self.feature_importances_ = []
+        features_info = []
+
+        for x_column in x_columns:
+            feature_metadata = feature_metadata_by_name(x_column)
+            if feature_metadata:
+                features_info.append(feature_metadata)
+                importances.remove(feature_metadata)
+
+        importances.sort(key=lambda m: m["feature_name"])
+        for feature_metadata in importances:
+            self.feature_names_.append(feature_metadata["feature_name"])
+            self.feature_importances_.append(feature_metadata["shap_value"])
+            features_info.append(feature_metadata)
+
+        self.features_info = pd.DataFrame(features_info)
 
     def _prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
         valid_search_keys = {}
