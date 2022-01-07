@@ -1,10 +1,10 @@
 import os
 
 import pandas as pd
+from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
-from requests_mock.mocker import Mocker
 
 
 def test_features_enricher(requests_mock):
@@ -64,14 +64,50 @@ def test_features_enricher(requests_mock):
         },
     )
     requests_mock.get(
+        url + "/public/api/v2/search/321/metadata",
+        json={
+            "fileUploadId": "123",
+            "fileMetadataId": "123",
+            "name": "test",
+            "description": "",
+            "columns": [
+                {
+                    "index": 0,
+                    "name": "systemrecordid_473310000",
+                    "originalName": "SystemRecordId_473310000",
+                    "dataType": "STRING",
+                    "meaningType": "FEATURE",
+                },
+                {
+                    "index": 1,
+                    "name": "phone_num",
+                    "originalName": "phone_num",
+                    "dataType": "STRING",
+                    "meaningType": "MSISDN",
+                },
+                {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
+                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
+                {
+                    "index": 4,
+                    "name": "system_record_id",
+                    "originalName": "system_record_id",
+                    "dataType": "INT",
+                    "meaningType": "SYSTEM_RECORD_ID",
+                },
+            ],
+            "searchKeys": [["phone_num"], ["rep_date"], ["phone_num", "rep_date"]],
+            "hierarchicalGroupKeys": [],
+            "hierarchicalSubgroupKeys": [],
+            "rowsCount": 15555,
+        },
+    )
+    requests_mock.get(
         url + "/public/api/v2/search/features/432",
         json={
             "providerFeatures": [
                 {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
             ],
-            "etalonFeatures": [
-                {"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}
-            ]
+            "etalonFeatures": [{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
         },
     )
     requests_mock.get(
@@ -185,14 +221,50 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         },
     )
     requests_mock.get(
+        url + "/public/api/v2/search/initialSearchTaskId/metadata",
+        json={
+            "fileUploadId": "123",
+            "fileMetadataId": "123",
+            "name": "test",
+            "description": "",
+            "columns": [
+                {
+                    "index": 0,
+                    "name": "systemrecordid_473310000",
+                    "originalName": "SystemRecordId_473310000",
+                    "dataType": "STRING",
+                    "meaningType": "FEATURE",
+                },
+                {
+                    "index": 1,
+                    "name": "phone_num",
+                    "originalName": "phone_num",
+                    "dataType": "STRING",
+                    "meaningType": "MSISDN",
+                },
+                {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
+                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
+                {
+                    "index": 4,
+                    "name": "system_record_id",
+                    "originalName": "system_record_id",
+                    "dataType": "INT",
+                    "meaningType": "SYSTEM_RECORD_ID",
+                },
+            ],
+            "searchKeys": [["phone_num"], ["rep_date"], ["phone_num", "rep_date"]],
+            "hierarchicalGroupKeys": [],
+            "hierarchicalSubgroupKeys": [],
+            "rowsCount": 15555,
+        },
+    )
+    requests_mock.get(
         url + "/public/api/v2/search/features/432",
         json={
             "providerFeatures": [
                 {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
             ],
-            "etalonFeatures": [
-                {"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}
-            ]
+            "etalonFeatures": [{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
         },
     )
     requests_mock.get(
