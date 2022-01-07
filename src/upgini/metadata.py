@@ -103,6 +103,7 @@ class FileColumnMetadata(BaseModel):
     dataType: DataType
     meaningType: FileColumnMeaningType
     minMaxValues: Optional[NumericInterval] = None
+    originalName: Optional[str]
 
 
 class FileMetadata(BaseModel):

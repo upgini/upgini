@@ -51,6 +51,7 @@ class Dataset(pd.DataFrame):
     initial_data: pd.DataFrame
     file_upload_id: Optional[str]
     etalon_def: Optional[Dict[str, str]]
+    columns_renaming: Dict[str, str] = {}
 
     _metadata = [
         "name",
@@ -66,6 +67,7 @@ class Dataset(pd.DataFrame):
         "etalon_def",
         "endpoint",
         "api_key",
+        "columns_renaming",
     ]
 
     def __init__(
@@ -158,6 +160,7 @@ class Dataset(pd.DataFrame):
             self.search_keys = [
                 tuple(new_column if key == column else key for key in keys) for keys in self.search_keys_checked
             ]
+            self.columns_renaming[new_column] = column
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
@@ -581,6 +584,7 @@ class Dataset(pd.DataFrame):
                 column_meta = FileColumnMetadata(
                     index=index,
                     name=column_name,
+                    originalName=self.columns_renaming.get(column_name) or column_name,
                     dataType=self.__get_data_type(column_type),
                     meaningType=meaning_type,
                     minMaxValues=min_max_values,

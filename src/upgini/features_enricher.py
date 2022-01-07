@@ -96,7 +96,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             print("Checking existing search...")
             self._search_task = search_task.poll_result(quiet=True)
             file_metadata = self._search_task.get_file_metadata()
-            x_columns = [c.name for c in file_metadata.columns]
+            x_columns = [c.originalName or c.name for c in file_metadata.columns]
             self._prepare_feature_importances(x_columns)
             # TODO validate search_keys with search_keys from file_metadata
             print("Search found. Now you can use transform")

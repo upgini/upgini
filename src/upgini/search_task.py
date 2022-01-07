@@ -635,6 +635,14 @@ class SearchTask:
 
     def _get_features(self, provider_summaries: List[ProviderTaskSummary]) -> List[Dict[str, Any]]:
         features = []
+        file_metadata = self.get_file_metadata()
+
+        def get_original_column_name(name: str) -> str:
+            for column_metadata in file_metadata.columns:
+                if column_metadata.name == name:
+                    return column_metadata.originalName or name
+            return name
+
         for provider_summary in provider_summaries:
             if provider_summary.status == "COMPLETED":
                 provider_features = get_rest_client(self.endpoint, self.api_key).get_search_features_meta_v2(
@@ -642,7 +650,7 @@ class SearchTask:
                 )
                 for feature in provider_features["providerFeatures"] + provider_features["etalonFeatures"]:
                     feature_meta = {
-                        "feature_name": feature["name"],
+                        "feature_name": get_original_column_name(feature["name"]),
                         "shap_value": feature["importance"],
                         "match_percent": feature["matchedInPercent"],
                         "type": feature["valueType"] if "valueType" in feature else None,
