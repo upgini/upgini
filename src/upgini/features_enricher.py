@@ -21,8 +21,8 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     FileColumnMeaningType,
     ModelTaskType,
-    SearchKey,
     RuntimeParameters,
+    SearchKey,
 )
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
@@ -97,12 +97,245 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self._search_task = search_task.poll_result(quiet=True)
             file_metadata = self._search_task.get_file_metadata()
             x_columns = [c.originalName or c.name for c in file_metadata.columns]
-            self._prepare_feature_importances(x_columns)
+            self.__prepare_feature_importances(x_columns)
             # TODO validate search_keys with search_keys from file_metadata
             print("Search found. Now you can use transform")
         self.runtime_parameters = runtime_parameters
 
-    def _inner_fit(
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, List],
+        eval_set: Optional[List[tuple]] = None,
+        **fit_params,
+    ):
+        """Fit to data.
+
+        Fits transformer to `X` and `y` with optional parameters `fit_params`.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        y :  array-like of shape (n_samples,) default=None
+            Target values.
+
+        eval_set : List[tuple], optional (default=None)
+            List of pairs like (X, y) for validation
+
+        **fit_params : dict
+            Additional fit parameters.
+        """
+
+        self.__inner_fit(X, y, eval_set, False, **fit_params)
+
+    def fit_transform(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, List],
+        eval_set: Optional[List[tuple]] = None,
+        **fit_params,
+    ) -> pd.DataFrame:
+        """Fit to data, then transform it.
+
+        Fits transformer to `X` and `y` with optional parameters `fit_params`
+        and returns a transformed version of `X`.
+        If keep_input is True, then all input columns are present in output dataframe.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        y :  array-like of shape (n_samples,) default=None
+            Target values.
+
+        eval_set : List[tuple], optional (default=None)
+            List of pairs like (X, y) for validation
+
+        **fit_params : dict
+            Additional fit parameters.
+
+        Returns
+        -------
+        X_new : pandas dataframe of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with important features.
+        """
+
+        df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+
+        etalon_columns = X.columns + self.TARGET_NAME
+
+        if self._search_task is None:
+            raise RuntimeError("Fit wasn't completed successfully.")
+
+        print("Executing transform step...")
+        result_features = self._search_task.get_all_initial_raw_features()
+
+        if result_features is None:
+            raise RuntimeError("Search engine crashed on this request.")
+
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
+        if self.keep_input:
+            result = pd.merge(
+                df.drop(columns=self.TARGET_NAME),
+                result_features,
+                left_on=SYSTEM_RECORD_ID,
+                right_on=SYSTEM_RECORD_ID,
+                how="left",
+            )
+        else:
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+            result.drop(columns=etalon_columns, inplace=True)
+
+        result.index = X.index
+        if SYSTEM_RECORD_ID in result.columns:
+            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+        if SYSTEM_FAKE_DATE in result.columns:
+            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+        return result
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Transform `X`.
+
+        Returns a transformed version of `X`.
+        If keep_input is True, then all input columns are present in output dataframe.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        Returns
+        -------
+        X_new : pandas dataframe of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with important features.
+        """
+
+        if self._search_task is None:
+            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
+
+        validated_search_keys = self.__prepare_search_keys(X)
+        search_keys = []
+        for L in range(1, len(validated_search_keys.keys()) + 1):
+            for subset in itertools.combinations(validated_search_keys.keys(), L):
+                search_keys.append(subset)
+        meaning_types = validated_search_keys.copy()
+        feature_columns = [column for column in X.columns if column not in meaning_types.keys()]
+
+        df = X.copy()
+
+        df = df.reset_index(drop=True)
+
+        if FileColumnMeaningType.DATE not in meaning_types.values():
+            df[SYSTEM_FAKE_DATE] = date.today()
+            search_keys.append((SYSTEM_FAKE_DATE,))
+            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
+        # Don't pass features in backend on transform
+        if feature_columns:
+            df_without_features = df.drop(columns=feature_columns)
+        else:
+            df_without_features = df
+
+        dataset = Dataset(
+            "sample_" + str(uuid.uuid4()), df=df_without_features, endpoint=self.endpoint, api_key=self.api_key
+        )
+        dataset.meaning_types = meaning_types
+        dataset.search_keys = search_keys
+        validation_task = self._search_task.validation(
+            dataset, extract_features=True, runtime_parameters=self.runtime_parameters
+        )
+
+        etalon_columns = list(self.search_keys.keys())
+
+        print("Executing transform step...")
+        result_features = validation_task.get_all_validation_raw_features()
+
+        if result_features is None:
+            raise RuntimeError("Search engine crashed on this request.")
+
+        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
+        if not self.keep_input:
+            result = pd.merge(
+                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
+            )
+            result.drop(columns=etalon_columns, inplace=True)
+        else:
+            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+
+        result.index = X.index
+        if SYSTEM_RECORD_ID in result.columns:
+            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+        if SYSTEM_FAKE_DATE in result.columns:
+            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+        return result
+
+    def get_features_info(self) -> pd.DataFrame:
+        """Returns pandas dataframe with importances for each feature
+        """
+        if self._search_task is None or self._search_task.summary is None:
+            raise NotFittedError("Run fit or pass search_id before get features info.")
+
+        return self.features_info
+
+    def get_metrics(self) -> Optional[pd.DataFrame]:
+        """Returns pandas dataframe with quality metrics for main dataset and eval_set
+        """
+        if self._search_task is None or self._search_task.summary is None:
+            raise NotFittedError("Run fit or pass search_id before get metrics.")
+
+        metrics = []
+        initial_metrics = {}
+
+        initial_hit_rate = self._search_task.initial_max_hit_rate()
+        if initial_hit_rate is None:
+            return None
+
+        initial_metrics["segment"] = "train"
+        initial_metrics["match rate"] = initial_hit_rate["value"]
+        metrics.append(initial_metrics)
+        initial_auc = self._search_task.initial_max_auc()
+        if initial_auc is not None:
+            initial_metrics["auc"] = initial_auc["value"]
+        initial_accuracy = self._search_task.initial_max_accuracy()
+        if initial_accuracy is not None:
+            initial_metrics["accuracy"] = initial_accuracy["value"]
+        initial_rmse = self._search_task.initial_max_rmse()
+        if initial_rmse is not None:
+            initial_metrics["rmse"] = initial_rmse["value"]
+        initial_uplift = self._search_task.initial_max_uplift()
+        if len(self.passed_features) > 0 and initial_uplift is not None:
+            initial_metrics["uplift"] = initial_uplift["value"]
+        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+
+        if max_initial_eval_set_metrics is not None:
+            for eval_set_metrics in max_initial_eval_set_metrics:
+                if "gini" in eval_set_metrics:
+                    del eval_set_metrics["gini"]
+                eval_set_index = eval_set_metrics["eval_set_index"]
+                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"]
+                eval_set_metrics["segment"] = f"eval {eval_set_index}"
+                del eval_set_metrics["hit_rate"]
+                del eval_set_metrics["eval_set_index"]
+                metrics.append(eval_set_metrics)
+
+        metrics_df = pd.DataFrame(metrics)
+        metrics_df.set_index("segment", inplace=True)
+        metrics_df.rename_axis(None, inplace=True)
+        return metrics_df
+
+    def __inner_fit(
         self,
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list] = None,
@@ -123,7 +356,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if X.shape[0] != len(y_array):
             raise ValueError("X and y should be the same size")
 
-        validated_search_keys = self._prepare_search_keys(X)
+        validated_search_keys = self.__prepare_search_keys(X)
 
         search_keys = []
         for L in range(1, len(validated_search_keys.keys()) + 1):
@@ -196,132 +429,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
         self.__show_metrics()
 
-        self._prepare_feature_importances(list(X.columns))
+        self.__prepare_feature_importances(list(X.columns))
 
         return df_without_eval_set
 
-    def fit(
-        self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, List],
-        eval_set: Optional[List[tuple]] = None,
-        **fit_params,
-    ):
-        self._inner_fit(X, y, eval_set, False, **fit_params)
-
-    def fit_transform(
-        self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, List],
-        eval_set: Optional[List[tuple]] = None,
-        **fit_params,
-    ) -> pd.DataFrame:
-        df = self._inner_fit(X, y, eval_set, extract_features=True, **fit_params)
-
-        etalon_columns = X.columns + self.TARGET_NAME
-
-        if self._search_task is None:
-            raise RuntimeError("Fit wasn't completed successfully.")
-
-        print("Executing transform step...")
-        result_features = self._search_task.get_all_initial_raw_features()
-
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
-
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
-
-        if self.keep_input:
-            result = pd.merge(
-                df.drop(columns=self.TARGET_NAME),
-                result_features,
-                left_on=SYSTEM_RECORD_ID,
-                right_on=SYSTEM_RECORD_ID,
-                how="left",
-            )
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-            result.drop(columns=etalon_columns, inplace=True)
-
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        if self._search_task is None:
-            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
-        if not isinstance(X, pd.DataFrame):
-            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
-
-        validated_search_keys = self._prepare_search_keys(X)
-        search_keys = []
-        for L in range(1, len(validated_search_keys.keys()) + 1):
-            for subset in itertools.combinations(validated_search_keys.keys(), L):
-                search_keys.append(subset)
-        meaning_types = validated_search_keys.copy()
-        feature_columns = [column for column in X.columns if column not in meaning_types.keys()]
-
-        df = X.copy()
-
-        df = df.reset_index(drop=True)
-
-        if FileColumnMeaningType.DATE not in meaning_types.values():
-            df[SYSTEM_FAKE_DATE] = date.today()
-            search_keys.append((SYSTEM_FAKE_DATE,))
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-
-        # Don't pass features in backend on transform
-        if feature_columns:
-            df_without_features = df.drop(columns=feature_columns)
-        else:
-            df_without_features = df
-
-        dataset = Dataset(
-            "sample_" + str(uuid.uuid4()), df=df_without_features, endpoint=self.endpoint, api_key=self.api_key
-        )
-        dataset.meaning_types = meaning_types
-        dataset.search_keys = search_keys
-        validation_task = self._search_task.validation(
-            dataset, extract_features=True, runtime_parameters=self.runtime_parameters
-        )
-
-        etalon_columns = list(self.search_keys.keys())
-
-        print("Executing transform step...")
-        result_features = validation_task.get_all_validation_raw_features()
-
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
-
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
-
-        if not self.keep_input:
-            result = pd.merge(
-                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
-            )
-            result.drop(columns=etalon_columns, inplace=True)
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
-
-    def get_features_info(self) -> pd.DataFrame:
-        return self.features_info
-
-    def _prepare_feature_importances(self, x_columns: List[str]):
+    def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:
             raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
         importances = self._search_task.initial_features()
@@ -349,7 +461,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.features_info = pd.DataFrame(features_info)
 
-    def _prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
+    def __prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
         valid_search_keys = {}
         for column_id, meaning_type in self.search_keys.items():
             if isinstance(column_id, str):
@@ -362,50 +474,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError("SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher.")
 
         return valid_search_keys
-
-    def get_metrics(self) -> Optional[pd.DataFrame]:
-        if self._search_task is None or self._search_task.summary is None:
-            raise NotFittedError("Run fit before get metrics.")
-
-        metrics = []
-        initial_metrics = {}
-
-        initial_hit_rate = self._search_task.initial_max_hit_rate()
-        if initial_hit_rate is None:
-            return None
-
-        initial_metrics["segment"] = "train"
-        initial_metrics["match rate"] = initial_hit_rate["value"]
-        metrics.append(initial_metrics)
-        initial_auc = self._search_task.initial_max_auc()
-        if initial_auc is not None:
-            initial_metrics["auc"] = initial_auc["value"]
-        initial_accuracy = self._search_task.initial_max_accuracy()
-        if initial_accuracy is not None:
-            initial_metrics["accuracy"] = initial_accuracy["value"]
-        initial_rmse = self._search_task.initial_max_rmse()
-        if initial_rmse is not None:
-            initial_metrics["rmse"] = initial_rmse["value"]
-        initial_uplift = self._search_task.initial_max_uplift()
-        if len(self.passed_features) > 0 and initial_uplift is not None:
-            initial_metrics["uplift"] = initial_uplift["value"]
-        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-
-        if max_initial_eval_set_metrics is not None:
-            for eval_set_metrics in max_initial_eval_set_metrics:
-                if "gini" in eval_set_metrics:
-                    del eval_set_metrics["gini"]
-                eval_set_index = eval_set_metrics["eval_set_index"]
-                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"]
-                eval_set_metrics["segment"] = f"eval {eval_set_index}"
-                del eval_set_metrics["hit_rate"]
-                del eval_set_metrics["eval_set_index"]
-                metrics.append(eval_set_metrics)
-
-        metrics_df = pd.DataFrame(metrics)
-        metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis(None, inplace=True)
-        return metrics_df
 
     def __show_metrics(self):
         metrics = self.get_metrics()
