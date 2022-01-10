@@ -132,6 +132,8 @@ class SearchCustomization(BaseModel):
     featuresFilter: Optional[FeaturesFilter]
     extractFeatures: Optional[bool]
     accurateModel: Optional[bool]
+    importanceThreshold: Optional[float]
+    maxFeatures: Optional[int]
     returnScores: Optional[bool]
     runtimeParameters: Optional[RuntimeParameters]
 
@@ -140,6 +142,8 @@ class SearchCustomization(BaseModel):
             f"Features filter: {self.featuresFilter}, "
             f"extract features: {self.extractFeatures}, "
             f"accurate model: {self.accurateModel}, "
+            f"importance threshold: {self.importanceThreshold}, "
+            f"max features: {self.maxFeatures}, "
             f"return scores: {self.returnScores}, "
             f"runtimeParameters: {self.runtimeParameters}"
         )

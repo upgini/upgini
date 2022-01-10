@@ -615,12 +615,16 @@ class Dataset(pd.DataFrame):
         return_scores: bool,
         extract_features: bool,
         accurate_model: Optional[bool] = None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
+            importanceThreshold=importance_threshold,
+            maxFeatures=max_features,
             returnScores=return_scores,
             runtimeParameters=runtime_parameters,
         )
@@ -649,6 +653,8 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
@@ -666,6 +672,8 @@ class Dataset(pd.DataFrame):
             return_scores=return_scores,
             extract_features=extract_features,
             accurate_model=accurate_model,
+            importance_threshold=importance_threshold,
+            max_features=max_features,
             filter_features=filter_features,
             runtime_parameters=runtime_parameters,
         )
