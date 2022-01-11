@@ -228,7 +228,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     ) -> pd.DataFrame:
         df = self._inner_fit(X, y, eval_set, extract_features=True, **fit_params)
 
-        etalon_columns = X.columns + self.TARGET_NAME
+        etalon_columns = X.columns + [self.TARGET_NAME]
 
         if self._search_task is None:
             raise RuntimeError("Fit wasn't completed successfully.")
