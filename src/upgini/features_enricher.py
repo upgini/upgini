@@ -43,6 +43,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     accurate_model: bool, optional (default=False)
         If True, search takes longer but returned metrics may be more accurate.
 
+    importance_threshold: float, optional (default=None)
+        Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+    max_features: int, optional (default=None)
+        Maximum count of selected most important features. By default it is unlimited
+
     api_key: str, optional (default=None)
         Token to authorize search requests. You can get it on https://profile.upgini.com/.
         If not specified then read the value from the environment variable UPGINI_API_KEY.
@@ -72,6 +78,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
         keep_input: bool = False,
         accurate_model: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
@@ -85,6 +93,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.search_keys = search_keys
         self.keep_input = keep_input
         self.accurate_model = accurate_model
+        self.importance_threshold = importance_threshold
+        self.max_features = max_features
         self.endpoint = endpoint
         self.api_key = api_key
         if search_id:
