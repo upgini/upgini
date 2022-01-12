@@ -3,14 +3,18 @@ import tempfile
 import time
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
-import pandas as pd
-
 from upgini import dataset
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
-from upgini.metadata import SYSTEM_RECORD_ID, FileMetadata, ModelTaskType, RuntimeParameters
+from upgini.metadata import (
+    SYSTEM_RECORD_ID,
+    FileMetadata,
+    ModelTaskType,
+    RuntimeParameters,
+)
 
 
 class SearchTask:
@@ -62,7 +66,10 @@ class SearchTask:
                     #   print("/", end="\r")
                     if self.summary.status in failed_statuses:
                         raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
-                    if self.summary.status in submitted_statuses and len(self._get_provider_summaries(self.summary)) == 0:
+                    if (
+                        self.summary.status in submitted_statuses
+                        and len(self._get_provider_summaries(self.summary)) == 0
+                    ):
                         raise RuntimeError(
                             "No datasets found to intersect with uploaded file using defined search keys. "
                             "Try with another set of keys or different time period."
