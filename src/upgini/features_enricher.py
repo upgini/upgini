@@ -14,6 +14,8 @@ import uuid
 
 import numpy as np
 import pandas as pd
+from yaspin import yaspin
+from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.metadata import (
@@ -21,8 +23,8 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     FileColumnMeaningType,
     ModelTaskType,
-    SearchKey,
     RuntimeParameters,
+    SearchKey,
 )
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
@@ -103,7 +105,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 endpoint=self.endpoint,
                 api_key=self.api_key,
             )
-            print("Checking existing search...")
+            print("Checking existing search")
             self._search_task = search_task.poll_result(quiet=True)
             file_metadata = self._search_task.get_file_metadata()
             x_columns = [c.originalName or c.name for c in file_metadata.columns]
@@ -233,33 +235,36 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if self._search_task is None:
             raise RuntimeError("Fit wasn't completed successfully.")
 
-        print("Executing transform step...")
-        result_features = self._search_task.get_all_initial_raw_features()
+        print("Executing transform step")
+        with yaspin(Spinners.material) as sp:
+            result_features = self._search_task.get_all_initial_raw_features()
 
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
+            if result_features is None:
+                raise RuntimeError("Search engine crashed on this request.")
 
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        if self.keep_input:
-            result = pd.merge(
-                df.drop(columns=self.TARGET_NAME),
-                result_features,
-                left_on=SYSTEM_RECORD_ID,
-                right_on=SYSTEM_RECORD_ID,
-                how="left",
-            )
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-            result.drop(columns=etalon_columns, inplace=True)
+            if self.keep_input:
+                result = pd.merge(
+                    df.drop(columns=self.TARGET_NAME),
+                    result_features,
+                    left_on=SYSTEM_RECORD_ID,
+                    right_on=SYSTEM_RECORD_ID,
+                    how="left",
+                )
+            else:
+                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+                result.drop(columns=etalon_columns, inplace=True)
 
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
+            result.index = X.index
+            if SYSTEM_RECORD_ID in result.columns:
+                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if SYSTEM_FAKE_DATE in result.columns:
+                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+            sp.ok("████████████████████")
+            return result
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         if self._search_task is None:
@@ -304,29 +309,36 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         etalon_columns = list(self.search_keys.keys())
 
-        print("Executing transform step...")
-        result_features = validation_task.get_all_validation_raw_features()
+        print("Executing transform step")
+        with yaspin(Spinners.material) as sp:
+            result_features = validation_task.get_all_validation_raw_features()
 
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
+            if result_features is None:
+                raise RuntimeError("Search engine crashed on this request.")
 
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        if not self.keep_input:
-            result = pd.merge(
-                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
-            )
-            result.drop(columns=etalon_columns, inplace=True)
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+            if not self.keep_input:
+                result = pd.merge(
+                    df_without_features,
+                    result_features,
+                    left_on=SYSTEM_RECORD_ID,
+                    right_on=SYSTEM_RECORD_ID,
+                    how="left",
+                )
+                result.drop(columns=etalon_columns, inplace=True)
+            else:
+                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
 
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
+            result.index = X.index
+            if SYSTEM_RECORD_ID in result.columns:
+                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if SYSTEM_FAKE_DATE in result.columns:
+                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+            sp.ok("████████████████████")
+            return result
 
     def get_features_info(self) -> pd.DataFrame:
         return self.features_info

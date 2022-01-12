@@ -17,3 +17,4 @@ pytest-timeout==1.4.2
 requests-mock==1.9.3
 unittest-xml-reporting==3.0.4
 Jinja2==3.0.2
+yaspin==2.1.0

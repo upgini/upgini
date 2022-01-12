@@ -30,8 +30,8 @@ from upgini.metadata import (
     MulticlassTask,
     NumericInterval,
     RegressionTask,
-    SearchCustomization,
     RuntimeParameters,
+    SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import phone_to_int
 from upgini.search_task import SearchTask
@@ -407,8 +407,7 @@ class Dataset(pd.DataFrame):
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
     def validate(self, validate_target: bool = True, validate_count: bool = True):
-        logging.info("Validating dataset...")
-
+        logging.info("Validating dataset")
         self.__validate_meaning_types(validate_target)
 
         self.__validate_search_keys()
@@ -449,7 +448,7 @@ class Dataset(pd.DataFrame):
         Returns:
             InitialMetadata: initial metadata
         """
-        logging.info("Calculating metrics...")
+        logging.info("Calculating metrics")
         if self.etalon_def is None:
             self.validate()
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value, "")
