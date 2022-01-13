@@ -207,6 +207,13 @@ class Dataset(pd.DataFrame):
                 logging.debug(f"Converting {col} to int")
                 self[col] = self[col].astype(int)
 
+    def __convert_float16(self):
+        """Convert float16 to float"""
+        logging.debug("Converting float16 to int")
+        for col in self.columns:
+            if is_float_dtype(self[col]):
+                self[col] = self[col].astype(float)
+
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
         logging.debug("Correct decimal commas")
@@ -426,6 +433,8 @@ class Dataset(pd.DataFrame):
             self.__validate_rows_count()
 
         self.__convert_bools()
+
+        self.__convert_float16()
 
         self.__correct_decimal_comma()
 
