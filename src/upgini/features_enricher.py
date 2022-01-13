@@ -104,107 +104,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self._search_task = search_task.poll_result(quiet=True)
             file_metadata = self._search_task.get_file_metadata()
             x_columns = [c.originalName or c.name for c in file_metadata.columns]
-            self._prepare_feature_importances(x_columns)
+            self.__prepare_feature_importances(x_columns)
             # TODO validate search_keys with search_keys from file_metadata
             print("Search found. Now you can use transform")
         self.runtime_parameters = runtime_parameters
-
-    def _inner_fit(
-        self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list] = None,
-        eval_set: Optional[List[tuple]] = None,
-        extract_features: bool = False,
-        **fit_params,
-    ) -> pd.DataFrame:
-        if not isinstance(X, pd.DataFrame):
-            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
-        if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
-            raise TypeError(f"Only pandas.Series or numpy.ndarray or list supported for y, but {type(y)} was passed.")
-
-        if isinstance(y, pd.Series):
-            y_array = y.values
-        else:
-            y_array = y
-
-        if X.shape[0] != len(y_array):
-            raise ValueError("X and y should be the same size")
-
-        validated_search_keys = self._prepare_search_keys(X)
-
-        search_keys = []
-        for L in range(1, len(validated_search_keys.keys()) + 1):
-            for subset in itertools.combinations(validated_search_keys.keys(), L):
-                search_keys.append(subset)
-        meaning_types = {
-            **validated_search_keys.copy(),
-            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
-        }
-
-        df = X.copy()
-        df[self.TARGET_NAME] = y_array
-
-        df.reset_index(drop=True, inplace=True)
-
-        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
-
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-
-        df_without_eval_set = df.copy()
-
-        if eval_set is not None and len(eval_set) > 0:
-            df[self.EVAL_SET_INDEX] = 0
-            meaning_types[self.EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
-            for idx, eval_pair in enumerate(eval_set):
-                if len(eval_pair) != 2:
-                    raise TypeError(
-                        f"Invalid size of eval_set pair: {len(eval_pair)}. "
-                        "It should contain tuples of 2 elements: X and y."
-                    )
-                eval_X = eval_pair[0]
-                eval_y = eval_pair[1]
-                if not isinstance(eval_X, pd.DataFrame):
-                    raise TypeError(
-                        f"Only pandas.DataFrame supported for X in eval_set, but {type(eval_X)} was passed."
-                    )
-                if (
-                    not isinstance(eval_y, pd.Series)
-                    and not isinstance(eval_y, np.ndarray)
-                    and not isinstance(eval_y, list)
-                ):
-                    raise TypeError(
-                        "pandas.Series or numpy.ndarray or list supported for y in eval_set, "
-                        f"but {type(eval_y)} was passed."
-                    )
-                eval_df = eval_X.copy()
-                eval_df[self.TARGET_NAME] = pd.Series(eval_y)
-                eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
-                eval_df[self.EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df], ignore_index=True)
-
-        if FileColumnMeaningType.DATE not in meaning_types.values():
-            df[SYSTEM_FAKE_DATE] = date.today()
-            search_keys.append((SYSTEM_FAKE_DATE,))
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-        dataset = Dataset("tds_" + str(uuid.uuid4()), df=df, endpoint=self.endpoint, api_key=self.api_key)
-        dataset.meaning_types = meaning_types
-        dataset.search_keys = search_keys
-
-        self.passed_features = [
-            column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
-        ]
-
-        self._search_task = dataset.search(
-            extract_features=extract_features,
-            runtime_parameters=self.runtime_parameters,
-        )
-        self.__show_metrics()
-
-        self._prepare_feature_importances(list(X.columns))
-
-        return df_without_eval_set
 
     def fit(
         self,
@@ -213,7 +116,26 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         eval_set: Optional[List[tuple]] = None,
         **fit_params,
     ):
-        self._inner_fit(X, y, eval_set, False, **fit_params)
+        """Fit to data.
+
+        Fits transformer to `X` and `y` with optional parameters `fit_params`.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        y :  array-like of shape (n_samples,) default=None
+            Target values.
+
+        eval_set : List[tuple], optional (default=None)
+            List of pairs like (X, y) for validation
+
+        **fit_params : dict
+            Additional fit parameters.
+        """
+
+        self.__inner_fit(X, y, eval_set, False, **fit_params)
 
     def fit_transform(
         self,
@@ -222,7 +144,33 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         eval_set: Optional[List[tuple]] = None,
         **fit_params,
     ) -> pd.DataFrame:
-        df = self._inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+        """Fit to data, then transform it.
+
+        Fits transformer to `X` and `y` with optional parameters `fit_params`
+        and returns a transformed version of `X`.
+        If keep_input is True, then all input columns are present in output dataframe.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        y :  array-like of shape (n_samples,) default=None
+            Target values.
+
+        eval_set : List[tuple], optional (default=None)
+            List of pairs like (X, y) for validation
+
+        **fit_params : dict
+            Additional fit parameters.
+
+        Returns
+        -------
+        X_new : pandas dataframe of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with important features.
+        """
+
+        df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
 
         etalon_columns = list(X.columns) + [self.TARGET_NAME]
 
@@ -261,12 +209,28 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             return result
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Transform `X`.
+
+        Returns a transformed version of `X`.
+        If keep_input is True, then all input columns are present in output dataframe.
+
+        Parameters
+        ----------
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        Returns
+        -------
+        X_new : pandas dataframe of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with important features.
+        """
+
         if self._search_task is None:
             raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
 
-        validated_search_keys = self._prepare_search_keys(X)
+        validated_search_keys = self.__prepare_search_keys(X)
         search_keys = []
         for L in range(1, len(validated_search_keys.keys()) + 1):
             for subset in itertools.combinations(validated_search_keys.keys(), L):
@@ -335,53 +299,18 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             return result
 
     def get_features_info(self) -> pd.DataFrame:
+        """Returns pandas dataframe with importances for each feature
+        """
+        if self._search_task is None or self._search_task.summary is None:
+            raise NotFittedError("Run fit or pass search_id before get features info.")
+
         return self.features_info
 
-    def _prepare_feature_importances(self, x_columns: List[str]):
-        if self._search_task is None:
-            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
-        importances = self._search_task.initial_features()
-
-        def feature_metadata_by_name(name: str):
-            for f in importances:
-                if f["feature_name"] == name:
-                    return f
-
-        self.feature_names_ = []
-        self.feature_importances_ = []
-        features_info = []
-
-        for x_column in x_columns:
-            feature_metadata = feature_metadata_by_name(x_column)
-            if feature_metadata:
-                features_info.append(feature_metadata)
-                importances.remove(feature_metadata)
-
-        importances.sort(key=lambda m: m["feature_name"])
-        for feature_metadata in importances:
-            self.feature_names_.append(feature_metadata["feature_name"])
-            self.feature_importances_.append(feature_metadata["shap_value"])
-            features_info.append(feature_metadata)
-
-        self.features_info = pd.DataFrame(features_info)
-
-    def _prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
-        valid_search_keys = {}
-        for column_id, meaning_type in self.search_keys.items():
-            if isinstance(column_id, str):
-                valid_search_keys[column_id] = meaning_type.value
-            elif isinstance(column_id, int):
-                valid_search_keys[x.columns[column_id]] = meaning_type.value
-            else:
-                raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
-            if meaning_type == SearchKey.CUSTOM_KEY:
-                raise ValueError("SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher.")
-
-        return valid_search_keys
-
     def get_metrics(self) -> Optional[pd.DataFrame]:
+        """Returns pandas dataframe with quality metrics for main dataset and eval_set
+        """
         if self._search_task is None or self._search_task.summary is None:
-            raise NotFittedError("Run fit before get metrics.")
+            raise NotFittedError("Run fit or pass search_id before get metrics.")
 
         metrics = []
         initial_metrics = {}
@@ -422,6 +351,146 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         metrics_df.set_index("segment", inplace=True)
         metrics_df.rename_axis(None, inplace=True)
         return metrics_df
+
+    def __inner_fit(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, list] = None,
+        eval_set: Optional[List[tuple]] = None,
+        extract_features: bool = False,
+        **fit_params,
+    ) -> pd.DataFrame:
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
+        if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
+            raise TypeError(f"Only pandas.Series or numpy.ndarray or list supported for y, but {type(y)} was passed.")
+
+        if isinstance(y, pd.Series):
+            y_array = y.values
+        else:
+            y_array = y
+
+        if X.shape[0] != len(y_array):
+            raise ValueError("X and y should be the same size")
+
+        validated_search_keys = self.__prepare_search_keys(X)
+
+        search_keys = []
+        for L in range(1, len(validated_search_keys.keys()) + 1):
+            for subset in itertools.combinations(validated_search_keys.keys(), L):
+                search_keys.append(subset)
+        meaning_types = {
+            **validated_search_keys.copy(),
+            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
+        }
+
+        df = X.copy()
+        df[self.TARGET_NAME] = y_array
+
+        df.reset_index(drop=True, inplace=True)
+
+        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
+        df_without_eval_set = df.copy()
+
+        if eval_set is not None and len(eval_set) > 0:
+            df[self.EVAL_SET_INDEX] = 0
+            meaning_types[self.EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
+            for idx, eval_pair in enumerate(eval_set):
+                if len(eval_pair) != 2:
+                    raise TypeError(
+                        f"Invalid size of eval_set pair: {len(eval_pair)}. "
+                        "It should contain tuples of 2 elements: X and y."
+                    )
+                eval_X = eval_pair[0]
+                eval_y = eval_pair[1]
+                if not isinstance(eval_X, pd.DataFrame):
+                    raise TypeError(
+                        f"Only pandas.DataFrame supported for X in eval_set, but {type(eval_X)} was passed."
+                    )
+                if (
+                    not isinstance(eval_y, pd.Series)
+                    and not isinstance(eval_y, np.ndarray)
+                    and not isinstance(eval_y, list)
+                ):
+                    raise TypeError(
+                        "pandas.Series or numpy.ndarray or list supported for y in eval_set, "
+                        f"but {type(eval_y)} was passed."
+                    )
+                eval_df = eval_X.copy()
+                eval_df[self.TARGET_NAME] = pd.Series(eval_y)
+                eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
+                eval_df[self.EVAL_SET_INDEX] = idx + 1
+                df = pd.concat([df, eval_df], ignore_index=True)
+
+        if FileColumnMeaningType.DATE not in meaning_types.values():
+            df[SYSTEM_FAKE_DATE] = date.today()
+            search_keys.append((SYSTEM_FAKE_DATE,))
+            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+
+        dataset = Dataset("tds_" + str(uuid.uuid4()), df=df, endpoint=self.endpoint, api_key=self.api_key)
+        dataset.meaning_types = meaning_types
+        dataset.search_keys = search_keys
+
+        self.passed_features = [
+            column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
+        ]
+
+        self._search_task = dataset.search(
+            extract_features=extract_features,
+            accurate_model=self.accurate_model,
+            runtime_parameters=self.runtime_parameters,
+        )
+        self.__show_metrics()
+
+        self.__prepare_feature_importances(list(X.columns))
+
+        return df_without_eval_set
+
+    def __prepare_feature_importances(self, x_columns: List[str]):
+        if self._search_task is None:
+            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
+        importances = self._search_task.initial_features()
+
+        def feature_metadata_by_name(name: str):
+            for f in importances:
+                if f["feature_name"] == name:
+                    return f
+
+        self.feature_names_ = []
+        self.feature_importances_ = []
+        features_info = []
+
+        for x_column in x_columns:
+            feature_metadata = feature_metadata_by_name(x_column)
+            if feature_metadata:
+                features_info.append(feature_metadata)
+                importances.remove(feature_metadata)
+
+        importances.sort(key=lambda m: m["feature_name"])
+        for feature_metadata in importances:
+            self.feature_names_.append(feature_metadata["feature_name"])
+            self.feature_importances_.append(feature_metadata["shap_value"])
+            features_info.append(feature_metadata)
+
+        self.features_info = pd.DataFrame(features_info)
+
+    def __prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
+        valid_search_keys = {}
+        for column_id, meaning_type in self.search_keys.items():
+            if isinstance(column_id, str):
+                valid_search_keys[column_id] = meaning_type.value
+            elif isinstance(column_id, int):
+                valid_search_keys[x.columns[column_id]] = meaning_type.value
+            else:
+                raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
+            if meaning_type == SearchKey.CUSTOM_KEY:
+                raise ValueError("SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher.")
+
+        return valid_search_keys
 
     def __show_metrics(self):
         metrics = self.get_metrics()
