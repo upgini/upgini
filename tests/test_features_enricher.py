@@ -133,7 +133,6 @@ def test_features_enricher(requests_mock):
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
         keep_input=True,
-        accurate_model=True,
         endpoint=url,
         api_key="fake_api_key",
     )
@@ -290,7 +289,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
         keep_input=True,
-        accurate_model=True,
         endpoint=url,
         api_key="fake_api_key",
         runtime_parameters=RuntimeParameters(properties={"runtimeProperty1": "runtimeValue1"}),
