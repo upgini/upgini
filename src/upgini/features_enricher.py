@@ -14,6 +14,8 @@ import uuid
 
 import numpy as np
 import pandas as pd
+from yaspin import yaspin
+from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.metadata import (
@@ -40,8 +42,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     keep_input: bool, optional (default=False)
         If True, copy original input columns to the output dataframe.
 
-    accurate_model: bool, optional (default=False)
-        If True, search takes longer but returned metrics may be more accurate.
+    importance_threshold: float, optional (default=None)
+        Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+    max_features: int, optional (default=None)
+        Maximum count of selected most important features. By default it is unlimited
 
     api_key: str, optional (default=None)
         Token to authorize search requests. You can get it on https://profile.upgini.com/.
@@ -71,7 +76,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self,
         search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
         keep_input: bool = False,
-        accurate_model: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
@@ -84,7 +90,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
-        self.accurate_model = accurate_model
+        self.importance_threshold = importance_threshold
+        self.max_features = max_features
         self.endpoint = endpoint
         self.api_key = api_key
         if search_id:
@@ -93,7 +100,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 endpoint=self.endpoint,
                 api_key=self.api_key,
             )
-            print("Checking existing search...")
+            print("Checking existing search")
             self._search_task = search_task.poll_result(quiet=True)
             file_metadata = self._search_task.get_file_metadata()
             x_columns = [c.originalName or c.name for c in file_metadata.columns]
@@ -165,38 +172,41 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
 
-        etalon_columns = X.columns + self.TARGET_NAME
+        etalon_columns = list(X.columns) + [self.TARGET_NAME]
 
         if self._search_task is None:
             raise RuntimeError("Fit wasn't completed successfully.")
 
-        print("Executing transform step...")
-        result_features = self._search_task.get_all_initial_raw_features()
+        print("Executing transform step")
+        with yaspin(Spinners.material) as sp:
+            result_features = self._search_task.get_all_initial_raw_features()
 
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
+            if result_features is None:
+                raise RuntimeError("Search engine crashed on this request.")
 
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        if self.keep_input:
-            result = pd.merge(
-                df.drop(columns=self.TARGET_NAME),
-                result_features,
-                left_on=SYSTEM_RECORD_ID,
-                right_on=SYSTEM_RECORD_ID,
-                how="left",
-            )
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-            result.drop(columns=etalon_columns, inplace=True)
+            if self.keep_input:
+                result = pd.merge(
+                    df.drop(columns=self.TARGET_NAME),
+                    result_features,
+                    left_on=SYSTEM_RECORD_ID,
+                    right_on=SYSTEM_RECORD_ID,
+                    how="left",
+                )
+            else:
+                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+                result.drop(columns=etalon_columns, inplace=True)
 
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
+            result.index = X.index
+            if SYSTEM_RECORD_ID in result.columns:
+                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if SYSTEM_FAKE_DATE in result.columns:
+                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+            sp.ok("████████████████████")
+            return result
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Transform `X`.
@@ -257,29 +267,36 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         etalon_columns = list(self.search_keys.keys())
 
-        print("Executing transform step...")
-        result_features = validation_task.get_all_validation_raw_features()
+        print("Executing transform step")
+        with yaspin(Spinners.material) as sp:
+            result_features = validation_task.get_all_validation_raw_features()
 
-        if result_features is None:
-            raise RuntimeError("Search engine crashed on this request.")
+            if result_features is None:
+                raise RuntimeError("Search engine crashed on this request.")
 
-        sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        if not self.keep_input:
-            result = pd.merge(
-                df_without_features, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
-            )
-            result.drop(columns=etalon_columns, inplace=True)
-        else:
-            result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
+            if not self.keep_input:
+                result = pd.merge(
+                    df_without_features,
+                    result_features,
+                    left_on=SYSTEM_RECORD_ID,
+                    right_on=SYSTEM_RECORD_ID,
+                    how="left",
+                )
+                result.drop(columns=etalon_columns, inplace=True)
+            else:
+                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
 
-        result.index = X.index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-        return result
+            result.index = X.index
+            if SYSTEM_RECORD_ID in result.columns:
+                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if SYSTEM_FAKE_DATE in result.columns:
+                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+            sp.ok("████████████████████")
+            return result
 
     def get_features_info(self) -> pd.DataFrame:
         """Returns pandas dataframe with importances for each feature

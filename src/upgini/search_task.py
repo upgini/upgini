@@ -4,10 +4,17 @@ import time
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from yaspin import yaspin
+from yaspin.spinners import Spinners
 
 from upgini import dataset
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
-from upgini.metadata import SYSTEM_RECORD_ID, FileMetadata, ModelTaskType, RuntimeParameters
+from upgini.metadata import (
+    SYSTEM_RECORD_ID,
+    FileMetadata,
+    ModelTaskType,
+    RuntimeParameters,
+)
 
 
 class SearchTask:
@@ -47,25 +54,26 @@ class SearchTask:
             )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
         try:
-            time.sleep(1)
-            self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
-            while self.summary.status not in completed_statuses:
-                if not quiet:
-                    print("\\", end="\r")
-                time.sleep(5)
+            with yaspin(Spinners.material) as sp:
+                time.sleep(1)
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
-                if not quiet:
-                    print("/", end="\r")
-                if self.summary.status in failed_statuses:
-                    raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
-                if self.summary.status in submitted_statuses and len(self._get_provider_summaries(self.summary)) == 0:
-                    raise RuntimeError(
-                        "No datasets found to intersect with uploaded file using defined search keys. "
-                        "Try with another set of keys or different time period."
-                    )
-                time.sleep(5)
+                while self.summary.status not in completed_statuses:
+                    time.sleep(5)
+                    self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
+                    if self.summary.status in failed_statuses:
+                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
+                    if (
+                        self.summary.status in submitted_statuses
+                        and len(self._get_provider_summaries(self.summary)) == 0
+                    ):
+                        raise RuntimeError(
+                            "No datasets found to intersect with uploaded file using defined search keys. "
+                            "Try with another set of keys or different time period."
+                        )
+                    time.sleep(5)
+                sp.ok("████████████████████")
         except KeyboardInterrupt:
-            print("Search interrupted. Stopping search request...")
+            print("Search interrupted. Stopping search request")
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(search_task_id)
             print("Search request stopped")
             raise

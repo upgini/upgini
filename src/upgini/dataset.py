@@ -30,8 +30,8 @@ from upgini.metadata import (
     MulticlassTask,
     NumericInterval,
     RegressionTask,
-    SearchCustomization,
     RuntimeParameters,
+    SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import phone_to_int
 from upgini.search_task import SearchTask
@@ -206,6 +206,13 @@ class Dataset(pd.DataFrame):
             if is_bool(self[col]):
                 logging.debug(f"Converting {col} to int")
                 self[col] = self[col].astype(int)
+
+    def __convert_float16(self):
+        """Convert float16 to float"""
+        logging.debug("Converting float16 to int")
+        for col in self.columns:
+            if is_float_dtype(self[col]):
+                self[col] = self[col].astype(float)
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
@@ -407,8 +414,7 @@ class Dataset(pd.DataFrame):
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
     def validate(self, validate_target: bool = True, validate_count: bool = True):
-        logging.info("Validating dataset...")
-
+        logging.info("Validating dataset")
         self.__validate_meaning_types(validate_target)
 
         self.__validate_search_keys()
@@ -427,6 +433,8 @@ class Dataset(pd.DataFrame):
             self.__validate_rows_count()
 
         self.__convert_bools()
+
+        self.__convert_float16()
 
         self.__correct_decimal_comma()
 
@@ -449,7 +457,7 @@ class Dataset(pd.DataFrame):
         Returns:
             InitialMetadata: initial metadata
         """
-        logging.info("Calculating metrics...")
+        logging.info("Calculating metrics")
         if self.etalon_def is None:
             self.validate()
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value, "")
@@ -615,12 +623,16 @@ class Dataset(pd.DataFrame):
         return_scores: bool,
         extract_features: bool,
         accurate_model: Optional[bool] = None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
+            importanceThreshold=importance_threshold,
+            maxFeatures=max_features,
             returnScores=return_scores,
             runtimeParameters=runtime_parameters,
         )
@@ -649,6 +661,8 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
@@ -666,6 +680,8 @@ class Dataset(pd.DataFrame):
             return_scores=return_scores,
             extract_features=extract_features,
             accurate_model=accurate_model,
+            importance_threshold=importance_threshold,
+            max_features=max_features,
             filter_features=filter_features,
             runtime_parameters=runtime_parameters,
         )
