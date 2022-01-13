@@ -42,9 +42,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     keep_input: bool, optional (default=False)
         If True, copy original input columns to the output dataframe.
 
-    accurate_model: bool, optional (default=False)
-        If True, search takes longer but returned metrics may be more accurate.
-
     importance_threshold: float, optional (default=None)
         Minimum importance shap value for selected features. By default minimum importance is 0.0
 
