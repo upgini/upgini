@@ -79,7 +79,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self,
         search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
         keep_input: bool = False,
-        accurate_model: bool = False,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         api_key: Optional[str] = None,
@@ -94,7 +93,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
-        self.accurate_model = accurate_model
         self.importance_threshold = importance_threshold
         self.max_features = max_features
         self.endpoint = endpoint
@@ -203,7 +201,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self._search_task = dataset.search(
             extract_features=extract_features,
-            accurate_model=self.accurate_model,
             runtime_parameters=self.runtime_parameters,
         )
         self.__show_metrics()

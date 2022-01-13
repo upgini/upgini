@@ -58,12 +58,8 @@ class SearchTask:
                 time.sleep(1)
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
                 while self.summary.status not in completed_statuses:
-                    # if not quiet:
-                    #   print("\\", end="\r")
                     time.sleep(5)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
-                    # if not quiet:
-                    #   print("/", end="\r")
                     if self.summary.status in failed_statuses:
                         raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
                     if (
