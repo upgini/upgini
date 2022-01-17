@@ -71,7 +71,7 @@ class SearchTask:
                             "Try with another set of keys or different time period."
                         )
                     time.sleep(5)
-                sp.ok("████████████████████")
+                sp.ok("Done                         ")
         except KeyboardInterrupt:
             print("Search interrupted. Stopping search request")
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(search_task_id)

@@ -205,7 +205,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             if SYSTEM_FAKE_DATE in result.columns:
                 result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
 
-            sp.ok("████████████████████")
+            sp.ok("Done                         ")
             return result
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -295,7 +295,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             if SYSTEM_FAKE_DATE in result.columns:
                 result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
 
-            sp.ok("████████████████████")
+            sp.ok("Done                         ")
             return result
 
     def get_features_info(self) -> pd.DataFrame:

@@ -1,3 +1,4 @@
+from typing import Optional
 import pandas as pd
 from pandas.api.types import is_float_dtype, is_int64_dtype, is_string_dtype
 
@@ -14,7 +15,7 @@ def phone_to_int(df: pd.DataFrame, phone_column_name: str) -> pd.DataFrame:
     Inplace conversion of phone to int.
 
     Method will remove all non numeric chars from string and convert it to int.
-    -1 will be set for phone numbers that couldn't be converted to int
+    None will be set for phone numbers that couldn't be converted to int
     """
     if is_string_dtype(df[phone_column_name]):
         df[phone_column_name] = df[phone_column_name].apply(phone_str_to_int_safe)
@@ -30,31 +31,31 @@ def phone_to_int(df: pd.DataFrame, phone_column_name: str) -> pd.DataFrame:
     return df
 
 
-def phone_float_to_int_safe(value: float) -> int:
+def phone_float_to_int_safe(value: float) -> Optional[int]:
     try:
         return validate_length(int(value))
     except Exception:
-        return -1
+        return None
 
 
-def phone_int_to_int_safe(value: float) -> int:
+def phone_int_to_int_safe(value: float) -> Optional[int]:
     try:
         return validate_length(int(value))
     except Exception:
-        return -1
+        return None
 
 
-def phone_str_to_int_safe(value: str) -> int:
+def phone_str_to_int_safe(value: str) -> Optional[int]:
     try:
         numeric_filter = filter(str.isdigit, value)
         numeric_string = "".join(numeric_filter)
         return validate_length(int(numeric_string))
     except Exception:
-        return -1
+        return None
 
 
-def validate_length(value: int) -> int:
+def validate_length(value: int) -> Optional[int]:
     if value < 10000000 or value > 999999999999999:
-        return -1
+        return None
     else:
         return value

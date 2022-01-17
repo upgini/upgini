@@ -1,6 +1,7 @@
 import ipaddress
 from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -15,8 +16,8 @@ def test_etalon_validation(etalon: Dataset):
     valid_count = int(etalon["is_valid"].sum())
     valid_rate = 100 * valid_count / count
 
-    assert valid_count == 1
-    valid_rate_expected = 100 * (1 / 6)
+    assert valid_count == 8
+    valid_rate_expected = 100 * (8 / 9)
     assert valid_rate == pytest.approx(valid_rate_expected, abs=0.01)
 
 
@@ -52,10 +53,9 @@ def test_string_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
-    assert dataset["ip"].dtype == "int64"
+    assert dataset["ip"].dtype == "Int64"
     assert dataset["ip"].iloc[0] == 3232235777
-    assert dataset["ip"].iloc[1] == -1
-    assert dataset["ip"].iloc[2] == -1
+    assert dataset["ip"].isnull().sum() == 2
 
 
 def test_python_ip_to_int_conversion():
@@ -69,7 +69,7 @@ def test_python_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
-    assert dataset["ip"].dtype == "int64"
+    assert dataset["ip"].dtype == "Int64"
     assert dataset["ip"].iloc[0] == 3232235777
 
 
@@ -100,11 +100,12 @@ def test_string_date_to_timestamp_convertion():
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATE,
     }
-    dataset._Dataset__clean_empty_rows()
     dataset._Dataset__to_millis()
-    assert dataset.shape[0] == 1
-    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
+    assert dataset["date"].isnull().sum() == 2
+    dataset._Dataset__remove_empty_date_rows()
+    assert dataset.shape[0] == 1
 
 
 def test_string_datetime_to_timestamp_convertion():
@@ -118,10 +119,10 @@ def test_string_datetime_to_timestamp_convertion():
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATE,
     }
-    dataset._Dataset__clean_empty_rows()
     dataset._Dataset__to_millis()
+    dataset._Dataset__remove_empty_date_rows()
     assert dataset.shape[0] == 1
-    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
 
 
@@ -131,7 +132,7 @@ def test_period_range_to_timestamp_conversion():
     dataset = Dataset("test2", df=df)
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
-    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
     assert dataset["date"].iloc[1] == 1577923200000
     assert dataset["date"].iloc[2] == 1578009600000
@@ -148,7 +149,7 @@ def test_python_date_to_timestamp_conversion():
     dataset = Dataset("test3", df=df)
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
-    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
     assert dataset["date"].iloc[1] == 1577923200000
     assert dataset["date"].iloc[2] == 1578009600000
@@ -165,7 +166,7 @@ def test_python_datetime_to_timestamp_conversion():
     dataset = Dataset("test3", df=df)
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
-    assert dataset["date"].dtype == "int64"
+    assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
     assert dataset["date"].iloc[1] == 1577923200000
     assert dataset["date"].iloc[2] == 1578009600000
