@@ -398,7 +398,7 @@ class Dataset(pd.DataFrame):
 
         df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
         df_stats.reset_index(inplace=True)
-        df_stats.columns = ["Key", "Status", "Description"]
+        df_stats.columns = ["Column name", "Status", "Description"]
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
         df_stats = df_stats.style.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
         try:
