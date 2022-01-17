@@ -309,7 +309,6 @@ class Dataset(pd.DataFrame):
         target.dropna(inplace=True)
         if target.dtype in (np.int_, np.float_):
             target = target.loc[np.isfinite(target)]
-            np.random.randint()
         else:
             target = target.loc[target != ""]
         target_items = target.nunique()
