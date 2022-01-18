@@ -15,8 +15,8 @@ def test_etalon_validation(etalon: Dataset):
     valid_count = int(etalon["is_valid"].sum())
     valid_rate = 100 * valid_count / count
 
-    assert valid_count == 8
-    valid_rate_expected = 100 * (8 / 9)
+    assert valid_count == 1
+    valid_rate_expected = 100 * (1 / 9)
     assert valid_rate == pytest.approx(valid_rate_expected, abs=0.01)
 
 

@@ -347,7 +347,8 @@ class Dataset(pd.DataFrame):
                 raise ValueError("Target column is absent in meaning_types.")
             self[target] = self[target].apply(pd.to_numeric, errors="coerce")
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
-        columns_to_validate = [date_millis, target, score]
+        mandatory_columns = [date_millis, target, score]
+        columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
         columns_to_validate.discard(SYSTEM_FAKE_DATE)
@@ -355,18 +356,21 @@ class Dataset(pd.DataFrame):
         nrows = len(self)
         validation_stats = {}
         self["valid_keys"] = 0
-        self["valid_target"] = True
+        self["valid_mandatory"] = True
         for col in columns_to_validate:
             self[f"{col}_is_valid"] = ~self[col].isnull()
             if validate_target and target is not None and col == target:
                 self.loc[self[target] == np.Inf, f"{col}_is_valid"] = False
-                self["valid_target"] = self[f"{col}_is_valid"]
+
+            if col in mandatory_columns:
+                self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
 
             invalid_values = self.loc[self[f"{col}_is_valid"] == 0, col].head().values
             invalid_values = list(invalid_values)
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
-            optional_drop_message = "Invalid rows will be dropped. " if col == date_millis or col == target else ""
+            print(f"Is column {col} in mandatory {mandatory_columns}: {col in mandatory_columns}")
+            optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""
             if valid_share == 1:
                 valid_status = "All valid"
                 valid_message = "All values in this column are good to go"
@@ -392,8 +396,8 @@ class Dataset(pd.DataFrame):
             self.drop(columns=f"{col}_is_valid", inplace=True)
 
         self["is_valid"] = self["valid_keys"] > 0
-        self["is_valid"] = self["is_valid"] & self["valid_target"]
-        self.drop(columns=["valid_keys", "valid_target"], inplace=True)
+        self["is_valid"] = self["is_valid"] & self["valid_mandatory"]
+        self.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
 
         df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
         df_stats.reset_index(inplace=True)
