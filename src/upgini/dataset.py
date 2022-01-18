@@ -354,7 +354,6 @@ class Dataset(pd.DataFrame):
 
         nrows = len(self)
         validation_stats = {}
-        # self["is_valid"] = True
         self["valid_keys"] = 0
         self["valid_target"] = True
         for col in columns_to_validate:
@@ -387,8 +386,6 @@ class Dataset(pd.DataFrame):
                 )
             validation_stats[col]["valid_status"] = valid_status
             validation_stats[col]["valid_message"] = valid_message
-
-            # self["is_valid"] = self["is_valid"] & self[f"{col}_is_valid"]
 
             if col in keys_to_validate:
                 self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
