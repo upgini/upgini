@@ -441,6 +441,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self._search_task = dataset.search(
             extract_features=extract_features,
+            importance_threshold=self.importance_threshold,
+            max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
         )
         self.__show_metrics()
