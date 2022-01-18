@@ -356,16 +356,18 @@ class Dataset(pd.DataFrame):
         validation_stats = {}
         # self["is_valid"] = True
         self["valid_keys"] = 0
+        self["valid_target"] = True
         for col in columns_to_validate:
             self[f"{col}_is_valid"] = ~self[col].isnull()
             if validate_target and target is not None and col == target:
                 self.loc[self[target] == np.Inf, f"{col}_is_valid"] = False
+                self["valid_target"] = self[f"{col}_is_valid"]
 
             invalid_values = self.loc[self[f"{col}_is_valid"] == 0, col].head().values
             invalid_values = list(invalid_values)
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
-            optional_date_message = "Invalid rows will be dropped. " if col == date_millis else ""
+            optional_drop_message = "Invalid rows will be dropped. " if col == date_millis or col == target else ""
             if valid_share == 1:
                 valid_status = "All valid"
                 valid_message = "All values in this column are good to go"
@@ -373,14 +375,14 @@ class Dataset(pd.DataFrame):
                 valid_status = "Some invalid"
                 valid_message = (
                     f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
-                    f"{optional_date_message}"
+                    f"{optional_drop_message}"
                     f"Some examples of invalid values: '{invalid_values}'"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
                     f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
-                    f"{optional_date_message}"
+                    f"{optional_drop_message}"
                     f"Some examples of invalid values: '{invalid_values}'"
                 )
             validation_stats[col]["valid_status"] = valid_status
@@ -393,7 +395,8 @@ class Dataset(pd.DataFrame):
             self.drop(columns=f"{col}_is_valid", inplace=True)
 
         self["is_valid"] = self["valid_keys"] > 0
-        self.drop(columns="valid_keys", inplace=True)
+        self["is_valid"] = self["is_valid"] & self["valid_target"]
+        self.drop(columns=["valid_keys", "valid_target"], inplace=True)
 
         df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
         df_stats.reset_index(inplace=True)
