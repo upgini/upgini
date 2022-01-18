@@ -26,7 +26,10 @@ def test_phone_int_to_int_safe():
     phone_to_int(df, "phone_num")
 
     expected_df = pd.DataFrame(
-        data={"phone_num": [None, None, None, 123456789012345, None, None], "something_else": ["a", "b", "c", "d", "e", "f"]}
+        data={
+            "phone_num": [None, None, None, 123456789012345, None, None],
+            "something_else": ["a", "b", "c", "d", "e", "f"],
+        }
     )
     assert_frame_equal(df, expected_df)
 
