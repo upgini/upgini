@@ -1,4 +1,5 @@
 import csv
+import html
 import logging
 import tempfile
 from hashlib import sha256
@@ -205,14 +206,14 @@ class Dataset(pd.DataFrame):
         for col in self.columns:
             if is_bool(self[col]):
                 logging.debug(f"Converting {col} to int")
-                self[col] = self[col].astype(int)
+                self[col] = self[col].astype("Int64")
 
     def __convert_float16(self):
         """Convert float16 to float"""
         logging.debug("Converting float16 to int")
         for col in self.columns:
             if is_float_dtype(self[col]):
-                self[col] = self[col].astype(float)
+                self[col] = self[col].astype("Float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
@@ -231,6 +232,13 @@ class Dataset(pd.DataFrame):
         """Parse date column and transform it to millis"""
         logging.debug("Transform date column to millis")
         date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+
+        def intToOpt(i: int) -> Optional[int]:
+            if i == -9223372036855:
+                return None
+            else:
+                return i
+
         if date is not None and date in self.columns:
             if is_string(self[date]):
                 self[date] = pd.to_datetime(self[date]).values.astype(np.int64) // 1_000_000
@@ -238,11 +246,12 @@ class Dataset(pd.DataFrame):
                 self[date] = self[date].view(np.int64) // 1_000_000
             elif is_period_dtype(self[date]):
                 self[date] = pd.to_datetime(self[date].astype("string")).values.astype(np.int64) // 1_000_000
+            self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
 
     @staticmethod
-    def __email_to_hem(email: str):
+    def __email_to_hem(email: str) -> Optional[str]:
         if email is None or not isinstance(email, str) or email == "":
-            return ""
+            return None
         else:
             return sha256(email.lower().encode("utf-8")).hexdigest()
 
@@ -265,20 +274,20 @@ class Dataset(pd.DataFrame):
             self.drop(columns=email, inplace=True)
 
     @staticmethod
-    def __ip_to_int(ip: Union[str, int, IPv4Address]):
+    def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
         try:
             return int(ip_address(ip))
         except Exception:
-            return -1
+            return None
 
     def __convert_ip(self):
         """Convert ip address to int"""
         logging.debug("Convert ip address to int")
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.columns:
-            self[ip] = self[ip].apply(self.__ip_to_int)
+            self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
 
-    def __clean_empty_rows(self):
+    def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
         logging.debug("cleaning empty rows")
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
@@ -339,53 +348,68 @@ class Dataset(pd.DataFrame):
                 raise ValueError("Target column is absent in meaning_types.")
             self[target] = self[target].apply(pd.to_numeric, errors="coerce")
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
-        columns_to_validate = [date_millis, target, score]
+        mandatory_columns = [date_millis, target, score]
+        columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
         columns_to_validate.discard(SYSTEM_FAKE_DATE)
 
         nrows = len(self)
         validation_stats = {}
-        self["is_valid"] = True
+        self["valid_keys"] = 0
+        self["valid_mandatory"] = True
         for col in columns_to_validate:
             self[f"{col}_is_valid"] = ~self[col].isnull()
             if validate_target and target is not None and col == target:
                 self.loc[self[target] == np.Inf, f"{col}_is_valid"] = False
 
-            invalid_values = self.loc[self[f"{col}_is_valid"] == 0, col].head().values
-            invalid_values = list(invalid_values)
+            if col in mandatory_columns:
+                self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
+
+            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
+            optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""
             if valid_share == 1:
                 valid_status = "All valid"
                 valid_message = "All values in this column are good to go"
             elif 0 < valid_share < 1:
                 valid_status = "Some invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation and was deleted. "
-                    f"Some examples of invalid values: '{invalid_values}'"
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
+                    f"{optional_drop_message}"
+                    f"Some examples of invalid values: {invalid_values}"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation and was deleted. "
-                    f"Some examples of invalid values: '{invalid_values}'"
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
+                    f"{optional_drop_message}"
+                    f"Some examples of invalid values: {invalid_values}"
                 )
             validation_stats[col]["valid_status"] = valid_status
             validation_stats[col]["valid_message"] = valid_message
 
-            self["is_valid"] = self["is_valid"] & self[f"{col}_is_valid"]
+            if col in keys_to_validate:
+                self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
             self.drop(columns=f"{col}_is_valid", inplace=True)
+
+        self["is_valid"] = self["valid_keys"] > 0
+        self["is_valid"] = self["is_valid"] & self["valid_mandatory"]
+        self.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
 
         df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
         df_stats.reset_index(inplace=True)
-        df_stats.columns = ["Key", "Status", "Description"]
+        df_stats.columns = ["Column name", "Status", "Description"]
+        styled_df_stats = df_stats.copy()
+        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
-        df_stats = df_stats.style.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
+        styled_df_stats = styled_df_stats.style
+        styled_df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
         try:
             from IPython.display import display  # type: ignore
 
-            display(df_stats)
+            display(styled_df_stats)
         except ImportError:
             print(df_stats)
 
@@ -413,7 +437,7 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True, validate_count: bool = True):
+    def validate(self, validate_target: bool = True):
         logging.info("Validating dataset")
         self.__validate_meaning_types(validate_target)
 
@@ -425,12 +449,7 @@ class Dataset(pd.DataFrame):
 
         self.__validate_too_long_string_values()
 
-        self.__clean_empty_rows()
-
         self.__clean_duplicates()
-
-        if validate_count:
-            self.__validate_rows_count()
 
         self.__convert_bools()
 
@@ -460,6 +479,8 @@ class Dataset(pd.DataFrame):
         logging.info("Calculating metrics")
         if self.etalon_def is None:
             self.validate()
+
+        self.__remove_empty_date_rows()
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value, "")
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
@@ -584,8 +605,8 @@ class Dataset(pd.DataFrame):
                     FileColumnMeaningType.IP_ADDRESS,
                 }:
                     min_max_values = NumericInterval(
-                        minValue=self[column_name].astype("int").min(),
-                        maxValue=self[column_name].astype("int").max(),
+                        minValue=self[column_name].astype("Int64").min(),
+                        maxValue=self[column_name].astype("Int64").max(),
                     )
                 else:
                     min_max_values = None
@@ -674,6 +695,7 @@ class Dataset(pd.DataFrame):
         if "is_valid" in self.columns:
             self.query("is_valid == 1", inplace=True)
             self.drop(["is_valid"], axis=1, inplace=True)
+        self.__validate_rows_count()
 
         file_metadata = self.__construct_metadata()
         search_customization = self.__construct_search_customization(
@@ -722,7 +744,7 @@ class Dataset(pd.DataFrame):
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(validate_target=not extract_features, validate_count=False)
+            self.validate(validate_target=not extract_features)
         if extract_features:
             file_metrics = FileMetrics()
         else:

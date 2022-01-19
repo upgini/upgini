@@ -11,7 +11,7 @@ def test_phone_float_to_int_safe():
     phone_to_int(df, "phone_num")
 
     expected_df = pd.DataFrame(
-        data={"phone_num": [-1, -1, -1, 123456789012345, -1], "something_else": ["a", "b", "c", "d", "e"]}
+        data={"phone_num": [None, None, None, 123456789012345, None], "something_else": ["a", "b", "c", "d", "e"]}
     )
     assert_frame_equal(df, expected_df)
 
@@ -26,7 +26,10 @@ def test_phone_int_to_int_safe():
     phone_to_int(df, "phone_num")
 
     expected_df = pd.DataFrame(
-        data={"phone_num": [-1, -1, -1, 123456789012345, -1, -1], "something_else": ["a", "b", "c", "d", "e", "f"]}
+        data={
+            "phone_num": [None, None, None, 123456789012345, None, None],
+            "something_else": ["a", "b", "c", "d", "e", "f"],
+        }
     )
     assert_frame_equal(df, expected_df)
 
@@ -50,7 +53,7 @@ def test_phone_str_to_int_safe():
 
     expected_df = pd.DataFrame(
         data={
-            "phone_num": [42345678, 102030405, 22345678, 861067645489, 123456789012345, -1, -1],
+            "phone_num": [42345678, 102030405, 22345678, 861067645489, 123456789012345, None, None],
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
