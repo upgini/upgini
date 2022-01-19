@@ -210,10 +210,10 @@ class Dataset(pd.DataFrame):
 
     def __convert_float16(self):
         """Convert float16 to float"""
-        logging.debug("Converting float16 to int")
+        logging.debug("Converting float16 to float")
         for col in self.columns:
             if is_float_dtype(self[col]):
-                self[col] = self[col].astype("Float64")
+                self[col] = self[col].astype("float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
