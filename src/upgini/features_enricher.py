@@ -90,8 +90,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
-        self.importance_threshold = importance_threshold
-        self.max_features = max_features
+        if importance_threshold is not None:
+            try:
+                self.importance_threshold = float(importance_threshold)
+            except ValueError:
+                raise ValueError("importance_threshold should be float")
+        if max_features is not None:
+            try:
+                self.max_features = int(max_features)
+            except ValueError:
+                raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
         if search_id:
