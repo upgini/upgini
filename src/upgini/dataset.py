@@ -5,6 +5,7 @@ from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+import html
 
 import numpy as np
 import pandas as pd
@@ -365,11 +366,9 @@ class Dataset(pd.DataFrame):
             if col in mandatory_columns:
                 self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
 
-            invalid_values = self.loc[self[f"{col}_is_valid"] == 0, col].head().values
-            invalid_values = list(invalid_values)
+            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
-            print(f"Is column {col} in mandatory {mandatory_columns}: {col in mandatory_columns}")
             optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""
             if valid_share == 1:
                 valid_status = "All valid"
@@ -379,17 +378,17 @@ class Dataset(pd.DataFrame):
                 valid_message = (
                     f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
-                    f"Some examples of invalid values: '{invalid_values}'"
+                    f"Some examples of invalid values: {invalid_values}"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
                     f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
-                    f"Some examples of invalid values: '{invalid_values}'"
+                    f"Some examples of invalid values: {invalid_values}"
                 )
             validation_stats[col]["valid_status"] = valid_status
-            validation_stats[col]["valid_message"] = valid_message
+            validation_stats[col]["valid_message"] = html.escape(valid_message)
 
             if col in keys_to_validate:
                 self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
@@ -403,7 +402,8 @@ class Dataset(pd.DataFrame):
         df_stats.reset_index(inplace=True)
         df_stats.columns = ["Column name", "Status", "Description"]
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
-        df_stats = df_stats.style.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
+        df_stats = df_stats.style
+        df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
         try:
             from IPython.display import display  # type: ignore
 
