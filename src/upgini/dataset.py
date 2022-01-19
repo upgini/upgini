@@ -1,11 +1,11 @@
 import csv
+import html
 import logging
 import tempfile
 from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-import html
 
 import numpy as np
 import pandas as pd
@@ -388,7 +388,7 @@ class Dataset(pd.DataFrame):
                     f"Some examples of invalid values: {invalid_values}"
                 )
             validation_stats[col]["valid_status"] = valid_status
-            validation_stats[col]["valid_message"] = html.escape(valid_message)
+            validation_stats[col]["valid_message"] = valid_message
 
             if col in keys_to_validate:
                 self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
@@ -401,13 +401,15 @@ class Dataset(pd.DataFrame):
         df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
         df_stats.reset_index(inplace=True)
         df_stats.columns = ["Column name", "Status", "Description"]
+        styled_df_stats = df_stats.copy()
+        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
-        df_stats = df_stats.style
-        df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
+        styled_df_stats = styled_df_stats.style
+        styled_df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
         try:
             from IPython.display import display  # type: ignore
 
-            display(df_stats)
+            display(styled_df_stats)
         except ImportError:
             print(df_stats)
 
