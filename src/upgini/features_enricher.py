@@ -71,6 +71,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     _search_task: Optional[SearchTask] = None
     passed_features: List[str] = []
+    importance_threshold: Optional[float] = None
+    max_features: Optional[int] = None
 
     def __init__(
         self,
