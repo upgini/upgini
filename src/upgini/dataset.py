@@ -292,8 +292,8 @@ class Dataset(pd.DataFrame):
         logging.debug("cleaning empty rows")
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
         if date_column is not None:
-            self.query(f"`{date_column}` != ''", inplace=True)
-            self.query(f"~`{date_column}`.isnull()", inplace=True, engine="python")
+            self[self[date_column] == ""] = None
+            self.dropna(inplace=True)
             logging.info(f"df with valid date column: {self.shape}")
 
     def __drop_ignore_columns(self):
