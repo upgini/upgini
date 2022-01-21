@@ -292,8 +292,8 @@ class Dataset(pd.DataFrame):
         logging.debug("cleaning empty rows")
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
         if date_column is not None:
-            self[self[date_column] == ""] = None
-            self.dropna(inplace=True)
+            drop_idx = self[(self[date_column] == "") | self[date_column].isna()].index
+            self.drop(drop_idx, inplace=True)
             logging.info(f"df with valid date column: {self.shape}")
 
     def __drop_ignore_columns(self):
@@ -693,8 +693,9 @@ class Dataset(pd.DataFrame):
         file_metrics = self.calculate_metrics()
         # keep only valid rows
         if "is_valid" in self.columns:
-            self.query("is_valid == 1", inplace=True)
-            self.drop(["is_valid"], axis=1, inplace=True)
+            drop_idx = self[self["is_valid"] != 1].index
+            self.drop(drop_idx, inplace=True)
+            self.drop(columns=["is_valid"], inplace=True)
         self.__validate_rows_count()
 
         file_metadata = self.__construct_metadata()
