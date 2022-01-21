@@ -39,7 +39,7 @@ from upgini.search_task import SearchTask
 
 
 class Dataset(pd.DataFrame):
-    MIN_ROWS_COUNT: int = 1000
+    MIN_ROWS_COUNT: int = 100
 
     name: str
     description: Optional[str]
