@@ -313,7 +313,8 @@ class Dataset(pd.DataFrame):
         else:
             target = target.loc[target != ""]
         target_items = target.nunique()
-        if target_items > 50 and type(target[0]) in (np.int_, np.float_):
+        target_ratio = target_items / len(target)
+        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and type(target[0]) in (np.int_, np.float_):
             task = ModelTaskType.REGRESSION
         elif target_items == 2:
             if type(target[0]) in (np.int_, np.float_):
@@ -326,6 +327,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Target contains only NaN or incorrect values.")
         else:
             task = ModelTaskType.MULTICLASS
+        print(f"Detected task type: {task}")
         return task
 
     def __convert_phone(self):
@@ -457,7 +459,7 @@ class Dataset(pd.DataFrame):
 
         self.__correct_decimal_comma()
 
-        if validate_target:
+        if validate_target and self.task_type is None:
             self.task_type = self.__define_task()
 
         self.__to_millis()
@@ -682,12 +684,13 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
+        model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
-
+        self.task_type = model_task_type
         if self.etalon_def is None:
             self.validate()
         file_metrics = self.calculate_metrics()

@@ -42,6 +42,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     keep_input: bool, optional (default=False)
         If True, copy original input columns to the output dataframe.
 
+    model_task_type: ModelTaskType, optional (default=None)
+        If defined, used as type of training model, else autdefined type will be used
+
     importance_threshold: float, optional (default=None)
         Minimum importance shap value for selected features. By default minimum importance is 0.0
 
@@ -78,6 +81,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self,
         search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
         keep_input: bool = False,
+        model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         api_key: Optional[str] = None,
@@ -92,6 +96,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
+        self.model_task_type = model_task_type
         if importance_threshold is not None:
             try:
                 self.importance_threshold = float(importance_threshold)
@@ -309,16 +314,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             return result
 
     def get_features_info(self) -> pd.DataFrame:
-        """Returns pandas dataframe with importances for each feature
-        """
+        """Returns pandas dataframe with importances for each feature"""
         if self._search_task is None or self._search_task.summary is None:
             raise NotFittedError("Run fit or pass search_id before get features info.")
 
         return self.features_info
 
     def get_metrics(self) -> Optional[pd.DataFrame]:
-        """Returns pandas dataframe with quality metrics for main dataset and eval_set
-        """
+        """Returns pandas dataframe with quality metrics for main dataset and eval_set"""
         if self._search_task is None or self._search_task.summary is None:
             raise NotFittedError("Run fit or pass search_id before get metrics.")
 
@@ -451,6 +454,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self._search_task = dataset.search(
             extract_features=extract_features,
+            model_task_type=self.model_task_type,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
