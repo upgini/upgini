@@ -82,8 +82,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
         keep_input: bool = False,
         model_task_type: Optional[ModelTaskType] = None,
-        importance_threshold: Optional[float] = None,
-        max_features: Optional[int] = None,
+        importance_threshold: Optional[float] = 0,
+        max_features: Optional[int] = 400,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
@@ -199,7 +199,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             if result_features is None:
                 raise RuntimeError("Search engine crashed on this request.")
 
-            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            sorted_result_columns = [
+                name for name in self.__filtered_importance_names() if name in result_features.columns
+            ]
             result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
             if self.keep_input:
@@ -289,7 +291,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             if result_features is None:
                 raise RuntimeError("Search engine crashed on this request.")
 
-            sorted_result_columns = [name for name in self.feature_names_ if name in result_features.columns]
+            sorted_result_columns = [
+                name for name in self.__filtered_importance_names() if name in result_features.columns
+            ]
             result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
             if not self.keep_input:
@@ -362,7 +366,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         metrics_df = pd.DataFrame(metrics)
         metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis(None, inplace=True)
+        metrics_df.rename_axis("", inplace=True)
         return metrics_df
 
     def __inner_fit(
@@ -397,7 +401,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
         }
 
-        df = X.copy()
+        df: pd.DataFrame = X.copy()
         df[self.TARGET_NAME] = y_array
 
         df.reset_index(drop=True, inplace=True)
@@ -407,7 +411,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
-        df_without_eval_set = df.copy()
+        df_without_eval_set: pd.DataFrame = df.copy()
 
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
@@ -433,7 +437,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                         "pandas.Series or numpy.ndarray or list supported for y in eval_set, "
                         f"but {type(eval_y)} was passed."
                     )
-                eval_df = eval_X.copy()
+                eval_df: pd.DataFrame = eval_X.copy()
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1
@@ -480,18 +484,42 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         features_info = []
 
         for x_column in x_columns:
+            if x_column in self.search_keys.keys():
+                continue
             feature_metadata = feature_metadata_by_name(x_column)
             if feature_metadata:
                 features_info.append(feature_metadata)
                 importances.remove(feature_metadata)
+            else:
+                features_info.append(
+                    {
+                        "feature_name": x_column,
+                        "shap_value": 0.0,
+                        "match_percent": 100.0,  # TODO fill from X
+                        "type": "",  # TODO fill from X
+                    }
+                )
 
-        importances.sort(key=lambda m: m["feature_name"])
+        importances.sort(key=lambda m: -m["shap_value"])
         for feature_metadata in importances:
             self.feature_names_.append(feature_metadata["feature_name"])
             self.feature_importances_.append(feature_metadata["shap_value"])
             features_info.append(feature_metadata)
 
         self.features_info = pd.DataFrame(features_info)
+
+    def __filtered_importance_names(self) -> List[str]:
+        filtered_importances = zip(self.feature_names_, self.feature_importances_)
+        if self.importance_threshold is not None:
+            filtered_importances = [
+                (name, importance)
+                for name, importance in filtered_importances
+                if importance > self.importance_threshold
+            ]
+        if self.max_features is not None:
+            filtered_importances = list(filtered_importances)[: self.max_features]
+        filtered_importance_names, _ = zip(*filtered_importances)
+        return list(filtered_importance_names)
 
     def __prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
         valid_search_keys = {}
