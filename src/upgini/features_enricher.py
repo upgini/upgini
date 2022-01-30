@@ -1,5 +1,4 @@
 from datetime import date
-from tkinter import N
 from typing import Dict, List, Optional, Union
 
 try:
@@ -497,7 +496,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                         "feature_name": x_column,
                         "shap_value": 0.0,
                         "match_percent": 100.0,  # TODO fill from X
-                        "type": ""  # TODO fill from X
+                        "type": "",  # TODO fill from X
                     }
                 )
 
