@@ -76,6 +76,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     passed_features: List[str] = []
     importance_threshold: Optional[float] = None
     max_features: Optional[int] = None
+    features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
 
     def __init__(
         self,
@@ -496,7 +497,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                         "feature_name": x_column,
                         "shap_value": 0.0,
                         "match_percent": 100.0,  # TODO fill from X
-                        "type": "",  # TODO fill from X
                     }
                 )
 
@@ -506,7 +506,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self.feature_importances_.append(feature_metadata["shap_value"])
             features_info.append(feature_metadata)
 
-        self.features_info = pd.DataFrame(features_info)
+        if len(features_info) > 0:
+            self.features_info = pd.DataFrame(features_info)
 
     def __filtered_importance_names(self) -> List[str]:
         filtered_importances = zip(self.feature_names_, self.feature_importances_)
