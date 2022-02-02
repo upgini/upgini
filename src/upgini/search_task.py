@@ -49,8 +49,8 @@ class SearchTask:
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(
-                f"Running {self.search_task_id} search request.\n"
-                "We'll email you once it's completed. Please wait a few minutes."
+                f"Running {self.search_task_id} search request\n"
+                "We’ll send email notification once it’s completed, just use your personal api_key from profile.upgini.com"
             )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
         try:
@@ -61,14 +61,14 @@ class SearchTask:
                     time.sleep(5)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
                     if self.summary.status in failed_statuses:
-                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
+                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request")
                     if (
                         self.summary.status in submitted_statuses
                         and len(self._get_provider_summaries(self.summary)) == 0
                     ):
                         raise RuntimeError(
-                            "No datasets found to intersect with uploaded file using defined search keys. "
-                            "Try with another set of keys or different time period."
+                            "No datasets found to intersect"
+                            "Try with another set of search keys or different time period"
                         )
                     time.sleep(5)
                 sp.ok("Done                         ")
@@ -541,7 +541,7 @@ class SearchTask:
                 min_hit_rate = current_value
 
         if min_hit_rate is None:
-            raise RuntimeError("There is no hit rate available for search task.")
+            raise RuntimeError("There is no hit rate available for search task")
         else:
             return min_hit_rate
 
