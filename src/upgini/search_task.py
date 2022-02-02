@@ -50,7 +50,8 @@ class SearchTask:
         if not quiet:
             print(
                 f"Running {self.search_task_id} search request\n"
-                "We’ll send email notification once it’s completed, just use your personal api_key from profile.upgini.com"
+                "We'll send email notification once it's completed, "
+                "just use your personal api_key from profile.upgini.com"
             )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
         try:
