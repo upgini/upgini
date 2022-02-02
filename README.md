@@ -225,15 +225,15 @@ We validate and clean search initialization dataset under the hood:
 We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.  
 
 ## 💸 Is it a free or paid service? 
-We can three types of data sources: public data, community data and commerical data.
+We have three types of data sources: public data, community data and commerical data.
 The usage of public data is free of charge.
-The usage of community data is free of charge if you publish your data for other users feature searches.
+The usage of community data is free of charge if you publish your data for community searches.
 The usage of commercial data is paid. 
 
 
-#### How may I publish my own data to get access to community data? 
-If you have ANY data which you might consider as royalty and license-free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for supervised ML applications, you may publish it for **community usage**.  
-Firstly please Sign Up here: https://profile.upgini.com
+#### How may I publish my own data to get free access to community data? 
+If you have ANY data which you might consider as royalty and license-free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for supervised ML applications, you may publish it for **community usage** and get free access for community data.   
+To do that firstly please Sign Up here: https://profile.upgini.com
 After that you can copy a unique API access key and upload your data sample right from Jupyter:
 ```python
 import pandas as pd
@@ -247,9 +247,10 @@ upload_user_ads("test", sample_df, {
     "city": SearchKey.CUSTOM_KEY, "stats_date": SearchKey.DATE
 })
 ```
+And finaly you can search for community data by the usual search way.
 
-#### May I use commercial data for free? Participate in beta testing!
-Now service is still in a beta stage, so *registered beta testers* will get an **80USD credits for 6 months**. Feel free to start with the registration form 👉 [here](https://profile.upgini.com/access-for-beta-testers)  Please note that number of slots for beta testing is limited and we wont' be able to handle all the requests.  
+#### May I use commercial data for free? 
+Yes, participate in beta testing and get credits for Upgini usage! Now service is still in a beta stage, so *registered beta testers* will get an **80USD credits for 6 months**. Feel free to start with the registration form 👉 [here](https://profile.upgini.com/access-for-beta-testers)  Please note that number of slots for beta testing is limited and we wont' be able to handle all the requests.  
 
 ## 🛠 Getting Help & Community
 Requests and support, in preferred order  
