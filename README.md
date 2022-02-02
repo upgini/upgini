@@ -1,5 +1,5 @@
-<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : automated feature discovery & enrichment library for supervised machine learning on tabular data </h2>
-<p align="center"> <b>Automatically find and enrich ML model with relevant <i>external</i> features from scraped data and public datasets to improve machine learning model accuracy </b> </p>
+<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : free feature search engine for Machine Learning</h2>
+<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public, community and commercial data sources and enriches your dataset with new external relevant features in minutes</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Live DEMO in Colab »</strong></a> |
@@ -77,20 +77,8 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 ## 💻 How it works?
 
-### 1. 🔑 Get access - API key
-For full access beyond demo example, you'll need API key from User profile page https://profile.upgini.com  
-Pass API key via `api_key` parameter in [`FeaturesEnricher` class constructor](#4--start-your-first-data-search) or export as environment variable:  
-... in python  
-```python
-import os
-os.environ["UPGINI_API_KEY"] = "your_long_string_api_key_goes_here"
-```
-... in bash/zsh
-```bash
-export UPGINI_API_KEY = "your_long_string_api_key_goes_here"
-```  
-### 2. 💡 Reuse existing labeled training datasets for search
-To simplify things, you can reuse your existing labeled training datasets "as is" to initiate the search. Under the hood, we'll search for relevant data using:
+### 1. 💡 Use your existing labeled training datasets for search
+You can use your existing labeled training datasets "as is" to initiate the search. Under the hood, we'll search for relevant data using:
 - *[search keys](#-search-key-types-we-support-more-is-coming)* from training dataset to match records from potential external data sources and features
 - *labels* from training dataset to estimate relevancy of feature or dataset for your ML task and calculate metrics  
 - *your features* from training dataset to find external datasets and features only give accuracy improvement to your existing data and estimate accuracy uplift ([optional](#-optional-find-datasets-and-features-only-give-accuracy-gain-to-your-existing-data-in-the-ml-model))  
@@ -103,13 +91,11 @@ train_df = pd.read_csv("customer_churn_prediction_train.csv")
 train_ids_and_features = train_df.drop(columns="label")
 train_label = train_df["label"]
 ```
-### 3. 🔦 Choose at least one column as a search key
+### 2. 🔦 Choose at least one column as a search key
 *Search keys* columns will be used to match records from all potential external data sources 👓. Define at least one search key with `FeaturesEnricher` class initialization.  
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher (
-    search_keys={"subscription_activation_date": SearchKey.DATE},
-    keep_input=True )
+enricher = FeaturesEnricher ( search_keys={"subscription_activation_date": SearchKey.DATE} )
 ```
 #### ✨ Search key types we support (more is coming!)
 Our team works hard to introduce new search key types, currently we support:
@@ -161,7 +147,7 @@ We do dataset verification and cleaning under the hood, but still there are some
 - At least one column defined as a [search key](#-search-key-types-we-support-more-is-coming)  
 - Min size after deduplication by search key column and NAs removal: *1000 records*  
 - Max size after deduplication by search key column and NAs removal: *1 000 000 records*  
-### 4. 🔍 Start your first data search!
+### 3. 🔍 Start your first data search!
 The main abstraction you interact is `FeaturesEnricher`. `FeaturesEnricher` is a Scikit-learn compatible estimator, so you can easily add it into your existing ML pipelines. First, create instance of the `FeaturesEnricher` class. Once it created call  
 - `fit` to search relevant datasets & features  
 - than `transform` to enrich your dataset with features from search result  
@@ -173,21 +159,16 @@ from upgini import FeaturesEnricher, SearchKey
 
 # load labeled training dataset to initiate search
 train_df = pd.read_csv("customer_churn_prediction_train.csv")
-train_features = train_df.drop(columns="label")
-train_target = train_df["label"]
+train_ids_and_features = train_df.drop(columns="label")
+train_label = train_df["label"]
 
 # now we're going to create `FeaturesEnricher` class
-# if you still didn't define UPGINI_API_KEY env variable - not a problem, you can do it via `api_key`
-enricher = FeaturesEnricher(
-    search_keys={"subscription_activation_date": SearchKey.DATE},
-    keep_input=True,
-    api_key="your_long_string_api_key_goes_here"
-)
+enricher = FeaturesEnricher( search_keys={"subscription_activation_date": SearchKey.DATE} )
 
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
 # but don't worry - we'll send email notification. Accuracy metrics of trained model and uplifts
 # will be shown automaticly
-enricher.fit(train_ids_and_features, train_target)
+enricher.fit(train_ids_and_features, train_label)
 
 ```
 
@@ -212,26 +193,23 @@ You can validate data quality from your search result on out-of-time dataset usi
 ```python
 # load train dataset
 train_df = pd.read_csv("train.csv")
-train_ids_and_features = train_df.drop(columns="target")
-train_target = train_df["target"]
+train_ids_and_features = train_df.drop(columns="label")
+train_label = train_df["label"]
 
 # load out-of-time validation dataset
 eval_df = pd.read_csv("validation.csv")
-eval_ids_and_features = eval_df.drop(columns="eval_target")
-eval_target = eval_df["eval_target"]
+eval_ids_and_features = eval_df.drop(columns="label")
+eval_label = eval_df["label"]
 # create FeaturesEnricher
-enricher = FeaturesEnricher(
-    search_keys={"registration_date": SearchKey.DATE},
-    keep_input=True
-)
+enricher = FeaturesEnricher( search_keys={"registration_date": SearchKey.DATE} )
 
 # now we fit WITH eval_set parameter to calculate accuracy metrics on OOT dataset.
 # the output will contain quality metrics for both the training data set and
 # the eval set (validation OOT data set)
 enricher.fit(
   train_ids_and_features,
-  train_target,
-  eval_set = [(eval_ids_and_features, eval_target)]
+  train_label,
+  eval_set = [(eval_ids_and_features, eval_label)]
 )
 ```
 #### ⚠️ Requirements for out-of-time dataset  
@@ -246,15 +224,17 @@ We validate and clean search initialization dataset under the hood:
 ### 🆙 Accuracy and uplift metrics calculations
 We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.  
 
-## 💸 Why it's a paid service? Can I use it for free?
-The short answer is Yes! **We do have two options for that** 🤓  
-Let us explain. This is a part-time project for our small team, but as you might know, search is a very infrastructure-intensive service. We pay infrastructure cost for *every search request* generated on the platform, as we mostly use serverless components under the hood. Both storage and compute.  
-To cover these run costs we introduce paid plans with a certain amount of search requests, which we hope will be affordable for most of the data scientists & developers in the community.  
-#### First option. Participate in beta testing
-Now service is still in a beta stage, so *registered beta testers* will get an **80USD credits for 6 months**. Feel free to start with the registration form 👉 [here](https://profile.upgini.com/access-for-beta-testers)  Please note that number of slots for beta testing is limited and we wont' be able to handle all the requests.  
-#### Second option. Share license-free data with community
-If you have ANY data which you might consider as royalty and license-free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for supervised ML applications, we'll be happy to give **free individual access** in exchange for **sharing this data with community**.  
-Just upload your data sample right from Jupyter. We will check your data sharing proposal and get back to you ASAP:
+## 💸 Is it a free or paid service? 
+We can three types of data sources: public data, community data and commerical data.
+The usage of public data is free of charge.
+The usage of community data is free of charge if you publish your data for other users feature searches.
+The usage of commercial data is paid. 
+
+
+#### How may I publish my own data to get access to community data? 
+If you have ANY data which you might consider as royalty and license-free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for supervised ML applications, you may publish it for **community usage**.  
+Firstly please Sign Up here: https://profile.upgini.com
+After that you can copy a unique API access key and upload your data sample right from Jupyter:
 ```python
 import pandas as pd
 from upgini import SearchKey
@@ -267,6 +247,10 @@ upload_user_ads("test", sample_df, {
     "city": SearchKey.CUSTOM_KEY, "stats_date": SearchKey.DATE
 })
 ```
+
+#### May I use commercial data for free? Participate in beta testing!
+Now service is still in a beta stage, so *registered beta testers* will get an **80USD credits for 6 months**. Feel free to start with the registration form 👉 [here](https://profile.upgini.com/access-for-beta-testers)  Please note that number of slots for beta testing is limited and we wont' be able to handle all the requests.  
+
 ## 🛠 Getting Help & Community
 Requests and support, in preferred order  
 [![Claim help in slack](https://img.shields.io/badge/slack-@upgini-orange.svg?style=for-the-badge&logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)
