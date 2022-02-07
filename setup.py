@@ -19,7 +19,7 @@ from setuptools import find_packages, setup
 here = Path(__file__).parent.resolve()
 setup(
     name="upgini",
-    version="0.10.0a45",
+    version="0.10.0a46",
     description="Automated feature discovery & enrichment library for supervised machine learning on tabular data",
     long_description=(here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
