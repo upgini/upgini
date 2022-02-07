@@ -1,10 +1,12 @@
 import logging
 import os
 import time
+from upgini.utils.track_info import get_track_metrics
 from functools import lru_cache
 from http.client import HTTPConnection
 from typing import Optional
 from urllib.parse import urljoin
+from json import dumps
 
 import requests
 from pydantic import BaseModel
@@ -223,6 +225,7 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
+                files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
 
                 return self._send_post_file_req_v2(api_path, files)
 
@@ -274,6 +277,7 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
+                files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
 
                 return self._send_post_file_req_v2(api_path, files)
 
