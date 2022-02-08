@@ -156,12 +156,12 @@ class Dataset(pd.DataFrame):
                     new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
             self.rename(columns={column: new_column}, inplace=True)
             self.meaning_types = {
-                (new_column if key == column else key): value for key, value in self.meaning_types_checked.items()
+                (new_column if key == str(column) else key): value for key, value in self.meaning_types_checked.items()
             }
             self.search_keys = [
-                tuple(new_column if key == column else key for key in keys) for keys in self.search_keys_checked
+                tuple(new_column if key == str(column) else key for key in keys) for keys in self.search_keys_checked
             ]
-            self.columns_renaming[new_column] = column
+            self.columns_renaming[new_column] = str(column)
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
@@ -441,13 +441,14 @@ class Dataset(pd.DataFrame):
 
     def validate(self, validate_target: bool = True):
         logging.info("Validating dataset")
+
+        self.__rename_columns()
+
         self.__validate_meaning_types(validate_target)
 
         self.__validate_search_keys()
 
         self.__drop_ignore_columns()
-
-        self.__rename_columns()
 
         self.__validate_too_long_string_values()
 
