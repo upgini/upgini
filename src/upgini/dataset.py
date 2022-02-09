@@ -439,7 +439,7 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True):
+    def validate(self, validate_target: bool = True, silent_mode: bool = False):
         logging.info("Validating dataset")
 
         self.__rename_columns()
@@ -471,7 +471,8 @@ class Dataset(pd.DataFrame):
 
         self.__convert_phone()
 
-        self.__validate_dataset(validate_target)
+        if not silent_mode:
+            self.__validate_dataset(validate_target)
 
     def calculate_metrics(self) -> FileMetrics:
         """Calculate initial metadata for DataSet
@@ -747,9 +748,10 @@ class Dataset(pd.DataFrame):
         return_scores: bool = True,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(validate_target=not extract_features)
+            self.validate(validate_target=not extract_features, silent_mode=silent_mode)
         if extract_features:
             file_metrics = FileMetrics()
         else:
@@ -790,4 +792,4 @@ class Dataset(pd.DataFrame):
             api_key=self.api_key,
         )
 
-        return search_task.poll_result()
+        return search_task.poll_result(quiet=silent_mode)

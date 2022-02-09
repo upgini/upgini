@@ -86,11 +86,15 @@ class SearchTask:
                 has_completed_provider_task = True
 
         if not has_completed_provider_task:
-            raise RuntimeError(
-                "All search tasks in the request have failed: "
-                + ",".join([self._error_message(x) for x in self._get_provider_summaries(self.summary)])
-                + "."
-            )
+            error_messages = [self._error_message(x) for x in self._get_provider_summaries(self.summary)]
+            if len(error_messages) == 1 and (error_messages[0] is None or error_messages[0].endswith("Internal error")):
+                raise RuntimeError("All search tasks in the request have failed")
+            else:
+                raise RuntimeError(
+                    "All search tasks in the request have failed: "
+                    + ",".join(error_messages)
+                    + "."
+                )
 
         return self
 
@@ -123,12 +127,14 @@ class SearchTask:
         validation_dataset: "dataset.Dataset",
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        silent_mode: bool = False,
     ) -> "SearchTask":
         return validation_dataset.validation(
             self.search_task_id,
             return_scores=True,
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
+            silent_mode=silent_mode
         )
 
     def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:

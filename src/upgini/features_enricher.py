@@ -71,16 +71,18 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     TARGET_NAME = "target"
     EVAL_SET_INDEX = "eval_set_index"
+    FIT_SAMPLE_ROWS = 100_000
+    FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
 
     _search_task: Optional[SearchTask] = None
     passed_features: List[str] = []
-    importance_threshold: Optional[float] = None
-    max_features: Optional[int] = None
+    importance_threshold: Optional[float]
+    max_features: Optional[int]
     features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
 
     def __init__(
         self,
-        search_keys: Union[Dict[str, SearchKey], Dict[int, SearchKey]],
+        search_keys: Dict[str, SearchKey],
         keep_input: bool = False,
         model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = 0,
@@ -188,6 +190,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
 
+        if len(X) > self.FIT_SAMPLE_THRESHOLD:
+            return self.transform(X, silent_mode=True)
+
         etalon_columns = list(X.columns) + [self.TARGET_NAME]
 
         if self._search_task is None:
@@ -226,7 +231,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             sp.ok("Done                         ")
             return result
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, X: pd.DataFrame, silent_mode: bool = False) -> pd.DataFrame:
         """Transform `X`.
 
         Returns a transformed version of `X`.
@@ -280,7 +285,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
         validation_task = self._search_task.validation(
-            dataset, extract_features=True, runtime_parameters=self.runtime_parameters
+            dataset, extract_features=True, runtime_parameters=self.runtime_parameters, silent_mode=silent_mode
         )
 
         etalon_columns = list(self.search_keys.keys())
@@ -414,6 +419,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df_without_eval_set: pd.DataFrame = df.copy()
 
+        if len(df) > self.FIT_SAMPLE_THRESHOLD:
+            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=42)
+
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
             meaning_types[self.EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
@@ -484,8 +492,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.feature_importances_ = []
         features_info = []
 
+        service_columns = [SYSTEM_RECORD_ID, self.EVAL_SET_INDEX, self.TARGET_NAME]
+
         for x_column in x_columns:
-            if x_column in self.search_keys.keys():
+            if x_column in (list(self.search_keys.keys()) + service_columns):
                 continue
             feature_metadata = feature_metadata_by_name(x_column)
             if feature_metadata:
@@ -510,6 +520,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self.features_info = pd.DataFrame(features_info)
 
     def __filtered_importance_names(self) -> List[str]:
+        if len(self.feature_names_) == 0:
+            return []
+
         filtered_importances = zip(self.feature_names_, self.feature_importances_)
         if self.importance_threshold is not None:
             filtered_importances = [
