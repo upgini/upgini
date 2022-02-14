@@ -407,7 +407,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
         }
 
-        df: pd.DataFrame = X.copy()
+        df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
         df.reset_index(drop=True, inplace=True)
@@ -417,10 +417,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
-        df_without_eval_set: pd.DataFrame = df.copy()
+        df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
         if len(df) > self.FIT_SAMPLE_THRESHOLD:
-            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=42)
+            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=42)  # type: ignore
 
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
@@ -446,7 +446,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                         "pandas.Series or numpy.ndarray or list supported for y in eval_set, "
                         f"but {type(eval_y)} was passed."
                     )
-                eval_df: pd.DataFrame = eval_X.copy()
+                eval_df: pd.DataFrame = eval_X.copy()  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1

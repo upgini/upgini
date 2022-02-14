@@ -368,7 +368,7 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.initial_dataset.metadata.phone_column, inplace=True)
             # if self.initial_dataset.drop_date_column:
             #     scores.drop(columns="etalon_" + self.initial_dataset.metadata.date_column, inplace=True)
-            return scores
+            return scores  # type: ignore
 
     def _download_features_file(self, features_id) -> pd.DataFrame:
         time.sleep(1)
@@ -377,7 +377,7 @@ class SearchTask:
             gzip_file_name = "{0}/features.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)
+            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
 
     def get_initial_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
@@ -610,7 +610,7 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.validation_dataset.metadata.phone_column, inplace=True)
             # if self.validation_dataset.drop_date_column:
             #     scores.drop(columns="etalon_" + self.validation_dataset.metadata.date_column, inplace=True)
-            return scores
+            return scores  # type: ignore
 
     def get_validation_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
@@ -630,7 +630,7 @@ class SearchTask:
             gzip_file_name = "{0}/features.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)
+            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
 
     def get_all_validation_raw_features(self) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()

@@ -302,8 +302,7 @@ class Dataset(pd.DataFrame):
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
         self.drop(columns_to_drop, axis=1, inplace=True)
 
-    def __define_task(self) -> ModelTaskType:
-        logging.debug("defining task")
+    def __target_value(self) -> pd.Series:
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         target: pd.Series = self[target_column]
         # clean target from nulls
@@ -312,6 +311,12 @@ class Dataset(pd.DataFrame):
             target = target.loc[np.isfinite(target)]
         else:
             target = target.loc[target != ""]
+
+        return target
+
+    def __define_task(self) -> ModelTaskType:
+        logging.debug("defining task")
+        target = self.__target_value()
         target_items = target.nunique()
         target_ratio = target_items / len(target)
         if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and type(target[0]) in (np.int_, np.float_):
@@ -321,10 +326,6 @@ class Dataset(pd.DataFrame):
                 task = ModelTaskType.BINARY
             else:
                 raise ValueError("Binary target should be numerical.")
-        elif target_items == 1:
-            raise ValueError("Target contains only one distinct value.")
-        elif target_items == 0:
-            raise ValueError("Target contains only NaN or incorrect values.")
         else:
             task = ModelTaskType.MULTICLASS
         print(f"Detected task type: {task}")
@@ -348,6 +349,14 @@ class Dataset(pd.DataFrame):
         if self.task_type != ModelTaskType.MULTICLASS and validate_target:
             if target is None:
                 raise ValueError("Target column is absent in meaning_types.")
+
+            target = self.__target_value()
+            target_items = target.nunique()
+            if target_items == 1:
+                raise ValueError("Target contains only one distinct value.")
+            elif target_items == 0:
+                raise ValueError("Target contains only NaN or incorrect values.")
+
             self[target] = self[target].apply(pd.to_numeric, errors="coerce")
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
         mandatory_columns = [date_millis, target, score]
@@ -404,7 +413,7 @@ class Dataset(pd.DataFrame):
         df_stats.reset_index(inplace=True)
         df_stats.columns = ["Column name", "Status", "Description"]
         styled_df_stats = df_stats.copy()
-        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))
+        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))  # type: ignore
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
         styled_df_stats = styled_df_stats.style
         styled_df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
@@ -491,7 +500,7 @@ class Dataset(pd.DataFrame):
         cls_metadata = [date_millis, target, score, "is_valid"]
         cls_metadata = [i for i in cls_metadata if i is not None]
         # df with columns for metadata calculation
-        df = self[cls_metadata].copy()
+        df: pd.DataFrame = self[cls_metadata].copy()  # type: ignore
         count = len(df)
         valid_count = int(df["is_valid"].sum())
         valid_rate = 100 * valid_count / count
@@ -698,7 +707,7 @@ class Dataset(pd.DataFrame):
         file_metrics = self.calculate_metrics()
         # keep only valid rows
         if "is_valid" in self.columns:
-            drop_idx = self[self["is_valid"] != 1].index
+            drop_idx = self[self["is_valid"] != 1].index  # type: ignore
             self.drop(drop_idx, inplace=True)
             self.drop(columns=["is_valid"], inplace=True)
         self.__validate_rows_count()
