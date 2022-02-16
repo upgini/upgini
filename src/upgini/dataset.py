@@ -350,8 +350,8 @@ class Dataset(pd.DataFrame):
             if target is None:
                 raise ValueError("Target column is absent in meaning_types.")
 
-            target = self.__target_value()
-            target_items = target.nunique()
+            target_value = self.__target_value()
+            target_items = target_value.nunique()
             if target_items == 1:
                 raise ValueError("Target contains only one distinct value.")
             elif target_items == 0:
