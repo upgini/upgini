@@ -14,7 +14,7 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype
 from pandas.api.types import is_string_dtype as is_string
 from pandas.core.dtypes.common import is_period_dtype
-from pandas.api.types import is_number
+from pandas.api.types import is_numeric_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -308,7 +308,7 @@ class Dataset(pd.DataFrame):
         target: pd.Series = self[target_column]
         # clean target from nulls
         target.dropna(inplace=True)
-        if is_number(target):
+        if is_numeric_dtype(target):
             target = target.loc[np.isfinite(target)]
         else:
             target = target.loc[target != ""]
@@ -323,7 +323,7 @@ class Dataset(pd.DataFrame):
         if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and type(target[0]) in (np.int_, np.float_):
             task = ModelTaskType.REGRESSION
         elif target_items == 2:
-            if is_number(target):
+            if is_numeric_dtype(target):
                 task = ModelTaskType.BINARY
             else:
                 raise ValueError("Binary target should be numerical.")
