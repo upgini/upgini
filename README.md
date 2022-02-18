@@ -1,4 +1,4 @@
-<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : free feature search engine for Machine Learning</h2>
+<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : free feature search library for Machine Learning</h2>
 <p align="center"> <b>Automatically searches through thousands of ready-to-use features from public, community and commercial data sources and enriches your dataset with new external features in minutes</b> </p>
 <p align="center">
 	<br />
