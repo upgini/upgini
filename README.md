@@ -23,7 +23,7 @@ Only features that improve the prediction power of your ML model are returned.
 We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.
 
 ## 🚀 Awesome features
-⭐️ Automatically find only features that *give accuracy improvement for ML algorithm* according to metrics: ROC AUC, RMSE, Accuracy. Not just correlated with target variable data or features, which 9 out of 10 cases gives zero accuracy improvement for production ML cases  
+⭐️ Automatically find only features that *give accuracy improvement for ML algorithm* according to metrics: ROC AUC, RMSE, Accuracy. Not just correlated with target variable, which 9 out of 10 cases gives zero accuracy improvement for production ML cases  
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with found external features, right in search results   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipelines   
 ⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
