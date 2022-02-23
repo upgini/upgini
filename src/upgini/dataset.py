@@ -320,7 +320,7 @@ class Dataset(pd.DataFrame):
         target = self.__target_value()
         target_items = target.nunique()
         target_ratio = target_items / len(target)
-        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and type(target[0]) in (np.int_, np.float_):
+        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
             task = ModelTaskType.REGRESSION
         elif target_items == 2:
             if is_numeric_dtype(target):
