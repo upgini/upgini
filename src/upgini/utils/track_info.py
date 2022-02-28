@@ -3,6 +3,7 @@ import os
 import sys
 from getpass import getuser
 from uuid import uuid4
+from requests import get
 
 
 _ide_env_variables = {
@@ -51,6 +52,35 @@ def _get_client_uuid() -> str:
 
 
 def get_track_metrics() -> dict:
+    ide = _get_execution_ide()
+    ip = None
+    if ide == "colab":
+        try:
+            from IPython.display import display, Javascript
+            from google.colab import output 
+            display(Javascript('''
+                window.clientIP = 
+                fetch("https://api.ipify.org")
+                .then(response => response.text())
+                .then(data => data);
+            '''))
+            ip = output.eval_js("window.clientIP")
+        except:
+            None
+    elif ide == "binder":
+        try:
+            from IPython.display import Javascript, display
+            display(Javascript('''
+                var kernel = IPython.notebook.kernel;
+                fetch("https://api.ipify.org")
+                .then(response => response.text())
+                .then(data => kernel.execute("ip="+data));
+            '''))
+        except:
+            None
+    else:
+        ip = get('https://api.ipify.org').text
     return {
-        "ide": _get_execution_ide()
+        "ide": ide,
+        "ip": ip 
     }
