@@ -139,3 +139,5 @@ dmypy.json
 .cache/
 activate_venv.sh
 test-results/
+test_notebooks/
+publish.sh

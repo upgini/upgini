@@ -14,6 +14,7 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype
 from pandas.api.types import is_string_dtype as is_string
 from pandas.core.dtypes.common import is_period_dtype
+from pandas.api.types import is_numeric_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -156,12 +157,12 @@ class Dataset(pd.DataFrame):
                     new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
             self.rename(columns={column: new_column}, inplace=True)
             self.meaning_types = {
-                (new_column if key == column else key): value for key, value in self.meaning_types_checked.items()
+                (new_column if key == str(column) else key): value for key, value in self.meaning_types_checked.items()
             }
             self.search_keys = [
-                tuple(new_column if key == column else key for key in keys) for keys in self.search_keys_checked
+                tuple(new_column if key == str(column) else key for key in keys) for keys in self.search_keys_checked
             ]
-            self.columns_renaming[new_column] = column
+            self.columns_renaming[new_column] = str(column)
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
@@ -302,29 +303,30 @@ class Dataset(pd.DataFrame):
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
         self.drop(columns_to_drop, axis=1, inplace=True)
 
-    def __define_task(self) -> ModelTaskType:
-        logging.debug("defining task")
+    def __target_value(self) -> pd.Series:
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         target: pd.Series = self[target_column]
         # clean target from nulls
         target.dropna(inplace=True)
-        if target.dtype in (np.int_, np.float_):
+        if is_numeric_dtype(target):
             target = target.loc[np.isfinite(target)]
         else:
             target = target.loc[target != ""]
+
+        return target
+
+    def __define_task(self) -> ModelTaskType:
+        logging.debug("defining task")
+        target = self.__target_value()
         target_items = target.nunique()
         target_ratio = target_items / len(target)
-        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and type(target[0]) in (np.int_, np.float_):
+        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
             task = ModelTaskType.REGRESSION
         elif target_items == 2:
-            if type(target[0]) in (np.int_, np.float_):
+            if is_numeric_dtype(target):
                 task = ModelTaskType.BINARY
             else:
                 raise ValueError("Binary target should be numerical.")
-        elif target_items == 1:
-            raise ValueError("Target contains only one distinct value.")
-        elif target_items == 0:
-            raise ValueError("Target contains only NaN or incorrect values.")
         else:
             task = ModelTaskType.MULTICLASS
         print(f"Detected task type: {task}")
@@ -348,6 +350,14 @@ class Dataset(pd.DataFrame):
         if self.task_type != ModelTaskType.MULTICLASS and validate_target:
             if target is None:
                 raise ValueError("Target column is absent in meaning_types.")
+
+            target_value = self.__target_value()
+            target_items = target_value.nunique()
+            if target_items == 1:
+                raise ValueError("Target contains only one distinct value.")
+            elif target_items == 0:
+                raise ValueError("Target contains only NaN or incorrect values.")
+
             self[target] = self[target].apply(pd.to_numeric, errors="coerce")
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
         mandatory_columns = [date_millis, target, score]
@@ -404,7 +414,7 @@ class Dataset(pd.DataFrame):
         df_stats.reset_index(inplace=True)
         df_stats.columns = ["Column name", "Status", "Description"]
         styled_df_stats = df_stats.copy()
-        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))
+        styled_df_stats["Description"] = styled_df_stats["Description"].apply(lambda x: html.escape(x))  # type: ignore
         colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
         styled_df_stats = styled_df_stats.style
         styled_df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
@@ -439,15 +449,16 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True):
+    def validate(self, validate_target: bool = True, silent_mode: bool = False):
         logging.info("Validating dataset")
+
+        self.__rename_columns()
+
         self.__validate_meaning_types(validate_target)
 
         self.__validate_search_keys()
 
         self.__drop_ignore_columns()
-
-        self.__rename_columns()
 
         self.__validate_too_long_string_values()
 
@@ -470,7 +481,8 @@ class Dataset(pd.DataFrame):
 
         self.__convert_phone()
 
-        self.__validate_dataset(validate_target)
+        if not silent_mode:
+            self.__validate_dataset(validate_target)
 
     def calculate_metrics(self) -> FileMetrics:
         """Calculate initial metadata for DataSet
@@ -489,7 +501,7 @@ class Dataset(pd.DataFrame):
         cls_metadata = [date_millis, target, score, "is_valid"]
         cls_metadata = [i for i in cls_metadata if i is not None]
         # df with columns for metadata calculation
-        df = self[cls_metadata].copy()
+        df: pd.DataFrame = self[cls_metadata].copy()  # type: ignore
         count = len(df)
         valid_count = int(df["is_valid"].sum())
         valid_rate = 100 * valid_count / count
@@ -696,7 +708,7 @@ class Dataset(pd.DataFrame):
         file_metrics = self.calculate_metrics()
         # keep only valid rows
         if "is_valid" in self.columns:
-            drop_idx = self[self["is_valid"] != 1].index
+            drop_idx = self[self["is_valid"] != 1].index  # type: ignore
             self.drop(drop_idx, inplace=True)
             self.drop(columns=["is_valid"], inplace=True)
         self.__validate_rows_count()
@@ -746,9 +758,10 @@ class Dataset(pd.DataFrame):
         return_scores: bool = True,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(validate_target=not extract_features)
+            self.validate(validate_target=not extract_features, silent_mode=silent_mode)
         if extract_features:
             file_metrics = FileMetrics()
         else:
@@ -789,4 +802,4 @@ class Dataset(pd.DataFrame):
             api_key=self.api_key,
         )
 
-        return search_task.poll_result()
+        return search_task.poll_result(quiet=silent_mode)

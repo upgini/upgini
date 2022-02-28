@@ -49,8 +49,9 @@ class SearchTask:
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(
-                f"Running {self.search_task_id} search request.\n"
-                "We'll email you once it's completed. Please wait a few minutes."
+                f"Running {self.search_task_id} search request\n"
+                "We'll send email notification once it's completed, "
+                "just use your personal api_key from profile.upgini.com"
             )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
         try:
@@ -61,14 +62,14 @@ class SearchTask:
                     time.sleep(5)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
                     if self.summary.status in failed_statuses:
-                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request.")
+                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request")
                     if (
                         self.summary.status in submitted_statuses
                         and len(self._get_provider_summaries(self.summary)) == 0
                     ):
                         raise RuntimeError(
-                            "No datasets found to intersect with uploaded file using defined search keys. "
-                            "Try with another set of keys or different time period."
+                            "No datasets found to intersect"
+                            "Try with another set of search keys or different time period"
                         )
                     time.sleep(5)
                 sp.ok("Done                         ")
@@ -85,11 +86,15 @@ class SearchTask:
                 has_completed_provider_task = True
 
         if not has_completed_provider_task:
-            raise RuntimeError(
-                "All search tasks in the request have failed: "
-                + ",".join([self._error_message(x) for x in self._get_provider_summaries(self.summary)])
-                + "."
-            )
+            error_messages = [self._error_message(x) for x in self._get_provider_summaries(self.summary)]
+            if len(error_messages) == 1 and (error_messages[0] is None or error_messages[0].endswith("Internal error")):
+                raise RuntimeError("All search tasks in the request have failed")
+            else:
+                raise RuntimeError(
+                    "All search tasks in the request have failed: "
+                    + ",".join(error_messages)
+                    + "."
+                )
 
         return self
 
@@ -122,12 +127,14 @@ class SearchTask:
         validation_dataset: "dataset.Dataset",
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        silent_mode: bool = False,
     ) -> "SearchTask":
         return validation_dataset.validation(
             self.search_task_id,
             return_scores=True,
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
+            silent_mode=silent_mode
         )
 
     def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:
@@ -361,7 +368,7 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.initial_dataset.metadata.phone_column, inplace=True)
             # if self.initial_dataset.drop_date_column:
             #     scores.drop(columns="etalon_" + self.initial_dataset.metadata.date_column, inplace=True)
-            return scores
+            return scores  # type: ignore
 
     def _download_features_file(self, features_id) -> pd.DataFrame:
         time.sleep(1)
@@ -370,7 +377,7 @@ class SearchTask:
             gzip_file_name = "{0}/features.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)
+            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
 
     def get_initial_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
@@ -541,7 +548,7 @@ class SearchTask:
                 min_hit_rate = current_value
 
         if min_hit_rate is None:
-            raise RuntimeError("There is no hit rate available for search task.")
+            raise RuntimeError("There is no hit rate available for search task")
         else:
             return min_hit_rate
 
@@ -603,7 +610,7 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.validation_dataset.metadata.phone_column, inplace=True)
             # if self.validation_dataset.drop_date_column:
             #     scores.drop(columns="etalon_" + self.validation_dataset.metadata.date_column, inplace=True)
-            return scores
+            return scores  # type: ignore
 
     def get_validation_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
@@ -623,7 +630,7 @@ class SearchTask:
             gzip_file_name = "{0}/features.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)
+            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
 
     def get_all_validation_raw_features(self) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
@@ -661,7 +668,7 @@ class SearchTask:
                         "feature_name": get_original_column_name(feature["name"]),
                         "shap_value": feature["importance"],
                         "match_percent": feature["matchedInPercent"],
-                        "type": feature["valueType"] if "valueType" in feature else None,
+                        # "type": feature["valueType"] if "valueType" in feature else None,
                     }
                     features.append(feature_meta)
         return features
