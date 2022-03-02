@@ -224,7 +224,7 @@ class _RestClient:
                         "customization.json",
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
-                    )s
+                    )
                 files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
 
                 return self._send_post_file_req_v2(api_path, files)
