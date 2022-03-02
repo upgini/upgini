@@ -94,10 +94,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ):
+        init_logging(endpoint, api_key)
         if len(search_keys) == 0:
             if search_id:
+                logging.error(f"search_id {search_id} provided without search_keys")
                 raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
             else:
+                logging.error("search_keys not provided")
                 raise ValueError("Key columns should be marked up by search_keys.")
         self.search_keys = search_keys
         self.keep_input = keep_input
@@ -106,16 +109,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             try:
                 self.importance_threshold = float(importance_threshold)
             except ValueError:
+                logging.error(f"Invalid importance_threshold provided: {importance_threshold}")
                 raise ValueError("importance_threshold should be float")
         if max_features is not None:
             try:
                 self.max_features = int(max_features)
             except ValueError:
-                logging.error(f"Invalid max_features provided: {}")
+                logging.error(f"Invalid max_features provided: {max_features}")
                 raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
-        init_logging(endpoint, api_key)
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -123,12 +126,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 api_key=self.api_key,
             )
             print("Checking existing search")
-            self._search_task = search_task.poll_result(quiet=True)
-            file_metadata = self._search_task.get_file_metadata()
-            x_columns = [c.originalName or c.name for c in file_metadata.columns]
-            self.__prepare_feature_importances(x_columns)
-            # TODO validate search_keys with search_keys from file_metadata
-            print("Search found. Now you can use transform")
+            try:
+                self._search_task = search_task.poll_result(quiet=True)
+                file_metadata = self._search_task.get_file_metadata()
+                x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                self.__prepare_feature_importances(x_columns)
+                # TODO validate search_keys with search_keys from file_metadata
+                print("Search found. Now you can use transform")
+            except Exception as e:
+                logging.error(f"Failed to check existing search {e}")
+                raise e
         self.runtime_parameters = runtime_parameters
 
     def fit(
@@ -156,8 +163,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         **fit_params : dict
             Additional fit parameters.
         """
-
-        self.__inner_fit(X, y, eval_set, False, **fit_params)
+        try:
+            self.__inner_fit(X, y, eval_set, False, **fit_params)
+        except Exception as e:
+            logging.error(f"Failed inner fit: {e}")
+            raise e
 
     def fit_transform(
         self,
@@ -192,21 +202,32 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             Transformed dataframe, enriched with important features.
         """
 
-        df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+        try:
+            df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+        except Exception as e:
+            logging.error(f"Failed in inner_fit: {e}")
+            raise e
 
         if len(X) > self.FIT_SAMPLE_THRESHOLD:
-            return self.transform(X, silent_mode=True)
+            try:
+                return self.transform(X, silent_mode=True)
+            except Exception as e:
+                logging.error(f"Failed to transform: {e}")
+                raise e
 
         etalon_columns = list(X.columns) + [self.TARGET_NAME]
 
         if self._search_task is None:
-            raise RuntimeError("Fit wasn't completed successfully.")
+            msg = "Fit wasn't completed successfully."
+            logging.error(msg)
+            raise RuntimeError(msg)
 
         print("Executing transform step")
         with yaspin(Spinners.material) as sp:
             result_features = self._search_task.get_all_initial_raw_features()
 
             if result_features is None:
+                logging.error(f"result features not found by search_task_id: {self._search_task.search_task_id}")
                 raise RuntimeError("Search engine crashed on this request.")
 
             sorted_result_columns = [
@@ -547,9 +568,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             elif isinstance(column_id, int):
                 valid_search_keys[x.columns[column_id]] = meaning_type.value
             else:
-                raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
+                msg = f"Unsupported type of key in search_keys: {type(column_id)}."
+                logging.error(msg)
+                raise ValueError(msg)
             if meaning_type == SearchKey.CUSTOM_KEY:
-                raise ValueError("SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher.")
+                msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
+                logging.error("msg")
+                raise ValueError(msg)
 
         return valid_search_keys
 
