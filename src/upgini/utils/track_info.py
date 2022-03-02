@@ -67,7 +67,7 @@ def _pull_temp_var():
 
 
 def get_track_metrics() -> dict:
-    track = { "ide": _get_execution_ide() }
+    track = {"ide": _get_execution_ide()}
     if track["ide"] == "colab":
         try:
             from IPython.display import display, Javascript
