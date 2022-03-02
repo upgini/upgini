@@ -12,6 +12,8 @@ def test_initial_and_validation_search(requests_mock):
     os.environ[UPGINI_URL] = url
     os.environ[UPGINI_API_KEY] = "fake_api_token"
 
+    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
+
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.post(
         url + "/public/api/v2/search/initial",
