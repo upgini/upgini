@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from typing import Dict, List, Optional, Union
 
@@ -18,6 +19,7 @@ from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
+from upgini.http import init_logging
 from upgini.metadata import (
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
@@ -109,9 +111,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             try:
                 self.max_features = int(max_features)
             except ValueError:
+                logging.error(f"Invalid max_features provided: {}")
                 raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
+        init_logging(endpoint, api_key)
         if search_id:
             search_task = SearchTask(
                 search_id,

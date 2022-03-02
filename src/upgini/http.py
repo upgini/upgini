@@ -1,20 +1,20 @@
 import logging
 import os
 import time
-from upgini.utils.track_info import get_track_metrics
 from functools import lru_cache
 from http.client import HTTPConnection
+from json import dumps
 from typing import Optional
 from urllib.parse import urljoin
-from json import dumps
 
 import requests
 from pydantic import BaseModel
+from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
 from upgini.metadata import FileMetadata, FileMetrics, SearchCustomization
-
+from upgini.utils.track_info import get_track_metrics
 
 try:
     from importlib_metadata import version
@@ -448,3 +448,37 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
         token = os.environ[UPGINI_API_KEY]
 
     return _RestClient(url, token)
+
+
+class BackendLogHandler(logging.Handler):
+    def __init__(self,
+                 rest_client: _RestClient,
+                 *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.rest_client = rest_client
+        self.hostname = requests.get('https://ident.me').text
+
+    def emit(self, record: logging.LogRecord) -> None:
+        text = self.format(record)
+
+        self.rest_client.send_log_event(LogEvent(
+            source="python",
+            tags="version:" + __version__,
+            hostname=self.hostname,
+            message=text,
+            service="PyLib"
+        ))
+
+
+def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
+    root = logging.getLogger()
+    if root.hasHandlers():
+        root.handlers.clear()
+
+    root.setLevel(logging.INFO)
+
+    rest_client = get_rest_client(backend_url, api_token)
+    datadogHandler = BackendLogHandler(rest_client)
+    jsonFormatter = jsonlogger.JsonFormatter("%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s")
+    datadogHandler.setFormatter(jsonFormatter)
+    root.addHandler(datadogHandler)
