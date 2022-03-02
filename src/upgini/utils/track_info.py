@@ -52,7 +52,6 @@ def _get_client_uuid() -> str:
         return client_uuid
 
 def _push_temp_var(value):
-    print(f"push var value #{value}")
     f = open(_temp_file_track_var, "w")
     f.write(value)
     f.close()
