@@ -132,6 +132,14 @@ class SearchTaskSummary:
         # performanceMetrics
 
 
+class LogEvent(BaseModel):
+    source: str
+    tags: str
+    service: str
+    hostname: str
+    message: str
+
+
 class _RestClient:
     SERVICE_ROOT = "public/api/v1/"
     SERVICE_ROOT_V2 = "public/api/v2/"
@@ -158,6 +166,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
+    SEND_LOG_EVENT_URI = SERVICE_ROOT_V2 + "events/send"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -357,6 +366,10 @@ class _RestClient:
         api_path = self.SEARCH_FILE_METADATA_URI_FMT_V2.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
         return FileMetadata.parse_obj(response)
+
+    def send_log_event(self, log_event: LogEvent):
+        api_path = self.SEND_LOG_EVENT_URI
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, log_event.json(exclude_none=True)))
 
     # ---
 
