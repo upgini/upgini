@@ -66,6 +66,7 @@ def _pull_temp_var():
 def get_track_metrics() -> dict:
     track_ide = _get_execution_ide()
     track_ip = None
+    track_err = None
     if track_ide == "colab":
         try:
             from IPython.display import display, Javascript
@@ -77,8 +78,8 @@ def get_track_metrics() -> dict:
                 .then(data => data);
             '''))
             track_ip = output.eval_js("window.clientIP")
-        except:
-            None
+        except Exception as e:
+            track_err = e
     elif track_ide == "binder":
         try:
             from IPython.display import Javascript, display
@@ -88,12 +89,17 @@ def get_track_metrics() -> dict:
                 .then(response => response.text())
                 .then(ip => IPython.notebook.kernel.execute('_push_temp_var("' + ip + '")'));
             '''))
+            sleep(1)
             track_ip = _pull_temp_var()
         except Exception as e:
-            print(e)
+            track_err = e
     else:
-        track_ip = get("https://api.ipify.org").text
+        try:
+            track_ip = get("https://api.ipify.org").text
+        except Exception as e:
+            track_err = e
     return {
         "ide": track_ide,
-        "ip": track_ip 
+        "ip": track_ip,
+        "err": track_err
     }
