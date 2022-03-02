@@ -14,6 +14,7 @@ _ide_env_variables = {
 
 _temp_file_track_var = "client_ip.dat"
 
+
 def _check_installed(package):
     result = None
     loc = locals()
@@ -51,16 +52,19 @@ def _get_client_uuid() -> str:
         os.environ["UPGINI_UUID"] = client_uuid
         return client_uuid
 
+
 def _push_temp_var(value):
     f = open(_temp_file_track_var, "w")
     f.write(value)
     f.close()
-    
+
+
 def _pull_temp_var():
     output_stream = os.popen("cat "+_temp_file_track_var)
     value = output_stream.read()
     os.remove(_temp_file_track_var)
     return value
+
 
 def get_track_metrics() -> dict:
     track_ide = _get_execution_ide()
@@ -69,9 +73,9 @@ def get_track_metrics() -> dict:
     if track_ide == "colab":
         try:
             from IPython.display import display, Javascript
-            from google.colab import output 
+            from google.colab import output
             display(Javascript('''
-                window.clientIP = 
+                window.clientIP =
                 fetch("https://api.ipify.org")
                 .then(response => response.text())
                 .then(data => data);
