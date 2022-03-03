@@ -23,6 +23,7 @@ try:
 except ImportError:
     try:
         from importlib.metadata import version  # type: ignore
+
         __version__ = version("upgini")
     except ImportError:
         __version__ = "Upgini wasn't installed"
@@ -369,8 +370,14 @@ class _RestClient:
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI
-        self._with_unauth_retry(lambda: self._send_post_req(api_path, json_data=log_event.dict(exclude_none=True), 
-                                                            content_type="application/json", result_format="text"))
+        self._with_unauth_retry(
+            lambda: self._send_post_req(
+                api_path,
+                json_data=log_event.dict(exclude_none=True),
+                content_type="application/json",
+                result_format="text",
+            )
+        )
 
     # ---
 
@@ -455,23 +462,19 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
 
 
 class BackendLogHandler(logging.Handler):
-    def __init__(self,
-                 rest_client: _RestClient,
-                 *args, **kwargs) -> None:
+    def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
-        self.hostname = requests.get('https://ident.me').text
+        self.hostname = requests.get("https://ident.me").text
 
     def emit(self, record: logging.LogRecord) -> None:
         text = self.format(record)
 
-        self.rest_client.send_log_event(LogEvent(
-            source="python",
-            tags="version:" + __version__,
-            hostname=self.hostname,
-            message=text,
-            service="PyLib"
-        ))
+        self.rest_client.send_log_event(
+            LogEvent(
+                source="python", tags="version:" + __version__, hostname=self.hostname, message=text, service="PyLib"
+            )
+        )
 
 
 def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
