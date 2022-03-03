@@ -369,7 +369,8 @@ class _RestClient:
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI
-        self._with_unauth_retry(lambda: self._send_post_req(api_path, log_event.json(exclude_none=True)))
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, json_data=log_event.dict(exclude_none=True), 
+                                                            content_type="application/json", result_format="text"))
 
     # ---
 
@@ -389,7 +390,7 @@ class _RestClient:
 
         return response.content
 
-    def _send_post_req(self, api_path, json_data=None, data=None, content_type=None):
+    def _send_post_req(self, api_path, json_data=None, data=None, content_type=None, result_format="json"):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
@@ -401,7 +402,10 @@ class _RestClient:
             print(response)
             raise HttpError(response.text, status_code=response.status_code)
 
-        return response.json()
+        if result_format == "json":
+            return response.json()
+        else:
+            return response.text
 
     def _send_post_file_req_v2(self, api_path, files, data=None):
         response = requests.post(
