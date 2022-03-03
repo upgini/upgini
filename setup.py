@@ -56,7 +56,8 @@ setup(
         "pydantic>=1.8.2",
         "pyarrow>=5.0.0",
         "fastparquet>=0.7.1",
-        "yaspin>=2.1.0"
+        "yaspin>=2.1.0",
+        "python-json-logger>=2.0.2"
     ],
     project_urls={
         "Bug Reports": "https://github.com/upgini/upgini/issues",
