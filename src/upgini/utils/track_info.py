@@ -3,6 +3,7 @@ import os
 import sys
 from getpass import getuser
 from uuid import uuid4
+from requests import get
 
 
 _ide_env_variables = {
@@ -10,6 +11,8 @@ _ide_env_variables = {
     "binder": ["BINDER_PORT", "BINDER_SERVICE_PORT", "BINDER_REQUEST", "BINDER_REPO_URL", "BINDER_LAUNCH_HOST"],
     "kaggle": ["KAGGLE_DOCKER_IMAGE", "KAGGLE_URL_BASE"]
 }
+
+_temp_file_track_var = "client_ip.dat"
 
 
 def _check_installed(package):
@@ -50,7 +53,50 @@ def _get_client_uuid() -> str:
         return client_uuid
 
 
+def _push_temp_var(value):
+    f = open(_temp_file_track_var, "w")
+    f.write(value)
+    f.close()
+
+
+def _pull_temp_var():
+    output_stream = os.popen("cat "+_temp_file_track_var)
+    value = output_stream.read()
+    os.remove(_temp_file_track_var)
+    return value
+
+
 def get_track_metrics() -> dict:
-    return {
-        "ide": _get_execution_ide()
-    }
+    track = {"ide": _get_execution_ide()}
+    if track["ide"] == "colab":
+        try:
+            from IPython.display import display, Javascript
+            from google.colab import output
+            display(Javascript('''
+                window.clientIP =
+                fetch("https://api.ipify.org")
+                .then(response => response.text())
+                .then(data => data);
+            '''))
+            track["ip"] = output.eval_js("window.clientIP")
+        except Exception as e:
+            track["err"] = str(e)
+    elif track["ide"] == "binder":
+        try:
+            from IPython.display import Javascript, display
+            from time import sleep
+            display(Javascript('''
+                fetch('https://api.ipify.org')
+                .then(response => response.text())
+                .then(ip => IPython.notebook.kernel.execute('_push_temp_var("' + ip + '")'));
+            '''))
+            sleep(1)
+            track["ip"] = _pull_temp_var()
+        except Exception as e:
+            track["err"] = str(e)
+    else:
+        try:
+            track["ip"] = get("https://api.ipify.org").text
+        except Exception as e:
+            track["err"] = str(e)
+    return track
