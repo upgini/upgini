@@ -16,7 +16,7 @@ def test_features_enricher(requests_mock):
 
     requests_mock.get("https://ident.me", text="1.1.1.1")
 
-    requests_mock.post(url + "/public/api/v2/events/send", text="Success")
+    requests_mock.post(url + "/private/api/v2/events/send", text="Success")
 
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.post(
@@ -177,7 +177,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 
     requests_mock.get("https://ident.me", text="1.1.1.1")
 
-    requests_mock.post(url + "/public/api/v2/events/send", text="Success")
+    requests_mock.post(url + "/private/api/v2/events/send", text="Success")
 
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.post(

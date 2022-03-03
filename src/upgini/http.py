@@ -167,7 +167,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
-    SEND_LOG_EVENT_URI = SERVICE_ROOT_V2 + "events/send"
+    SEND_LOG_EVENT_URI = "private/api/v2/events/send"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
