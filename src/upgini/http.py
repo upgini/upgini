@@ -1,20 +1,20 @@
 import logging
 import os
 import time
-from upgini.utils.track_info import get_track_metrics
 from functools import lru_cache
 from http.client import HTTPConnection
+from json import dumps
 from typing import Optional
 from urllib.parse import urljoin
-from json import dumps
 
 import requests
 from pydantic import BaseModel
+from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
 from upgini.metadata import FileMetadata, FileMetrics, SearchCustomization
-
+from upgini.utils.track_info import get_track_metrics
 
 try:
     from importlib_metadata import version
@@ -23,6 +23,7 @@ try:
 except ImportError:
     try:
         from importlib.metadata import version  # type: ignore
+
         __version__ = version("upgini")
     except ImportError:
         __version__ = "Upgini wasn't installed"
@@ -132,6 +133,14 @@ class SearchTaskSummary:
         # performanceMetrics
 
 
+class LogEvent(BaseModel):
+    source: str
+    tags: str
+    service: str
+    hostname: str
+    message: str
+
+
 class _RestClient:
     SERVICE_ROOT = "public/api/v1/"
     SERVICE_ROOT_V2 = "public/api/v2/"
@@ -158,6 +167,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
+    SEND_LOG_EVENT_URI = "private/api/v2/events/send"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -358,6 +368,17 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
         return FileMetadata.parse_obj(response)
 
+    def send_log_event(self, log_event: LogEvent):
+        api_path = self.SEND_LOG_EVENT_URI
+        self._with_unauth_retry(
+            lambda: self._send_post_req(
+                api_path,
+                json_data=log_event.dict(exclude_none=True),
+                content_type="application/json",
+                result_format="text",
+            )
+        )
+
     # ---
 
     def _send_get_req(self, api_path):
@@ -376,7 +397,7 @@ class _RestClient:
 
         return response.content
 
-    def _send_post_req(self, api_path, json_data=None, data=None, content_type=None):
+    def _send_post_req(self, api_path, json_data=None, data=None, content_type=None, result_format="json"):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
@@ -388,7 +409,10 @@ class _RestClient:
             print(response)
             raise HttpError(response.text, status_code=response.status_code)
 
-        return response.json()
+        if result_format == "json":
+            return response.json()
+        else:
+            return response.text
 
     def _send_post_file_req_v2(self, api_path, files, data=None):
         response = requests.post(
@@ -435,3 +459,33 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
         token = os.environ[UPGINI_API_KEY]
 
     return _RestClient(url, token)
+
+
+class BackendLogHandler(logging.Handler):
+    def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.rest_client = rest_client
+        self.hostname = requests.get("https://ident.me").text
+
+    def emit(self, record: logging.LogRecord) -> None:
+        text = self.format(record)
+
+        self.rest_client.send_log_event(
+            LogEvent(
+                source="python", tags="version:" + __version__, hostname=self.hostname, message=text, service="PyLib"
+            )
+        )
+
+
+def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
+    root = logging.getLogger()
+    if root.hasHandlers():
+        root.handlers.clear()
+
+    root.setLevel(logging.INFO)
+
+    rest_client = get_rest_client(backend_url, api_token)
+    datadogHandler = BackendLogHandler(rest_client)
+    jsonFormatter = jsonlogger.JsonFormatter("%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s")
+    datadogHandler.setFormatter(jsonFormatter)
+    root.addHandler(datadogHandler)
