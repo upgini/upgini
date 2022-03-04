@@ -83,19 +83,7 @@ def get_track_metrics() -> dict:
             track["err"] = str(e)
     elif track["ide"] == "binder":
         try:
-<<<<<<< HEAD
             track["ip"] = os.environ["CLIENT_IP"]
-=======
-            from IPython.display import Javascript, display
-            from time import sleep
-            display(Javascript('''
-                fetch('https://api.ipify.org')
-                .then(response => response.text())
-                .then(ip => IPython.notebook.kernel.execute('_push_temp_var("' + ip + '")'));
-            '''))
-            sleep(1)
-            track["ip"] = _pull_temp_var()
->>>>>>> main
         except Exception as e:
             track["err"] = str(e)
     else:
