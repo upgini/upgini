@@ -12,8 +12,6 @@ _ide_env_variables = {
     "kaggle": ["KAGGLE_DOCKER_IMAGE", "KAGGLE_URL_BASE"]
 }
 
-_temp_file_track_var = "client_ip.dat"
-
 
 def _check_installed(package):
     result = None
@@ -53,19 +51,6 @@ def _get_client_uuid() -> str:
         return client_uuid
 
 
-def _push_temp_var(value):
-    f = open(_temp_file_track_var, "w")
-    f.write(value)
-    f.close()
-
-
-def _pull_temp_var():
-    output_stream = os.popen("cat "+_temp_file_track_var)
-    value = output_stream.read()
-    os.remove(_temp_file_track_var)
-    return value
-
-
 def get_track_metrics() -> dict:
     track = {"ide": _get_execution_ide()}
     if track["ide"] == "colab":
@@ -83,15 +68,7 @@ def get_track_metrics() -> dict:
             track["err"] = str(e)
     elif track["ide"] == "binder":
         try:
-            from IPython.display import Javascript, display
-            from time import sleep
-            display(Javascript('''
-                fetch('https://api.ipify.org')
-                .then(response => response.text())
-                .then(ip => IPython.notebook.kernel.execute('_push_temp_var("' + ip + '")'));
-            '''))
-            sleep(1)
-            track["ip"] = _pull_temp_var()
+            track["ip"] = os.environ["CLIENT_IP"]
         except Exception as e:
             track["err"] = str(e)
     else:
