@@ -206,6 +206,7 @@ class _RestClient:
         try:
             return request()
         except RequestException as e:
+            logging.warning(f"Connection error: {e}. Retrying in 10 seconds...")
             print(f"Connection error: {e}. Retrying in 10 seconds...")
             time.sleep(10)
             return self._with_unauth_retry(request)
@@ -406,7 +407,7 @@ class _RestClient:
         )
 
         if response.status_code >= 400:
-            print(response)
+            logging.error(f"Failed to execute request to {api_path}: {response}")
             raise HttpError(response.text, status_code=response.status_code)
 
         if result_format == "json":
