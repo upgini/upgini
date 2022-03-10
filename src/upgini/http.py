@@ -475,7 +475,7 @@ class BackendLogHandler(logging.Handler):
         self.rest_client.send_log_event(
             LogEvent(
                 source="python",
-                tags=dumps(tags, separators=(',', ':')).strip("{}").replace("\"", ""),
+                tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
                 hostname=self.hostname, message=text, service="PyLib"
             )
         )
