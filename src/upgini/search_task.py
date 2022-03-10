@@ -354,6 +354,7 @@ class SearchTask:
                     scores_id = score_block["adsSearchTaskScoresId"]
 
         if scores_id is None:
+            logging.error(f"Initial scores by provider {provider_id} not found")
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
@@ -396,6 +397,7 @@ class SearchTask:
                 features_id = feature_block["adsSearchTaskFeaturesId"]
 
         if features_id is None:
+            logging.error(f"Initial features by provider {provider_id} not found")
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
@@ -434,6 +436,7 @@ class SearchTask:
                     model_id = model_block["adsSearchTaskTrainedModelId"]
 
         if model_id is None:
+            logging.error(f"Model by provider {provider_id} not found")
             print(f"Provider's {provider_id} task wasn't completed in initial search")
             return None
 
@@ -597,6 +600,7 @@ class SearchTask:
                     scores_id = score_block["adsSearchTaskScoresId"]
 
         if scores_id is None:
+            logging.error(f"Validation scores by provider {provider_id} not found")
             print("Provider ", provider_id, " not found in validation search")
             return None
 
@@ -629,7 +633,9 @@ class SearchTask:
                 features_id = feature_block["adsSearchTaskFeaturesId"]
 
         if features_id is None:
+            logging.error(f"Validation features by provider {provider_id} not found")
             print(f"Features for provider {provider_id} not found in validation search")
+            return None
 
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
