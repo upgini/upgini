@@ -1,4 +1,5 @@
 
+from functools import lru_cache
 import os
 import sys
 from getpass import getuser
@@ -11,8 +12,6 @@ _ide_env_variables = {
     "binder": ["BINDER_PORT", "BINDER_SERVICE_PORT", "BINDER_REQUEST", "BINDER_REPO_URL", "BINDER_LAUNCH_HOST"],
     "kaggle": ["KAGGLE_DOCKER_IMAGE", "KAGGLE_URL_BASE"]
 }
-
-_temp_file_track_var = "client_ip.dat"
 
 
 def _check_installed(package):
@@ -32,6 +31,7 @@ def _env_contains(envs):
     return set(envs).issubset(set(os.environ.keys()))
 
 
+@lru_cache()
 def _get_execution_ide() -> str:
     if "google.colab" in sys.modules and _env_contains(_ide_env_variables["colab"]):
         return"colab"
@@ -53,28 +53,22 @@ def _get_client_uuid() -> str:
         return client_uuid
 
 
-def _push_temp_var(value):
-    f = open(_temp_file_track_var, "w")
-    f.write(value)
-    f.close()
-
-
-def _pull_temp_var():
-    output_stream = os.popen("cat "+_temp_file_track_var)
-    value = output_stream.read()
-    os.remove(_temp_file_track_var)
-    return value
-
-
+@lru_cache()
 def get_track_metrics() -> dict:
+    # default values
     track = {"ide": _get_execution_ide()}
+    try:
+        track["ip"] = get("https://ident.me").text
+    except Exception as e:
+        track["err"] = str(e)
+    # get real info depending on ide
     if track["ide"] == "colab":
         try:
             from IPython.display import display, Javascript
             from google.colab import output
             display(Javascript('''
                 window.clientIP =
-                fetch("https://api.ipify.org")
+                fetch("https://ident.me")
                 .then(response => response.text())
                 .then(data => data);
             '''))
@@ -86,9 +80,6 @@ def get_track_metrics() -> dict:
             track["ip"] = os.environ["CLIENT_IP"]
         except Exception as e:
             track["err"] = str(e)
-    else:
-        try:
-            track["ip"] = get("https://api.ipify.org").text
-        except Exception as e:
-            track["err"] = str(e)
+    elif track["ide"] == "kaggle":
+        None
     return track
