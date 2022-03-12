@@ -206,7 +206,6 @@ class _RestClient:
         try:
             return request()
         except RequestException as e:
-            logging.warning(f"Connection error: {e}. Retrying in 10 seconds...")
             print(f"Connection error: {e}. Retrying in 10 seconds...")
             time.sleep(10)
             return self._with_unauth_retry(request)
@@ -377,6 +376,7 @@ class _RestClient:
                 json_data=log_event.dict(exclude_none=True),
                 content_type="application/json",
                 result_format="text",
+                silent=True
             )
         )
 
@@ -398,7 +398,9 @@ class _RestClient:
 
         return response.content
 
-    def _send_post_req(self, api_path, json_data=None, data=None, content_type=None, result_format="json"):
+    def _send_post_req(
+        self, api_path, json_data=None, data=None, content_type=None, result_format="json", silent=False
+    ):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
@@ -407,7 +409,8 @@ class _RestClient:
         )
 
         if response.status_code >= 400:
-            logging.error(f"Failed to execute request to {api_path}: {response}")
+            if not silent:
+                logging.error(f"Failed to execute request to {api_path}: {response}")
             raise HttpError(response.text, status_code=response.status_code)
 
         if result_format == "json":
@@ -476,7 +479,9 @@ class BackendLogHandler(logging.Handler):
             LogEvent(
                 source="python",
                 tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
-                hostname=self.hostname, message=text, service="PyLib"
+                hostname=self.hostname,
+                message=text,
+                service="PyLib",
             )
         )
 
