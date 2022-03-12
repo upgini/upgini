@@ -31,7 +31,6 @@ def _env_contains(envs):
     return set(envs).issubset(set(os.environ.keys()))
 
 
-@lru_cache()
 def _get_execution_ide() -> str:
     if "google.colab" in sys.modules and _env_contains(_ide_env_variables["colab"]):
         return"colab"
