@@ -466,14 +466,17 @@ class BackendLogHandler(logging.Handler):
     def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
-        self.hostname = requests.get("https://ident.me").text
+        self.hostname = get_track_metrics()["ip"]
 
     def emit(self, record: logging.LogRecord) -> None:
         text = self.format(record)
-
+        tags = get_track_metrics()
+        tags["version"] = __version__
         self.rest_client.send_log_event(
             LogEvent(
-                source="python", tags="version:" + __version__, hostname=self.hostname, message=text, service="PyLib"
+                source="python",
+                tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
+                hostname=self.hostname, message=text, service="PyLib"
             )
         )
 
