@@ -332,6 +332,21 @@ class Dataset(pd.DataFrame):
         print(f"Detected task type: {task}")
         return task
 
+    def __validate_target(self):
+        target = self.__target_value()
+        if self.task_type == ModelTaskType.BINARY:
+            if not is_bool(target) and not is_integer_dtype(target):
+                raise Exception(f"Unexpected dtype of target for binary task type: {target.dtype}. Expected int or bool")
+        elif self.task_type == ModelTaskType.MULTICLASS:
+            if not is_integer_dtype(target) and not is_string(target):
+                raise Exception(f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str")
+        elif self.task_type == ModelTaskType.REGRESSION:
+            if not is_float_dtype(target):
+                raise Exception(f"Unexpected dtype of target for regression task type: {target.dtype}. Expected float")
+        elif self.task_type == ModelTaskType.TIMESERIES:
+            if not is_float_dtype(target):
+                raise Exception(f"Unexpected dtype of target for timeseries task type: {target.dtype}. Expected float")
+
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
         logging.debug("Convert phone to int")
@@ -472,6 +487,7 @@ class Dataset(pd.DataFrame):
 
         if validate_target and self.task_type is None:
             self.task_type = self.__define_task()
+            self.__validate_target()
 
         self.__to_millis()
 

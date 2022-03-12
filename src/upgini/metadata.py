@@ -44,6 +44,7 @@ class ModelTaskType(Enum):
     BINARY = "BINARY"
     MULTICLASS = "MULTICLASS"
     REGRESSION = "REGRESSION"
+    TIMESERIES = "TIMESERIES"
 
 
 class ModelLabelType(Enum):
