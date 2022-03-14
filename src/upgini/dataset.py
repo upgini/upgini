@@ -11,10 +11,9 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from pandas.api.types import is_float_dtype, is_integer_dtype
+from pandas.api.types import is_float_dtype, is_integer_dtype, is_numeric_dtype
 from pandas.api.types import is_string_dtype as is_string
 from pandas.core.dtypes.common import is_period_dtype
-from pandas.api.types import is_numeric_dtype
 
 from upgini.http import get_rest_client
 from upgini.metadata import (
@@ -334,18 +333,50 @@ class Dataset(pd.DataFrame):
 
     def __validate_target(self):
         target = self.__target_value()
+        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         if self.task_type == ModelTaskType.BINARY:
-            if not is_bool(target) and not is_integer_dtype(target):
-                raise Exception(f"Unexpected dtype of target for binary task type: {target.dtype}. Expected int or bool")
+            if not is_integer_dtype(target):
+                print(self)
+                try:
+                    self[target_column] = self[target_column].astype("int")
+                except ValueError:
+                    logging.exception("Failed to cast target to integer for binary task type")
+                    raise Exception(
+                        f"Unexpected dtype of target for binary task type: {target.dtype}." " Expected int or bool"
+                    )
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string(target):
-                raise Exception(f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str")
+                if is_numeric_dtype(target):
+                    try:
+                        self[target_column] = self[target_column].astype("int")
+                    except ValueError:
+                        logging.exception("Failed to cast target to integer for multiclass task type")
+                        raise Exception(
+                            f"Unexpected dtype of target for multiclass task type: {target.dtype}."
+                            "Expected int or str"
+                        )
+                else:
+                    msg = f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str"
+                    logging.exception(msg)
+                    raise Exception(msg)
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
-                raise Exception(f"Unexpected dtype of target for regression task type: {target.dtype}. Expected float")
+                try:
+                    self[target_column] = self[target_column].astype("float")
+                except ValueError:
+                    logging.exception("Failed to cast target to float for regression task type")
+                    raise Exception(
+                        f"Unexpected dtype of target for regression task type: {target.dtype}. Expected float"
+                    )
         elif self.task_type == ModelTaskType.TIMESERIES:
             if not is_float_dtype(target):
-                raise Exception(f"Unexpected dtype of target for timeseries task type: {target.dtype}. Expected float")
+                try:
+                    self[target_column] = self[target_column].astype("float")
+                except ValueError:
+                    logging.exception("Failed to cast target to float for timeseries task type")
+                    raise Exception(
+                        f"Unexpected dtype of target for timeseries task type: {target.dtype}. Expected float"
+                    )
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
@@ -487,7 +518,6 @@ class Dataset(pd.DataFrame):
 
         if validate_target and self.task_type is None:
             self.task_type = self.__define_task()
-            self.__validate_target()
 
         self.__to_millis()
 
@@ -727,6 +757,7 @@ class Dataset(pd.DataFrame):
             drop_idx = self[self["is_valid"] != 1].index  # type: ignore
             self.drop(drop_idx, inplace=True)
             self.drop(columns=["is_valid"], inplace=True)
+        self.__validate_target()
         self.__validate_rows_count()
 
         file_metadata = self.__construct_metadata()
