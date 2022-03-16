@@ -75,6 +75,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     EVAL_SET_INDEX = "eval_set_index"
     FIT_SAMPLE_ROWS = 100_000
     FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+    RANDOM_STATE = 42
 
     _search_task: Optional[SearchTask] = None
     passed_features: List[str] = []
@@ -445,7 +446,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
         if len(df) > self.FIT_SAMPLE_THRESHOLD:
-            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=42)  # type: ignore
+            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=self.RANDOM_STATE)  # type: ignore
 
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
@@ -475,6 +476,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1
+                if len(eval_df) > (self.FIT_SAMPLE_THRESHOLD / len(eval_set)):
+                    eval_df = eval_df.sample(
+                        n=int(self.FIT_SAMPLE_ROWS / len(eval_set)), random_state=self.RANDOM_STATE
+                    )
                 df = pd.concat([df, eval_df], ignore_index=True)
 
         if FileColumnMeaningType.DATE not in meaning_types.values():
