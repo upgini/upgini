@@ -292,7 +292,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df = df.reset_index(drop=True)
 
         if FileColumnMeaningType.DATE not in meaning_types.values():
-            df[SYSTEM_FAKE_DATE] = date.today()
+            df[SYSTEM_FAKE_DATE] = date(2999, 1, 1)  # remove when statistics by date will be deleted
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
