@@ -404,7 +404,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def __inner_fit(
         self,
         X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list] = None,
+        y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
         extract_features: bool = False,
         **fit_params,
