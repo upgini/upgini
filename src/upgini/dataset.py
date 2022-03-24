@@ -387,6 +387,19 @@ class Dataset(pd.DataFrame):
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
 
+    def __remove_high_cardinality_features(self):
+        logging.debug("Remove columns with high cardinality")
+        features = [
+            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
+        ]
+        count = len(self)
+        for f in features:
+            unique_values = self[f].nunique()
+            if unique_values == count:
+                logging.warning(f"Column {f} has high cardinality and will be droped from tds")
+                self.drop(columns=f, inplace=True)
+                del self.meaning_types_checked[f]
+
     def __validate_dataset(self, validate_target: bool):
         """Validate DataSet"""
         logging.debug("validating etalon")
@@ -526,6 +539,8 @@ class Dataset(pd.DataFrame):
         self.__convert_ip()
 
         self.__convert_phone()
+
+        self.__remove_high_cardinality_features()
 
         if not silent_mode:
             self.__validate_dataset(validate_target)
