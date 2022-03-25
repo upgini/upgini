@@ -15,6 +15,7 @@ import uuid
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
@@ -66,9 +67,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         Identifier of fitted enricher.
         If not specified transform could be called only after fit or fit_transform call
 
-    runtime_parameters: Optional dict of str->str.
+    runtime_parameters: dict of str->str, optional (default None).
         Not for public use. Ignore it. It's a way to argument requests with extra parameters.
         Used to trigger experimental features at backend. Used by backend team.
+
+    date_format: str, optional (default=None)
+        Format for date column with string type. For example: %Y-%m-%d
     """
 
     TARGET_NAME = "target"
@@ -94,6 +98,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        date_format: Optional[str] = None,
     ):
         init_logging(endpoint, api_key)
         if len(search_keys) == 0:
@@ -135,9 +140,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 # TODO validate search_keys with search_keys from file_metadata
                 print("Search found. Now you can use transform")
             except Exception as e:
-                logging.error(f"Failed to check existing search {e}")
+                logging.exception("Failed to check existing search")
                 raise e
         self.runtime_parameters = runtime_parameters
+        self.date_format = date_format
 
     def fit(
         self,
@@ -164,6 +170,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         **fit_params : dict
             Additional fit parameters.
         """
+        logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
         try:
             self.__inner_fit(X, y, eval_set, False, **fit_params)
         except Exception as e:
@@ -203,17 +210,21 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             Transformed dataframe, enriched with important features.
         """
 
+        logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
         try:
             df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
         except Exception as e:
-            logging.error(f"Failed in inner_fit: {e}")
+            logging.exception("Failed in inner_fit")
             raise e
 
         if len(X) > self.FIT_SAMPLE_THRESHOLD:
+            logging.info(
+                "Train dataset has size more than fit threshold. Transform will be executed in separate action"
+            )
             try:
                 return self.transform(X, silent_mode=True)
             except Exception as e:
-                logging.error(f"Failed to transform: {e}")
+                logging.exception("Failed to transform")
                 raise e
 
         etalon_columns = list(X.columns) + [self.TARGET_NAME]
@@ -274,10 +285,15 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             Transformed dataframe, enriched with important features.
         """
 
+        logging.info(f"Start transform. X shape: {X.shape}")
         if self._search_task is None:
-            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
+            msg = "`fit` or `fit_transform` should be called before `transform`."
+            logging.error(msg)
+            raise NotFittedError(msg)
         if not isinstance(X, pd.DataFrame):
-            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
+            msg = f"Only pandas.DataFrame supported for X, but {type(X)} was passed."
+            logging.error(msg)
+            raise TypeError(msg)
 
         validated_search_keys = self.__prepare_search_keys(X)
         search_keys = []
@@ -289,9 +305,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df = X.copy()
 
+        self.__check_and_convert_string_dates(df, meaning_types)
+
         df = df.reset_index(drop=True)
 
         if FileColumnMeaningType.DATE not in meaning_types.values():
+            logging.info("Fake date column added with 2999-01-01 value")
             df[SYSTEM_FAKE_DATE] = date(2999, 1, 1)  # remove when statistics by date will be deleted
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
@@ -321,6 +340,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             result_features = validation_task.get_all_validation_raw_features()
 
             if result_features is None:
+                logging.error(f"result features not found by search_task_id: {self._search_task.search_task_id}")
                 raise RuntimeError("Search engine crashed on this request.")
 
             sorted_result_columns = [
@@ -352,20 +372,25 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def get_features_info(self) -> pd.DataFrame:
         """Returns pandas dataframe with importances for each feature"""
         if self._search_task is None or self._search_task.summary is None:
-            raise NotFittedError("Run fit or pass search_id before get features info.")
+            msg = "Run fit or pass search_id before get features info."
+            logging.info(msg)
+            raise NotFittedError(msg)
 
         return self.features_info
 
     def get_metrics(self) -> Optional[pd.DataFrame]:
         """Returns pandas dataframe with quality metrics for main dataset and eval_set"""
         if self._search_task is None or self._search_task.summary is None:
-            raise NotFittedError("Run fit or pass search_id before get metrics.")
+            msg = "Run fit or pass search_id before get metrics."
+            logging.error(msg)
+            raise NotFittedError(msg)
 
         metrics = []
         initial_metrics = {}
 
         initial_hit_rate = self._search_task.initial_max_hit_rate()
         if initial_hit_rate is None:
+            logging.warning("Get metrics called, but initial search information is empty")
             return None
 
         initial_metrics["segment"] = "train"
@@ -436,6 +461,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
+        self.__check_and_convert_string_dates(df, meaning_types)
+
         df.reset_index(drop=True, inplace=True)
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
@@ -446,7 +473,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
         if len(df) > self.FIT_SAMPLE_THRESHOLD:
+            logging.info(f"Input dataset has size {len(df)} more than threshold {self.FIT_SAMPLE_THRESHOLD}")
             df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=self.RANDOM_STATE)  # type: ignore
+            logging.info(f"Size of fitting dataset after sampling: {len(df)}")
 
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
@@ -476,10 +505,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[self.EVAL_SET_INDEX] = idx + 1
-                if len(eval_df) > (self.FIT_SAMPLE_THRESHOLD / len(eval_set)):
+                eval_df_threshold = self.FIT_SAMPLE_THRESHOLD / len(eval_set)
+                if len(eval_df) > eval_df_threshold:
+                    logging.info(f"Size of eval dataset {idx}: {len(eval_df)} more than threshold {eval_df_threshold}")
                     eval_df = eval_df.sample(
                         n=int(self.FIT_SAMPLE_ROWS / len(eval_set)), random_state=self.RANDOM_STATE
                     )
+                    logging.info(f"Size of eval dataset {idx} after sampling: {len(eval_df)}")
                 df = pd.concat([df, eval_df], ignore_index=True)
 
         if FileColumnMeaningType.DATE not in meaning_types.values():
@@ -507,6 +539,19 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.__prepare_feature_importances(list(X.columns))
 
         return df_without_eval_set
+
+    def __check_and_convert_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+        for column, meaning_type in meaning_types.items():
+            if meaning_type in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME] and is_string_dtype(
+                df[column]
+            ):
+                if self.date_format is not None and len(self.date_format) > 0:
+                    df[column] = pd.to_datetime(df[column], format=self.date_format)
+                else:
+                    msg = f"Date column `{column}` has string type, but constructor argument `date_format` is empty. "
+                    "Please, convert column to datetime type or pass date format implicitly"
+                    logging.error(msg)
+                    raise Exception(msg)
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:
@@ -578,7 +623,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise ValueError(msg)
             if meaning_type == SearchKey.CUSTOM_KEY:
                 msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
-                logging.error("msg")
+                logging.error(msg)
                 raise ValueError(msg)
 
         return valid_search_keys
