@@ -218,7 +218,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             raise e
 
         if len(X) > self.FIT_SAMPLE_THRESHOLD:
-            logging.info("Train dataset has size more than fit threshold. Transform will be executed in separate action")
+            logging.info(
+                "Train dataset has size more than fit threshold. Transform will be executed in separate action"
+            )
             try:
                 return self.transform(X, silent_mode=True)
             except Exception as e:
