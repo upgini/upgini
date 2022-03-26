@@ -336,7 +336,6 @@ class Dataset(pd.DataFrame):
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
-                print(self)
                 try:
                     self[target_column] = self[target_column].astype("int")
                 except ValueError:
