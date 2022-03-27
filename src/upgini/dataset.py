@@ -414,9 +414,15 @@ class Dataset(pd.DataFrame):
         ]
         count = len(self)
         for f in features:
-            unique_values = self[f].nunique()
-            if unique_values == count:
-                logging.warning(f"Column {f} has high cardinality and will be droped from tds")
+            if self[f].is_unique:
+                logging.warning(f"Column {f} has high cardinality (all unique) and will be droped from tds")
+                self.drop(columns=f, inplace=True)
+                del self.meaning_types_checked[f]
+            elif self[f].nunique() / count > 0.85 and self[f].is_monotonic_increasing:
+                logging.warning(
+                    f"Column {f} has high cardinality (more than 85% uniques and monotonic increasing) "
+                    "and will be droped from tds"
+                )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
