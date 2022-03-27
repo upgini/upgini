@@ -1,6 +1,6 @@
 import logging
 from datetime import date
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 try:
     from sklearn.base import TransformerMixin  # type: ignore
@@ -101,13 +101,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         date_format: Optional[str] = None,
     ):
         init_logging(endpoint, api_key)
-        if len(search_keys) == 0:
-            if search_id:
-                logging.error(f"search_id {search_id} provided without search_keys")
-                raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
-            else:
-                logging.error("search_keys not provided")
-                raise ValueError("Key columns should be marked up by search_keys.")
+        self.__validate_search_keys(search_keys, search_id)
         self.search_keys = search_keys
         self.keep_input = keep_input
         self.model_task_type = model_task_type
@@ -115,13 +109,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             try:
                 self.importance_threshold = float(importance_threshold)
             except ValueError:
-                logging.error(f"Invalid importance_threshold provided: {importance_threshold}")
+                logging.exception(f"Invalid importance_threshold provided: {importance_threshold}")
                 raise ValueError("importance_threshold should be float")
         if max_features is not None:
             try:
                 self.max_features = int(max_features)
             except ValueError:
-                logging.error(f"Invalid max_features provided: {max_features}")
+                logging.exception(f"Invalid max_features provided: {max_features}")
                 raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
@@ -174,7 +168,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         try:
             self.__inner_fit(X, y, eval_set, False, **fit_params)
         except Exception as e:
-            logging.error(f"Failed inner fit: {e}")
+            logging.exception("Failed inner fit")
             raise e
 
     def fit_transform(
@@ -303,17 +297,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         meaning_types = validated_search_keys.copy()
         feature_columns = [column for column in X.columns if column not in meaning_types.keys()]
 
-        df = X.copy()
+        self.__check_string_dates(X, meaning_types)
 
-        self.__check_and_convert_string_dates(df, meaning_types)
+        df = X.copy()
 
         df = df.reset_index(drop=True)
 
-        if FileColumnMeaningType.DATE not in meaning_types.values():
-            logging.info("Fake date column added with 2999-01-01 value")
-            df[SYSTEM_FAKE_DATE] = date(2999, 1, 1)  # remove when statistics by date will be deleted
-            search_keys.append((SYSTEM_FAKE_DATE,))
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+        self.__add_fake_date(meaning_types, search_keys, df)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -325,7 +315,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             df_without_features = df
 
         dataset = Dataset(
-            "sample_" + str(uuid.uuid4()), df=df_without_features, endpoint=self.endpoint, api_key=self.api_key
+            "sample_" + str(uuid.uuid4()),
+            df=df_without_features,
+            endpoint=self.endpoint,
+            api_key=self.api_key,
+            date_format=self.date_format,
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
@@ -426,6 +420,34 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         metrics_df.rename_axis("", inplace=True)
         return metrics_df
 
+    @staticmethod
+    def __validate_search_keys(search_keys: Dict[str, SearchKey], search_id: Optional[str]):
+        if len(search_keys) == 0:
+            if search_id:
+                logging.error(f"search_id {search_id} provided without search_keys")
+                raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
+            else:
+                logging.error("search_keys not provided")
+                raise ValueError("Key columns should be marked up by search_keys.")
+
+        key_types = search_keys.values()
+
+        if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
+            msg = "Date and datetime search keys are presented simultaniously. Select only one of them"
+            logging.error(msg)
+            raise Exception(msg)
+
+        if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
+            msg = "Email and HEM search keys are presented simultaniously. Select only one of them"
+            logging.error(msg)
+            raise Exception(msg)
+
+        for key_type in SearchKey.__members__.values():
+            if len(list(filter(lambda x: x == key_type, key_types))) > 1:
+                msg = f"Search key {key_type} presented multiple times"
+                logging.error(msg)
+                raise Exception(msg)
+
     def __inner_fit(
         self,
         X: pd.DataFrame,
@@ -458,10 +480,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
         }
 
+        self.__check_string_dates(X, meaning_types)
+
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
-
-        self.__check_and_convert_string_dates(df, meaning_types)
 
         df.reset_index(drop=True, inplace=True)
 
@@ -514,12 +536,15 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     logging.info(f"Size of eval dataset {idx} after sampling: {len(eval_df)}")
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        if FileColumnMeaningType.DATE not in meaning_types.values():
-            df[SYSTEM_FAKE_DATE] = date.today()
-            search_keys.append((SYSTEM_FAKE_DATE,))
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+        self.__add_fake_date(meaning_types, search_keys, df)
 
-        dataset = Dataset("tds_" + str(uuid.uuid4()), df=df, endpoint=self.endpoint, api_key=self.api_key)
+        dataset = Dataset(
+            "tds_" + str(uuid.uuid4()),
+            df=df,
+            endpoint=self.endpoint,
+            api_key=self.api_key,
+            date_format=self.date_format,
+        )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
 
@@ -540,18 +565,28 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         return df_without_eval_set
 
-    def __check_and_convert_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __check_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         for column, meaning_type in meaning_types.items():
             if meaning_type in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME] and is_string_dtype(
                 df[column]
             ):
-                if self.date_format is not None and len(self.date_format) > 0:
-                    df[column] = pd.to_datetime(df[column], format=self.date_format)
-                else:
-                    msg = f"Date column `{column}` has string type, but constructor argument `date_format` is empty. "
-                    "Please, convert column to datetime type or pass date format implicitly"
+                if self.date_format is None or len(self.date_format) == 0:
+                    msg = (
+                        f"Date column `{column}` has string type, but constructor argument `date_format` is empty.\n"
+                        "Please, convert column to datetime type or pass date format implicitly"
+                    )
                     logging.error(msg)
                     raise Exception(msg)
+
+    # temporary while statistic on date will not be removed
+    def __add_fake_date(
+        self, meaning_types: Dict[str, FileColumnMeaningType], search_keys: List[Tuple[str]], df: pd.DataFrame
+    ):
+        if len({FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME}.intersection(meaning_types.values())) == 0:
+            logging.info("Fake date column added with 2999-01-01 value")
+            df[SYSTEM_FAKE_DATE] = date(2999, 1, 1)  # remove when statistics by date will be deleted
+            search_keys.append((SYSTEM_FAKE_DATE,))
+            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:

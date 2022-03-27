@@ -1,4 +1,3 @@
-
 from functools import lru_cache
 import os
 import sys
@@ -10,19 +9,20 @@ from requests import get
 _ide_env_variables = {
     "colab": ["GCS_READ_CACHE_BLOCK_SIZE_MB"],
     "binder": ["BINDER_PORT", "BINDER_SERVICE_PORT", "BINDER_REQUEST", "BINDER_REPO_URL", "BINDER_LAUNCH_HOST"],
-    "kaggle": ["KAGGLE_DOCKER_IMAGE", "KAGGLE_URL_BASE"]
+    "kaggle": ["KAGGLE_DOCKER_IMAGE", "KAGGLE_URL_BASE"],
 }
 
 
 def _check_installed(package):
     result = None
     loc = locals()
-    exec_check_str = (f"try: import {package};"
-                      "result = True \n"
-                      "except ModuleNotFoundError:"
-                      "result = False \n"
-                      "except: result=True"
-                      )
+    exec_check_str = (
+        f"try: import {package};"
+        "result = True \n"
+        "except ModuleNotFoundError:"
+        "result = False \n"
+        "except: result=True"
+    )
     exec(exec_check_str, globals(), loc)
     return loc["result"]
 
@@ -33,7 +33,7 @@ def _env_contains(envs):
 
 def _get_execution_ide() -> str:
     if "google.colab" in sys.modules and _env_contains(_ide_env_variables["colab"]):
-        return"colab"
+        return "colab"
     elif os.path.exists("/kaggle") and _check_installed("kaggle") and _env_contains(_ide_env_variables["kaggle"]):
         return "kaggle"
     elif getuser() == "jovyan" and _env_contains(_ide_env_variables["binder"]):
@@ -65,12 +65,17 @@ def get_track_metrics() -> dict:
         try:
             from IPython.display import display, Javascript
             from google.colab import output
-            display(Javascript('''
+
+            display(
+                Javascript(
+                    """
                 window.clientIP =
                 fetch("https://ident.me")
                 .then(response => response.text())
                 .then(data => data);
-            '''))
+            """
+                )
+            )
             track["ip"] = output.eval_js("window.clientIP")
         except Exception as e:
             track["err"] = str(e)

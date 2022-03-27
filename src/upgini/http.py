@@ -376,7 +376,7 @@ class _RestClient:
                 json_data=log_event.dict(exclude_none=True),
                 content_type="application/json",
                 result_format="text",
-                silent=True
+                silent=True,
             )
         )
 

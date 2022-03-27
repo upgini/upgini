@@ -96,11 +96,7 @@ class SearchTask:
                 raise RuntimeError("All search tasks in the request have failed")
             else:
                 logging.error(f"Search failed with errors: {','.join(error_messages)}")
-                raise RuntimeError(
-                    "All search tasks in the request have failed: "
-                    + ",".join(error_messages)
-                    + "."
-                )
+                raise RuntimeError("All search tasks in the request have failed: " + ",".join(error_messages) + ".")
 
         return self
 
@@ -140,7 +136,7 @@ class SearchTask:
             return_scores=True,
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
-            silent_mode=silent_mode
+            silent_mode=silent_mode,
         )
 
     def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:

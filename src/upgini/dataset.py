@@ -48,6 +48,7 @@ class Dataset(pd.DataFrame):
     ignore_columns: List[str]
     hierarchical_group_keys: List[Tuple[str, ...]]
     hierarchical_subgroup_keys: List[Tuple[str, ...]]
+    date_format: Optional[str]
     task_type: Optional[ModelTaskType]
     initial_data: pd.DataFrame
     file_upload_id: Optional[str]
@@ -79,6 +80,7 @@ class Dataset(pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
+        date_format: Optional[str] = None,
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         **kwargs,
@@ -108,6 +110,7 @@ class Dataset(pd.DataFrame):
         self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
+        self.date_format = date_format
         self.task_type = None
         self.initial_data = data.copy()
         self.file_upload_id = None
@@ -231,7 +234,9 @@ class Dataset(pd.DataFrame):
     def __to_millis(self):
         """Parse date column and transform it to millis"""
         logging.debug("Transform date column to millis")
-        date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
+            FileColumnMeaningType.DATETIME.value
+        )
 
         def intToOpt(i: int) -> Optional[int]:
             if i == -9223372036855:
@@ -241,11 +246,14 @@ class Dataset(pd.DataFrame):
 
         if date is not None and date in self.columns:
             if is_string(self[date]):
-                self[date] = pd.to_datetime(self[date]).values.astype(np.int64) // 1_000_000
+                self[date] = pd.to_datetime(self[date], format=self.date_format).values.astype(np.int64) // 1_000_000
             elif is_datetime(self[date]):
                 self[date] = self[date].view(np.int64) // 1_000_000
             elif is_period_dtype(self[date]):
-                self[date] = pd.to_datetime(self[date].astype("string")).values.astype(np.int64) // 1_000_000
+                self[date] = (
+                    pd.to_datetime(self[date].astype("string"), format=self.date_format).values.astype(np.int64)
+                    // 1_000_000
+                )
             self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
 
     @staticmethod
@@ -290,7 +298,9 @@ class Dataset(pd.DataFrame):
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
         logging.debug("cleaning empty rows")
-        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
+            FileColumnMeaningType.DATETIME.value
+        )
         if date_column is not None:
             drop_idx = self[(self[date_column] == "") | self[date_column].isna()].index
             self.drop(drop_idx, inplace=True)
@@ -386,6 +396,17 @@ class Dataset(pd.DataFrame):
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
 
+    def __remove_dates_from_features(self):
+        logging.debug("Remove date columns from features")
+        features = [
+            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
+        ]
+        for f in features:
+            if is_datetime(self[f]) or is_period_dtype(self[f]):
+                logging.warning(f"Column {f} has datetime or period type but is feature and will be dropped from tds")
+                self.drop(columns=f, inplace=True)
+                del self.meaning_types_checked[f]
+
     def __remove_high_cardinality_features(self):
         logging.debug("Remove columns with high cardinality")
         features = [
@@ -402,7 +423,9 @@ class Dataset(pd.DataFrame):
     def __validate_dataset(self, validate_target: bool):
         """Validate DataSet"""
         logging.debug("validating etalon")
-        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
+            FileColumnMeaningType.DATETIME.value
+        )
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
         if self.task_type != ModelTaskType.MULTICLASS and validate_target:
@@ -539,6 +562,8 @@ class Dataset(pd.DataFrame):
 
         self.__convert_phone()
 
+        self.__remove_dates_from_features()
+
         self.__remove_high_cardinality_features()
 
         if not silent_mode:
@@ -555,7 +580,11 @@ class Dataset(pd.DataFrame):
             self.validate()
 
         self.__remove_empty_date_rows()
-        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value, "")
+        date_millis = (
+            self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
+            or self.etalon_def_checked.get(FileColumnMeaningType.DATETIME.value)
+            or ""
+        )
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
         cls_metadata = [date_millis, target, score, "is_valid"]
@@ -671,6 +700,9 @@ class Dataset(pd.DataFrame):
             if column_name not in self.ignore_columns:
                 if column_name in self.meaning_types_checked:
                     meaning_type = self.meaning_types_checked[column_name]
+                    # Temporary workaround while backend doesn't support datetime
+                    if meaning_type == FileColumnMeaningType.DATETIME:
+                        meaning_type = FileColumnMeaningType.DATE
                 else:
                     meaning_type = FileColumnMeaningType.FEATURE
                 if meaning_type in {
