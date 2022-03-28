@@ -2,7 +2,7 @@ requests==2.25.1
 python-dateutil==2.8.1
 pandas==1.1.5
 numpy==1.19.5
-scikit-learn==0.24.2
+scikit-learn==1.0.1
 pydantic==1.8.2
 pyarrow==5.0.0
 fastparquet==0.7.1
