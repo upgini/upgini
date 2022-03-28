@@ -139,7 +139,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise e
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
-        self.random_stat = random_state
+        self.random_state = random_state
 
     def fit(
         self,
