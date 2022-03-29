@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from imblearn.under_sampling import RandomUnderSampler
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype, is_numeric_dtype
@@ -49,6 +50,7 @@ class Dataset(pd.DataFrame):
     hierarchical_group_keys: List[Tuple[str, ...]]
     hierarchical_subgroup_keys: List[Tuple[str, ...]]
     date_format: Optional[str]
+    random_state: Optional[int]
     task_type: Optional[ModelTaskType]
     initial_data: pd.DataFrame
     file_upload_id: Optional[str]
@@ -63,6 +65,8 @@ class Dataset(pd.DataFrame):
         "ignore_columns",
         "hierarchical_group_keys",
         "hierarchical_subgroup_keys",
+        "date_format",
+        "random_state",
         "task_type",
         "initial_data",
         "file_upload_id",
@@ -81,6 +85,7 @@ class Dataset(pd.DataFrame):
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
         date_format: Optional[str] = None,
+        random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         **kwargs,
@@ -117,6 +122,7 @@ class Dataset(pd.DataFrame):
         self.etalon_def = None
         self.endpoint = endpoint
         self.api_key = api_key
+        self.random_state = random_state
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
@@ -344,6 +350,19 @@ class Dataset(pd.DataFrame):
     def __validate_target(self):
         target = self.__target_value()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
+
+        def imbalance_check(target_classes_count: int):
+            count = len(self)
+            min_class_count = count
+            for v in target.unique():
+                current_class_count = len(self.loc[target == v])
+                if current_class_count < min_class_count:
+                    min_class_count = current_class_count
+            if min_class_count < (2 / (5 * target_classes_count) * count):
+                rus = RandomUnderSampler(random_state=self.random_state)
+                new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
+                self._update_inplace(pd.merge(new_x, new_y, left_index=True, right_index=True))
+
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
                 try:
@@ -353,6 +372,12 @@ class Dataset(pd.DataFrame):
                     raise Exception(
                         f"Unexpected dtype of target for binary task type: {target.dtype}." " Expected int or bool"
                     )
+            target_classes_count = target.nunique()
+            if target_classes_count != 2:
+                msg = f"Binary task type should contain only 2 target values, but {target_classes_count} presented"
+                logging.error(msg)
+                raise Exception(msg)
+            imbalance_check(target_classes_count)
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string(target):
                 if is_numeric_dtype(target):
@@ -368,6 +393,7 @@ class Dataset(pd.DataFrame):
                     msg = f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str"
                     logging.exception(msg)
                     raise Exception(msg)
+            imbalance_check(target.nunique())
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
@@ -726,7 +752,7 @@ class Dataset(pd.DataFrame):
                     index=index,
                     name=column_name,
                     originalName=self.columns_renaming.get(column_name) or column_name,
-                    dataType=self.__get_data_type(column_type),
+                    dataType=self.__get_data_type(column_type, column_name),
                     meaningType=meaning_type,
                     minMaxValues=min_max_values,
                 )
@@ -743,13 +769,17 @@ class Dataset(pd.DataFrame):
             taskType=self.task_type,
         )
 
-    def __get_data_type(self, pandas_data_type) -> DataType:
+    def __get_data_type(self, pandas_data_type, column_name) -> DataType:
         if is_integer_dtype(pandas_data_type):
             return DataType.INT
         elif is_float_dtype(pandas_data_type):
             return DataType.DECIMAL
-        else:
+        elif is_string(pandas_data_type):
             return DataType.STRING
+        else:
+            msg = f"Unsupported data type of column {column_name}: {pandas_data_type}"
+            logging.error(msg)
+            raise Exception(msg)
 
     def __construct_search_customization(
         self,

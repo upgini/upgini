@@ -99,6 +99,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
+        random_state: int = 42
     ):
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
@@ -138,6 +139,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 raise e
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
+        self.random_state = random_state
 
     def fit(
         self,
@@ -544,6 +546,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             endpoint=self.endpoint,
             api_key=self.api_key,
             date_format=self.date_format,
+            random_state=self.random_state
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
