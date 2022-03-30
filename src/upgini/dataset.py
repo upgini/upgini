@@ -433,6 +433,18 @@ class Dataset(pd.DataFrame):
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
+    def __remove_empty_and_constant_features(self):
+        logging.debug("Remove constant and empty columns")
+        features = [
+            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
+        ]
+
+        for f in features:
+            if self[f].nunique() <= 1:
+                logging.warning(f"Column {f} is constant or empty and will be droped from tds")
+                self.drop(columns=f, inplace=True)
+                del self.meaning_types_checked[f]
+
     def __remove_high_cardinality_features(self):
         logging.debug("Remove columns with high cardinality")
         features = [
@@ -595,6 +607,8 @@ class Dataset(pd.DataFrame):
         self.__convert_phone()
 
         self.__remove_dates_from_features()
+
+        self.__remove_empty_and_constant_features()
 
         self.__remove_high_cardinality_features()
 
