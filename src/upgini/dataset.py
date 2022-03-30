@@ -235,7 +235,6 @@ class Dataset(pd.DataFrame):
             if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
                 logging.info(f"Correcting comma sep in {col}")
                 self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
-        return
 
     def __to_millis(self):
         """Parse date column and transform it to millis"""
@@ -421,13 +420,16 @@ class Dataset(pd.DataFrame):
             logging.debug(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
+    
+    def __features(self):
+        return [
+            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
+        ]
 
     def __remove_dates_from_features(self):
         logging.debug("Remove date columns from features")
-        features = [
-            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
-        ]
-        for f in features:
+
+        for f in self.__features():
             if is_datetime(self[f]) or is_period_dtype(self[f]):
                 logging.warning(f"Column {f} has datetime or period type but is feature and will be dropped from tds")
                 self.drop(columns=f, inplace=True)
@@ -435,11 +437,8 @@ class Dataset(pd.DataFrame):
 
     def __remove_empty_and_constant_features(self):
         logging.debug("Remove constant and empty columns")
-        features = [
-            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
-        ]
 
-        for f in features:
+        for f in self.__features():
             if self[f].nunique() <= 1:
                 logging.warning(f"Column {f} is constant or empty and will be droped from tds")
                 self.drop(columns=f, inplace=True)
@@ -447,11 +446,9 @@ class Dataset(pd.DataFrame):
 
     def __remove_high_cardinality_features(self):
         logging.debug("Remove columns with high cardinality")
-        features = [
-            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
-        ]
+
         count = len(self)
-        for f in features:
+        for f in self.__features():
             if self[f].is_unique:
                 logging.warning(f"Column {f} has high cardinality (all unique) and will be droped from tds")
                 self.drop(columns=f, inplace=True)
@@ -463,6 +460,15 @@ class Dataset(pd.DataFrame):
                 )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
+
+    def __convert_features_types(self):
+        logging.debug("Convert features to supported data types")
+
+        for f in self.__features():
+            if self[f].dtype == np.object:
+                self[f] = self[f].astype(str)
+            elif not is_numeric_dtype(self[f].dtype):
+                self[f] = self[f].astype(str)
 
     def __validate_dataset(self, validate_target: bool):
         """Validate DataSet"""
@@ -611,6 +617,8 @@ class Dataset(pd.DataFrame):
         self.__remove_empty_and_constant_features()
 
         self.__remove_high_cardinality_features()
+
+        self.__convert_features_types()
 
         if not silent_mode:
             self.__validate_dataset(validate_target)
