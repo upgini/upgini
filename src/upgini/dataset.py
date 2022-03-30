@@ -420,7 +420,7 @@ class Dataset(pd.DataFrame):
             logging.debug(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
-    
+
     def __features(self):
         return [
             f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
