@@ -449,13 +449,9 @@ class Dataset(pd.DataFrame):
 
         count = len(self)
         for f in self.__features():
-            if self[f].is_unique:
-                logging.warning(f"Column {f} has high cardinality (all unique) and will be droped from tds")
-                self.drop(columns=f, inplace=True)
-                del self.meaning_types_checked[f]
-            elif self[f].nunique() / count > 0.85 and self[f].is_monotonic_increasing:
+            if (is_string(self[f]) or is_integer_dtype(self[f])) and self[f].nunique() / count >= 0.9:
                 logging.warning(
-                    f"Column {f} has high cardinality (more than 85% uniques and monotonic increasing) "
+                    f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
                     "and will be droped from tds"
                 )
                 self.drop(columns=f, inplace=True)
@@ -616,7 +612,8 @@ class Dataset(pd.DataFrame):
 
         self.__remove_empty_and_constant_features()
 
-        self.__remove_high_cardinality_features()
+        if validate_target:
+            self.__remove_high_cardinality_features()
 
         self.__convert_features_types()
 
