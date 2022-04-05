@@ -586,8 +586,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self, meaning_types: Dict[str, FileColumnMeaningType], search_keys: List[Tuple[str]], df: pd.DataFrame
     ):
         if len({FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME}.intersection(meaning_types.values())) == 0:
-            logging.info("Fake date column added with 2999-01-01 value")
-            df[SYSTEM_FAKE_DATE] = date(2999, 1, 1)  # remove when statistics by date will be deleted
+            logging.info("Fake date column added with 2200-01-01 value")
+            df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
