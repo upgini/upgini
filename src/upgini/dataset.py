@@ -358,9 +358,15 @@ class Dataset(pd.DataFrame):
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
             if min_class_count < (2 / (5 * target_classes_count) * count):
-                rus = RandomUnderSampler(random_state=self.random_state)
-                new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
-                self._update_inplace(pd.merge(new_x, new_y, left_index=True, right_index=True))
+                if is_string(target):
+                    logging.warning(
+                        "Imbalanced target min class count: {}. "
+                        "But target is string and not supported by RandomUnderSampler"
+                    )
+                else:
+                    rus = RandomUnderSampler(random_state=self.random_state)
+                    new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
+                    self._update_inplace(pd.merge(new_x, new_y, left_index=True, right_index=True))
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -576,12 +582,12 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, validate_target: bool = True, silent_mode: bool = False):
+    def validate(self, is_fit: bool = True, silent_mode: bool = False):
         logging.info("Validating dataset")
 
         self.__rename_columns()
 
-        self.__validate_meaning_types(validate_target)
+        self.__validate_meaning_types(validate_target=is_fit)
 
         self.__validate_search_keys()
 
@@ -597,7 +603,7 @@ class Dataset(pd.DataFrame):
 
         self.__correct_decimal_comma()
 
-        if validate_target and self.task_type is None:
+        if is_fit and self.task_type is None:
             self.task_type = self.__define_task()
 
         self.__to_millis()
@@ -612,13 +618,13 @@ class Dataset(pd.DataFrame):
 
         self.__remove_empty_and_constant_features()
 
-        if validate_target:
+        if is_fit:
             self.__remove_high_cardinality_features()
 
         self.__convert_features_types()
 
         if not silent_mode:
-            self.__validate_dataset(validate_target)
+            self.__validate_dataset(is_fit)
 
     def calculate_metrics(self) -> FileMetrics:
         """Calculate initial metadata for DataSet
@@ -909,7 +915,7 @@ class Dataset(pd.DataFrame):
         silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(validate_target=not extract_features, silent_mode=silent_mode)
+            self.validate(is_fit=False, silent_mode=silent_mode)
         if extract_features:
             file_metrics = FileMetrics()
         else:
