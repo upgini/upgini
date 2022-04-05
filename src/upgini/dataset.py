@@ -582,12 +582,12 @@ class Dataset(pd.DataFrame):
                 if key not in self.columns:
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
-    def validate(self, is_fit: bool = True, silent_mode: bool = False):
+    def validate(self, validate_target: bool = True, silent_mode: bool = False):
         logging.info("Validating dataset")
 
         self.__rename_columns()
 
-        self.__validate_meaning_types(validate_target=is_fit)
+        self.__validate_meaning_types(validate_target=validate_target)
 
         self.__validate_search_keys()
 
@@ -603,7 +603,7 @@ class Dataset(pd.DataFrame):
 
         self.__correct_decimal_comma()
 
-        if is_fit and self.task_type is None:
+        if validate_target and self.task_type is None:
             self.task_type = self.__define_task()
 
         self.__to_millis()
@@ -618,13 +618,12 @@ class Dataset(pd.DataFrame):
 
         self.__remove_empty_and_constant_features()
 
-        if is_fit:
-            self.__remove_high_cardinality_features()
+        self.__remove_high_cardinality_features()
 
         self.__convert_features_types()
 
         if not silent_mode:
-            self.__validate_dataset(is_fit)
+            self.__validate_dataset(validate_target)
 
     def calculate_metrics(self) -> FileMetrics:
         """Calculate initial metadata for DataSet
@@ -915,7 +914,7 @@ class Dataset(pd.DataFrame):
         silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate(is_fit=False, silent_mode=silent_mode)
+            self.validate(validate_target=False, silent_mode=silent_mode)
         if extract_features:
             file_metrics = FileMetrics()
         else:
