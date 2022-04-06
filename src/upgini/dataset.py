@@ -761,9 +761,7 @@ class Dataset(pd.DataFrame):
 
     def __construct_metadata(self) -> FileMetadata:
         columns = []
-        print("Preparing columns metadata. Dataset: \n", self)
         for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
-            print(f"Processing column {column_name}")
             if column_name not in self.ignore_columns:
                 if column_name in self.meaning_types_checked:
                     meaning_type = self.meaning_types_checked[column_name]
@@ -891,14 +889,10 @@ class Dataset(pd.DataFrame):
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
             self.file_upload_id, file_metadata
         ):
-            print("Sending initial search task without uploading file")
-            print("File metadata: ", file_metadata.json())
             search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_without_upload_v2(
                 self.file_upload_id, file_metadata, file_metrics, search_customization
             )
         else:
-            print("Sending initial search task with uploading file")
-            print("File metadata: ", file_metadata.json())
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
