@@ -222,8 +222,6 @@ class _RestClient:
     ) -> SearchTaskResponse:
         api_path = self.INITIAL_SEARCH_URI_FMT_V2
 
-        print("Sending to backend initial search with metadata: ", metadata.json(exclude_none=True))
-
         def open_and_send():
             with open(file_path, "rb") as file:
                 files = {
