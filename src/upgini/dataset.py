@@ -359,12 +359,17 @@ class Dataset(pd.DataFrame):
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
                     min_class_value = v
-            if min_class_count < (2 / (5 * target_classes_count) * count):
+            min_class_threshold = 2 / (5 * target_classes_count) * count
+            min_class_percent = 2 * 100 / (5 * target_classes_count)
+            if min_class_count < min_class_threshold:
                 if is_string(target):
-                    logging.warning(
-                        f"Imbalanced target min class `{min_class_value}` count: {min_class_count}. "
-                        "But target is string and not supported by RandomUnderSampler"
+                    msg = (
+                        f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
+                        "The minimum number of observations for each class in your train dataset must be "
+                        f"grater than or equal to {min_class_threshold} ({min_class_percent} %)"
                     )
+                    logging.warning(msg)
+                    raise Exception(msg)
                 else:
                     rus = RandomUnderSampler(random_state=self.random_state)
                     new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
