@@ -353,14 +353,16 @@ class Dataset(pd.DataFrame):
         def imbalance_check(target_classes_count: int):
             count = len(self)
             min_class_count = count
+            min_class_value = None
             for v in target.unique():
                 current_class_count = len(self.loc[target == v])
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
+                    min_class_value = v
             if min_class_count < (2 / (5 * target_classes_count) * count):
                 if is_string(target):
                     logging.warning(
-                        "Imbalanced target min class count: {}. "
+                        f"Imbalanced target min class `{min_class_value}` count: {min_class_count}. "
                         "But target is string and not supported by RandomUnderSampler"
                     )
                 else:
