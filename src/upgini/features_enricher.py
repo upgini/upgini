@@ -2,6 +2,9 @@ import logging
 from datetime import date
 from typing import Dict, List, Optional, Tuple, Union
 
+from imblearn.under_sampling import RandomUnderSampler
+from pandas.api.types import is_numeric_dtype, is_string_dtype
+
 try:
     from sklearn.base import TransformerMixin  # type: ignore
     from sklearn.exceptions import NotFittedError  # type: ignore
@@ -15,7 +18,6 @@ import uuid
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_string_dtype
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
@@ -208,12 +210,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+            sampled, df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
         except Exception as e:
             logging.exception("Failed in inner_fit")
             raise e
 
-        if len(X) > self.FIT_SAMPLE_THRESHOLD:
+        if sampled:
             logging.info(
                 "Train dataset has size more than fit threshold. Transform will be executed in separate action"
             )
@@ -457,7 +459,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         eval_set: Optional[List[tuple]] = None,
         extract_features: bool = False,
         **fit_params,
-    ) -> pd.DataFrame:
+    ) -> Tuple[bool, pd.DataFrame]:
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
@@ -496,10 +498,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
+        model_task_type = self.model_task_type or self.__define_task(df[self.TARGET_NAME])
+        sampled = False
+        if model_task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
+            sampled, df = self.__imbalance_check(df)
+
         if len(df) > self.FIT_SAMPLE_THRESHOLD:
             logging.info(f"Input dataset has size {len(df)} more than threshold {self.FIT_SAMPLE_THRESHOLD}")
             df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=self.RANDOM_STATE)  # type: ignore
             logging.info(f"Size of fitting dataset after sampling: {len(df)}")
+            sampled = True
 
         if eval_set is not None and len(eval_set) > 0:
             df[self.EVAL_SET_INDEX] = 0
@@ -557,7 +565,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self._search_task = dataset.search(
             extract_features=extract_features,
-            model_task_type=self.model_task_type,
+            model_task_type=model_task_type,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
@@ -566,7 +574,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__prepare_feature_importances(list(X.columns))
 
-        return df_without_eval_set
+        return (sampled, df_without_eval_set)
 
     def __check_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         for column, meaning_type in meaning_types.items():
@@ -590,6 +598,67 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+
+    def __define_task(self, y: pd.Series) -> ModelTaskType:
+        logging.info("Defining task")
+        target = y.dropna()
+        if is_numeric_dtype(target):
+            target = target.loc[np.isfinite(target)]
+        else:
+            target = target.loc[target != ""]
+        target_items = target.nunique()
+        target_ratio = target_items / len(target)
+        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
+            task = ModelTaskType.REGRESSION
+        elif target_items == 2:
+            if is_numeric_dtype(target):
+                task = ModelTaskType.BINARY
+            else:
+                raise ValueError("Binary target should be numerical.")
+        else:
+            task = ModelTaskType.MULTICLASS
+        print(f"Detected task type: {task}")
+        return task
+
+    def __imbalance_check(self, df: pd.DataFrame) -> Tuple[bool, pd.DataFrame]:
+        count = len(df)
+        min_class_count = count
+        min_class_value = None
+        target = df[self.TARGET_NAME]
+        target_classes_count = target.nunique()
+        unique_target = target.unique()
+        for v in unique_target:
+            current_class_count = len(df.loc[target == v])
+            if current_class_count < min_class_count:
+                min_class_count = current_class_count
+                min_class_value = v
+
+        min_class_percent = 2 / (5 * target_classes_count)
+        min_class_threshold = min_class_percent * count
+
+        if min_class_count < min_class_threshold:
+            logging.info(
+                f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
+                "The minimum number of observations for each class in your train dataset must be "
+                f"grater than or equal to {min_class_threshold} ({min_class_percent * 100} %). "
+                "It will be undersampled"
+            )
+
+            if is_string_dtype(target):
+                target_replacement = {v: i for i, v in enumerate(unique_target)}
+                prepared_target = target.replace(target_replacement)
+            else:
+                prepared_target = target
+
+            sampler = RandomUnderSampler(random_state=self.random_state)
+            X = df[SYSTEM_RECORD_ID]
+            X = X.to_frame()
+            new_x, _ = sampler.fit_resample(X, prepared_target)  # type: ignore
+            resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
+            logging.info(f"Shape after resampling: {resampled_data.shape}")
+            return (True, resampled_data)
+        else:
+            return (False, df)
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:

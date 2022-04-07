@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from imblearn.under_sampling import RandomUnderSampler
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype, is_numeric_dtype
@@ -332,64 +331,10 @@ class Dataset(pd.DataFrame):
 
         return target
 
-    def __define_task(self) -> ModelTaskType:
-        logging.info("Defining task")
-        target = self.__target_value()
-        target_items = target.nunique()
-        target_ratio = target_items / len(target)
-        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
-            task = ModelTaskType.REGRESSION
-        elif target_items == 2:
-            if is_numeric_dtype(target):
-                task = ModelTaskType.BINARY
-            else:
-                raise ValueError("Binary target should be numerical.")
-        else:
-            task = ModelTaskType.MULTICLASS
-        print(f"Detected task type: {task}")
-        return task
-
     def __validate_target(self):
         logging.info("Validating target")
         target = self.__target_value()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-
-        def imbalance_check(target_classes_count: int):
-            count = len(self)
-            min_class_count = count
-            min_class_value = None
-            unique_target = target.unique()
-            for v in unique_target:
-                current_class_count = len(self.loc[target == v])
-                if current_class_count < min_class_count:
-                    min_class_count = current_class_count
-                    min_class_value = v
-
-            min_class_percent = 2 / (5 * target_classes_count)
-            min_class_threshold = min_class_percent * count
-
-            if min_class_count < min_class_threshold:
-                logging.info(
-                    f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
-                    "The minimum number of observations for each class in your train dataset must be "
-                    f"grater than or equal to {min_class_threshold} ({min_class_percent * 100} %). "
-                    "It will be undersampled"
-                )
-
-                if is_string(target):
-                    target_replacement = {v: i for i, v in enumerate(unique_target)}
-                    prepared_target = target.replace(target_replacement)
-                else:
-                    prepared_target = target
-
-                rus = RandomUnderSampler(random_state=self.random_state)
-                X = self[SYSTEM_RECORD_ID]
-                X.name = SYSTEM_RECORD_ID
-                X = X.to_frame()
-                new_x, _ = rus.fit_resample(X, prepared_target)  # type: ignore
-                resampled_data = self.loc[new_x[SYSTEM_RECORD_ID], :]
-                self._update_inplace(resampled_data)
-                logging.info(f"Shape after resampling: {self.shape}")
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -405,7 +350,6 @@ class Dataset(pd.DataFrame):
                 msg = f"Binary task type should contain only 2 target values, but {target_classes_count} presented"
                 logging.error(msg)
                 raise Exception(msg)
-            imbalance_check(target_classes_count)
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string(target):
                 if is_numeric_dtype(target):
@@ -421,7 +365,6 @@ class Dataset(pd.DataFrame):
                     msg = f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str"
                     logging.exception(msg)
                     raise Exception(msg)
-            imbalance_check(target.nunique())
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
@@ -630,9 +573,6 @@ class Dataset(pd.DataFrame):
         self.__convert_float16()
 
         self.__correct_decimal_comma()
-
-        if validate_target and self.task_type is None:
-            self.task_type = self.__define_task()
 
         self.__to_millis()
 

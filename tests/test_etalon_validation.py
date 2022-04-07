@@ -4,8 +4,9 @@ from datetime import date, datetime
 
 import pandas as pd
 import pytest
+from requests_mock.mocker import Mocker
 
-from upgini import Dataset, FileColumnMeaningType, ModelTaskType
+from upgini import Dataset, FeaturesEnricher, FileColumnMeaningType, SearchKey
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -187,25 +188,26 @@ def test_constant_and_empty_validation():
     assert list(dataset.columns) == ["phone"]
 
 
-def test_imbalanced_target():
+def test_imbalanced_target(requests_mock: Mocker):
+    back_url = "https://test.com"
+    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
+    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
+    requests_mock.post(back_url + "/private/api/v2/events/send", content="Success".encode())
+
+    requests_mock.post(back_url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
+
     df = pd.DataFrame(
         [{"phone": random.randint(1, 99999999999), "f": "123", "target": "a"}] * 5
         + [{"phone": random.randint(1, 99999999999), "f": "321", "target": "b"}] * 20
         + [{"phone": random.randint(1, 99999999999), "f": "543", "target": "c"}] * 25
         + [{"phone": random.randint(1, 99999999999), "f": "999", "target": "d"}] * 30
     )
-    df.reset_index(inplace=True)
-    df.rename(columns={"index": "system_record_id"}, inplace=True)
-    dataset = Dataset("test5", df=df)
-    dataset.meaning_types = {
-        "phone": FileColumnMeaningType.MSISDN,
-        "target": FileColumnMeaningType.TARGET,
-    }
-    dataset.task_type = ModelTaskType.MULTICLASS
-    dataset._Dataset__validate_target()
-    print(dataset)
-    assert len(dataset) == 20
-    value_counts = dataset["target"].value_counts()
+    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
+    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=back_url)
+    _, checked_df = enricher._FeaturesEnricher__imbalance_check(df)
+    print(checked_df)
+    assert len(checked_df) == 20
+    value_counts = checked_df["target"].value_counts()
     assert len(value_counts) == 4
     assert value_counts["a"] == 5
     assert value_counts["b"] == 5
