@@ -1,4 +1,5 @@
 import ipaddress
+import random
 from datetime import date, datetime
 
 import pandas as pd
@@ -169,3 +170,18 @@ def test_python_datetime_to_timestamp_conversion():
     assert dataset["date"].iloc[0] == 1577836800000
     assert dataset["date"].iloc[1] == 1577923200000
     assert dataset["date"].iloc[2] == 1578009600000
+
+
+def test_constant_and_empty_validation():
+    df = pd.DataFrame(
+        [{"phone": random.randint(1, 99999999999), "a": 1, "b": None}] * 995
+        + [{"phone": random.randint(1, 99999999999), "a": 2, "b": 3}] * 5
+    )
+    dataset = Dataset("test4", df=df)
+    dataset.meaning_types = {
+        "phone": FileColumnMeaningType.MSISDN,
+        "a": FileColumnMeaningType.FEATURE,
+        "b": FileColumnMeaningType.FEATURE,
+    }
+    dataset._Dataset__remove_empty_and_constant_features()
+    assert list(dataset.columns) == ["phone"]
