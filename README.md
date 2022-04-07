@@ -238,6 +238,20 @@ enricher = FeaturesEnricher(
 enriched_dataframe.fit_transform(X, y)
 ```
 
+### ✅ Optional: reuse completed enrichment
+`FeaturesEnricher` can be used with search id of completed state:
+- `search_id`: str - id of completed fit operation (`enricher.get_search_id()`)
+Search keys and features in X should be the same as on fit
+
+```python
+enricher = FeaturesEnricher(
+  search_keys={"date": SearchKey.DATE},
+  search_id = "abcdef00-0000-0000-0000-999999999999"
+)
+
+enricher.transform(X)
+```
+
 ### 🧹 Search dataset validation
 We validate and clean search initialization dataset under the hood:  
 ✂️ Check you *search keys* columns format  
