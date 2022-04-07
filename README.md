@@ -240,7 +240,7 @@ enriched_dataframe.fit_transform(X, y)
 
 ### ✅ Optional: reuse completed enrichment
 `FeaturesEnricher` can be used with search id of completed state:
-- `search_id`: str - id of completed fit operation
+- `search_id`: str - id of completed fit operation (`enricher.get_search_id()`)
 Search keys and features in X should be the same as on fit
 
 ```python

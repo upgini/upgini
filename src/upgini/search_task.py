@@ -50,7 +50,7 @@ class SearchTask:
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(
-                f"Running {self.search_task_id} search request\n"
+                f"Running search request with search_id={self.search_task_id}\n"
                 "We'll send email notification once it's completed, "
                 "just use your personal api_key from profile.upgini.com"
             )

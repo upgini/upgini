@@ -365,6 +365,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             sp.ok("Done                         ")
             return result
 
+    def get_search_id(self) -> Optional[str]:
+        """Returns search_id of fitted enricher. It's present only after fit completed"""
+        return self._search_task.search_task_id if self._search_task else None
+
     def get_features_info(self) -> pd.DataFrame:
         """Returns pandas dataframe with importances for each feature"""
         if self._search_task is None or self._search_task.summary is None:
