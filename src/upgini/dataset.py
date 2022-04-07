@@ -148,12 +148,12 @@ class Dataset(pd.DataFrame):
         return self.etalon_def
 
     def __validate_rows_count(self):
-        logging.debug("Validate rows count")
+        logging.info("Validate rows count")
         if self.shape[0] < self.MIN_ROWS_COUNT:
             raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows.")
 
     def __rename_columns(self):
-        logging.debug("Replace restricted symbols in column names")
+        logging.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
                 raise ValueError("Some of column names are empty. Fill them and try again, please.")
@@ -174,7 +174,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
-        logging.debug("Validate too long string values")
+        logging.info("Validate too long string values")
         for col in self.columns:
             if is_string(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
@@ -186,8 +186,8 @@ class Dataset(pd.DataFrame):
 
     def __clean_duplicates(self):
         """Clean DataSet from full duplicates."""
+        logging.info("Clean full duplicates")
         nrows = len(self)
-        logging.debug("cleaning duplicates")
         unique_columns = self.columns.tolist()
         logging.info(f"Input data shape: {self.shape}")
         self.drop_duplicates(subset=unique_columns, inplace=True)
@@ -204,29 +204,32 @@ class Dataset(pd.DataFrame):
             nrows_after_tgt_dedup = len(self)
             share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
-                raise ValueError(
+                msg = (
                     f"{share_tgt_dedup:.5f}% of rows in X are duplicates with different y values. "
                     "Please check the dataframe and restart fit"
                 )
+                logging.error(msg)
+                raise ValueError(msg)
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
-        logging.debug("Converting bool to int")
+        logging.info("Converting bool to int")
         for col in self.columns:
             if is_bool(self[col]):
-                logging.debug(f"Converting {col} to int")
+                logging.info(f"Converting {col} from bool to int")
                 self[col] = self[col].astype("Int64")
 
     def __convert_float16(self):
         """Convert float16 to float"""
-        logging.debug("Converting float16 to float")
+        logging.info("Converting float16 to float")
         for col in self.columns:
             if is_float_dtype(self[col]):
+                logging.info(f"Converting {col} from float16 to float64")
                 self[col] = self[col].astype("float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
-        logging.debug("Correct decimal commas")
+        logging.info("Correct decimal commas")
         tmp = self.head(10)
         # all columns with sep="," will have dtype == 'object', i.e string
         # sep="." will be casted to numeric automatically
@@ -238,7 +241,7 @@ class Dataset(pd.DataFrame):
 
     def __to_millis(self):
         """Parse date column and transform it to millis"""
-        logging.debug("Transform date column to millis")
+        logging.info("Transform date column to millis")
         date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -270,7 +273,7 @@ class Dataset(pd.DataFrame):
 
     def __hash_email(self):
         """Add column with HEM if email presented in search keys"""
-        logging.debug("Hashing email")
+        logging.info("Hashing email")
         email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
         if email is not None and email in self.columns:
             generated_hem_name = "generated_hem"
@@ -295,14 +298,14 @@ class Dataset(pd.DataFrame):
 
     def __convert_ip(self):
         """Convert ip address to int"""
-        logging.debug("Convert ip address to int")
+        logging.info("Convert ip address to int")
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.columns:
             self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
-        logging.debug("cleaning empty rows")
+        logging.info("cleaning empty rows")
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -313,7 +316,7 @@ class Dataset(pd.DataFrame):
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
-        logging.debug("Dropping ignore columns")
+        logging.info("Dropping ignore columns")
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
         self.drop(columns_to_drop, axis=1, inplace=True)
 
@@ -330,7 +333,7 @@ class Dataset(pd.DataFrame):
         return target
 
     def __define_task(self) -> ModelTaskType:
-        logging.debug("defining task")
+        logging.info("Defining task")
         target = self.__target_value()
         target_items = target.nunique()
         target_ratio = target_items / len(target)
@@ -347,6 +350,7 @@ class Dataset(pd.DataFrame):
         return task
 
     def __validate_target(self):
+        logging.info("Validating target")
         target = self.__target_value()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
 
@@ -363,6 +367,7 @@ class Dataset(pd.DataFrame):
             min_class_percent = 2 * 100 / (5 * target_classes_count)
             if min_class_count < min_class_threshold:
                 if is_string(target):
+                    # TODO replace string target with enumeration (0, 1, 2, ...)
                     msg = (
                         f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
                         "The minimum number of observations for each class in your train dataset must be "
@@ -372,6 +377,7 @@ class Dataset(pd.DataFrame):
                     raise Exception(msg)
                 else:
                     rus = RandomUnderSampler(random_state=self.random_state)
+                    # TODO pass only system_record_id to X and filter by it after resampling
                     new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
                     new_x[target_column] = new_y
                     self._update_inplace(new_x)
@@ -429,10 +435,10 @@ class Dataset(pd.DataFrame):
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
-        logging.debug("Convert phone to int")
+        logging.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
         if msisdn_column is not None and msisdn_column in self.columns:
-            logging.debug(f"going to apply phone_to_int for column {msisdn_column}")
+            logging.info(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
 
@@ -442,7 +448,7 @@ class Dataset(pd.DataFrame):
         ]
 
     def __remove_dates_from_features(self):
-        logging.debug("Remove date columns from features")
+        logging.info("Remove date columns from features")
 
         for f in self.__features():
             if is_datetime(self[f]) or is_period_dtype(self[f]):
@@ -451,16 +457,21 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
     def __remove_empty_and_constant_features(self):
-        logging.debug("Remove constant and empty columns")
-
+        logging.info("Remove almost constant and almost empty columns")
         for f in self.__features():
-            if self[f].nunique() <= 1:
-                logging.warning(f"Column {f} is constant or empty and will be droped from tds")
+            value_counts = self[f].value_counts(dropna=False, normalize=True)
+            most_frequent_value = value_counts.index[0]
+            most_frequent_percent = value_counts.iloc[0]
+            if most_frequent_percent >= 0.99:
+                logging.warning(
+                    f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
+                    " and will be droped from tds"
+                    )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
     def __remove_high_cardinality_features(self):
-        logging.debug("Remove columns with high cardinality")
+        logging.info("Remove columns with high cardinality")
 
         count = len(self)
         for f in self.__features():
@@ -473,17 +484,17 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
     def __convert_features_types(self):
-        logging.debug("Convert features to supported data types")
+        logging.info("Convert features to supported data types")
 
         for f in self.__features():
-            if self[f].dtype == np.object:
+            if self[f].dtype == object:
                 self[f] = self[f].astype(str)
             elif not is_numeric_dtype(self[f].dtype):
                 self[f] = self[f].astype(str)
 
     def __validate_dataset(self, validate_target: bool):
         """Validate DataSet"""
-        logging.debug("validating etalon")
+        logging.info("validating etalon")
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -568,7 +579,7 @@ class Dataset(pd.DataFrame):
             print(df_stats)
 
     def __validate_meaning_types(self, validate_target: bool):
-        logging.debug("Validating meaning types")
+        logging.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
 
@@ -583,7 +594,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Target column is not presented in meaning types. Specify it, please.")
 
     def __validate_search_keys(self):
-        logging.debug("Validating search keys")
+        logging.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
             raise ValueError("Please pass `search_keys` argument before validation.")
         for keys_group in self.search_keys:
@@ -760,6 +771,7 @@ class Dataset(pd.DataFrame):
         )
 
     def __construct_metadata(self) -> FileMetadata:
+        logging.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
             if column_name not in self.ignore_columns:
@@ -824,6 +836,7 @@ class Dataset(pd.DataFrame):
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
+        logging.info("Constructing search customization")
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
@@ -896,7 +909,7 @@ class Dataset(pd.DataFrame):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
-                logging.debug(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
+                logging.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     parquet_file_path, file_metadata, file_metrics, search_customization
                 )
@@ -948,7 +961,7 @@ class Dataset(pd.DataFrame):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
-                logging.debug(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
+                logging.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization
                 )
