@@ -5,7 +5,7 @@ from datetime import date, datetime
 import pandas as pd
 import pytest
 
-from upgini import Dataset, FileColumnMeaningType
+from upgini import Dataset, FileColumnMeaningType, ModelTaskType
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -185,3 +185,29 @@ def test_constant_and_empty_validation():
     }
     dataset._Dataset__remove_empty_and_constant_features()
     assert list(dataset.columns) == ["phone"]
+
+
+def test_imbalanced_target():
+    df = pd.DataFrame(
+        [{"phone": random.randint(1, 99999999999), "f": "123", "target": "a"}] * 5
+        + [{"phone": random.randint(1, 99999999999), "f": "321", "target": "b"}] * 20
+        + [{"phone": random.randint(1, 99999999999), "f": "543", "target": "c"}] * 25
+        + [{"phone": random.randint(1, 99999999999), "f": "999", "target": "d"}] * 30
+    )
+    df.reset_index(inplace=True)
+    df.rename(columns={"index": "system_record_id"}, inplace=True)
+    dataset = Dataset("test5", df=df)
+    dataset.meaning_types = {
+        "phone": FileColumnMeaningType.MSISDN,
+        "target": FileColumnMeaningType.TARGET,
+    }
+    dataset.task_type = ModelTaskType.MULTICLASS
+    dataset._Dataset__validate_target()
+    print(dataset)
+    assert len(dataset) == 20
+    value_counts = dataset["target"].value_counts()
+    assert len(value_counts) == 4
+    assert value_counts["a"] == 5
+    assert value_counts["b"] == 5
+    assert value_counts["c"] == 5
+    assert value_counts["d"] == 5
