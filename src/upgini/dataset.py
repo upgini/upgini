@@ -48,9 +48,9 @@ class Dataset(pd.DataFrame):
     ignore_columns: List[str]
     hierarchical_group_keys: List[Tuple[str, ...]]
     hierarchical_subgroup_keys: List[Tuple[str, ...]]
+    task_type: Optional[ModelTaskType]
     date_format: Optional[str]
     random_state: Optional[int]
-    task_type: Optional[ModelTaskType]
     initial_data: pd.DataFrame
     file_upload_id: Optional[str]
     etalon_def: Optional[Dict[str, str]]
@@ -83,6 +83,7 @@ class Dataset(pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
+        model_task_type: Optional[ModelTaskType] = None,
         date_format: Optional[str] = None,
         random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
@@ -108,6 +109,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
 
         self.name = name
+        self.task_type = model_task_type
         self.description = description
         self.meaning_types = meaning_types
         self.search_keys = search_keys
@@ -115,7 +117,6 @@ class Dataset(pd.DataFrame):
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
         self.date_format = date_format
-        self.task_type = None
         self.initial_data = data.copy()
         self.file_upload_id = None
         self.etalon_def = None
@@ -818,13 +819,11 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
-        model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
-        self.task_type = model_task_type
         if self.etalon_def is None:
             self.validate()
         file_metrics = self.calculate_metrics()

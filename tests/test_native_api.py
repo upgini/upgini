@@ -93,7 +93,7 @@ def test_initial_and_validation_search(requests_mock):
         "target": FileColumnMeaningType.TARGET,
     }
     search_keys = [("phone_num", "rep_date")]
-    etalon = Dataset("my_dataset", "description", df=df)
+    etalon = Dataset("my_dataset", "description", df=df, model_task_type=ModelTaskType.BINARY)
     etalon.meaning_types = meaning_types
     etalon.search_keys = search_keys
 

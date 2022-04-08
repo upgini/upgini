@@ -551,6 +551,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
             df=df,
+            model_task_type=model_task_type,
             endpoint=self.endpoint,
             api_key=self.api_key,
             date_format=self.date_format,
@@ -565,7 +566,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self._search_task = dataset.search(
             extract_features=extract_features,
-            model_task_type=model_task_type,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
