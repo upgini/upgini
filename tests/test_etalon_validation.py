@@ -3,6 +3,7 @@ import random
 from datetime import date, datetime
 
 import pandas as pd
+import numpy as np
 import pytest
 from requests_mock.mocker import Mocker
 
@@ -196,20 +197,18 @@ def test_imbalanced_target(requests_mock: Mocker):
 
     requests_mock.post(back_url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
 
-    df = pd.DataFrame(
-        [{"phone": random.randint(1, 99999999999), "f": "123", "target": "a"}] * 5
-        + [{"phone": random.randint(1, 99999999999), "f": "321", "target": "b"}] * 20
-        + [{"phone": random.randint(1, 99999999999), "f": "543", "target": "c"}] * 25
-        + [{"phone": random.randint(1, 99999999999), "f": "999", "target": "d"}] * 30
-    )
+    df = pd.DataFrame({
+        "phone": np.random.randint(10000000000, 99999999999, 20),
+        "f": ["123"] * 20,
+        "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10
+    })
     df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
     enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=back_url)
     _, checked_df = enricher._FeaturesEnricher__imbalance_check(df)
-    print(checked_df)
-    assert len(checked_df) == 20
+    assert len(checked_df) == 4
     value_counts = checked_df["target"].value_counts()
     assert len(value_counts) == 4
-    assert value_counts["a"] == 5
-    assert value_counts["b"] == 5
-    assert value_counts["c"] == 5
-    assert value_counts["d"] == 5
+    assert value_counts["a"] == 1
+    assert value_counts["b"] == 1
+    assert value_counts["c"] == 1
+    assert value_counts["d"] == 1
