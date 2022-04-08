@@ -3,9 +3,11 @@ import random
 from datetime import date, datetime
 
 import pandas as pd
+import numpy as np
 import pytest
+from requests_mock.mocker import Mocker
 
-from upgini import Dataset, FileColumnMeaningType
+from upgini import Dataset, FeaturesEnricher, FileColumnMeaningType, SearchKey
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -185,3 +187,28 @@ def test_constant_and_empty_validation():
     }
     dataset._Dataset__remove_empty_and_constant_features()
     assert list(dataset.columns) == ["phone"]
+
+
+def test_imbalanced_target(requests_mock: Mocker):
+    back_url = "https://test.com"
+    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
+    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
+    requests_mock.post(back_url + "/private/api/v2/events/send", content="Success".encode())
+
+    requests_mock.post(back_url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
+
+    df = pd.DataFrame({
+        "phone": np.random.randint(10000000000, 99999999999, 20),
+        "f": ["123"] * 20,
+        "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10
+    })
+    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
+    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=back_url)
+    _, checked_df = enricher._FeaturesEnricher__imbalance_check(df)
+    assert len(checked_df) == 4
+    value_counts = checked_df["target"].value_counts()
+    assert len(value_counts) == 4
+    assert value_counts["a"] == 1
+    assert value_counts["b"] == 1
+    assert value_counts["c"] == 1
+    assert value_counts["d"] == 1

@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from imblearn.under_sampling import RandomUnderSampler
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import is_float_dtype, is_integer_dtype, is_numeric_dtype
@@ -49,9 +48,9 @@ class Dataset(pd.DataFrame):
     ignore_columns: List[str]
     hierarchical_group_keys: List[Tuple[str, ...]]
     hierarchical_subgroup_keys: List[Tuple[str, ...]]
+    task_type: Optional[ModelTaskType]
     date_format: Optional[str]
     random_state: Optional[int]
-    task_type: Optional[ModelTaskType]
     initial_data: pd.DataFrame
     file_upload_id: Optional[str]
     etalon_def: Optional[Dict[str, str]]
@@ -84,6 +83,7 @@ class Dataset(pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
+        model_task_type: Optional[ModelTaskType] = None,
         date_format: Optional[str] = None,
         random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
@@ -109,6 +109,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
 
         self.name = name
+        self.task_type = model_task_type
         self.description = description
         self.meaning_types = meaning_types
         self.search_keys = search_keys
@@ -116,7 +117,6 @@ class Dataset(pd.DataFrame):
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
         self.date_format = date_format
-        self.task_type = None
         self.initial_data = data.copy()
         self.file_upload_id = None
         self.etalon_def = None
@@ -332,56 +332,10 @@ class Dataset(pd.DataFrame):
 
         return target
 
-    def __define_task(self) -> ModelTaskType:
-        logging.info("Defining task")
-        target = self.__target_value()
-        target_items = target.nunique()
-        target_ratio = target_items / len(target)
-        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
-            task = ModelTaskType.REGRESSION
-        elif target_items == 2:
-            if is_numeric_dtype(target):
-                task = ModelTaskType.BINARY
-            else:
-                raise ValueError("Binary target should be numerical.")
-        else:
-            task = ModelTaskType.MULTICLASS
-        print(f"Detected task type: {task}")
-        return task
-
     def __validate_target(self):
         logging.info("Validating target")
         target = self.__target_value()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-
-        def imbalance_check(target_classes_count: int):
-            count = len(self)
-            min_class_count = count
-            min_class_value = None
-            for v in target.unique():
-                current_class_count = len(self.loc[target == v])
-                if current_class_count < min_class_count:
-                    min_class_count = current_class_count
-                    min_class_value = v
-            min_class_threshold = 2 / (5 * target_classes_count) * count
-            min_class_percent = 2 * 100 / (5 * target_classes_count)
-            if min_class_count < min_class_threshold:
-                if is_string(target):
-                    # TODO replace string target with enumeration (0, 1, 2, ...)
-                    msg = (
-                        f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
-                        "The minimum number of observations for each class in your train dataset must be "
-                        f"grater than or equal to {min_class_threshold} ({min_class_percent} %)"
-                    )
-                    logging.warning(msg)
-                    raise Exception(msg)
-                else:
-                    rus = RandomUnderSampler(random_state=self.random_state)
-                    # TODO pass only system_record_id to X and filter by it after resampling
-                    new_x, new_y = rus.fit_resample(self.drop(columns=target_column), self[target_column])
-                    new_x[target_column] = new_y
-                    self._update_inplace(new_x)
-                    logging.info(f"Shape after resampling: {self.shape}")
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -397,7 +351,6 @@ class Dataset(pd.DataFrame):
                 msg = f"Binary task type should contain only 2 target values, but {target_classes_count} presented"
                 logging.error(msg)
                 raise Exception(msg)
-            imbalance_check(target_classes_count)
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string(target):
                 if is_numeric_dtype(target):
@@ -413,7 +366,6 @@ class Dataset(pd.DataFrame):
                     msg = f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str"
                     logging.exception(msg)
                     raise Exception(msg)
-            imbalance_check(target.nunique())
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
@@ -622,9 +574,6 @@ class Dataset(pd.DataFrame):
         self.__convert_float16()
 
         self.__correct_decimal_comma()
-
-        if validate_target and self.task_type is None:
-            self.task_type = self.__define_task()
 
         self.__to_millis()
 
@@ -870,13 +819,11 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
-        model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
-        self.task_type = model_task_type
         if self.etalon_def is None:
             self.validate()
         file_metrics = self.calculate_metrics()
