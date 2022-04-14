@@ -531,13 +531,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
-                # eval_df_threshold = self.FIT_SAMPLE_THRESHOLD / len(eval_set)
-                # if len(eval_df) > eval_df_threshold:
-                #     logging.info(f"Size of eval dataset {idx}: {len(eval_df)} more than threshold {eval_df_threshold}")
-                #     eval_df = eval_df.sample(
-                #         n=int(self.FIT_SAMPLE_ROWS / len(eval_set)), random_state=self.RANDOM_STATE
-                #     )
-                #     logging.info(f"Size of eval dataset {idx} after sampling: {len(eval_df)}")
                 df = pd.concat([df, eval_df], ignore_index=True)
 
         self.__add_fake_date(meaning_types, search_keys, df)
