@@ -26,6 +26,7 @@ from upgini.http import init_logging
 from upgini.metadata import (
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
+    EVAL_SET_INDEX,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -78,9 +79,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     """
 
     TARGET_NAME = "target"
-    EVAL_SET_INDEX = "eval_set_index"
-    FIT_SAMPLE_ROWS = 100_000
-    FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+
     RANDOM_STATE = 42
 
     _search_task: Optional[SearchTask] = None
@@ -503,19 +502,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
         model_task_type = self.model_task_type or self.__define_task(df[self.TARGET_NAME])
-        sampled = False
-        if model_task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
-            sampled, df = self.__imbalance_check(df)
-
-        if len(df) > self.FIT_SAMPLE_THRESHOLD:
-            logging.info(f"Input dataset has size {len(df)} more than threshold {self.FIT_SAMPLE_THRESHOLD}")
-            df = df.sample(n=self.FIT_SAMPLE_ROWS, random_state=self.RANDOM_STATE)  # type: ignore
-            logging.info(f"Size of fitting dataset after sampling: {len(df)}")
-            sampled = True
 
         if eval_set is not None and len(eval_set) > 0:
-            df[self.EVAL_SET_INDEX] = 0
-            meaning_types[self.EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
+            df[EVAL_SET_INDEX] = 0
+            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
             for idx, eval_pair in enumerate(eval_set):
                 if len(eval_pair) != 2:
                     raise TypeError(
@@ -540,14 +530,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 eval_df: pd.DataFrame = eval_X.copy()  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
-                eval_df[self.EVAL_SET_INDEX] = idx + 1
-                eval_df_threshold = self.FIT_SAMPLE_THRESHOLD / len(eval_set)
-                if len(eval_df) > eval_df_threshold:
-                    logging.info(f"Size of eval dataset {idx}: {len(eval_df)} more than threshold {eval_df_threshold}")
-                    eval_df = eval_df.sample(
-                        n=int(self.FIT_SAMPLE_ROWS / len(eval_set)), random_state=self.RANDOM_STATE
-                    )
-                    logging.info(f"Size of eval dataset {idx} after sampling: {len(eval_df)}")
+                eval_df[EVAL_SET_INDEX] = idx + 1
+                # eval_df_threshold = self.FIT_SAMPLE_THRESHOLD / len(eval_set)
+                # if len(eval_df) > eval_df_threshold:
+                #     logging.info(f"Size of eval dataset {idx}: {len(eval_df)} more than threshold {eval_df_threshold}")
+                #     eval_df = eval_df.sample(
+                #         n=int(self.FIT_SAMPLE_ROWS / len(eval_set)), random_state=self.RANDOM_STATE
+                #     )
+                #     logging.info(f"Size of eval dataset {idx} after sampling: {len(eval_df)}")
                 df = pd.concat([df, eval_df], ignore_index=True)
 
         self.__add_fake_date(meaning_types, search_keys, df)
@@ -574,11 +564,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
         )
+
         self.__show_metrics()
 
         self.__prepare_feature_importances(list(X.columns))
 
-        return (sampled, df_without_eval_set)
+        return (dataset.sampled, df_without_eval_set)
 
     def __check_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         for column, meaning_type in meaning_types.items():
@@ -678,7 +669,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.feature_importances_ = []
         features_info = []
 
-        service_columns = [SYSTEM_RECORD_ID, self.EVAL_SET_INDEX, self.TARGET_NAME]
+        service_columns = [SYSTEM_RECORD_ID, EVAL_SET_INDEX, self.TARGET_NAME]
 
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):

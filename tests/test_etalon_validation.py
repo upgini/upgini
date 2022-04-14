@@ -8,6 +8,8 @@ import pytest
 from requests_mock.mocker import Mocker
 
 from upgini import Dataset, FeaturesEnricher, FileColumnMeaningType, SearchKey
+from upgini.errors import ValidationError
+from upgini.metadata import ModelTaskType
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -189,26 +191,64 @@ def test_constant_and_empty_validation():
     assert list(dataset.columns) == ["phone"]
 
 
-def test_imbalanced_target(requests_mock: Mocker):
-    back_url = "https://test.com"
-    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
-    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
-    requests_mock.post(back_url + "/private/api/v2/events/send", content="Success".encode())
+def test_imbalanced_target():
+    df = pd.DataFrame({
+        "phone": np.random.randint(10000000000, 99999999999, 2000),
+        "f": ["123"] * 2000,
+        "target": ["a"]*100 + ["b"] * 400 + ["c"] * 500 + ["d"] * 1000
+    })
+    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
+    dataset = Dataset("test123", df=df)
+    dataset.meaning_types = {
+        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
+        "phone": FileColumnMeaningType.MSISDN,
+        "f": FileColumnMeaningType.FEATURE,
+        "target": FileColumnMeaningType.TARGET,
+    }
+    dataset.task_type = ModelTaskType.MULTICLASS
+    dataset._Dataset__resample()
+    assert len(dataset) == 400
+    value_counts = dataset["target"].value_counts()
+    assert len(value_counts) == 4
+    assert value_counts["a"] == 100
+    assert value_counts["b"] == 100
+    assert value_counts["c"] == 100
+    assert value_counts["d"] == 100
 
-    requests_mock.post(back_url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
 
+def test_fail_on_small_class_observations():
     df = pd.DataFrame({
         "phone": np.random.randint(10000000000, 99999999999, 20),
         "f": ["123"] * 20,
         "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10
     })
     df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
-    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=back_url)
-    _, checked_df = enricher._FeaturesEnricher__imbalance_check(df)
-    assert len(checked_df) == 4
-    value_counts = checked_df["target"].value_counts()
-    assert len(value_counts) == 4
-    assert value_counts["a"] == 1
-    assert value_counts["b"] == 1
-    assert value_counts["c"] == 1
-    assert value_counts["d"] == 1
+    dataset = Dataset("test123", df=df)
+    dataset.meaning_types = {
+        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
+        "phone": FileColumnMeaningType.MSISDN,
+        "f": FileColumnMeaningType.FEATURE,
+        "target": FileColumnMeaningType.TARGET,
+    }
+    dataset.task_type = ModelTaskType.MULTICLASS
+    with pytest.raises(ValidationError, match=r".*The minimum number of observations for each class.*"):
+        dataset._Dataset__resample()
+
+
+def test_fail_on_too_many_classes():
+    df = pd.DataFrame({
+        "phone": np.random.randint(10000000000, 99999999999, 200),
+        "f": ["123"] * 200,
+        "target": range(200)
+    })
+    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
+    dataset = Dataset("test123", df=df)
+    dataset.meaning_types = {
+        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
+        "phone": FileColumnMeaningType.MSISDN,
+        "f": FileColumnMeaningType.FEATURE,
+        "target": FileColumnMeaningType.TARGET,
+    }
+    dataset.task_type = ModelTaskType.MULTICLASS
+    with pytest.raises(ValidationError, match=r".*The number of target classes .+ exceeds the allowed threshold.*"):
+        dataset._Dataset__resample()
