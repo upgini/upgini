@@ -35,3 +35,9 @@ def _not_none(param_name: str, param: Optional[Any]):
 def _not_none_or_empty(param_name: str, param: Optional[str]):
     if param is None:
         raise TypeError(_ErrorMessages.not_none_or_empty.format(param_name))
+
+
+class ValidationError(Exception):
+
+    def __init__(self, message):
+        super(ValidationError, self).__init__(message)

@@ -33,4 +33,4 @@ def test_binary_dataset(datafiles, etalon_definition, etalon_search_keys):
     )
     ds.validate()
     expected_valid_rows = 16913
-    assert expected_valid_rows == ds["is_valid"].sum()
+    assert len(ds) == expected_valid_rows

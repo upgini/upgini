@@ -97,9 +97,6 @@ def test_initial_and_validation_search(requests_mock):
     etalon.meaning_types = meaning_types
     etalon.search_keys = search_keys
 
-    meta = etalon.calculate_metrics()
-    assert meta.task_type == ModelTaskType.BINARY
-
     search_task = etalon.search(return_scores=True)
 
     initial_metadata = search_task.initial_metadata()
