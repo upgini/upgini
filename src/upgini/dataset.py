@@ -46,8 +46,8 @@ class Dataset(pd.DataFrame):
     FIT_SAMPLE_ROWS: int = 100_000
     FIT_SAMPLE_THRESHOLD: int = FIT_SAMPLE_ROWS * 3
     IMBALANCE_THESHOLD: float = 0.4
-    MIN_TARGET_CLASS_COUNT = 100
-    MAX_MULTICLASS_CLASS_COUNT = 100
+    MIN_TARGET_CLASS_COUNT: int = 100
+    MAX_MULTICLASS_CLASS_COUNT: int = 100
 
     name: str
     description: Optional[str]

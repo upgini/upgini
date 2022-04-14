@@ -2,26 +2,25 @@ import ipaddress
 import random
 from datetime import date, datetime
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
-from requests_mock.mocker import Mocker
 
-from upgini import Dataset, FeaturesEnricher, FileColumnMeaningType, SearchKey
+from upgini import Dataset, FileColumnMeaningType
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
 
 
 def test_etalon_validation(etalon: Dataset):
-    Dataset.MIN_ROWS_COUNT = 3
-    etalon.validate()
-    assert "is_valid" in etalon.columns
+    print("Initial dataset:\n", etalon)
+    Dataset.MIN_ROWS_COUNT = 1
     count = len(etalon)
-    valid_count = int(etalon["is_valid"].sum())
+    etalon.validate()
+    valid_count = len(etalon)
     valid_rate = 100 * valid_count / count
 
     assert valid_count == 1
-    valid_rate_expected = 100 * (1 / 9)
+    valid_rate_expected = 100 * (1 / 10)
     assert valid_rate == pytest.approx(valid_rate_expected, abs=0.01)
 
 
