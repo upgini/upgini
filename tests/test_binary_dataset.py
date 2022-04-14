@@ -27,7 +27,7 @@ def etalon_search_keys():
 
 
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
-def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys, expected_binary_etalon_metadata):
+def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     ds = Dataset(
         name="test Dataset",
@@ -40,10 +40,6 @@ def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys,
     ds.validate()
     expected_valid_rows = 15555
     assert len(ds) == expected_valid_rows
-    # binary_metadata = ds.calculate_metrics()
-    # print("binary_metadata:\n", binary_metadata.json())
-    # print("expected_binary_etalon_metadata:\n", expected_binary_etalon_metadata.json())
-    # assert expected_binary_etalon_metadata == binary_metadata
 
 
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv"))
