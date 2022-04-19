@@ -114,7 +114,7 @@ class Dataset(pd.DataFrame):
         else:
             raise ValueError("DataFrame or path to file should be passed.")
         if isinstance(data, pd.DataFrame):
-            super(Dataset, self).__init__(data)
+            super(Dataset, self).__init__(data)  # type: ignore
         else:
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
 

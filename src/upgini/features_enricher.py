@@ -1,8 +1,7 @@
 import logging
 from datetime import date
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from imblearn.under_sampling import RandomUnderSampler
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 
 try:
@@ -76,6 +75,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     date_format: str, optional (default=None)
         Format for date column with string type. For example: %Y-%m-%d
+
+    scoring: string, callable or None, optional, default: None
+        A string or a scorer callable object / function with signature scorer(estimator, X, y).
+        If None, the estimator's score method is used.
     """
 
     TARGET_NAME = "target"
@@ -100,13 +103,15 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
-        random_state: int = 42
+        random_state: int = 42,
+        scoring: Union[str, Callable, None] = None
     ):
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
         self.search_keys = search_keys
         self.keep_input = keep_input
         self.model_task_type = model_task_type
+        self.scoring = scoring
         if importance_threshold is not None:
             try:
                 self.importance_threshold = float(importance_threshold)
@@ -558,9 +563,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             runtime_parameters=self.runtime_parameters,
         )
 
+        # TODO FIX
+        enriched_x = X
+
+        self.__calculate_metrics(X, enriched_x, y)
+
         self.__show_metrics()
 
         self.__prepare_feature_importances(list(X.columns))
+
+        self.__show_selected_features()
 
         return (dataset.sampled, df_without_eval_set)
 
@@ -608,45 +620,34 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         print(f"Detected task type: {task}")
         return task
 
-    def __imbalance_check(self, df: pd.DataFrame) -> Tuple[bool, pd.DataFrame]:
-        count = len(df)
-        min_class_count = count
-        min_class_value = None
-        target = df[self.TARGET_NAME]
-        target_classes_count = target.nunique()
-        unique_target = target.unique()
-        for v in unique_target:
-            current_class_count = len(df.loc[target == v])
-            if current_class_count < min_class_count:
-                min_class_count = current_class_count
-                min_class_value = v
+    def __calculate_metrics(self, X: pd.DataFrame, enriched_X: pd.DataFrame, y):
+        fitting_X = X.drop(columns=self.search_keys.keys())
+        fitting_enriched_X = enriched_X.drop(columns=self.search_keys.keys())
 
-        min_class_percent = 2 / (5 * target_classes_count)
-        min_class_threshold = min_class_percent * count
+        from upgini.metrics import calculate_cv_metric
 
-        if min_class_count < min_class_threshold:
-            logging.info(
-                f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
-                "The minimum number of observations for each class in your train dataset must be "
-                f"grater than or equal to {min_class_threshold} ({min_class_percent * 100} %). "
-                "It will be undersampled"
-            )
+        # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
+        # and calculate baseline metric
+        etalon_metric = None
+        if fitting_X.shape[1] > 0:
+            etalon_metric = calculate_cv_metric(fitting_X, y, self.scoring)
 
-            if is_string_dtype(target):
-                target_replacement = {v: i for i, v in enumerate(unique_target)}
-                prepared_target = target.replace(target_replacement)
-            else:
-                prepared_target = target
+        # 2 If eval_set is presented - fit final model on train etalon features data and score each validation dataset
+        # and calculate baseline metric
+        # TODO
 
-            sampler = RandomUnderSampler(random_state=self.random_state)
-            X = df[SYSTEM_RECORD_ID]
-            X = X.to_frame()
-            new_x, _ = sampler.fit_resample(X, prepared_target)  # type: ignore
-            resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
-            logging.info(f"Shape after resampling: {resampled_data.shape}")
-            return (True, resampled_data)
-        else:
-            return (False, df)
+        # 3 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+        enriched_metric = calculate_cv_metric(fitting_enriched_X, y, self.scoring)
+
+        uplift = None
+        if etalon_metric is not None:
+            uplift = enriched_metric - etalon_metric
+
+        # 4 If eval_set is presented - fit final model on train enriched data and score each validation dataset
+        # and calculate final metric (and uplift)
+        # TODO
+
+        return enriched_metric, uplift
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:
@@ -728,7 +729,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if metrics is not None:
             print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
             try:
-                from IPython.display import display  # type: ignore
+                from IPython.display import display
 
                 display(metrics)
             except ImportError:
@@ -739,6 +740,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     "\nFollowing features was used for accuracy uplift estimation:",
                     ", ".join(self.passed_features),
                 )
+
+    def __show_selected_features(self):
+        print(Format.GREEN + Format.BOLD + "\nSelected features" + Format.END)
+        try:
+            from IPython.display import display
+            display(self.features_info)
+        except ImportError:
+            print(self.features_info)
 
     def __is_uplift_present_in_metrics(self):
         uplift_presented = False
