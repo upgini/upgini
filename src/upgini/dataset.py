@@ -705,7 +705,7 @@ class Dataset(pd.DataFrame):
 
             self.__resample()
 
-        self.__validate_rows_count()
+            self.__validate_rows_count()
 
     # def calculate_metrics(self) -> FileMetrics:
     #     """Calculate initial metadata for DataSet
