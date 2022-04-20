@@ -27,6 +27,7 @@ from upgini.metadata import (
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
+    CVType,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -76,6 +77,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     date_format: str, optional (default=None)
         Format for date column with string type. For example: %Y-%m-%d
+
+    cv: CVType, optional (default=None)
+        Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
     """
 
     TARGET_NAME = "target"
@@ -100,6 +104,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
+        cv: Optional[CVType] = None,
         random_state: int = 42
     ):
         init_logging(endpoint, api_key)
@@ -141,6 +146,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
         self.random_state = random_state
+        self.cv = cv
+        if cv is not None:
+            if self.runtime_parameters is None:
+                self.runtime_parameters = RuntimeParameters()
+            if self.runtime_parameters.properties is None:
+                self.runtime_parameters.properties = {}
+            self.runtime_parameters.properties["cv_type"] = cv.name
 
     def fit(
         self,
