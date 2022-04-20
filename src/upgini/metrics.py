@@ -59,5 +59,7 @@ def get_estimator(y):
 
 def get_cat_features(X: pd.DataFrame) -> Tuple[List[int], List[str]]:
     zipped = [(i, c) for i, c in enumerate(X.columns) if not is_numeric_dtype(X[c])]
+    if len(zipped) == 0:
+        return ([], [])
     unzipped = list(zip(*zipped))
     return list(unzipped[0]), list(unzipped[1])
