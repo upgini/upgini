@@ -77,6 +77,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     date_format: str, optional (default=None)
         Format for date column with string type. For example: %Y-%m-%d
+
+    cv: CVType, optional (default=None)
+        Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
     """
 
     TARGET_NAME = "target"
