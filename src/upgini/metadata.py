@@ -149,3 +149,9 @@ class SearchCustomization(BaseModel):
             f"return scores: {self.returnScores}, "
             f"runtimeParameters: {self.runtimeParameters}"
         )
+
+
+class CVType(Enum):
+    k_fold = "k_fold"
+    time_series = "time_series"
+    blocked_time_series = "blocked_time_series"

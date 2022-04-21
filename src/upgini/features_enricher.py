@@ -23,6 +23,7 @@ from yaspin.spinners import Spinners
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
+    CVType,
     EVAL_SET_INDEX,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
@@ -80,6 +81,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     scoring: string, callable or None, optional, default: None
         A string or a scorer callable object / function with signature scorer(estimator, X, y).
         If None, the estimator's score method is used.
+
+    cv: CVType, optional (default=None)
+        Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
     """
 
     TARGET_NAME = "target"
@@ -108,6 +112,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         date_format: Optional[str] = None,
         random_state: int = 42,
         scoring: Union[str, Callable, None] = None,
+        cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
@@ -149,6 +154,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
         self.random_state = random_state
+        self.cv = cv
+        if cv is not None:
+            if self.runtime_parameters is None:
+                self.runtime_parameters = RuntimeParameters()
+            if self.runtime_parameters.properties is None:
+                self.runtime_parameters.properties = {}
+            self.runtime_parameters.properties["cv_type"] = cv.name
 
     def fit(
         self,
