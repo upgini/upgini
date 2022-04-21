@@ -92,6 +92,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     max_features: Optional[int]
     features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
     enriched_X: Optional[pd.DataFrame] = None
+    enriched_eval_set: Optional[pd.DataFrame] = None
 
     def __init__(
         self,
@@ -238,7 +239,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         print("Executing transform step")
         with yaspin(Spinners.material) as sp:
-            result = self.__enrich(df, self._search_task.get_all_initial_raw_features(), X.index, self.keep_input)
+            result, _ = self.__enrich(df, self._search_task.get_all_initial_raw_features(), X.index, self.keep_input)
 
             sp.ok("Done                         ")
             return result
@@ -310,7 +311,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         print("Executing transform step")
         with yaspin(Spinners.material) as sp:
-            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
+            result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
 
             sp.ok("Done                         ")
             return result
@@ -514,7 +515,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__show_selected_features()
 
-        self.enriched_X = self.__enrich(df, self._search_task.get_all_initial_raw_features(), X.index, True)
+        self.enriched_X, self.enriched_eval_set = self.__enrich(
+            df, self._search_task.get_all_initial_raw_features(), X.index, True
+        )
 
         return (dataset.sampled, df_without_eval_set)
 
@@ -563,7 +566,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         return task
 
     def calculate_metrics(self, X: pd.DataFrame, y, scoring: Union[str, Callable, None] = None):
-        if self.enriched_X is None or self._search_task is None or self._search_task.initial_max_hit_rate() is None:
+        if (
+            (self.enriched_X is None)
+            or (self._search_task is None)
+            or (self._search_task.initial_max_hit_rate() is None)
+        ):
             raise Exception("Fit wasn't completed successfully")
         if scoring is None:
             scoring = self.scoring
@@ -599,7 +606,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         return pd.DataFrame(
             [
                 {
-                    "match_rate": self._search_task.initial_max_hit_rate()["value"],
+                    "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
                     f"baseline {metric}": self.etalon_metric,
                     f"enriched {metric}": self.enriched_metric,
                     "uplift": self.uplift,
@@ -613,7 +620,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         result_features: Optional[pd.DataFrame],
         original_index: pd.Index,
         keep_input: bool,
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         if result_features is None:
             logging.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError("Search engine crashed on this request.")
@@ -635,13 +642,25 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 df[SYSTEM_RECORD_ID], result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
             )
 
-        result.index = original_index
-        if SYSTEM_RECORD_ID in result.columns:
-            result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+        if EVAL_SET_INDEX in result.columns:
+            result_train = result[result[EVAL_SET_INDEX] == 0]
+            result_eval_set = result[result[EVAL_SET_INDEX] != 0]
+            result_train.drop(columns=EVAL_SET_INDEX, inplace=True)
+        else:
+            result_train = result
+            result_eval_set = None
 
-        return result
+        result_train.index = original_index
+        if SYSTEM_RECORD_ID in result.columns:
+            result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if result_eval_set is not None:
+                result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+        if SYSTEM_FAKE_DATE in result.columns:
+            result_train.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+            if result_eval_set is not None:
+                result_eval_set.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+        return result_train, result_eval_set
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:

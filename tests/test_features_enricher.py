@@ -158,15 +158,17 @@ def test_features_enricher(requests_mock):
 
     assert metrics is not None and metrics.equals(expected_metrics)
 
+    print(enricher.features_info)
+
     assert enricher.feature_names_ == ["feature"]
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature_name"] == "SystemRecordId_473310000"
-    assert first_feature_info["shap_value"] == 1.0
+    assert first_feature_info["feature_name"] == "feature"
+    assert first_feature_info["shap_value"] == 10.1
     second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature_name"] == "feature"
-    assert second_feature_info["shap_value"] == 10.1
+    assert second_feature_info["feature_name"] == "SystemRecordId_473310000"
+    assert second_feature_info["shap_value"] == 1.0
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
