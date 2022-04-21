@@ -21,7 +21,7 @@ class BlockedTimeSeriesSplit(BaseCrossValidator):
         of groups to include in the test split
     """
 
-    def __init__(self, n_splits=5, test_size=0.2):
+    def __init__(self, n_splits: int = 5, test_size=0.2):
         if not isinstance(n_splits, numbers.Integral):
             raise ValueError(
                 "The number of folds must be of Integral type. "

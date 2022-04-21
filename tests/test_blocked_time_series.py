@@ -52,16 +52,13 @@ def test_bts_exceptions():
     with pytest.raises(
         ValueError, match=r"The number of folds must be of Integral type. .* of type <class 'float'> was passed."
     ):
-        cv_err = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)
-        _ = cross_val_score(model, X, y, cv=cv_err)
+        _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)
 
     with pytest.raises(
         ValueError,
         match=r"Cross-validation requires at least one train/test split by setting n_splits=2 or more, got n_splits=.*",
     ):
-        cv_err = BlockedTimeSeriesSplit(n_splits=0, test_size=0.2)
-        _ = cross_val_score(model, X, y, cv=cv_err)
+        _ = BlockedTimeSeriesSplit(n_splits=0, test_size=0.2)
 
     with pytest.raises(ValueError, match=r"test_size=.* should be a float in the .* range"):
-        cv_err = BlockedTimeSeriesSplit(n_splits=5, test_size=2)
-        _ = cross_val_score(model, X, y, cv=cv_err)
+        _ = BlockedTimeSeriesSplit(n_splits=5, test_size=2)
