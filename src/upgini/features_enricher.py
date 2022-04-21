@@ -1,8 +1,7 @@
 import logging
 from datetime import date
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from imblearn.under_sampling import RandomUnderSampler
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 
 try:
@@ -24,15 +23,16 @@ from yaspin.spinners import Spinners
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
+    CVType,
+    EVAL_SET_INDEX,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
-    EVAL_SET_INDEX,
-    CVType,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
     SearchKey,
 )
+from upgini.metrics import calculate_cv_score, calculate_metric
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
 
@@ -78,6 +78,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     date_format: str, optional (default=None)
         Format for date column with string type. For example: %Y-%m-%d
 
+    scoring: string, callable or None, optional, default: None
+        A string or a scorer callable object / function with signature scorer(estimator, X, y).
+        If None, the estimator's score method is used.
+
     cv: CVType, optional (default=None)
         Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
     """
@@ -91,6 +95,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     importance_threshold: Optional[float]
     max_features: Optional[int]
     features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+    enriched_X: Optional[pd.DataFrame] = None
+    enriched_eval_set: Optional[pd.DataFrame] = None
 
     def __init__(
         self,
@@ -104,14 +110,16 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
+        random_state: int = 42,
+        scoring: Union[str, Callable, None] = None,
         cv: Optional[CVType] = None,
-        random_state: int = 42
     ):
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
         self.search_keys = search_keys
         self.keep_input = keep_input
         self.model_task_type = model_task_type
+        self.scoring = scoring
         if importance_threshold is not None:
             try:
                 self.importance_threshold = float(importance_threshold)
@@ -181,7 +189,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         """
         logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            self.__inner_fit(X, y, eval_set, False, **fit_params)
+            self.__inner_fit(X, y, eval_set, True, **fit_params)
         except Exception as e:
             logging.exception("Failed inner fit")
             raise e
@@ -236,8 +244,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 logging.exception("Failed to transform")
                 raise e
 
-        etalon_columns = list(X.columns) + [self.TARGET_NAME]
-
         if self._search_task is None:
             msg = "Fit wasn't completed successfully."
             logging.error(msg)
@@ -245,34 +251,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         print("Executing transform step")
         with yaspin(Spinners.material) as sp:
-            result_features = self._search_task.get_all_initial_raw_features()
-
-            if result_features is None:
-                logging.error(f"result features not found by search_task_id: {self._search_task.search_task_id}")
-                raise RuntimeError("Search engine crashed on this request.")
-
-            sorted_result_columns = [
-                name for name in self.__filtered_importance_names() if name in result_features.columns
-            ]
-            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
-
-            if self.keep_input:
-                result = pd.merge(
-                    df.drop(columns=self.TARGET_NAME),
-                    result_features,
-                    left_on=SYSTEM_RECORD_ID,
-                    right_on=SYSTEM_RECORD_ID,
-                    how="left",
-                )
-            else:
-                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-                result.drop(columns=etalon_columns, inplace=True)
-
-            result.index = X.index
-            if SYSTEM_RECORD_ID in result.columns:
-                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-            if SYSTEM_FAKE_DATE in result.columns:
-                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+            result, _ = self.__enrich(df, self._search_task.get_all_initial_raw_features(), X.index, self.keep_input)
 
             sp.ok("Done                         ")
             return result
@@ -331,10 +310,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         dataset = Dataset(
             "sample_" + str(uuid.uuid4()),
-            df=df_without_features,
-            endpoint=self.endpoint,
-            api_key=self.api_key,
-            date_format=self.date_format,
+            df=df_without_features,  # type: ignore
+            endpoint=self.endpoint,  # type: ignore
+            api_key=self.api_key,  # type: ignore
+            date_format=self.date_format,  # type: ignore
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
@@ -342,38 +321,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             dataset, extract_features=True, runtime_parameters=self.runtime_parameters, silent_mode=silent_mode
         )
 
-        etalon_columns = list(self.search_keys.keys())
-
         print("Executing transform step")
         with yaspin(Spinners.material) as sp:
-            result_features = validation_task.get_all_validation_raw_features()
-
-            if result_features is None:
-                logging.error(f"result features not found by search_task_id: {self._search_task.search_task_id}")
-                raise RuntimeError("Search engine crashed on this request.")
-
-            sorted_result_columns = [
-                name for name in self.__filtered_importance_names() if name in result_features.columns
-            ]
-            result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
-
-            if not self.keep_input:
-                result = pd.merge(
-                    df_without_features,
-                    result_features,
-                    left_on=SYSTEM_RECORD_ID,
-                    right_on=SYSTEM_RECORD_ID,
-                    how="left",
-                )
-                result.drop(columns=etalon_columns, inplace=True)
-            else:
-                result = pd.merge(df, result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left")
-
-            result.index = X.index
-            if SYSTEM_RECORD_ID in result.columns:
-                result.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-            if SYSTEM_FAKE_DATE in result.columns:
-                result.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+            result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
 
             sp.ok("Done                         ")
             return result
@@ -475,6 +425,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         extract_features: bool = False,
         **fit_params,
     ) -> Tuple[bool, pd.DataFrame]:
+        self.enriched_X = None
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
@@ -549,12 +500,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
-            df=df,
-            model_task_type=model_task_type,
-            endpoint=self.endpoint,
-            api_key=self.api_key,
-            date_format=self.date_format,
-            random_state=self.random_state
+            df=df,  # type: ignore
+            model_task_type=model_task_type,  # type: ignore
+            endpoint=self.endpoint,  # type: ignore
+            api_key=self.api_key,  # type: ignore
+            date_format=self.date_format,  # type: ignore
+            random_state=self.random_state,  # type: ignore
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = search_keys
@@ -573,6 +524,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         self.__show_metrics()
 
         self.__prepare_feature_importances(list(X.columns))
+
+        self.__show_selected_features()
+
+        self.enriched_X, self.enriched_eval_set = self.__enrich(
+            df, self._search_task.get_all_initial_raw_features(), X.index, True
+        )
 
         return (dataset.sampled, df_without_eval_set)
 
@@ -620,45 +577,102 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         print(f"Detected task type: {task}")
         return task
 
-    def __imbalance_check(self, df: pd.DataFrame) -> Tuple[bool, pd.DataFrame]:
-        count = len(df)
-        min_class_count = count
-        min_class_value = None
-        target = df[self.TARGET_NAME]
-        target_classes_count = target.nunique()
-        unique_target = target.unique()
-        for v in unique_target:
-            current_class_count = len(df.loc[target == v])
-            if current_class_count < min_class_count:
-                min_class_count = current_class_count
-                min_class_value = v
+    def calculate_metrics(self, X: pd.DataFrame, y, scoring: Union[str, Callable, None] = None):
+        if (
+            (self.enriched_X is None)
+            or (self._search_task is None)
+            or (self._search_task.initial_max_hit_rate() is None)
+        ):
+            raise Exception("Fit wasn't completed successfully")
+        if scoring is None:
+            scoring = self.scoring
 
-        min_class_percent = 2 / (5 * target_classes_count)
-        min_class_threshold = min_class_percent * count
+        fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
+        fitting_enriched_X = self.enriched_X.drop(
+            columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
+        )
 
-        if min_class_count < min_class_threshold:
-            logging.info(
-                f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
-                "The minimum number of observations for each class in your train dataset must be "
-                f"grater than or equal to {min_class_threshold} ({min_class_percent * 100} %). "
-                "It will be undersampled"
+        # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
+        # and calculate baseline metric
+        self.etalon_metric = None
+        if fitting_X.shape[1] > 0:
+            self.etalon_scores = calculate_cv_score(fitting_X, y)
+            self.etalon_metric, metric = calculate_metric(y, self.etalon_scores, scoring)
+
+        # 2 If eval_set is presented - fit final model on train etalon features data and score each validation dataset
+        # and calculate baseline metric
+        # TODO
+
+        # 3 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+        self.enriched_scores = calculate_cv_score(fitting_enriched_X, y)
+        self.enriched_metric, metric = calculate_metric(y, self.enriched_scores, scoring)
+
+        self.uplift = None
+        if self.etalon_metric is not None:
+            self.uplift = self.enriched_metric - self.etalon_metric
+
+        # 4 If eval_set is presented - fit final model on train enriched data and score each validation dataset
+        # and calculate final metric (and uplift)
+        # TODO
+
+        return pd.DataFrame(
+            [
+                {
+                    "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
+                    f"baseline {metric}": self.etalon_metric,
+                    f"enriched {metric}": self.enriched_metric,
+                    "uplift": self.uplift,
+                }
+            ]
+        )
+
+    def __enrich(
+        self,
+        df: pd.DataFrame,
+        result_features: Optional[pd.DataFrame],
+        original_index: pd.Index,
+        keep_input: bool,
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        if result_features is None:
+            logging.error(f"result features not found by search_task_id: {self.get_search_id()}")
+            raise RuntimeError("Search engine crashed on this request.")
+
+        sorted_result_columns = [name for name in self.__filtered_importance_names() if name in result_features.columns]
+        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
+
+        if keep_input:
+            df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
+            result = pd.merge(
+                df_without_target,
+                result_features,
+                left_on=SYSTEM_RECORD_ID,
+                right_on=SYSTEM_RECORD_ID,
+                how="left",
+            )
+        else:
+            result = pd.merge(
+                df[SYSTEM_RECORD_ID], result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
             )
 
-            if is_string_dtype(target):
-                target_replacement = {v: i for i, v in enumerate(unique_target)}
-                prepared_target = target.replace(target_replacement)
-            else:
-                prepared_target = target
-
-            sampler = RandomUnderSampler(random_state=self.random_state)
-            X = df[SYSTEM_RECORD_ID]
-            X = X.to_frame()
-            new_x, _ = sampler.fit_resample(X, prepared_target)  # type: ignore
-            resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
-            logging.info(f"Shape after resampling: {resampled_data.shape}")
-            return (True, resampled_data)
+        if EVAL_SET_INDEX in result.columns:
+            result_train = result[result[EVAL_SET_INDEX] == 0]
+            result_eval_set = result[result[EVAL_SET_INDEX] != 0]
+            result_train.drop(columns=EVAL_SET_INDEX, inplace=True)
         else:
-            return (False, df)
+            result_train = result
+            result_eval_set = None
+
+        result_train.index = original_index
+        if SYSTEM_RECORD_ID in result.columns:
+            result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            if result_eval_set is not None:
+                result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+        if SYSTEM_FAKE_DATE in result.columns:
+            result_train.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+            if result_eval_set is not None:
+                result_eval_set.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+
+        return result_train, result_eval_set
 
     def __prepare_feature_importances(self, x_columns: List[str]):
         if self._search_task is None:
@@ -676,13 +690,19 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         service_columns = [SYSTEM_RECORD_ID, EVAL_SET_INDEX, self.TARGET_NAME]
 
+        importances.sort(key=lambda m: -m["shap_value"])
+        for feature_metadata in importances:
+            self.feature_names_.append(feature_metadata["feature_name"])
+            self.feature_importances_.append(feature_metadata["shap_value"])
+            features_info.append(feature_metadata)
+            importances.remove(feature_metadata)
+
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):
                 continue
             feature_metadata = feature_metadata_by_name(x_column)
             if feature_metadata:
                 features_info.append(feature_metadata)
-                importances.remove(feature_metadata)
             else:
                 features_info.append(
                     {
@@ -691,12 +711,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                         "match_percent": 100.0,  # TODO fill from X
                     }
                 )
-
-        importances.sort(key=lambda m: -m["shap_value"])
-        for feature_metadata in importances:
-            self.feature_names_.append(feature_metadata["feature_name"])
-            self.feature_importances_.append(feature_metadata["shap_value"])
-            features_info.append(feature_metadata)
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
@@ -740,7 +754,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if metrics is not None:
             print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
             try:
-                from IPython.display import display  # type: ignore
+                from IPython.display import display
 
                 display(metrics)
             except ImportError:
@@ -751,6 +765,17 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     "\nFollowing features was used for accuracy uplift estimation:",
                     ", ".join(self.passed_features),
                 )
+
+    def __show_selected_features(self):
+        print(
+            Format.GREEN + Format.BOLD + f"\nWe found {len(self.feature_names_)} useful features for you" + Format.END
+        )
+        try:
+            from IPython.display import display
+
+            display(self.features_info)
+        except ImportError:
+            print(self.features_info)
 
     def __is_uplift_present_in_metrics(self):
         uplift_presented = False
