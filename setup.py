@@ -19,7 +19,7 @@ from setuptools import find_packages, setup
 here = Path(__file__).parent.resolve()
 setup(
     name="upgini",
-    version="0.10.0a80",
+    version="0.10.0a81",
     description="Features search library for supervised machine learning on tabular data",
     long_description=(here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
@@ -59,6 +59,7 @@ setup(
         "fastparquet>=0.7.1",
         "yaspin>=2.1.0",
         "python-json-logger>=2.0.2",
+        "catboost>=1.0.3"
     ],
     project_urls={
         "Bug Reports": "https://github.com/upgini/upgini/issues",

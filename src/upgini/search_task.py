@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 import time
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -401,8 +402,12 @@ class SearchTask:
 
     def get_all_initial_raw_features(self) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
+        return self._get_all_initial_raw_features(self.search_task_id)
+
+    @lru_cache()
+    def _get_all_initial_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
         time.sleep(1)
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(self.search_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
             if feature_block["searchType"] == "INITIAL":
@@ -642,8 +647,12 @@ class SearchTask:
 
     def get_all_validation_raw_features(self) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
+        return self._get_all_validation_raw_features(self.search_task_id)
+
+    @lru_cache()
+    def _get_all_validation_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
         time.sleep(1)
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(self.search_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
             if feature_block["searchType"] == "VALIDATION":
@@ -676,7 +685,7 @@ class SearchTask:
                         "feature_name": get_original_column_name(feature["name"]),
                         "shap_value": feature["importance"],
                         "match_percent": feature["matchedInPercent"],
-                        # "type": feature["valueType"] if "valueType" in feature else None,
+                        "type": feature["valueType"] if "valueType" in feature else None,
                     }
                     features.append(feature_meta)
         return features
