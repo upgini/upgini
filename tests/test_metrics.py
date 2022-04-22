@@ -25,7 +25,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
-    ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id, hit_rate=99.0)
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_features_meta(
         requests_mock,

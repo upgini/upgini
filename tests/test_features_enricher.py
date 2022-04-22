@@ -5,10 +5,17 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
+
 from .utils import (
     mock_default_requests,
+    mock_get_features_meta,
+    mock_get_metadata,
     mock_initial_search,
-    mock_initial_summary
+    mock_initial_summary,
+    mock_raw_features,
+    mock_validation_raw_features,
+    mock_validation_search,
+    mock_validation_summary,
 )
 
 
@@ -21,62 +28,27 @@ def test_features_enricher(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
-    mock_initial_summary(requests_mock, url, search_task_id)
-
-    requests_mock.get(
-        url + "/public/api/v2/search/321/metadata",
-        json={
-            "fileUploadId": "123",
-            "fileMetadataId": "123",
-            "name": "test",
-            "description": "",
-            "columns": [
-                {
-                    "index": 0,
-                    "name": "systemrecordid_473310000",
-                    "originalName": "SystemRecordId_473310000",
-                    "dataType": "STRING",
-                    "meaningType": "FEATURE",
-                },
-                {
-                    "index": 1,
-                    "name": "phone_num",
-                    "originalName": "phone_num",
-                    "dataType": "STRING",
-                    "meaningType": "MSISDN",
-                },
-                {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
-                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
-                {
-                    "index": 4,
-                    "name": "system_record_id",
-                    "originalName": "system_record_id",
-                    "dataType": "INT",
-                    "meaningType": "SYSTEM_RECORD_ID",
-                },
-            ],
-            "searchKeys": [["phone_num"], ["rep_date"], ["phone_num", "rep_date"]],
-            "hierarchicalGroupKeys": [],
-            "hierarchicalSubgroupKeys": [],
-            "rowsCount": 15555,
-        },
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
     )
-    requests_mock.get(
-        url + "/public/api/v2/search/features/432",
-        json={
-            "providerFeatures": [
-                {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
-            ],
-            "etalonFeatures": [{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-        },
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
     )
-    requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/321",
-        json={"adsSearchTaskFeaturesDTO": [{"searchType": "INITIAL", "adsSearchTaskFeaturesId": "333"}]},
-    )
-    with open(path_to_mock_features, "rb") as f:
-        buffer = f.read()
-        requests_mock.get(url + "/public/api/v2/search/rawfeatures/333/file", content=buffer)
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -134,109 +106,28 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     )
 
     mock_default_requests(requests_mock, url)
-
-    requests_mock.post(
-        url + "/public/api/v2/search/initial",
-        json={
-            "fileUploadId": "123",
-            "searchTaskId": "initialSearchTaskId",
-            "searchType": "INITIAL",
-            "status": "SUBMITTED",
-            "extractFeatures": "true",
-            "returnScores": "false",
-            "createdAt": 1633302145414,
-        },
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
     )
-    requests_mock.get(
-        url + "/public/api/v2/search/initialSearchTaskId",
-        json={
-            "fileUploadTaskId": "123",
-            "searchTaskId": "initialSearchTaskId",
-            "searchTaskStatus": "COMPLETED",
-            "featuresFoundCount": 1,
-            "providersCheckedCount": 1,
-            "importantProvidersCount": 1,
-            "importantFeaturesCount": 1,
-            "importantProviders": [
-                {
-                    "adsSearchTaskId": "432",
-                    "searchTaskId": "initialSearchTaskId",
-                    "searchType": "INITIAL",
-                    "taskStatus": "COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {
-                        "metrics": [
-                            {"code": "HIT_RATE", "value": 99.9},
-                            {"code": "AUC", "value": 0.66},
-                            {"code": "UPLIFT", "value": 0.1},
-                        ]
-                    },
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": [
-                        {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-                        {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-                    ],
-                }
-            ],
-            "validationImportantProviders": [],
-            "createdAt": 1633302145414,
-        },
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
     )
-    requests_mock.get(
-        url + "/public/api/v2/search/initialSearchTaskId/metadata",
-        json={
-            "fileUploadId": "123",
-            "fileMetadataId": "123",
-            "name": "test",
-            "description": "",
-            "columns": [
-                {
-                    "index": 0,
-                    "name": "systemrecordid_473310000",
-                    "originalName": "SystemRecordId_473310000",
-                    "dataType": "STRING",
-                    "meaningType": "FEATURE",
-                },
-                {
-                    "index": 1,
-                    "name": "phone_num",
-                    "originalName": "phone_num",
-                    "dataType": "STRING",
-                    "meaningType": "MSISDN",
-                },
-                {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
-                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
-                {
-                    "index": 4,
-                    "name": "system_record_id",
-                    "originalName": "system_record_id",
-                    "dataType": "INT",
-                    "meaningType": "SYSTEM_RECORD_ID",
-                },
-            ],
-            "searchKeys": [["phone_num"], ["rep_date"], ["phone_num", "rep_date"]],
-            "hierarchicalGroupKeys": [],
-            "hierarchicalSubgroupKeys": [],
-            "rowsCount": 15555,
-        },
-    )
-    requests_mock.get(
-        url + "/public/api/v2/search/features/432",
-        json={
-            "providerFeatures": [
-                {"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"},
-            ],
-            "etalonFeatures": [{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-        },
-    )
-    requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/initialSearchTaskId",
-        json={"adsSearchTaskFeaturesDTO": [{"searchType": "INITIAL", "adsSearchTaskFeaturesId": "333"}]},
-    )
-    with open(path_to_mock_features, "rb") as f:
-        buffer = f.read()
-        requests_mock.get(url + "/public/api/v2/search/rawfeatures/333/file", content=buffer)
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -264,7 +155,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     )
 
     fit_req = None
-    initial_search_url = "http://fake_url2/public/api/v2/search/initial"
+    initial_search_url = url + "/public/api/v2/search/initial"
     for elem in requests_mock.request_history:
         if elem.url == initial_search_url:
             fit_req = elem
@@ -276,86 +167,27 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(fit_req.body)
     assert "runtimeValue1" in str(fit_req.body)
 
-    requests_mock.post(
-        url + "/public/api/v2/search/validation?initialSearchTaskId=initialSearchTaskId",
-        json={
-            "fileUploadId": "validation_fileUploadId",
-            "searchTaskId": "validation_searchTaskId",
-            "searchType": "VALIDATION",
-            "status": "SUBMITTED",
-            "extractFeatures": "true",
-            "returnScores": "false",
-            "createdAt": 1633302145414,
-        },
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
     )
-
-    requests_mock.get(
-        url + "/public/api/v2/search/initialSearchTaskId",
-        json={
-            "fileUploadTaskId": "validation_fileUploadTaskId",
-            "searchTaskId": "validation_searchTaskId",
-            "searchTaskStatus": "COMPLETED",
-            "featuresFoundCount": 1,
-            "providersCheckedCount": 1,
-            "importantProvidersCount": 1,
-            "importantFeaturesCount": 1,
-            "importantProviders": [
-                {
-                    "adsSearchTaskId": "adsSearchTaskId_initial",
-                    "searchTaskId": "321",
-                    "searchType": "INITIAL",
-                    "taskStatus": "COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {
-                        "metrics": [
-                            {"code": "HIT_RATE", "value": 99.9},
-                            {"code": "AUC", "value": 0.66},
-                            {"code": "UPLIFT", "value": 0.1},
-                        ]
-                    },
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": [
-                        {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-                        {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-                    ],
-                }
-            ],
-            "validationImportantProviders": [
-                {
-                    "adsSearchTaskId": "adsSearchTaskIdЗ_validation",
-                    "searchTaskId": "validation_searchTaskId",
-                    "searchType": "VALIDATION",
-                    "taskStatus": "VALIDATION_COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {
-                        "metrics": [
-                            {"code": "HIT_RATE", "value": 99.9},
-                            {"code": "AUC", "value": 0.66},
-                            {"code": "UPLIFT", "value": 0.1},
-                        ]
-                    },
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": [
-                        {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-                        {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-                    ],
-                }
-            ],
-            "createdAt": 1633302145414,
-        },
-    )
-
-    requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/validation_searchTaskId",
-        json={"adsSearchTaskFeaturesDTO": [{"searchType": "VALIDATION", "adsSearchTaskFeaturesId": "333"}]},
-    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     transformed = enricher.transform(train_features)
 
     transform_req = None
-    transform_url = "http://fake_url2/public/api/v2/search/validation?initialSearchTaskId=initialSearchTaskId"
+    transform_url = url + "/public/api/v2/search/validation?initialSearchTaskId=" + search_task_id
     for elem in requests_mock.request_history:
         if elem.url == transform_url:
             transform_req = elem

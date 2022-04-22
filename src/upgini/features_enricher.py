@@ -734,8 +734,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         importances.sort(key=lambda m: -m["shap_value"])
         for feature_metadata in importances:
-            self.feature_names_.append(feature_metadata["feature_name"])
-            self.feature_importances_.append(feature_metadata["shap_value"])
+            if feature_metadata["feature_name"] not in x_columns:
+                self.feature_names_.append(feature_metadata["feature_name"])
+                self.feature_importances_.append(feature_metadata["shap_value"])
             features_info.append(feature_metadata)
 
         for x_column in x_columns:
