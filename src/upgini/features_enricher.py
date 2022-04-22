@@ -33,10 +33,9 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.metrics import (
-    calculate_cv_score,
+    calculate_cv_metric,
     calculate_metric,
     fit_model,
-    score_calculate_metric,
 )
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
@@ -607,12 +606,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         # and calculate baseline metric
         etalon_metric = None
         if fitting_X.shape[1] > 0:
-            self.etalon_scores = calculate_cv_score(fitting_X, y)
-            etalon_metric, _ = calculate_metric(y, self.etalon_scores, scoring)
+            etalon_metric, _ = calculate_cv_metric(fitting_X, y, scoring=scoring)
 
         # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        self.enriched_scores = calculate_cv_score(fitting_enriched_X, y)
-        enriched_metric, metric = calculate_metric(y, self.enriched_scores, scoring)
+        enriched_metric, metric = calculate_cv_metric(fitting_enriched_X, y, scoring=scoring)
 
         uplift = None
         if etalon_metric is not None:
@@ -635,8 +632,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             # Fit models
             etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_model, etalon_method = fit_model(fitting_X, y)
-            enriched_model, enriched_method = fit_model(fitting_enriched_X, y)
+                etalon_model = fit_model(fitting_X, y)
+            enriched_model = fit_model(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
                 eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
@@ -650,9 +647,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
                 etalon_eval_metric = None
                 if etalon_model is not None:
-                    etalon_eval_metric = score_calculate_metric(etalon_model, eval_X, eval_y, scoring)
+                    etalon_eval_metric = calculate_metric(etalon_model, eval_X, eval_y, scoring)
 
-                enriched_eval_metric = score_calculate_metric(enriched_model, enriched_eval_X, eval_y, scoring)
+                enriched_eval_metric = calculate_metric(enriched_model, enriched_eval_X, eval_y, scoring)
 
                 eval_uplift = None
                 if etalon_eval_metric is not None:

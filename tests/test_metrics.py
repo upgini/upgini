@@ -61,14 +61,14 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     print(metrics_df)
-    assert metrics_df.loc["train", "baseline roc_auc"] == pytest.approx(0.498607, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["train", "enriched roc_auc"] == pytest.approx(0.499296, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["train", "uplift"] == pytest.approx(0.000688, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["train", "baseline roc_auc"] == pytest.approx(0.504402, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["train", "enriched roc_auc"] == pytest.approx(0.505442, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["train", "uplift"] == pytest.approx(0.001040, abs=0.000001)  # type: ignore
 
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == pytest.approx(0.502164, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == pytest.approx(0.497739, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["eval 1", "uplift"] == pytest.approx(-0.004425, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == pytest.approx(0.473419, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == pytest.approx(0.471094, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 1", "uplift"] == pytest.approx(-0.002325, abs=0.000001)  # type: ignore
 
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == pytest.approx(0.487584, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == pytest.approx(0.495625, abs=0.000001)  # type: ignore
-    assert metrics_df.loc["eval 2", "uplift"] == pytest.approx(0.008042, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == pytest.approx(0.507302, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == pytest.approx(0.508267, abs=0.000001)  # type: ignore
+    assert metrics_df.loc["eval 2", "uplift"] == pytest.approx(0.000965, abs=0.000001)  # type: ignore
