@@ -5,68 +5,24 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
+from .utils import (
+    mock_default_requests,
+    mock_initial_search,
+    mock_initial_summary
+)
 
 
-def test_features_enricher(requests_mock):
+def test_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.csv.gz"
     )
 
-    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
-    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
-    requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_summary(requests_mock, url, search_task_id)
 
-    requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
-    requests_mock.post(
-        url + "/public/api/v2/search/initial",
-        json={
-            "fileUploadId": "123",
-            "searchTaskId": "321",
-            "searchType": "INITIAL",
-            "status": "SUBMITTED",
-            "extractFeatures": "true",
-            "returnScores": "false",
-            "createdAt": 1633302145414,
-        },
-    )
-    requests_mock.get(
-        url + "/public/api/v2/search/321",
-        json={
-            "fileUploadTaskId": "123",
-            "searchTaskId": "321",
-            "searchTaskStatus": "COMPLETED",
-            "featuresFoundCount": 1,
-            "providersCheckedCount": 1,
-            "importantProvidersCount": 1,
-            "importantFeaturesCount": 1,
-            "importantProviders": [
-                {
-                    "adsSearchTaskId": "432",
-                    "searchTaskId": "321",
-                    "searchType": "INITIAL",
-                    "taskStatus": "COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {
-                        "metrics": [
-                            {"code": "HIT_RATE", "value": 99.9},
-                            {"code": "AUC", "value": 0.66},
-                            {"code": "UPLIFT", "value": 0.1},
-                        ]
-                    },
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": [
-                        {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-                        {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-                    ],
-                }
-            ],
-            "validationImportantProviders": [],
-            "createdAt": 1633302145414,
-        },
-    )
     requests_mock.get(
         url + "/public/api/v2/search/321/metadata",
         json={
@@ -177,11 +133,8 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.csv.gz"
     )
 
-    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
-    requests_mock.get("https://api.ipify.org", content="1.1.1.1".encode())
-    requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
+    mock_default_requests(requests_mock, url)
 
-    requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.post(
         url + "/public/api/v2/search/initial",
         json={

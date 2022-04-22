@@ -1,6 +1,6 @@
 import logging
 from datetime import date
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 
@@ -23,16 +23,21 @@ from yaspin.spinners import Spinners
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
-    CVType,
     EVAL_SET_INDEX,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
+    CVType,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import calculate_cv_score, calculate_metric
+from upgini.metrics import (
+    calculate_cv_score,
+    calculate_metric,
+    fit_model,
+    score_calculate_metric,
+)
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
 
@@ -249,12 +254,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             logging.error(msg)
             raise RuntimeError(msg)
 
-        print("Executing transform step")
-        with yaspin(Spinners.material) as sp:
-            result, _ = self.__enrich(df, self._search_task.get_all_initial_raw_features(), X.index, self.keep_input)
+        if self.enriched_X is None:
+            logging.error("Features wasn't downloaded")
+            raise Exception("Internal error")
 
-            sp.ok("Done                         ")
-            return result
+        return self.enriched_X
 
     def transform(self, X: pd.DataFrame, silent_mode: bool = False) -> pd.DataFrame:
         """Transform `X`.
@@ -577,13 +581,20 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         print(f"Detected task type: {task}")
         return task
 
-    def calculate_metrics(self, X: pd.DataFrame, y, scoring: Union[str, Callable, None] = None):
+    def calculate_metrics(
+        self,
+        X: pd.DataFrame,
+        y,
+        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
+        scoring: Union[str, Callable, None] = None,
+    ) -> pd.DataFrame:
         if (
             (self.enriched_X is None)
             or (self._search_task is None)
             or (self._search_task.initial_max_hit_rate() is None)
         ):
             raise Exception("Fit wasn't completed successfully")
+
         if scoring is None:
             scoring = self.scoring
 
@@ -594,37 +605,71 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
         # and calculate baseline metric
-        self.etalon_metric = None
+        etalon_metric = None
         if fitting_X.shape[1] > 0:
             self.etalon_scores = calculate_cv_score(fitting_X, y)
-            self.etalon_metric, metric = calculate_metric(y, self.etalon_scores, scoring)
+            etalon_metric, _ = calculate_metric(y, self.etalon_scores, scoring)
 
-        # 2 If eval_set is presented - fit final model on train etalon features data and score each validation dataset
-        # and calculate baseline metric
-        # TODO
-
-        # 3 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+        # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
         self.enriched_scores = calculate_cv_score(fitting_enriched_X, y)
-        self.enriched_metric, metric = calculate_metric(y, self.enriched_scores, scoring)
+        enriched_metric, metric = calculate_metric(y, self.enriched_scores, scoring)
 
-        self.uplift = None
-        if self.etalon_metric is not None:
-            self.uplift = self.enriched_metric - self.etalon_metric
+        uplift = None
+        if etalon_metric is not None:
+            uplift = enriched_metric - etalon_metric
 
-        # 4 If eval_set is presented - fit final model on train enriched data and score each validation dataset
-        # and calculate final metric (and uplift)
-        # TODO
-
-        return pd.DataFrame(
-            [
-                {
-                    "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
-                    f"baseline {metric}": self.etalon_metric,
-                    f"enriched {metric}": self.enriched_metric,
-                    "uplift": self.uplift,
+        metrics = [
+            {
+                "segment": "train",
+                "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
+                f"baseline {metric}": etalon_metric,
+                f"enriched {metric}": enriched_metric,
+                "uplift": uplift,
                 }
-            ]
-        )
+        ]
+
+        # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
+        # and calculate final metric (and uplift)
+        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+        if eval_set is not None and self.enriched_eval_set is not None:
+            # Fit models
+            etalon_model = None
+            if fitting_X.shape[1] > 0:
+                etalon_model, etalon_method = fit_model(fitting_X, y)
+            enriched_model, enriched_method = fit_model(fitting_enriched_X, y)
+
+            for idx, eval_pair in enumerate(eval_set):
+                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
+                eval_X = eval_pair[0]
+                eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
+                enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
+                enriched_eval_X = enriched_eval_X.drop(
+                    columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
+                )
+                eval_y = eval_pair[1].reset_index(drop=True)
+
+                etalon_eval_metric = None
+                if etalon_model is not None:
+                    etalon_eval_metric = score_calculate_metric(etalon_model, eval_X, eval_y, scoring)
+
+                enriched_eval_metric = score_calculate_metric(enriched_model, enriched_eval_X, eval_y, scoring)
+
+                eval_uplift = None
+                if etalon_eval_metric is not None:
+                    eval_uplift = enriched_eval_metric - etalon_eval_metric
+
+                metrics.append({
+                    "segment": f"eval {idx + 1}",
+                    "match_rate": eval_hit_rate,
+                    f"baseline {metric}": etalon_eval_metric,
+                    f"enriched {metric}": enriched_eval_metric,
+                    "uplift": eval_uplift,
+                })
+
+        metrics_df = pd.DataFrame(metrics)
+        metrics_df.set_index("segment", inplace=True)
+        metrics_df.rename_axis("", inplace=True)
+        return metrics_df
 
     def __enrich(
         self,
@@ -695,15 +740,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self.feature_names_.append(feature_metadata["feature_name"])
             self.feature_importances_.append(feature_metadata["shap_value"])
             features_info.append(feature_metadata)
-            importances.remove(feature_metadata)
 
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):
                 continue
             feature_metadata = feature_metadata_by_name(x_column)
-            if feature_metadata:
-                features_info.append(feature_metadata)
-            else:
+            if feature_metadata is None:
                 features_info.append(
                     {
                         "feature_name": x_column,
@@ -768,7 +810,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     def __show_selected_features(self):
         print(
-            Format.GREEN + Format.BOLD + f"\nWe found {len(self.feature_names_)} useful features for you" + Format.END
+            Format.GREEN + Format.BOLD + f"\nWe found {len(self.feature_names_)} useful feature(s) for you" + Format.END
         )
         try:
             from IPython.display import display
