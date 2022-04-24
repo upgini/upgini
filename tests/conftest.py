@@ -14,8 +14,8 @@ def etalon():
             [2000000, 44444444, 1, None],
             [2000000, 55555555, None, 0.5],
             [2000000, 66666666, None, 0.5],
-            [None,    77777777, 1, 0.5],
-            ["",      88888888, 1, 0.5],
+            [None, 77777777, 1, 0.5],
+            ["", 88888888, 1, 0.5],
             [2000000, 99999999, np.Inf, 0.5],
             [2000000, 11111111, np.NaN, 0.5],
             [None, None, None, None],
@@ -31,7 +31,11 @@ def etalon():
     }
     search_keys = [("msisdn", "timestamp")]
     etalon = Dataset(
-        dataset_name="test_etalon", description="test etalon", df=data, meaning_types=definition, search_keys=search_keys
+        dataset_name="test_etalon",
+        description="test etalon",
+        df=data,
+        meaning_types=definition,
+        search_keys=search_keys,
     )
     return etalon
 
