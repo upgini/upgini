@@ -318,16 +318,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
 
         if not silent_mode:
-            print("Executing transform step")     
+            print("Executing transform step")
             with yaspin(Spinners.material) as sp:
-                result = self.__enrich(
-                   df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input
-                )
+                result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
                 sp.ok("Done                         ")
         else:
-            result = self.__enrich(
-                   df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input
-                )
+            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
 
         return result
 
