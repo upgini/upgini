@@ -29,7 +29,7 @@ def etalon_search_keys():
 def test_binary_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     ds = Dataset(
-        name="test Dataset",
+        dataset_name="test Dataset",
         description="test",
         df=df,
         meaning_types=etalon_definition,
