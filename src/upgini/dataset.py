@@ -49,7 +49,7 @@ class Dataset(pd.DataFrame):
     MIN_TARGET_CLASS_COUNT: int = 100
     MAX_MULTICLASS_CLASS_COUNT: int = 100
 
-    name: str
+    dataset_name: str
     description: Optional[str]
     meaning_types: Optional[Dict[str, FileColumnMeaningType]]
     search_keys: Optional[List[Tuple[str, ...]]]
@@ -66,7 +66,7 @@ class Dataset(pd.DataFrame):
     sampled: bool = False
 
     _metadata = [
-        "name",
+        "dataset_name",
         "description",
         "meaning_types",
         "search_keys",
@@ -87,7 +87,7 @@ class Dataset(pd.DataFrame):
 
     def __init__(
         self,
-        name: str,
+        dataset_name: str,
         description: Optional[str] = None,
         df: Optional[pd.DataFrame] = None,
         path: Optional[str] = None,
@@ -118,7 +118,7 @@ class Dataset(pd.DataFrame):
         else:
             raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
 
-        self.name = name
+        self.dataset_name = dataset_name
         self.task_type = model_task_type
         self.description = description
         self.meaning_types = meaning_types
@@ -867,7 +867,7 @@ class Dataset(pd.DataFrame):
                 columns.append(column_meta)
 
         return FileMetadata(
-            name=self.name,
+            name=self.dataset_name,
             description=self.description,
             columns=columns,
             searchKeys=self.search_keys,
@@ -960,7 +960,9 @@ class Dataset(pd.DataFrame):
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
-                parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
+                parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
+                print("Dataset uploading to backend:")
+                print(self)
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
@@ -1005,7 +1007,7 @@ class Dataset(pd.DataFrame):
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
-                parquet_file_path = f"{tmp_dir}/{self.name}.parquet"
+                parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(

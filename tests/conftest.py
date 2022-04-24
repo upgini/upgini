@@ -31,7 +31,7 @@ def etalon():
     }
     search_keys = [("msisdn", "timestamp")]
     etalon = Dataset(
-        name="test_etalon", description="test etalon", df=data, meaning_types=definition, search_keys=search_keys
+        dataset_name="test_etalon", description="test etalon", df=data, meaning_types=definition, search_keys=search_keys
     )
     return etalon
 
