@@ -8,7 +8,9 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import get_scorer
 from sklearn.model_selection import cross_val_score
-from sklearn.utils.multiclass import type_of_target
+
+from upgini.metadata import ModelTaskType
+from upgini.utils.target_utils import define_task
 
 CATBOOST_PARAMS = {
     "iterations": 200,
@@ -100,12 +102,12 @@ def fit_model(X: pd.DataFrame, y, estimator: Optional[Any]) -> EstimatorWrapper:
 
 def _get_scorer(y, scoring: Union[str, Callable, None]) -> Tuple[Callable, str]:
     if scoring is None:
-        target_type = type_of_target(y)
-        if target_type == "binary":
+        target_type = define_task(y, silent=True)
+        if target_type == ModelTaskType.BINARY:
             metric_name = scoring = "roc_auc"
-        elif target_type == "multiclass":
+        elif target_type == ModelTaskType.MULTICLASS:
             metric_name = scoring = "accuracy"
-        elif target_type == "continuous":
+        elif target_type == ModelTaskType.REGRESSION:
             metric_name = scoring = "neg_root_mean_squared_error"
         else:
             raise Exception(f"Unsupported type of target: {target_type}")
@@ -117,12 +119,12 @@ def _get_scorer(y, scoring: Union[str, Callable, None]) -> Tuple[Callable, str]:
     return get_scorer(scoring), metric_name
 
 
-def get_estimator(estimator, y) -> EstimatorWrapper:
-    target_type = type_of_target(y)
+def get_estimator(estimator, y: pd.Series) -> EstimatorWrapper:
+    target_type = define_task(y, silent=True)
     if estimator is None:
-        if target_type in ["multiclass", "binary"]:
+        if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
             estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS))
-        elif target_type == "continuous":
+        elif target_type == ModelTaskType.REGRESSION:
             estimator = CatBoostWrapper(CatBoostRegressor(**CATBOOST_PARAMS))
         else:
             raise Exception(f"Unsupported type of target: {target_type}")

@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from pandas.api.types import is_numeric_dtype, is_string_dtype
+from pandas.api.types import is_string_dtype
 
 try:
     from sklearn.base import TransformerMixin  # type: ignore
@@ -35,6 +35,7 @@ from upgini.metadata import (
 from upgini.metrics import calculate_cv_metric, fit_model
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
+from upgini.utils.target_utils import define_task
 
 
 class FeaturesEnricher(TransformerMixin):  # type: ignore
@@ -461,7 +462,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
-        model_task_type = self.model_task_type or self.__define_task(df[self.TARGET_NAME])
+        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
 
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
@@ -566,27 +567,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
             search_keys.append((SYSTEM_FAKE_DATE,))
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-    def __define_task(self, y: pd.Series) -> ModelTaskType:
-        logging.info("Defining task")
-        target = y.dropna()
-        if is_numeric_dtype(target):
-            target = target.loc[np.isfinite(target)]
-        else:
-            target = target.loc[target != ""]
-        target_items = target.nunique()
-        target_ratio = target_items / len(target)
-        if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
-            task = ModelTaskType.REGRESSION
-        elif target_items == 2:
-            if is_numeric_dtype(target):
-                task = ModelTaskType.BINARY
-            else:
-                raise ValueError("Binary target should be numerical.")
-        else:
-            task = ModelTaskType.MULTICLASS
-        print(f"Detected task type: {task}")
-        return task
 
     def calculate_metrics(
         self,
