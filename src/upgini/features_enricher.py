@@ -11,9 +11,9 @@ except ImportError:
     TransformerMixin = object
     NotFittedError = Exception
 
-
 import itertools
 import uuid
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -32,11 +32,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import (
-    calculate_cv_metric,
-    calculate_metric,
-    fit_model,
-)
+from upgini.metrics import calculate_cv_metric, fit_model
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
 
@@ -233,33 +229,17 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            sampled, df = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+            result = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
         except Exception as e:
             logging.exception("Failed in inner_fit")
             raise e
 
-        if sampled:
-            logging.info(
-                "Train dataset has size more than fit threshold. Transform will be executed in separate action"
-            )
-            try:
-                return self.transform(X, silent_mode=True)
-            except Exception as e:
-                logging.exception("Failed to transform")
-                raise e
+        if self.keep_input:
+            return result
+        else:
+            return result.drop(columns=[c for c in X.columns if c in result.columns])
 
-        if self._search_task is None:
-            msg = "Fit wasn't completed successfully."
-            logging.error(msg)
-            raise RuntimeError(msg)
-
-        if self.enriched_X is None:
-            logging.error("Features wasn't downloaded")
-            raise Exception("Internal error")
-
-        return self.enriched_X
-
-    def transform(self, X: pd.DataFrame, silent_mode: bool = False) -> pd.DataFrame:
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Transform `X`.
 
         Returns a transformed version of `X`.
@@ -275,8 +255,21 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         X_new : pandas dataframe of shape (n_samples, n_features_new)
             Transformed dataframe, enriched with important features.
         """
-
         logging.info(f"Start transform. X shape: {X.shape}")
+        try:
+            result, _ = self.__inner_transform(X)
+        except Exception as e:
+            logging.exception("Failed to inner transform")
+            raise e
+
+        if self.keep_input:
+            return result
+        else:
+            return result.drop(columns=[c for c in X.columns if c in result.columns])
+
+    def __inner_transform(
+        self, X: pd.DataFrame, silent_mode: bool = False
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         if self._search_task is None:
             msg = "`fit` or `fit_transform` should be called before `transform`."
             logging.error(msg)
@@ -324,12 +317,19 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             dataset, extract_features=True, runtime_parameters=self.runtime_parameters, silent_mode=silent_mode
         )
 
-        print("Executing transform step")
-        with yaspin(Spinners.material) as sp:
-            result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
+        if not silent_mode:
+            print("Executing transform step")     
+            with yaspin(Spinners.material) as sp:
+                result = self.__enrich(
+                   df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input
+                )
+                sp.ok("Done                         ")
+        else:
+            result = self.__enrich(
+                   df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input
+                )
 
-            sp.ok("Done                         ")
-            return result
+        return result
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of fitted enricher. It's present only after fit completed"""
@@ -427,7 +427,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         eval_set: Optional[List[tuple]] = None,
         extract_features: bool = False,
         **fit_params,
-    ) -> Tuple[bool, pd.DataFrame]:
+    ) -> pd.DataFrame:
         self.enriched_X = None
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
@@ -464,8 +464,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-
-        df_without_eval_set: pd.DataFrame = df.copy()  # type: ignore
 
         model_task_type = self.model_task_type or self.__define_task(df[self.TARGET_NAME])
 
@@ -530,11 +528,25 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__show_selected_features()
 
-        self.enriched_X, self.enriched_eval_set = self.__enrich(
-            df, self._search_task.get_all_initial_raw_features(), X.index, True
-        )
+        if dataset.sampled:
+            logging.info(
+                "Train dataset has size more than fit threshold. Transform will be executed in separate action"
+            )
+            try:
+                self.enriched_X, self.enriched_eval_set = self.__inner_transform(X, silent_mode=True)
+            except Exception as e:
+                logging.exception("Failed to transform")
+                raise e
+        else:
+            try:
+                self.enriched_X, self.enriched_eval_set = self.__enrich(
+                    df, self._search_task.get_all_initial_raw_features(), X.index, True
+                )
+            except Exception as e:
+                logging.exception("Failed to download features")
+                raise e
 
-        return (dataset.sampled, df_without_eval_set)
+        return self.enriched_X
 
     def __check_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         for column, meaning_type in meaning_types.items():
@@ -586,6 +598,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         y,
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
         scoring: Union[str, Callable, None] = None,
+        estimator=None,
     ) -> pd.DataFrame:
         if (
             (self.enriched_X is None)
@@ -606,10 +619,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         # and calculate baseline metric
         etalon_metric = None
         if fitting_X.shape[1] > 0:
-            etalon_metric, _ = calculate_cv_metric(fitting_X, y, scoring=scoring)
+            etalon_metric, _ = calculate_cv_metric(fitting_X, y, scoring=scoring, estimator=estimator)
 
         # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        enriched_metric, metric = calculate_cv_metric(fitting_enriched_X, y, scoring=scoring)
+        enriched_metric, metric = calculate_cv_metric(fitting_enriched_X, y, scoring=scoring, estimator=estimator)
 
         uplift = None
         if etalon_metric is not None:
@@ -622,7 +635,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 f"baseline {metric}": etalon_metric,
                 f"enriched {metric}": enriched_metric,
                 "uplift": uplift,
-                }
+            }
         ]
 
         # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
@@ -632,8 +645,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             # Fit models
             etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_model = fit_model(fitting_X, y)
-            enriched_model = fit_model(fitting_enriched_X, y)
+                etalon_model = fit_model(fitting_X, y, deepcopy(estimator))
+            enriched_model = fit_model(fitting_enriched_X, y, deepcopy(estimator))
 
             for idx, eval_pair in enumerate(eval_set):
                 eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
@@ -643,25 +656,28 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 enriched_eval_X = enriched_eval_X.drop(
                     columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
                 )
+                enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
                 eval_y = eval_pair[1].reset_index(drop=True)
 
                 etalon_eval_metric = None
                 if etalon_model is not None:
-                    etalon_eval_metric = calculate_metric(etalon_model, eval_X, eval_y, scoring)
+                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y, scoring)
 
-                enriched_eval_metric = calculate_metric(enriched_model, enriched_eval_X, eval_y, scoring)
+                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y, scoring)
 
                 eval_uplift = None
                 if etalon_eval_metric is not None:
                     eval_uplift = enriched_eval_metric - etalon_eval_metric
 
-                metrics.append({
-                    "segment": f"eval {idx + 1}",
-                    "match_rate": eval_hit_rate,
-                    f"baseline {metric}": etalon_eval_metric,
-                    f"enriched {metric}": enriched_eval_metric,
-                    "uplift": eval_uplift,
-                })
+                metrics.append(
+                    {
+                        "segment": f"eval {idx + 1}",
+                        "match_rate": eval_hit_rate,
+                        f"baseline {metric}": etalon_eval_metric,
+                        f"enriched {metric}": enriched_eval_metric,
+                        "uplift": eval_uplift,
+                    }
+                )
 
         metrics_df = pd.DataFrame(metrics)
         metrics_df.set_index("segment", inplace=True)
@@ -682,19 +698,19 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         sorted_result_columns = [name for name in self.__filtered_importance_names() if name in result_features.columns]
         result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        if keep_input:
-            df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
-            result = pd.merge(
-                df_without_target,
-                result_features,
-                left_on=SYSTEM_RECORD_ID,
-                right_on=SYSTEM_RECORD_ID,
-                how="left",
-            )
-        else:
-            result = pd.merge(
-                df[SYSTEM_RECORD_ID], result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
-            )
+        # if keep_input:
+        df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
+        result = pd.merge(
+            df_without_target,
+            result_features,
+            left_on=SYSTEM_RECORD_ID,
+            right_on=SYSTEM_RECORD_ID,
+            how="left",
+        )
+        # else:
+        #     result = pd.merge(
+        #         df[SYSTEM_RECORD_ID], result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
+        #     )
 
         if EVAL_SET_INDEX in result.columns:
             result_train = result[result[EVAL_SET_INDEX] == 0]

@@ -56,6 +56,7 @@ class SearchTask:
                 "just use your personal api_key from profile.upgini.com"
             )
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
+
         try:
             with yaspin(Spinners.material) as sp:
                 time.sleep(1)
