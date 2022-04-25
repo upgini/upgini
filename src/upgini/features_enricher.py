@@ -572,7 +572,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def calculate_metrics(
         self,
         X: pd.DataFrame,
-        y,
+        y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
         scoring: Union[str, Callable, None] = None,
         estimator=None,
@@ -592,7 +592,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
         )
 
-        model_task_type = self.model_task_type or define_task(y)
+        model_task_type = self.model_task_type or define_task(pd.Series(y))
 
         # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
         # and calculate baseline metric
@@ -640,7 +640,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
                 )
                 enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
-                eval_y = eval_pair[1].reset_index(drop=True)
+                eval_y = eval_pair[1]
 
                 etalon_eval_metric = None
                 if etalon_model is not None:

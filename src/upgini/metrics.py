@@ -101,7 +101,10 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-        cat_features_idx, cat_features = _get_cat_features(X)
+        _, cat_features = _get_cat_features(X)
+        num_features = [col for col in X.columns if col not in cat_features]
+        X[num_features] = X[num_features].fillna(-999)
+        X[cat_features] = X[cat_features].fillna("")
         # TODO use one-hot encoding if cardinality is less 50
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
