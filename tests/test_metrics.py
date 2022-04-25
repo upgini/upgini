@@ -23,6 +23,7 @@ FIXTURE_DIR = os.path.join(
 )
 
 
+@pytest.mark.skip
 def test_default_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -88,6 +89,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005275)
 
 
+@pytest.mark.skip
 def test_catboost_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -154,7 +156,6 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(-0.000579)
 
 
-@pytest.mark.skip
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
