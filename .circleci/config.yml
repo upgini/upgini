@@ -19,6 +19,7 @@ jobs:
       #       # Any branch if there are none on the default branch - this should be unnecessary if you have your default branch configured correctly
       #       - v1-dep-
       - run:
+          no_output_timeout: 60m
           name: Run tox
           command: tox
       - store_test_results:
