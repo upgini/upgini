@@ -1,12 +1,12 @@
 import logging
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import get_scorer
+from sklearn.metrics import make_scorer, roc_auc_score, mean_squared_error, accuracy_score
 from sklearn.model_selection import cross_val_score
 
 from upgini.metadata import ModelTaskType
@@ -50,7 +50,7 @@ class EstimatorWrapper:
         return self.scorer(self.estimator, X, y)
 
     @staticmethod
-    def create(estimator, target_type: ModelTaskType, scoring: Union[str, Callable, None] = None) -> "EstimatorWrapper":
+    def create(estimator, target_type: ModelTaskType, scoring: Optional[Callable] = None) -> "EstimatorWrapper":
         scorer, metric_name = _get_scorer(target_type, scoring)
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
@@ -111,22 +111,18 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         return X, {}
 
 
-def _get_scorer(target_type: ModelTaskType, scoring: Union[str, Callable, None]) -> Tuple[Callable, str]:
+def _get_scorer(target_type: ModelTaskType, scoring: Optional[Callable]) -> Tuple[Callable, str]:
     if scoring is None:
         if target_type == ModelTaskType.BINARY:
-            metric_name = scoring = "roc_auc"
+            scoring = roc_auc_score
         elif target_type == ModelTaskType.MULTICLASS:
-            metric_name = scoring = "accuracy"
+            scoring = accuracy_score
         elif target_type == ModelTaskType.REGRESSION:
-            metric_name = scoring = "neg_root_mean_squared_error"
+            scoring = mean_squared_error
         else:
             raise Exception(f"Unsupported type of target: {target_type}")
-    elif isinstance(scoring, str):
-        metric_name = scoring
-    else:
-        metric_name = "metric"
 
-    return get_scorer(scoring), metric_name
+    return make_scorer(scoring), scoring.__name__
 
 
 def _get_cat_features(X: pd.DataFrame) -> Tuple[List[int], List[str]]:

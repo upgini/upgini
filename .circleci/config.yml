@@ -8,6 +8,9 @@ jobs:
     parallelism: 1
 
     resource_class: large
+
+    working_directory: /mnt/ramdisk
+    
     steps:
       - checkout
       - run:
