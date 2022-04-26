@@ -34,6 +34,7 @@ jobs:
             pip3 -V
             pip3 install --upgrade pip
             pip3 install tox
+            export PATH="$PATH:/home/circleci/.local/bin"
       - run:
           no_output_timeout: 60m
           name: Run tox
