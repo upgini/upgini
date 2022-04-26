@@ -30,11 +30,12 @@ jobs:
             pyenv install -s 3.7.12
             pyenv install -s 3.8.12
             pyenv install -s 3.9.7
+            pyenv local 3.8.12
             python3 -V
             pip3 -V
             pip3 install --upgrade pip
-            pip3 install tox
-            export PATH="$PATH:/home/circleci/.local/bin"
+            sudo apt upgrade && sudo apt update
+            sudo apt install tox
       - run:
           no_output_timeout: 60m
           name: Run tox
