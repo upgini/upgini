@@ -4,7 +4,7 @@ version: 2.1
 jobs:
   toxify:
     machine:
-      - image: ubuntu-2004:202201-02
+      image: ubuntu-2004:202201-02
     # docker:
     #   - image: mikicz/tox
     parallelism: 1
