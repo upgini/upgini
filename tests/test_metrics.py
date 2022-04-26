@@ -24,6 +24,7 @@ FIXTURE_DIR = os.path.join(
 )
 
 
+@pytest.mark.skip
 def test_default_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -89,6 +90,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005275)
 
 
+@pytest.mark.skip
 def test_catboost_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -203,7 +205,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert enricher.enriched_eval_set is not None
     assert len(enricher.enriched_eval_set) == 500
 
-    estimator = LGBMClassifier(random_seed=42)
+    estimator = LGBMClassifier(random_seed=42, verbose=2)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
@@ -222,6 +224,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
+@pytest.mark.skip
 def test_rf_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
