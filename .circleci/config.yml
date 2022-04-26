@@ -3,16 +3,34 @@ orbs:
 version: 2.1
 jobs:
   toxify:
-    docker:
-      - image: mikicz/tox
+    machine:
+      - image: ubuntu-2004:202201-02
+    # docker:
+    #   - image: mikicz/tox
     parallelism: 1
 
-    resource_class: 2xlarge
+    resource_class: medium
 
     working_directory: /mnt/ramdisk
 
     steps:
       - checkout
+      - run:
+          name: Install pyenv
+          working_directory: ~/
+          command: |
+            rm -rf $(pyenv root)
+            curl https://pyenv.run | bash
+            export PATH="$HOME/.pyenv/bin:$PATH"
+            pyenv update
+            eval "$(pyenv init -)"
+            eval "$(pyenv virtualenv-init -)"
+            pyenv rehash
+            pyenv install -s 3.7.11
+            pyenv global 3.7.11
+            python -V
+            pip -V
+            pip install tox
       - run:
           no_output_timeout: 60m
           name: Run tox
