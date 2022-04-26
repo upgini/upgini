@@ -27,12 +27,13 @@ jobs:
             eval "$(pyenv init -)"
             eval "$(pyenv virtualenv-init -)"
             pyenv rehash
-            pyenv install -s 3.7.11
+            pyenv install -s 3.7.12
+            pyenv install -s 3.8.12
+            pyenv install -s 3.9.7
             pyenv global 3.7.11
             python -V
             pip -V
             pip install --upgrade pip
-            pip install -r requirements.txt
             pip install tox
       - run:
           no_output_timeout: 60m

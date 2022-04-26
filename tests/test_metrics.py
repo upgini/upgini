@@ -202,7 +202,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert enricher.enriched_eval_set is not None
     assert len(enricher.enriched_eval_set) == 500
 
-    estimator = LGBMClassifier(random_seed=42, verbose=2)
+    estimator = LGBMClassifier(random_seed=42)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
