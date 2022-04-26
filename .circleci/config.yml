@@ -30,7 +30,7 @@ jobs:
             pyenv install -s 3.7.12
             pyenv install -s 3.8.12
             pyenv install -s 3.9.7
-            pyenv global 3.7.12
+            pyenv global 3.9.7
             python -V
             pip -V
             pip install --upgrade pip

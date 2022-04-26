@@ -113,7 +113,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
         random_state: int = 42,
-        scoring: Union[str, Callable, None] = None,
+        scoring: Optional[Callable] = None,
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
@@ -574,7 +574,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
-        scoring: Union[str, Callable, None] = None,
+        scoring: Optional[Callable] = None,
         estimator=None,
     ) -> pd.DataFrame:
         if (
