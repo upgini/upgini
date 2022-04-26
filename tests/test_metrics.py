@@ -24,7 +24,6 @@ FIXTURE_DIR = os.path.join(
 )
 
 
-@pytest.mark.skip
 def test_default_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -75,22 +74,21 @@ def test_default_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.503842)
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.507683)
-    assert metrics_df.loc["train", "uplift"] == approx(0.003842)
+    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.485514)
+    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.485354)
+    assert metrics_df.loc["train", "uplift"] == approx(-0.000160)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.463245)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.467250)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.004005)
+    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.509463)
+    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.496415)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.013048)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.499903)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.494628)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005275)
+    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.485589)
+    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.476969)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.008621)
 
 
-@pytest.mark.skip
 def test_catboost_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -142,22 +140,21 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.503201)
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.504002)
-    assert metrics_df.loc["train", "uplift"] == approx(0.000800)
+    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.487395)
+    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.487315)
+    assert metrics_df.loc["train", "uplift"] == approx(-0.000080)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.472644)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.476520)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.003876)
+    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.491215)
+    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.505814)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.014599)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.506015)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.505436)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.000579)
+    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.476969)
+    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.485010)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(0.008042)
 
 
-# @pytest.mark.skip
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -224,7 +221,6 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
-@pytest.mark.skip
 def test_rf_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -276,18 +272,18 @@ def test_rf_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.498639)  # Investigate same values
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.498639)
+    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.483794)  # Investigate same values
+    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.483794)
     assert metrics_df.loc["train", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.479362)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.479362)
+    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.483690)
+    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.483690)
     assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.540144)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.540144)
+    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.541045)
+    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.541045)
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
