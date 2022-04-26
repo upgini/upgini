@@ -11,7 +11,8 @@ jobs:
 
     resource_class: medium
 
-    working_directory: /mnt/ramdisk
+    # working_directory: /mnt/ramdisk
+    working_directory: ~/upgini
 
     steps:
       - checkout
