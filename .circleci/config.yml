@@ -7,7 +7,7 @@ jobs:
       - image: mikicz/tox
     parallelism: 1
 
-    resource_class: 2xlarge+
+    resource_class: xlarge
 
     working_directory: /mnt/ramdisk
 
