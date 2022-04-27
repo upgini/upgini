@@ -8,17 +8,34 @@ jobs:
     parallelism: 1
 
     resource_class: medium
+
+    # working_directory: /mnt/ramdisk
+    working_directory: ~/upgini
+
     steps:
       - checkout
-      # - restore_cache:
-      #     keys:
-      #       # This branch if available
-      #       - v1-dep-{{ .Branch }}-
-      #       # Default branch if not
-      #       - v1-dep-main-
-      #       # Any branch if there are none on the default branch - this should be unnecessary if you have your default branch configured correctly
-      #       - v1-dep-
+      # - run:
+      #     name: Install pyenv
+      #     # working_directory: ~/
+      #     command: |
+      #       rm -rf $(pyenv root)
+      #       curl https://pyenv.run | bash
+      #       export PATH="$HOME/.pyenv/bin:$PATH"
+      #       pyenv update
+      #       eval "$(pyenv init -)"
+      #       eval "$(pyenv virtualenv-init -)"
+      #       pyenv rehash
+      #       pyenv install -s 3.7.12
+      #       pyenv install -s 3.8.12
+      #       pyenv install -s 3.9.7
+      #       pyenv local 3.8.12
+      #       python3 -V
+      #       pip3 -V
+      #       pip3 install --upgrade pip
+      #       sudo apt upgrade && sudo apt update
+      #       sudo apt install tox
       - run:
+          no_output_timeout: 60m
           name: Run tox
           command: tox
       - store_test_results:
@@ -26,11 +43,6 @@ jobs:
       - store_artifacts:
           path: test-results
       - run: mkdir -p /tmp/circleci-artifacts /tmp/circleci-test-results
-      # Save dependency cache
-      # - save_cache:
-      #     key: v1-dep-{{ .Branch }}-{{ epoch }}
-      #     paths:
-      #       - .tox
 
       - run:
           name: Save test results

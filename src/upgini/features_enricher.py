@@ -1,3 +1,5 @@
+import hashlib
+import sys
 import logging
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -32,7 +34,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import calculate_cv_metric, fit_model
+from upgini.metrics import EstimatorWrapper
 from upgini.search_task import SearchTask
 from upgini.utils.format import Format
 from upgini.utils.target_utils import define_task
@@ -112,7 +114,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
         random_state: int = 42,
-        scoring: Union[str, Callable, None] = None,
+        scoring: Optional[Callable] = None,
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
@@ -296,7 +298,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__add_fake_date(meaning_types, search_keys, df)
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row[meaning_types.keys()])), axis=1)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[meaning_types.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         # Don't pass features in backend on transform
@@ -321,10 +323,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if not silent_mode:
             print("Executing transform step")
             with yaspin(Spinners.material) as sp:
-                result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
+                result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
                 sp.ok("Done                         ")
         else:
-            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index, self.keep_input)
+            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
 
         return result
 
@@ -459,7 +461,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: hash(tuple(row)), axis=1)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
@@ -537,7 +539,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         else:
             try:
                 self.enriched_X, self.enriched_eval_set = self.__enrich(
-                    df, self._search_task.get_all_initial_raw_features(), X.index, True
+                    df, self._search_task.get_all_initial_raw_features(), X.index
                 )
             except Exception as e:
                 logging.exception("Failed to download features")
@@ -571,9 +573,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def calculate_metrics(
         self,
         X: pd.DataFrame,
-        y,
+        y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
-        scoring: Union[str, Callable, None] = None,
+        scoring: Optional[Callable] = None,
         estimator=None,
     ) -> pd.DataFrame:
         if (
@@ -591,14 +593,18 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
         )
 
+        model_task_type = self.model_task_type or define_task(pd.Series(y))
+
         # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
         # and calculate baseline metric
         etalon_metric = None
         if fitting_X.shape[1] > 0:
-            etalon_metric, _ = calculate_cv_metric(fitting_X, y, scoring=scoring, estimator=estimator)
+            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, scoring).cross_val_predict(fitting_X, y)
 
         # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        enriched_metric, metric = calculate_cv_metric(fitting_enriched_X, y, scoring=scoring, estimator=estimator)
+        wrapper = EstimatorWrapper.create(estimator, model_task_type, scoring)
+        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
+        metric = wrapper.metric_name
 
         uplift = None
         if etalon_metric is not None:
@@ -621,8 +627,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             # Fit models
             etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_model = fit_model(fitting_X, y, deepcopy(estimator))
-            enriched_model = fit_model(fitting_enriched_X, y, deepcopy(estimator))
+                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, scoring)
+                etalon_model.fit(fitting_X, y)
+            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, scoring)
+            enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
                 eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
@@ -633,13 +641,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
                 )
                 enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
-                eval_y = eval_pair[1].reset_index(drop=True)
+                eval_y = eval_pair[1]
 
                 etalon_eval_metric = None
                 if etalon_model is not None:
-                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y, scoring)
+                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
 
-                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y, scoring)
+                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
 
                 eval_uplift = None
                 if etalon_eval_metric is not None:
@@ -665,7 +673,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         df: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
         original_index: pd.Index,
-        keep_input: bool,
     ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         if result_features is None:
             logging.error(f"result features not found by search_task_id: {self.get_search_id()}")
@@ -674,7 +681,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         sorted_result_columns = [name for name in self.__filtered_importance_names() if name in result_features.columns]
         result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
 
-        # if keep_input:
         df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
         result = pd.merge(
             df_without_target,
@@ -683,10 +689,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             right_on=SYSTEM_RECORD_ID,
             how="left",
         )
-        # else:
-        #     result = pd.merge(
-        #         df[SYSTEM_RECORD_ID], result_features, left_on=SYSTEM_RECORD_ID, right_on=SYSTEM_RECORD_ID, how="left"
-        #     )
 
         if EVAL_SET_INDEX in result.columns:
             result_train = result[result[EVAL_SET_INDEX] == 0]
@@ -828,6 +830,26 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     uplift_presented = True
 
         return uplift_presented
+
+    @staticmethod
+    def _hash_row(row) -> int:
+        t = tuple(row)
+        m = hashlib.md5()
+        for i in t:
+            m.update(str(i).encode())
+        return FeaturesEnricher._hex_to_int(m.hexdigest())
+
+    @staticmethod
+    def _hex_to_int(s: str) -> int:
+        chars = []
+        for ch in s:
+            if not ch.isdecimal():
+                ch = str(ord(ch) - 97)
+            chars.append(ch)
+        result = int("".join(chars))
+        if result > sys.maxsize:
+            result = result % sys.maxsize
+        return result
 
     def __is_quality_by_metrics_low(self) -> bool:
         if self._search_task is None:
