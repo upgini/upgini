@@ -3,11 +3,9 @@ orbs:
 version: 2.1
 jobs:
   toxify:
-    machine:
-      image: ubuntu-2004:202201-02
-    # docker:
-    #   - image: mikicz/tox
-    parallelism: 1
+    docker:
+      - image: mikicz/tox
+    parallelism: 2
 
     resource_class: medium
 
@@ -16,26 +14,26 @@ jobs:
 
     steps:
       - checkout
-      - run:
-          name: Install pyenv
-          # working_directory: ~/
-          command: |
-            rm -rf $(pyenv root)
-            curl https://pyenv.run | bash
-            export PATH="$HOME/.pyenv/bin:$PATH"
-            pyenv update
-            eval "$(pyenv init -)"
-            eval "$(pyenv virtualenv-init -)"
-            pyenv rehash
-            pyenv install -s 3.7.12
-            pyenv install -s 3.8.12
-            pyenv install -s 3.9.7
-            pyenv local 3.8.12
-            python3 -V
-            pip3 -V
-            pip3 install --upgrade pip
-            sudo apt upgrade && sudo apt update
-            sudo apt install tox
+      # - run:
+      #     name: Install pyenv
+      #     # working_directory: ~/
+      #     command: |
+      #       rm -rf $(pyenv root)
+      #       curl https://pyenv.run | bash
+      #       export PATH="$HOME/.pyenv/bin:$PATH"
+      #       pyenv update
+      #       eval "$(pyenv init -)"
+      #       eval "$(pyenv virtualenv-init -)"
+      #       pyenv rehash
+      #       pyenv install -s 3.7.12
+      #       pyenv install -s 3.8.12
+      #       pyenv install -s 3.9.7
+      #       pyenv local 3.8.12
+      #       python3 -V
+      #       pip3 -V
+      #       pip3 install --upgrade pip
+      #       sudo apt upgrade && sudo apt update
+      #       sudo apt install tox
       - run:
           no_output_timeout: 60m
           name: Run tox
