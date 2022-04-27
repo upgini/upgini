@@ -1,6 +1,6 @@
 import hashlib
-import sys
 import logging
+import sys
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -26,6 +26,7 @@ from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
     EVAL_SET_INDEX,
+    ISO_CODE,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     CVType,
@@ -48,6 +49,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     search_keys: dict of str->SearchKey or int->SearchKey
         Dictionary with column names or indices mapping to key types.
         Each of this columns will be used as a search key to find features.
+
+    iso_code: str, optional (default=None)
+        ISO-1366 code of country for all rows in dataset.
 
     keep_input: bool, optional (default=False)
         If True, copy original input columns to the output dataframe.
@@ -104,6 +108,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def __init__(
         self,
         search_keys: Dict[str, SearchKey],
+        iso_code: Optional[str] = None,
         keep_input: bool = False,
         model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = 0,
@@ -120,6 +125,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
         self.search_keys = search_keys
+        self.iso_code = iso_code
         self.keep_input = keep_input
         self.model_task_type = model_task_type
         self.scoring = scoring
@@ -282,27 +288,30 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             logging.error(msg)
             raise TypeError(msg)
 
-        validated_search_keys = self.__prepare_search_keys(X)
-        search_keys = []
-        for L in range(1, len(validated_search_keys.keys()) + 1):
-            for subset in itertools.combinations(validated_search_keys.keys(), L):
-                search_keys.append(subset)
-        meaning_types = validated_search_keys.copy()
-        feature_columns = [column for column in X.columns if column not in meaning_types.keys()]
+        self.__prepare_search_keys(X)
+        meaning_types = {col: key.value for col, key in self.search_keys.items()}
+        feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
-        self.__check_string_dates(X, meaning_types)
+        self.__check_string_dates(X)
 
         df = X.copy()
 
         df = df.reset_index(drop=True)
 
-        self.__add_fake_date(meaning_types, search_keys, df)
+        self.__add_fake_date(df, meaning_types)
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[meaning_types.keys()]), axis=1)
+        self.__add_iso_code(df, meaning_types)
+
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
+        combined_search_keys = []
+        for L in range(1, len(self.search_keys.keys()) + 1):
+            for subset in itertools.combinations(self.search_keys.keys(), L):
+                combined_search_keys.append(subset)
+
         # Don't pass features in backend on transform
-        if feature_columns:
+        if len(feature_columns) > 0:
             df_without_features = df.drop(columns=feature_columns)
         else:
             df_without_features = df
@@ -315,7 +324,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             date_format=self.date_format,  # type: ignore
         )
         dataset.meaning_types = meaning_types
-        dataset.search_keys = search_keys
+        dataset.search_keys = combined_search_keys
         validation_task = self._search_task.validation(
             dataset, extract_features=True, runtime_parameters=self.runtime_parameters, silent_mode=silent_mode
         )
@@ -441,18 +450,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         if X.shape[0] != len(y_array):
             raise ValueError("X and y should be the same size")
 
-        validated_search_keys = self.__prepare_search_keys(X)
+        self.__prepare_search_keys(X)
 
-        search_keys = []
-        for L in range(1, len(validated_search_keys.keys()) + 1):
-            for subset in itertools.combinations(validated_search_keys.keys(), L):
-                search_keys.append(subset)
         meaning_types = {
-            **validated_search_keys.copy(),
-            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in validated_search_keys.keys()},
+            **{col: key.value for col, key in self.search_keys.items()},
+            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in self.search_keys.keys()},
         }
 
-        self.__check_string_dates(X, meaning_types)
+        self.__check_string_dates(X)
 
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
@@ -496,7 +501,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        self.__add_fake_date(meaning_types, search_keys, df)
+        self.__add_fake_date(df, meaning_types)
+
+        self.__add_iso_code(df, meaning_types)
+
+        combined_search_keys = []
+        for L in range(1, len(self.search_keys.keys()) + 1):
+            for subset in itertools.combinations(self.search_keys.keys(), L):
+                combined_search_keys.append(subset)
 
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
@@ -508,7 +520,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             random_state=self.random_state,  # type: ignore
         )
         dataset.meaning_types = meaning_types
-        dataset.search_keys = search_keys
+        dataset.search_keys = combined_search_keys
 
         self.passed_features = [
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
@@ -547,9 +559,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         return self.enriched_X
 
-    def __check_string_dates(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        for column, meaning_type in meaning_types.items():
-            if meaning_type in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME] and is_string_dtype(
+    def __check_string_dates(self, df: pd.DataFrame):
+        for column, search_key in self.search_keys.items():
+            if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(
                 df[column]
             ):
                 if self.date_format is None or len(self.date_format) == 0:
@@ -561,14 +573,19 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     raise Exception(msg)
 
     # temporary while statistic on date will not be removed
-    def __add_fake_date(
-        self, meaning_types: Dict[str, FileColumnMeaningType], search_keys: List[Tuple[str]], df: pd.DataFrame
-    ):
-        if len({FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME}.intersection(meaning_types.values())) == 0:
+    def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+        if len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) == 0:
             logging.info("Fake date column added with 2200-01-01 value")
             df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
-            search_keys.append((SYSTEM_FAKE_DATE,))
+            self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
+
+    def __add_iso_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+        if self.iso_code is not None and SearchKey.ISO_1366 not in self.search_keys.values():
+            logging.info(f"Add ISO-1366 column with {self.iso_code} value")
+            df[ISO_CODE] = self.iso_code
+            self.search_keys[ISO_CODE] = SearchKey.ISO_1366
+            meaning_types[ISO_CODE] = FileColumnMeaningType.ISO_1366
 
     def calculate_metrics(
         self,
@@ -765,13 +782,13 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         filtered_importance_names, _ = zip(*filtered_importances)
         return list(filtered_importance_names)
 
-    def __prepare_search_keys(self, x: pd.DataFrame) -> Dict[str, FileColumnMeaningType]:
+    def __prepare_search_keys(self, x: pd.DataFrame):
         valid_search_keys = {}
         for column_id, meaning_type in self.search_keys.items():
             if isinstance(column_id, str):
-                valid_search_keys[column_id] = meaning_type.value
+                valid_search_keys[column_id] = meaning_type
             elif isinstance(column_id, int):
-                valid_search_keys[x.columns[column_id]] = meaning_type.value
+                valid_search_keys[x.columns[column_id]] = meaning_type
             else:
                 msg = f"Unsupported type of key in search_keys: {type(column_id)}."
                 logging.error(msg)
@@ -780,8 +797,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
                 logging.error(msg)
                 raise ValueError(msg)
+            if meaning_type == SearchKey.ISO_1366 and self.iso_code is not None:
+                msg = "SearchKey.ISO_1366 cannot be used together with a iso_code property at the same time"
+                logging.error(msg)
+                raise ValueError(msg)
 
-        return valid_search_keys
+        self.search_keys = valid_search_keys
 
     def __show_metrics(self):
         metrics = self.get_metrics()

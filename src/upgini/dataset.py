@@ -251,7 +251,6 @@ class Dataset(pd.DataFrame):
 
     def __to_millis(self):
         """Parse date column and transform it to millis"""
-        logging.info("Transform date column to millis")
         date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -263,6 +262,7 @@ class Dataset(pd.DataFrame):
                 return i
 
         if date is not None and date in self.columns:
+            logging.info("Transform date column to millis")
             if is_string_dtype(self[date]):
                 self[date] = pd.to_datetime(self[date], format=self.date_format).values.astype(np.int64) // 1_000_000
             elif is_datetime(self[date]):
@@ -283,9 +283,9 @@ class Dataset(pd.DataFrame):
 
     def __hash_email(self):
         """Add column with HEM if email presented in search keys"""
-        logging.info("Hashing email")
         email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
         if email is not None and email in self.columns:
+            logging.info("Hashing email")
             generated_hem_name = "generated_hem"
             self[generated_hem_name] = self[email].apply(self.__email_to_hem)
             self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
@@ -308,27 +308,40 @@ class Dataset(pd.DataFrame):
 
     def __convert_ip(self):
         """Convert ip address to int"""
-        logging.info("Convert ip address to int")
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.columns:
+            logging.info("Convert ip address to int")
             self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
+
+    def __normalize_iso_code(self):
+        iso_code = self.etalon_def_checked.get(FileColumnMeaningType.ISO_1366.value)
+        if iso_code is not None and iso_code in self.columns:
+            logging.info("Normalize iso code column")
+            self[iso_code] = self[iso_code].str.replace(" ", "").str.upper()
+
+    def __normalize_postal_code(self):
+        postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
+        if postal_code is not None and postal_code in self.columns:
+            logging.info("Normalize postal code")
+            self[postal_code] = self[postal_code].str.replace(" ", "").str.replace("^0+", "").str.upper()
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
-        logging.info("cleaning empty rows")
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
         if date_column is not None:
+            logging.info("cleaning empty rows")
             drop_idx = self[(self[date_column] == "") | self[date_column].isna()].index
             self.drop(drop_idx, inplace=True)
             logging.info(f"df with valid date column: {self.shape}")
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
-        logging.info(f"Dropping ignore columns: {self.ignore_columns}")
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
-        self.drop(columns_to_drop, axis=1, inplace=True)
+        if len(columns_to_drop) > 0:
+            logging.info(f"Dropping ignore columns: {self.ignore_columns}")
+            self.drop(columns_to_drop, axis=1, inplace=True)
 
     def __target_value(self) -> pd.Series:
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
@@ -689,6 +702,10 @@ class Dataset(pd.DataFrame):
         self.__convert_ip()
 
         self.__convert_phone()
+
+        self.__normalize_iso_code()
+
+        self.__normalize_postal_code()
 
         self.__remove_dates_from_features()
 

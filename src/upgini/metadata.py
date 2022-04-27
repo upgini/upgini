@@ -6,6 +6,7 @@ from pydantic import BaseModel
 SYSTEM_RECORD_ID = "system_record_id"
 SYSTEM_FAKE_DATE = "system_fake_date"
 EVAL_SET_INDEX = "eval_set_index"
+ISO_CODE = "iso_code"
 
 
 class FileColumnMeaningType(Enum):
@@ -19,6 +20,8 @@ class FileColumnMeaningType(Enum):
     TARGET = "TARGET"
     FEATURE = "FEATURE"
     CUSTOM_KEY = "CUSTOM_KEY"
+    ISO_1366 = "ISO_1366"
+    POSTAL_CODE = "POSTAL_CODE"
     SYSTEM_RECORD_ID = "SYSTEM_RECORD_ID"
     EVAL_SET_INDEX = "EVAL_SET_INDEX"
 
@@ -31,6 +34,8 @@ class SearchKey(Enum):
     DATE = FileColumnMeaningType.DATE
     DATETIME = FileColumnMeaningType.DATETIME
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
+    ISO_1366 = FileColumnMeaningType.ISO_1366
+    POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
 
 
 class DataType(Enum):
