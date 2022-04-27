@@ -297,7 +297,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__add_fake_date(meaning_types, search_keys, df)
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self.__hash_row(row[meaning_types.keys()]), axis=1)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[meaning_types.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         # Don't pass features in backend on transform
@@ -460,7 +460,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self.__hash_row(row), axis=1)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
@@ -831,12 +831,25 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         return uplift_presented
 
     @staticmethod
-    def __hash_row(row) -> str:
+    def _hash_row(row) -> int:
         t = tuple(row)
         m = hashlib.md5()
         for i in t:
             m.update(str(i).encode())
-        return m.hexdigest()
+        return FeaturesEnricher._hex_to_int(m.hexdigest())
+
+    @staticmethod
+    def _hex_to_int(s: str) -> int:
+        c_max_long = 9_223_372_036_854_775_807
+        chars = []
+        for ch in s:
+            if not ch.isdecimal():
+                ch = str(ord(ch) - 97)
+            chars.append(ch)
+        result = int("".join(chars))
+        if result > c_max_long:
+            result = result % c_max_long
+        return result
 
     def __is_quality_by_metrics_low(self) -> bool:
         if self._search_task is None:

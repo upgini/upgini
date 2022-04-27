@@ -6,6 +6,7 @@ from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
 
 from upgini import FeaturesEnricher, SearchKey
 
@@ -137,7 +138,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert len(enricher.enriched_eval_set) == 500
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False)
-    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring=roc_auc_score)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
     assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.487395)

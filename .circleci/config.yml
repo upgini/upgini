@@ -5,7 +5,7 @@ jobs:
   toxify:
     docker:
       - image: mikicz/tox
-    parallelism: 2
+    parallelism: 1
 
     resource_class: medium
 
