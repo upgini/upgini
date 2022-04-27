@@ -1,4 +1,5 @@
 import hashlib
+import sys
 import logging
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -840,15 +841,14 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     @staticmethod
     def _hex_to_int(s: str) -> int:
-        c_max_long = 9_223_372_036_854_775_807
         chars = []
         for ch in s:
             if not ch.isdecimal():
                 ch = str(ord(ch) - 97)
             chars.append(ch)
         result = int("".join(chars))
-        if result > c_max_long:
-            result = result % c_max_long
+        if result > sys.maxsize:
+            result = result % sys.maxsize
         return result
 
     def __is_quality_by_metrics_low(self) -> bool:
