@@ -59,7 +59,7 @@ setup(
         "yaspin>=2.1.0",
         "python-json-logger>=2.0.2",
         "catboost>=1.0.3",
-        "lightgbm>=3.0.0"
+        "lightgbm>=3.0.0",
     ],
     project_urls={
         "Bug Reports": "https://github.com/upgini/upgini/issues",
