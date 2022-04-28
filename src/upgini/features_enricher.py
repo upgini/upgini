@@ -466,9 +466,6 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
 
         if eval_set is not None and len(eval_set) > 0:
@@ -497,9 +494,10 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                     )
                 eval_df: pd.DataFrame = eval_X.copy()  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
-                eval_df[SYSTEM_RECORD_ID] = eval_df.apply(lambda row: hash(tuple(row)), axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
+
+        self.__add_fit_system_record_id(df, meaning_types)
 
         self.__add_fake_date(df, meaning_types)
 
@@ -559,11 +557,26 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         return self.enriched_X
 
+    def __is_date_key_present(self) -> bool:
+        return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) == 0
+
+    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+        if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
+            date_column = [
+                col
+                for col, t in meaning_types.items()
+                if t in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
+            ]
+            df.sort_values(by=date_column, kind="mergesort")
+            pass
+        df.reset_index(drop=True, inplace=True)
+        df.reset_index(inplace=True)
+        df.rename(columns={"index": SYSTEM_RECORD_ID}, inplace=True)
+        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
     def __check_string_dates(self, df: pd.DataFrame):
         for column, search_key in self.search_keys.items():
-            if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(
-                df[column]
-            ):
+            if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(df[column]):
                 if self.date_format is None or len(self.date_format) == 0:
                     msg = (
                         f"Date column `{column}` has string type, but constructor argument `date_format` is empty.\n"
@@ -574,7 +587,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     # temporary while statistic on date will not be removed
     def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) == 0:
+        if self.__is_date_key_present():
             logging.info("Fake date column added with 2200-01-01 value")
             df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
             self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
