@@ -422,6 +422,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             logging.error(msg)
             raise Exception(msg)
 
+        if SearchKey.POSTAL_CODE in key_types and SearchKey.ISO_1366 not in key_types:
+            msg = "ISO_1366 search key should be provided if POSTAL_CODE is presented"
+            logging.error(msg)
+            raise Exception(msg)
+
         for key_type in SearchKey.__members__.values():
             if len(list(filter(lambda x: x == key_type, key_types))) > 1:
                 msg = f"Search key {key_type} presented multiple times"

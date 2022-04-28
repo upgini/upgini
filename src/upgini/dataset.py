@@ -323,7 +323,7 @@ class Dataset(pd.DataFrame):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
             logging.info("Normalize postal code")
-            self[postal_code] = self[postal_code].str.replace(" ", "").str.replace("^0+", "").str.upper()
+            self[postal_code] = self[postal_code].str.replace(" ", "").str.upper()
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
