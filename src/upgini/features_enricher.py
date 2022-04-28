@@ -558,7 +558,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         return self.enriched_X
 
     def __is_date_key_present(self) -> bool:
-        return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) == 0
+        return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
 
     def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
@@ -587,7 +587,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     # temporary while statistic on date will not be removed
     def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if self.__is_date_key_present():
+        if not self.__is_date_key_present():
             logging.info("Fake date column added with 2200-01-01 value")
             df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
             self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
