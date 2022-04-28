@@ -317,13 +317,13 @@ class Dataset(pd.DataFrame):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.ISO_1366.value)
         if iso_code is not None and iso_code in self.columns:
             logging.info("Normalize iso code column")
-            self[iso_code] = self[iso_code].str.replace(" ", "").str.upper()
+            self[iso_code] = self[iso_code].astype(str).str.replace(" ", "").str.upper().str.replace("^UK$", "GB")
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
             logging.info("Normalize postal code")
-            self[postal_code] = self[postal_code].str.replace(" ", "").str.upper()
+            self[postal_code] = self[postal_code].astype(str).str.replace(" ", "").str.upper()
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""

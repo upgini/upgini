@@ -6,6 +6,8 @@ from requests_mock.mocker import Mocker
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
 
+import pytest
+
 from .utils import (
     mock_default_requests,
     mock_get_features_meta,
@@ -17,6 +19,23 @@ from .utils import (
     mock_validation_search,
     mock_validation_summary,
 )
+
+
+def test_search_keys_validation(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    with pytest.raises(Exception, match="Date and datetime search keys are presented simultaniously"):
+        FeaturesEnricher(
+            search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
+            endpoint=url,
+        )
+
+    with pytest.raises(Exception, match="ISO_1366 search key should be provided if POSTAL_CODE is presented"):
+        FeaturesEnricher(
+            search_keys={"postal_code": SearchKey.POSTAL_CODE},
+            endpoint=url
+        )
 
 
 def test_features_enricher(requests_mock: Mocker):
