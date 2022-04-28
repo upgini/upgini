@@ -6,7 +6,7 @@ from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import get_scorer
 
 from upgini import FeaturesEnricher, SearchKey
 
@@ -75,19 +75,19 @@ def test_default_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.485514)
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.485354)
-    assert metrics_df.loc["train", "uplift"] == approx(-0.000160)
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.503842)
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.507683)
+    assert metrics_df.loc["train", "uplift"] == approx(0.003842)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.509463)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.496415)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.013048)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.463245)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.467250)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.004005)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.485589)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.476969)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.008621)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.499903)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.494628)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005275)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -138,22 +138,22 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert len(enricher.enriched_eval_set) == 500
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False)
-    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring=roc_auc_score)
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="roc_auc")
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.487395)
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.487315)
-    assert metrics_df.loc["train", "uplift"] == approx(-0.000080)
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.503201)
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.504002)
+    assert metrics_df.loc["train", "uplift"] == approx(0.000800)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.491215)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.505814)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.014599)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.472644)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.476520)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.003876)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.476969)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.485010)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.008042)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.506015)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.505436)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.000579)
 
 
 @pytest.mark.skip()
@@ -208,18 +208,18 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.502001)  # Investigate same values
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.502001)
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.502001)  # Investigate same values
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.502001)
     assert metrics_df.loc["train", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.532685)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.532685)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.532685)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.532685)
     assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.544197)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.544197)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.544197)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.544197)
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
@@ -271,21 +271,24 @@ def test_rf_metric_binary(requests_mock: Mocker):
     assert len(enricher.enriched_eval_set) == 500
 
     estimator = RandomForestClassifier(random_state=42)
-    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
+    scoring = get_scorer("neg_mean_squared_error")
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring=scoring)
     print(metrics_df)
+    baseline_metric = "baseline make_scorer(mean_squared_error, greater_is_better=False)"
+    enriched_metric = "enriched make_scorer(mean_squared_error, greater_is_better=False)"
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc_score"] == approx(0.483794)  # Investigate same values
-    assert metrics_df.loc["train", "enriched roc_auc_score"] == approx(0.483794)
+    assert metrics_df.loc["train", baseline_metric] == approx(-0.516)  # Investigate same values
+    assert metrics_df.loc["train", enriched_metric] == approx(-0.516)
     assert metrics_df.loc["train", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc_score"] == approx(0.483690)
-    assert metrics_df.loc["eval 1", "enriched roc_auc_score"] == approx(0.483690)
+    assert metrics_df.loc["eval 1", baseline_metric] == approx(-0.52)
+    assert metrics_df.loc["eval 1", enriched_metric] == approx(-0.52)
     assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc_score"] == approx(0.541045)
-    assert metrics_df.loc["eval 2", "enriched roc_auc_score"] == approx(0.541045)
+    assert metrics_df.loc["eval 2", baseline_metric] == approx(-0.456)
+    assert metrics_df.loc["eval 2", enriched_metric] == approx(-0.456)
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 

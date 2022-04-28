@@ -592,7 +592,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
-        scoring: Optional[Callable] = None,
+        scoring: Union[Callable, str, None] = None,
         estimator=None,
     ) -> pd.DataFrame:
         if (
@@ -625,7 +625,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         uplift = None
         if etalon_metric is not None:
-            uplift = enriched_metric - etalon_metric
+            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
 
         metrics = [
             {
@@ -668,7 +668,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
                 eval_uplift = None
                 if etalon_eval_metric is not None:
-                    eval_uplift = enriched_eval_metric - etalon_eval_metric
+                    eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
 
                 metrics.append(
                     {
