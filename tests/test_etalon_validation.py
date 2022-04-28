@@ -192,11 +192,11 @@ def test_constant_and_empty_validation():
 
 def test_imbalanced_target():
     df = pd.DataFrame({
+        "system_record_id": range(2000),
         "phone": np.random.randint(10000000000, 99999999999, 2000),
         "f": ["123"] * 2000,
         "target": ["a"]*100 + ["b"] * 400 + ["c"] * 500 + ["d"] * 1000
     })
-    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
     dataset = Dataset("test123", df=df)
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
@@ -217,11 +217,11 @@ def test_imbalanced_target():
 
 def test_fail_on_small_class_observations():
     df = pd.DataFrame({
+        "system_record_id": range(20),
         "phone": np.random.randint(10000000000, 99999999999, 20),
         "f": ["123"] * 20,
         "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10
     })
-    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
     dataset = Dataset("test123", df=df)
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
@@ -236,11 +236,11 @@ def test_fail_on_small_class_observations():
 
 def test_fail_on_too_many_classes():
     df = pd.DataFrame({
+        "system_record_id": range(200),
         "phone": np.random.randint(10000000000, 99999999999, 200),
         "f": ["123"] * 200,
         "target": range(200)
     })
-    df["system_record_id"] = df.apply(lambda row: hash(tuple(row)), axis=1)
     dataset = Dataset("test123", df=df)
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
@@ -251,3 +251,16 @@ def test_fail_on_too_many_classes():
     dataset.task_type = ModelTaskType.MULTICLASS
     with pytest.raises(ValidationError, match=r".*The number of target classes .+ exceeds the allowed threshold.*"):
         dataset._Dataset__resample()
+
+
+def test_iso_code_normalization():
+    df = pd.DataFrame({
+        "postal_code": ["  0ab-0123 ", "0123  3948  "]
+    })
+    dataset = Dataset("test321", df=df)
+    dataset.meaning_types = {
+        "postal_code": FileColumnMeaningType.POSTAL_CODE
+    }
+    dataset._Dataset__normalize_postal_code()
+    assert dataset.loc[0, "postal_code"] == "0AB-0123"
+    assert dataset.loc[1, "postal_code"] == "01233948"
