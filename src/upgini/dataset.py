@@ -48,6 +48,7 @@ class Dataset(pd.DataFrame):
     IMBALANCE_THESHOLD: float = 0.4
     MIN_TARGET_CLASS_COUNT: int = 100
     MAX_MULTICLASS_CLASS_COUNT: int = 100
+    MIN_SUPPORTED_DATE_TS: int = 946684800  # 2000-01-01
 
     dataset_name: str
     description: Optional[str]
@@ -342,7 +343,7 @@ class Dataset(pd.DataFrame):
             FileColumnMeaningType.DATETIME.value
         )
         if date_column is not None:
-            old_subset = self[self[date_column] < 946684800000]
+            old_subset = self[self[date_column] < self.MIN_SUPPORTED_DATE_TS]
             if len(old_subset) > 0:
                 logging.info(f"df before dropping old rows: {self.shape}")
                 self.drop(index=old_subset.index, inplace=True)
