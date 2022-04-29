@@ -19,13 +19,13 @@ from pandas.api.types import (
     is_string_dtype,
 )
 from pandas.core.dtypes.common import is_period_dtype
-from upgini.errors import ValidationError
 
+from upgini.errors import ValidationError
 from upgini.http import get_rest_client
 from upgini.metadata import (
+    EVAL_SET_INDEX,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
-    EVAL_SET_INDEX,
     DataType,
     FeaturesFilter,
     FileColumnMeaningType,
@@ -317,13 +317,25 @@ class Dataset(pd.DataFrame):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.ISO_1366.value)
         if iso_code is not None and iso_code in self.columns:
             logging.info("Normalize iso code column")
-            self[iso_code] = self[iso_code].astype(str).str.replace(" ", "").str.upper().str.replace("^UK$", "GB")
+            self[iso_code] = (
+                self[iso_code]
+                .astype(str)
+                .str.upper()
+                .str.replace(r"[^A-Z]", "", regex=True)
+                .str.replace("UK", "GB", regex=False)
+            )
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
             logging.info("Normalize postal code")
-            self[postal_code] = self[postal_code].astype(str).str.replace(" ", "").str.upper()
+            self[postal_code] = (
+                self[postal_code]
+                .astype(str)
+                .str.upper()
+                .str.replace(r"[^0-9A-Z]", "", regex=True)
+                .str.replace(r"^0+\B", "", regex=True)
+            )
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
