@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -13,9 +13,16 @@ from sklearn.metrics._regression import (
     check_consistent_length,
     mean_squared_error,
 )
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import (
+    BaseCrossValidator,
+    KFold,
+    StratifiedKFold,
+    TimeSeriesSplit,
+    cross_val_score,
+)
 
-from upgini.metadata import ModelTaskType
+from upgini.metadata import CVType, ModelTaskType
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 CATBOOST_PARAMS = {
     "iterations": 300,
@@ -25,13 +32,17 @@ CATBOOST_PARAMS = {
     "random_state": 42,
 }
 
+N_FOLDS = 5
+BLOCKED_TS_TEST_SIZE = 0.2
+
 
 class EstimatorWrapper:
-    def __init__(self, estimator, scorer: Callable, metric_name: str, multiplier: int):
+    def __init__(self, estimator, scorer: Callable, metric_name: str, multiplier: int, cv: BaseCrossValidator):
         self.estimator = estimator
         self.scorer = scorer
         self.metric_name = metric_name
         self.multiplier = multiplier
+        self.cv = cv
 
     def fit(self, X, y, **kwargs):
         X, fit_params = self._prepare_to_fit(X)
@@ -45,10 +56,10 @@ class EstimatorWrapper:
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
         raise NotImplementedError()
 
-    def cross_val_predict(self, X, y, cv=5):
+    def cross_val_predict(self, X, y):
         X, fit_params = self._prepare_to_fit(X)
 
-        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=cv, scoring=self.scorer, fit_params=fit_params)
+        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 
         return np.mean(metrics_by_fold) * self.multiplier
 
@@ -57,10 +68,24 @@ class EstimatorWrapper:
         return self.scorer(self.estimator, X, y) * self.multiplier
 
     @staticmethod
-    def create(estimator, target_type: ModelTaskType, scoring: Union[Callable, str, None] = None) -> "EstimatorWrapper":
+    def _create_cv(cv_type: Optional[CVType], target_type: ModelTaskType) -> BaseCrossValidator:
+        if cv_type == CVType.time_series:
+            return TimeSeriesSplit(n_splits=N_FOLDS)
+        elif cv_type == CVType.blocked_time_series:
+            return BlockedTimeSeriesSplit(n_splits=N_FOLDS, test_size=BLOCKED_TS_TEST_SIZE)
+        elif target_type == ModelTaskType.REGRESSION:
+            return KFold(n_splits=N_FOLDS)
+        else:
+            return StratifiedKFold(n_splits=N_FOLDS)
+
+    @staticmethod
+    def create(
+        estimator, target_type: ModelTaskType, cv_type: Optional[CVType], scoring: Union[Callable, str, None] = None
+    ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
+        cv = EstimatorWrapper._create_cv(cv_type, target_type)
+        kwargs = {"scorer": scorer, "metric_name": metric_name, "multiplier": multiplier, "cv": cv}
         if estimator is None:
-            kwargs = {"scorer": scorer, "metric_name": metric_name, "multiplier": multiplier}
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
                 estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
@@ -68,7 +93,7 @@ class EstimatorWrapper:
             else:
                 raise Exception(f"Unsupported type of target: {target_type}")
         else:
-            kwargs = {"estimator": estimator, "scorer": scorer, "metric_name": metric_name, "multiplier": multiplier}
+            kwargs["estimator"] = estimator
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
                 estimator = CatBoostWrapper(**kwargs)
             elif isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
@@ -89,8 +114,9 @@ class CatBoostWrapper(EstimatorWrapper):
         scorer: Callable,
         metric_name: str,
         multiplier: int,
+        cv: BaseCrossValidator,
     ):
-        super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier)
+        super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
         cat_features_idx, cat_features = _get_cat_features(X)
@@ -100,9 +126,14 @@ class CatBoostWrapper(EstimatorWrapper):
 
 class LightGBMWrapper(EstimatorWrapper):
     def __init__(
-        self, estimator: Union[LGBMClassifier, LGBMRegressor], scorer: Callable, metric_name: str, multiplier: int
+        self,
+        estimator: Union[LGBMClassifier, LGBMRegressor],
+        scorer: Callable,
+        metric_name: str,
+        multiplier: int,
+        cv: BaseCrossValidator,
     ):
-        super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier)
+        super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X) -> Tuple[pd.DataFrame, dict]:
         _, cat_features = _get_cat_features(X)
@@ -114,8 +145,15 @@ class LightGBMWrapper(EstimatorWrapper):
 
 
 class OtherEstimatorWrapper(EstimatorWrapper):
-    def __init__(self, estimator, scorer: Callable, metric_name: str, multiplier: int):
-        super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier)
+    def __init__(
+        self,
+        estimator,
+        scorer: Callable,
+        metric_name: str,
+        multiplier: int,
+        cv: BaseCrossValidator,
+    ):
+        super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
         _, cat_features = _get_cat_features(X)
