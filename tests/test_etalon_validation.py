@@ -291,3 +291,16 @@ def test_number_postal_code_normalization():
     dataset._Dataset__normalize_postal_code()
     assert dataset.loc[0, "postal_code"] == "103305"
     assert dataset.loc[1, "postal_code"] == "111222"
+
+
+def test_old_dates_drop():
+    df = pd.DataFrame({
+        "date": ["2020-01-01", "2000-01-01", "1999-12-31"]
+    })
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATE
+    }
+    dataset._Dataset__to_millis()
+    dataset._Dataset__remove_old_dates()
+    assert len(dataset) == 2
