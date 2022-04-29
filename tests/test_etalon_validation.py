@@ -255,7 +255,7 @@ def test_fail_on_too_many_classes():
 
 def test_iso_code_normalization():
     df = pd.DataFrame({
-        "iso_code": ["  rU ", " Uk", "G B "]
+        "iso_code": ["  rU 1", " Uk", "G B "]
     })
     dataset = Dataset("test321", df=df)
     dataset.meaning_types = {
@@ -276,8 +276,8 @@ def test_postal_code_normalization():
         "postal_code": FileColumnMeaningType.POSTAL_CODE
     }
     dataset._Dataset__normalize_postal_code()
-    assert dataset.loc[0, "postal_code"] == "0AB-0123"
-    assert dataset.loc[1, "postal_code"] == "01233948"
+    assert dataset.loc[0, "postal_code"] == "AB0123"
+    assert dataset.loc[1, "postal_code"] == "1233948"
 
 
 def test_number_postal_code_normalization():
