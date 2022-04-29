@@ -5,8 +5,14 @@ import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
+from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import SCORERS, get_scorer
+from sklearn.metrics import SCORERS, get_scorer, make_scorer
+from sklearn.metrics._regression import (
+    _check_reg_targets,
+    check_consistent_length,
+    mean_squared_error,
+)
 from sklearn.model_selection import cross_val_score
 
 from upgini.metadata import ModelTaskType
@@ -150,12 +156,85 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
     else:
         metric_name = str(scoring)
 
+    if "mean_squared_log_error" in metric_name:
+        scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
+
     return scoring, metric_name, multiplier
 
 
 def _get_cat_features(X: pd.DataFrame) -> Tuple[List[int], List[str]]:
-    zipped = [(i, c) for i, c in enumerate(X.columns) if not is_numeric_dtype(X[c])]
-    if len(zipped) == 0:
-        return ([], [])
-    unzipped = list(zip(*zipped))
-    return list(unzipped[0]), list(unzipped[1])
+    idices_to_names = {i: c for i, c in enumerate(X.columns) if not is_numeric_dtype(X[c])}
+    return (list(idices_to_names.keys()), list(idices_to_names.values()))
+
+
+def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutput="uniform_average", squared=True):
+    """Mean squared logarithmic error regression loss.
+
+    Extended version with clip(0) for y_pred
+
+    Read more in the :ref:`User Guide <mean_squared_log_error>`.
+
+    Parameters
+    ----------
+    y_true : array-like of shape (n_samples,) or (n_samples, n_outputs)
+        Ground truth (correct) target values.
+
+    y_pred : array-like of shape (n_samples,) or (n_samples, n_outputs)
+        Estimated target values.
+
+    sample_weight : array-like of shape (n_samples,), default=None
+        Sample weights.
+
+    multioutput : {'raw_values', 'uniform_average'} or array-like of shape \
+            (n_outputs,), default='uniform_average'
+
+        Defines aggregating of multiple output values.
+        Array-like value defines weights used to average errors.
+
+        'raw_values' :
+            Returns a full set of errors when the input is of multioutput
+            format.
+
+        'uniform_average' :
+            Errors of all outputs are averaged with uniform weight.
+    squared : bool, default=True
+        If True returns MSLE (mean squared log error) value.
+        If False returns RMSLE (root mean squared log error) value.
+
+    Returns
+    -------
+    loss : float or ndarray of floats
+        A non-negative floating point value (the best value is 0.0), or an
+        array of floating point values, one for each individual target.
+
+    Examples
+    --------
+    >>> from sklearn.metrics import mean_squared_log_error
+    >>> y_true = [3, 5, 2.5, 7]
+    >>> y_pred = [2.5, 5, 4, 8]
+    >>> mean_squared_log_error(y_true, y_pred)
+    0.039...
+    >>> mean_squared_log_error(y_true, y_pred, squared=False)
+    0.199...
+    >>> y_true = [[0.5, 1], [1, 2], [7, 6]]
+    >>> y_pred = [[0.5, 2], [1, 2.5], [8, 8]]
+    >>> mean_squared_log_error(y_true, y_pred)
+    0.044...
+    >>> mean_squared_log_error(y_true, y_pred, multioutput='raw_values')
+    array([0.00462428, 0.08377444])
+    >>> mean_squared_log_error(y_true, y_pred, multioutput=[0.3, 0.7])
+    0.060...
+    """
+    _, y_true, y_pred, multioutput = _check_reg_targets(y_true, y_pred, multioutput)
+    check_consistent_length(y_true, y_pred, sample_weight)
+
+    if (y_true < 0).any():
+        raise ValueError("Mean Squared Logarithmic Error cannot be used when " "targets contain negative values.")
+
+    return mean_squared_error(
+        log1p(y_true),
+        log1p(y_pred.clip(0)),
+        sample_weight=sample_weight,
+        multioutput=multioutput,
+        squared=squared,
+    )
