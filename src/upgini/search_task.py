@@ -685,7 +685,7 @@ class SearchTask:
                     feature_meta = {
                         "feature_name": get_original_column_name(feature["name"]),
                         "shap_value": feature["importance"],
-                        "match_percent": feature["matchedInPercent"],
+                        "coverage %": feature["matchedInPercent"],
                         "type": feature["valueType"] if "valueType" in feature else None,
                     }
                     features.append(feature_meta)
