@@ -1,23 +1,25 @@
 import numpy as np
 import pandas as pd
 import pytest
+from datetime import date
 
 from upgini import Dataset, FileColumnMeaningType, FileMetrics
 
 
 @pytest.fixture
 def etalon():
+    d = date(2000, 1, 1)
     data = pd.DataFrame(
         [
-            [946684800000001, 33333333, 0, 0.5],
-            [946684800000001, 33333333, 0, 0.5],
-            [946684800000001, 44444444, 1, None],
-            [946684800000001, 55555555, None, 0.5],
-            [946684800000001, 66666666, None, 0.5],
+            [d, 33333333, 0, 0.5],
+            [d, 33333333, 0, 0.5],
+            [d, 44444444, 1, None],
+            [d, 55555555, None, 0.5],
+            [d, 66666666, None, 0.5],
             [None, 77777777, 1, 0.5],
             ["", 88888888, 1, 0.5],
-            [946684800000001, 99999999, np.Inf, 0.5],
-            [946684800000001, 11111111, np.NaN, 0.5],
+            [d, 99999999, np.Inf, 0.5],
+            [d, 11111111, np.NaN, 0.5],
             [None, None, None, None],
         ],
         columns=["timestamp", "msisdn", "target", "score"],

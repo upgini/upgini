@@ -48,7 +48,7 @@ class Dataset(pd.DataFrame):
     IMBALANCE_THESHOLD: float = 0.4
     MIN_TARGET_CLASS_COUNT: int = 100
     MAX_MULTICLASS_CLASS_COUNT: int = 100
-    MIN_SUPPORTED_DATE_TS: int = 946684800  # 2000-01-01
+    MIN_SUPPORTED_DATE_TS: int = 946684800000  # 2000-01-01
 
     dataset_name: str
     description: Optional[str]
