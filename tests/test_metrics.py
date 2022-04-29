@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import get_scorer
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.metadata import CVType
 
 from .utils import (
     mock_default_requests,
@@ -88,6 +89,69 @@ def test_default_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.499903)
     assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.494628)
     assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005275)
+
+
+def test_blocked_timeseries_rmsle(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.0,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+
+    df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
+    X = df.loc[0:499, ["phone", "feature1"]]
+    y = df.loc[0:499, "target"].values
+    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
+    eval_y_1 = df.loc[500:749, "target"].values
+    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
+    eval_y_2 = df.loc[750:999, "target"].values
+    eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        cv=CVType.blocked_time_series
+    )
+
+    enriched_X = enricher.fit_transform(X, y, eval_set)
+
+    assert len(enriched_X) == len(X)
+
+    assert enricher.enriched_eval_set is not None
+    assert len(enricher.enriched_eval_set) == 500
+
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="mean_squared_log_error")
+    print(metrics_df)
+    assert metrics_df.loc["train", "match_rate"] == 99.0
+    assert metrics_df.loc["train", "baseline mean_squared_log_error"] == approx(0.230617)
+    assert metrics_df.loc["train", "enriched mean_squared_log_error"] == approx(0.230617)
+    assert metrics_df.loc["train", "uplift"] == approx(0.0)
+
+    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
+    assert metrics_df.loc["eval 1", "baseline mean_squared_log_error"] == approx(0.238305)
+    assert metrics_df.loc["eval 1", "enriched mean_squared_log_error"] == approx(0.245992)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.007687)
+
+    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
+    assert metrics_df.loc["eval 2", "baseline mean_squared_log_error"] == approx(0.244070)
+    assert metrics_df.loc["eval 2", "enriched mean_squared_log_error"] == approx(0.247914)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.003844)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -223,7 +287,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
-def test_rf_metric_binary(requests_mock: Mocker):
+def test_rf_metric_rmse(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
