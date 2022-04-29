@@ -48,6 +48,7 @@ class Dataset(pd.DataFrame):
     IMBALANCE_THESHOLD: float = 0.4
     MIN_TARGET_CLASS_COUNT: int = 100
     MAX_MULTICLASS_CLASS_COUNT: int = 100
+    MIN_SUPPORTED_DATE_TS: int = 946684800000  # 2000-01-01
 
     dataset_name: str
     description: Optional[str]
@@ -336,6 +337,20 @@ class Dataset(pd.DataFrame):
                 .str.replace(r"[^0-9A-Z]", "", regex=True)
                 .str.replace(r"^0+\B", "", regex=True)
             )
+
+    def __remove_old_dates(self):
+        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
+            FileColumnMeaningType.DATETIME.value
+        )
+        if date_column is not None:
+            old_subset = self[self[date_column] < self.MIN_SUPPORTED_DATE_TS]
+            if len(old_subset) > 0:
+                logging.info(f"df before dropping old rows: {self.shape}")
+                self.drop(index=old_subset.index, inplace=True)
+                logging.info(f"df after dropping old rows: {self.shape}")
+                msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
+                logging.warning(msg)
+                print("WARN: ", msg)
 
     def __remove_empty_date_rows(self):
         """Clean DataSet from empty date rows"""
@@ -708,6 +723,8 @@ class Dataset(pd.DataFrame):
         self.__correct_decimal_comma()
 
         self.__to_millis()
+
+        self.__remove_old_dates()
 
         self.__hash_email()
 
