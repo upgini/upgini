@@ -259,7 +259,7 @@ def test_iso_code_normalization():
     })
     dataset = Dataset("test321", df=df)
     dataset.meaning_types = {
-        "iso_code": FileColumnMeaningType.ISO_1366
+        "iso_code": FileColumnMeaningType.COUNTRY
     }
     dataset._Dataset__normalize_iso_code()
     assert dataset.loc[0, "iso_code"] == "RU"

@@ -31,7 +31,7 @@ def test_search_keys_validation(requests_mock: Mocker):
             endpoint=url,
         )
 
-    with pytest.raises(Exception, match="ISO_1366 search key should be provided if POSTAL_CODE is presented"):
+    with pytest.raises(Exception, match="COUNTRY search key should be provided if POSTAL_CODE is presented"):
         FeaturesEnricher(
             search_keys={"postal_code": SearchKey.POSTAL_CODE},
             endpoint=url

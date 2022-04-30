@@ -315,7 +315,7 @@ class Dataset(pd.DataFrame):
             self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
 
     def __normalize_iso_code(self):
-        iso_code = self.etalon_def_checked.get(FileColumnMeaningType.ISO_1366.value)
+        iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
         if iso_code is not None and iso_code in self.columns:
             logging.info("Normalize iso code column")
             self[iso_code] = (

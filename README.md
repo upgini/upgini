@@ -137,6 +137,16 @@ Our team works hard to introduce new search key types, currently we support:
     <td> datetime </td>
     <td> <tt>2020-02-12 12:46:18 </tt> <br/> <tt>12:46:18 12.02.2020 </tt> <br/> <tt>unixtimestamp </tt> </td>
   </tr>
+  <tr>
+    <td> SearchKey.COUNTRY </td>
+    <td> <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes">Country code</a> </td>
+    <td> <tt>GB </tt> <br/> <tt>US </tt> <br/> <tt>AU </tt> </td>
+  </tr> 
+  <tr>
+    <td> SearchKey.POSTAL_CODE </td>
+    <td> Postal code a.k.a. zip code. Could be used only with SearchKey.COUNTRY  </td>
+    <td> <tt>21174 </tt> <br/> <tt>061107 </tt> <br/> <tt>SE-999-99 </tt> </td>
+  </tr>
 </table>
 
 #### ⚠️ Requirements for search initialization dataset  
