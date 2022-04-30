@@ -20,7 +20,7 @@ class FileColumnMeaningType(Enum):
     TARGET = "TARGET"
     FEATURE = "FEATURE"
     CUSTOM_KEY = "CUSTOM_KEY"
-    ISO_1366 = "ISO_1366"
+    COUNTRY = "COUNTRY"
     POSTAL_CODE = "POSTAL_CODE"
     SYSTEM_RECORD_ID = "SYSTEM_RECORD_ID"
     EVAL_SET_INDEX = "EVAL_SET_INDEX"
@@ -34,7 +34,7 @@ class SearchKey(Enum):
     DATE = FileColumnMeaningType.DATE
     DATETIME = FileColumnMeaningType.DATETIME
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
-    ISO_1366 = FileColumnMeaningType.ISO_1366
+    COUNTRY = FileColumnMeaningType.COUNTRY
     POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
 
 

@@ -51,7 +51,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         Each of this columns will be used as a search key to find features.
 
     iso_code: str, optional (default=None)
-        ISO-1366 code of country for all rows in dataset.
+        ISO-3166 COUNTRY code of country for all rows in dataset.
 
     keep_input: bool, optional (default=False)
         If True, copy original input columns to the output dataframe.
@@ -422,8 +422,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             logging.error(msg)
             raise Exception(msg)
 
-        if SearchKey.POSTAL_CODE in key_types and SearchKey.ISO_1366 not in key_types:
-            msg = "ISO_1366 search key should be provided if POSTAL_CODE is presented"
+        if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types:
+            msg = "COUNTRY search key should be provided if POSTAL_CODE is presented"
             logging.error(msg)
             raise Exception(msg)
 
@@ -599,11 +599,11 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
     def __add_iso_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if self.iso_code is not None and SearchKey.ISO_1366 not in self.search_keys.values():
-            logging.info(f"Add ISO-1366 column with {self.iso_code} value")
+        if self.iso_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
+            logging.info(f"Add COUNTRY column with {self.iso_code} value")
             df[ISO_CODE] = self.iso_code
-            self.search_keys[ISO_CODE] = SearchKey.ISO_1366
-            meaning_types[ISO_CODE] = FileColumnMeaningType.ISO_1366
+            self.search_keys[ISO_CODE] = SearchKey.COUNTRY
+            meaning_types[ISO_CODE] = FileColumnMeaningType.COUNTRY
 
     def calculate_metrics(
         self,
@@ -817,8 +817,8 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
                 logging.error(msg)
                 raise ValueError(msg)
-            if meaning_type == SearchKey.ISO_1366 and self.iso_code is not None:
-                msg = "SearchKey.ISO_1366 cannot be used together with a iso_code property at the same time"
+            if meaning_type == SearchKey.COUNTRY and self.iso_code is not None:
+                msg = "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time"
                 logging.error(msg)
                 raise ValueError(msg)
 
