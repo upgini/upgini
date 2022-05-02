@@ -295,7 +295,7 @@ def test_number_postal_code_normalization():
 
 def test_old_dates_drop():
     df = pd.DataFrame({
-        "date": ["2020-01-01", "2000-01-01", "1999-12-31"]
+        "date": ["2020-01-01", "2000-01-01", "1999-12-31", None]
     })
     dataset = Dataset("test", df=df)
     dataset.meaning_types = {
@@ -303,4 +303,63 @@ def test_old_dates_drop():
     }
     dataset._Dataset__to_millis()
     dataset._Dataset__remove_old_dates()
-    assert len(dataset) == 2
+    assert len(dataset) == 3
+
+
+def test_time_cutoff_from_str():
+    df = pd.DataFrame({
+        "date": ["2020-01-01 00:01:00", "2000-01-01 00:00:00", "1999-12-31 02:00:00", None]
+    })
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATETIME
+    }
+    dataset.date_format = "%Y-%m-%d %H:%M:%S"
+    dataset._Dataset__to_millis()
+    assert dataset.loc[0, "date"] == 1577836800000
+    assert dataset.loc[1, "date"] == 946684800000
+    assert dataset.loc[2, "date"] == 946598400000
+    assert pd.isnull(dataset.loc[3, "date"])
+
+
+def test_time_cutoff_from_datetime():
+    df = pd.DataFrame({
+        "date": [datetime(2020, 1, 1, 0, 1, 0), datetime(2000, 1, 1, 0, 0, 0), datetime(1999, 12, 31, 2, 0, 0), None]
+    })
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATETIME
+    }
+    dataset._Dataset__to_millis()
+    assert dataset.loc[0, "date"] == 1577836800000
+    assert dataset.loc[1, "date"] == 946684800000
+    assert dataset.loc[2, "date"] == 946598400000
+    assert pd.isnull(dataset.loc[3, "date"])
+
+
+def test_time_cutoff_from_period():
+    df = pd.DataFrame({
+        "date": pd.date_range("2020-01-01", periods=24, freq="H")
+    })
+    print(df)
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATETIME
+    }
+    dataset._Dataset__to_millis()
+    for i in range(24):
+        assert dataset.loc[i, "date"] == 1577836800000
+
+
+def test_time_cutoff_from_timestamp():
+    df = pd.DataFrame({
+        "date": [1577836800000000000, 1577840400000000000, 1577844000000000000]
+    })
+    print(df)
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "date": FileColumnMeaningType.DATETIME
+    }
+    dataset._Dataset__to_millis()
+    for i in range(3):
+        assert dataset.loc[i, "date"] == 1577836800000

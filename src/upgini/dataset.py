@@ -265,14 +265,22 @@ class Dataset(pd.DataFrame):
         if date is not None and date in self.columns:
             logging.info("Transform date column to millis")
             if is_string_dtype(self[date]):
-                self[date] = pd.to_datetime(self[date], format=self.date_format).values.astype(np.int64) // 1_000_000
-            elif is_datetime(self[date]):
-                self[date] = self[date].view(np.int64) // 1_000_000
-            elif is_period_dtype(self[date]):
                 self[date] = (
-                    pd.to_datetime(self[date].astype("string"), format=self.date_format).values.astype(np.int64)
+                    pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64)
                     // 1_000_000
                 )
+            elif is_datetime(self[date]):
+                self[date] = self[date].dt.floor("D").view(np.int64) // 1_000_000
+            elif is_period_dtype(self[date]):
+                self[date] = (
+                    pd.to_datetime(self[date].astype("string")).dt.floor("D").view(
+                        np.int64
+                    )
+                    // 1_000_000
+                )
+            elif is_numeric_dtype(self[date]):
+                self[date] = pd.to_datetime(self[date]).dt.floor("D").view(np.int64) // 1_000_000
+
             self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
 
     @staticmethod
