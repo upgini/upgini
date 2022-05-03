@@ -8,7 +8,7 @@ from upgini import Dataset, FileColumnMeaningType, FileMetrics
 
 @pytest.fixture
 def etalon():
-    d = date(2000, 1, 1)
+    d = date(2020, 1, 1)
     data = pd.DataFrame(
         [
             [d, 33333333, 0, 0.5],

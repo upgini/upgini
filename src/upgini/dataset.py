@@ -48,7 +48,7 @@ class Dataset(pd.DataFrame):
     IMBALANCE_THESHOLD: float = 0.4
     MIN_TARGET_CLASS_COUNT: int = 100
     MAX_MULTICLASS_CLASS_COUNT: int = 100
-    MIN_SUPPORTED_DATE_TS: int = 946684800000  # 2000-01-01
+    MIN_SUPPORTED_DATE_TS: int = 1114992000000  # 2005-05-02
 
     dataset_name: str
     description: Optional[str]
@@ -279,7 +279,9 @@ class Dataset(pd.DataFrame):
                     // 1_000_000
                 )
             elif is_numeric_dtype(self[date]):
-                self[date] = pd.to_datetime(self[date]).dt.floor("D").view(np.int64) // 1_000_000
+                msg = f"Unsupported type of date column {date}. Convert to datetime manually please."
+                logging.error(msg)
+                raise Exception(msg)
 
             self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
 

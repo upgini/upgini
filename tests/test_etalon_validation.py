@@ -295,7 +295,7 @@ def test_number_postal_code_normalization():
 
 def test_old_dates_drop():
     df = pd.DataFrame({
-        "date": ["2020-01-01", "2000-01-01", "1999-12-31", None]
+        "date": ["2020-01-01", "2005-05-02", "1999-12-31", None]
     })
     dataset = Dataset("test", df=df)
     dataset.meaning_types = {
@@ -360,6 +360,5 @@ def test_time_cutoff_from_timestamp():
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATETIME
     }
-    dataset._Dataset__to_millis()
-    for i in range(3):
-        assert dataset.loc[i, "date"] == 1577836800000
+    with pytest.raises(Exception, match="Unsupported type of date column date.*"):
+        dataset._Dataset__to_millis()

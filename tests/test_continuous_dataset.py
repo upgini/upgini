@@ -26,7 +26,7 @@ def etalon_search_keys():
 
 
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
-def test_binary_dataset(datafiles, etalon_definition, etalon_search_keys):
+def test_continuous_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     ds = Dataset(
         dataset_name="test Dataset",
