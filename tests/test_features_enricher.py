@@ -86,6 +86,7 @@ def test_features_enricher(requests_mock: Mocker):
         keep_input=True,
         endpoint=url,
         api_key="fake_api_key",
+        date_format="%Y-%m-%d"
     )
 
     enriched_train_features = enricher.fit_transform(
@@ -163,6 +164,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
         keep_input=True,
+        date_format="%Y-%m-%d",
         endpoint=url,
         api_key="fake_api_key",
         runtime_parameters=RuntimeParameters(properties={"runtimeProperty1": "runtimeValue1"}),

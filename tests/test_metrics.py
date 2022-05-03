@@ -136,22 +136,22 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     assert enricher.enriched_eval_set is not None
     assert len(enricher.enriched_eval_set) == 500
 
-    metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="mean_squared_log_error")
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline mean_squared_log_error"] == approx(0.230617)
-    assert metrics_df.loc["train", "enriched mean_squared_log_error"] == approx(0.230617)
-    assert metrics_df.loc["train", "uplift"] == approx(0.0)
+    assert metrics_df.loc["train", "baseline RMSLE"] == approx(0.479534)
+    assert metrics_df.loc["train", "enriched RMSLE"] == approx(0.479000)
+    assert metrics_df.loc["train", "uplift"] == approx(0.000534)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline mean_squared_log_error"] == approx(0.238305)
-    assert metrics_df.loc["eval 1", "enriched mean_squared_log_error"] == approx(0.245992)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.007687)
+    assert metrics_df.loc["eval 1", "baseline RMSLE"] == approx(0.488165)
+    assert metrics_df.loc["eval 1", "enriched RMSLE"] == approx(0.495976)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.007811)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline mean_squared_log_error"] == approx(0.244070)
-    assert metrics_df.loc["eval 2", "enriched mean_squared_log_error"] == approx(0.247914)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.003844)
+    assert metrics_df.loc["eval 2", "baseline RMSLE"] == approx(0.494035)
+    assert metrics_df.loc["eval 2", "enriched RMSLE"] == approx(0.497909)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.003875)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):

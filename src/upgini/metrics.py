@@ -180,7 +180,13 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
     multiplier = 1
     if isinstance(scoring, str):
         metric_name = scoring
-        if scoring in SCORERS.keys():
+        if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
+            scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
+            multiplier = -1
+        elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
+            scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
+            multiplier = -1
+        elif scoring in SCORERS.keys():
             scoring = get_scorer(scoring)
         elif ("neg_" + scoring) in SCORERS.keys():
             scoring = get_scorer("neg_" + scoring)
@@ -194,15 +200,18 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
     else:
         metric_name = str(scoring)
 
-    if "mean_squared_log_error" in metric_name:
-        scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
-
     return scoring, metric_name, multiplier
 
 
 def _get_cat_features(X: pd.DataFrame) -> Tuple[List[int], List[str]]:
     idices_to_names = {i: c for i, c in enumerate(X.columns) if not is_numeric_dtype(X[c])}
     return (list(idices_to_names.keys()), list(idices_to_names.values()))
+
+
+def _ext_root_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutput="uniform_average"):
+    return _ext_mean_squared_log_error(
+        y_true, y_pred, sample_weight=sample_weight, multioutput=multioutput, squared=False
+    )
 
 
 def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutput="uniform_average", squared=True):
