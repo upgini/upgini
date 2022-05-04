@@ -611,6 +611,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
         scoring: Union[Callable, str, None] = None,
+        cv: Optional[CVType] = None,
         estimator=None,
     ) -> pd.DataFrame:
         if (
@@ -629,17 +630,18 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
 
         model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+        cv = cv or self.cv
 
         # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
         # and calculate baseline metric
         etalon_metric = None
         if fitting_X.shape[1] > 0:
-            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, self.cv, scoring).cross_val_predict(
+            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, cv, scoring).cross_val_predict(
                 fitting_X, y
             )
 
         # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        wrapper = EstimatorWrapper.create(estimator, model_task_type, self.cv, scoring)
+        wrapper = EstimatorWrapper.create(estimator, model_task_type, cv, scoring)
         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
         metric = wrapper.metric_name
 
@@ -664,9 +666,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             # Fit models
             etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, self.cv, scoring)
+                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, cv, scoring)
                 etalon_model.fit(fitting_X, y)
-            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, self.cv, scoring)
+            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, cv, scoring)
             enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
