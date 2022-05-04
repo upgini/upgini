@@ -34,6 +34,7 @@ CATBOOST_PARAMS = {
 
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
+MAX_OHE_CAT_FEATURES = 100
 
 
 class EstimatorWrapper:
@@ -160,9 +161,13 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         num_features = [col for col in X.columns if col not in cat_features]
         X[num_features] = X[num_features].fillna(-999)
         X[cat_features] = X[cat_features].fillna("")
-        # TODO use one-hot encoding if cardinality is less 50
-        for feature in cat_features:
-            X[feature] = X[feature].astype("category").cat.codes
+
+        if len(cat_features) < 10:
+            X = _one_hot_encode(X, cat_features)
+        else:
+            logging.warning(f"Too many category features: {len(cat_features)}. One-hot encoding will not be applied")
+            for feature in cat_features:
+                X[feature] = X[feature].astype("category").cat.codes
         return X, {}
 
 
@@ -285,3 +290,14 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
         multioutput=multioutput,
         squared=squared,
     )
+
+
+def _one_hot_encode(X: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
+    df = X.copy()
+    for cat_feature in cat_features:
+        value_counts = df[cat_feature].value_counts()
+        if len(value_counts) > MAX_OHE_CAT_FEATURES:
+            for other in value_counts.index[MAX_OHE_CAT_FEATURES:]:
+                df[cat_feature].replace({other: "other"}, inplace=True)
+
+    return pd.get_dummies(df)

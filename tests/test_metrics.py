@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 from catboost import CatBoostClassifier
@@ -354,6 +355,26 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", baseline_metric] == approx(-0.456)
     assert metrics_df.loc["eval 2", enriched_metric] == approx(-0.456)
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
+
+
+def test_one_hot_encoding():
+    df = pd.DataFrame({
+        "num_feature": np.random.randint(0, 1000, 300),
+        "cat_feature_1": [f"value_{i}" for i in range(100)] * 2 + [f"value_{i}" for i in range(100, 200)],
+        "cat_feature_2": [f"value_{i}" for i in range(50)] * 6
+    })
+    from upgini.metrics import _one_hot_encode
+    encoded = _one_hot_encode(df, ["cat_feature_1", "cat_feature_2"])
+    print(encoded)
+    assert encoded.shape == (300, 152)
+    assert "num_feature" in encoded.columns
+    assert "cat_feature_1_other" in encoded.columns
+    assert encoded.loc[0, "cat_feature_1_value_0"] == 1
+    assert encoded.loc[0, "cat_feature_1_value_1"] == 0
+    assert encoded.loc[250, "cat_feature_1_other"] == 1
+    assert encoded.loc[250, "cat_feature_1_value_99"] == 0
+    assert encoded.loc[50, "cat_feature_2_value_0"] == 1
+    assert encoded.loc[50, "cat_feature_2_value_49"] == 0
 
 
 def approx(value: float):
