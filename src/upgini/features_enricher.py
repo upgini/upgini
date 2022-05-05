@@ -5,13 +5,10 @@ from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pandas.api.types import is_string_dtype
+from sklearn.model_selection import BaseCrossValidator
 
-try:
-    from sklearn.base import TransformerMixin  # type: ignore
-    from sklearn.exceptions import NotFittedError  # type: ignore
-except ImportError:
-    TransformerMixin = object
-    NotFittedError = Exception
+from sklearn.base import TransformerMixin
+from sklearn.exceptions import NotFittedError
 
 import itertools
 import uuid
@@ -26,7 +23,7 @@ from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
     EVAL_SET_INDEX,
-    ISO_CODE,
+    COUNTRY,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     CVType,
@@ -41,7 +38,7 @@ from upgini.utils.format import Format
 from upgini.utils.target_utils import define_task
 
 
-class FeaturesEnricher(TransformerMixin):  # type: ignore
+class FeaturesEnricher(TransformerMixin):
     """Retrieve external features via Upgini that are most relevant to predict your target.
 
     Parameters
@@ -50,7 +47,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         Dictionary with column names or indices mapping to key types.
         Each of this columns will be used as a search key to find features.
 
-    iso_code: str, optional (default=None)
+    country_code: str, optional (default=None)
         ISO-3166 COUNTRY code of country for all rows in dataset.
 
     keep_input: bool, optional (default=False)
@@ -91,6 +88,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
     cv: CVType, optional (default=None)
         Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
+        Default cross validation is K-Fold for regressions and Stratified-K-Fold for classifications
     """
 
     TARGET_NAME = "target"
@@ -108,7 +106,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
     def __init__(
         self,
         search_keys: Dict[str, SearchKey],
-        iso_code: Optional[str] = None,
+        country_code: Optional[str] = None,
         keep_input: bool = False,
         model_task_type: Optional[ModelTaskType] = None,
         importance_threshold: Optional[float] = 0,
@@ -125,7 +123,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, search_id)
         self.search_keys = search_keys
-        self.iso_code = iso_code
+        self.country_code = country_code
         self.keep_input = keep_input
         self.model_task_type = model_task_type
         self.scoring = scoring
@@ -300,7 +298,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__add_fake_date(df, meaning_types)
 
-        self.__add_iso_code(df, meaning_types)
+        self.__add_country_code(df, meaning_types)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -506,7 +504,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
 
         self.__add_fake_date(df, meaning_types)
 
-        self.__add_iso_code(df, meaning_types)
+        self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
         for L in range(1, len(self.search_keys.keys()) + 1):
@@ -598,12 +596,12 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
             meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
-    def __add_iso_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if self.iso_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
-            logging.info(f"Add COUNTRY column with {self.iso_code} value")
-            df[ISO_CODE] = self.iso_code
-            self.search_keys[ISO_CODE] = SearchKey.COUNTRY
-            meaning_types[ISO_CODE] = FileColumnMeaningType.COUNTRY
+    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+        if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
+            logging.info(f"Add COUNTRY column with {self.country_code} value")
+            df[COUNTRY] = self.country_code
+            self.search_keys[COUNTRY] = SearchKey.COUNTRY
+            meaning_types[COUNTRY] = FileColumnMeaningType.COUNTRY
 
     def calculate_metrics(
         self,
@@ -611,6 +609,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
         scoring: Union[Callable, str, None] = None,
+        cv: Optional[BaseCrossValidator] = None,
         estimator=None,
     ) -> pd.DataFrame:
         if (
@@ -629,17 +628,18 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
         )
 
         model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+        _cv = cv or self.cv
 
         # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
         # and calculate baseline metric
         etalon_metric = None
         if fitting_X.shape[1] > 0:
-            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, self.cv, scoring).cross_val_predict(
+            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
                 fitting_X, y
             )
 
         # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        wrapper = EstimatorWrapper.create(estimator, model_task_type, self.cv, scoring)
+        wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
         metric = wrapper.metric_name
 
@@ -664,9 +664,9 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
             # Fit models
             etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, self.cv, scoring)
+                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
                 etalon_model.fit(fitting_X, y)
-            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, self.cv, scoring)
+            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
             enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
@@ -817,7 +817,7 @@ class FeaturesEnricher(TransformerMixin):  # type: ignore
                 msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
                 logging.error(msg)
                 raise ValueError(msg)
-            if meaning_type == SearchKey.COUNTRY and self.iso_code is not None:
+            if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time"
                 logging.error(msg)
                 raise ValueError(msg)

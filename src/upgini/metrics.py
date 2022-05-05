@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -68,10 +68,13 @@ class EstimatorWrapper:
         return self.scorer(self.estimator, X, y) * self.multiplier
 
     @staticmethod
-    def _create_cv(cv_type: Optional[CVType], target_type: ModelTaskType) -> BaseCrossValidator:
-        if cv_type == CVType.time_series:
+    def _create_cv(cv: Union[BaseCrossValidator, CVType, None], target_type: ModelTaskType) -> BaseCrossValidator:
+        if isinstance(cv, BaseCrossValidator):
+            return cv
+
+        if cv == CVType.time_series:
             return TimeSeriesSplit(n_splits=N_FOLDS)
-        elif cv_type == CVType.blocked_time_series:
+        elif cv == CVType.blocked_time_series:
             return BlockedTimeSeriesSplit(n_splits=N_FOLDS, test_size=BLOCKED_TS_TEST_SIZE)
         elif target_type == ModelTaskType.REGRESSION:
             return KFold(n_splits=N_FOLDS)
@@ -80,10 +83,13 @@ class EstimatorWrapper:
 
     @staticmethod
     def create(
-        estimator, target_type: ModelTaskType, cv_type: Optional[CVType], scoring: Union[Callable, str, None] = None
+        estimator,
+        target_type: ModelTaskType,
+        cv: Union[BaseCrossValidator, CVType, None],
+        scoring: Union[Callable, str, None] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
-        cv = EstimatorWrapper._create_cv(cv_type, target_type)
+        cv = EstimatorWrapper._create_cv(cv, target_type)
         kwargs = {"scorer": scorer, "metric_name": metric_name, "multiplier": multiplier, "cv": cv}
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
