@@ -50,22 +50,6 @@ class Dataset(pd.DataFrame):
     MAX_MULTICLASS_CLASS_COUNT: int = 100
     MIN_SUPPORTED_DATE_TS: int = 1114992000000  # 2005-05-02
 
-    dataset_name: str
-    description: Optional[str]
-    meaning_types: Optional[Dict[str, FileColumnMeaningType]]
-    search_keys: Optional[List[Tuple[str, ...]]]
-    ignore_columns: List[str]
-    hierarchical_group_keys: List[Tuple[str, ...]]
-    hierarchical_subgroup_keys: List[Tuple[str, ...]]
-    task_type: Optional[ModelTaskType]
-    date_format: Optional[str]
-    random_state: Optional[int]
-    initial_data: pd.DataFrame
-    file_upload_id: Optional[str]
-    etalon_def: Optional[Dict[str, str]]
-    columns_renaming: Dict[str, str] = {}
-    sampled: bool = False
-
     _metadata = [
         "dataset_name",
         "description",
@@ -129,11 +113,13 @@ class Dataset(pd.DataFrame):
         self.hierarchical_subgroup_keys = []
         self.date_format = date_format
         self.initial_data = data.copy()
-        self.file_upload_id = None
-        self.etalon_def = None
+        self.file_upload_id: Optional[str] = None
+        self.etalon_def: Optional[Dict[str, str]] = None
         self.endpoint = endpoint
         self.api_key = api_key
         self.random_state = random_state
+        self.columns_renaming: Dict[str, str] = {}
+        self.sampled: bool = False
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
@@ -472,7 +458,7 @@ class Dataset(pd.DataFrame):
                 raise ValidationError(msg)
 
             unique_target = target.unique()
-            for v in unique_target:
+            for v in list(unique_target):
                 current_class_count = len(train_segment.loc[target == v])
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
