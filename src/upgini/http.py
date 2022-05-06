@@ -215,6 +215,7 @@ class _RestClient:
 
     def initial_search_v2(
         self,
+        trace_id: str,
         file_path: str,
         metadata: FileMetadata,
         metrics: FileMetrics,
@@ -242,13 +243,14 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: open_and_send())
         return SearchTaskResponse(response)
 
-    def check_uploaded_file_v2(self, file_upload_id: str, metadata: FileMetadata) -> bool:
+    def check_uploaded_file_v2(self, trace_id: str, file_upload_id: str, metadata: FileMetadata) -> bool:
         api_path = self.CHECK_UPLOADED_FILE_URL_FMT_V2.format(file_upload_id)
         response = self._with_unauth_retry(lambda: self._send_post_req(api_path, metadata.json(exclude_none=True)))
         return bool(response)
 
     def initial_search_without_upload_v2(
         self,
+        trace_id: str,
         file_upload_id: str,
         metadata: FileMetadata,
         metrics: FileMetrics,
@@ -266,6 +268,7 @@ class _RestClient:
 
     def validation_search_v2(
         self,
+        trace_id: str,
         file_path: str,
         initial_search_task_id: str,
         metadata: FileMetadata,
@@ -296,6 +299,7 @@ class _RestClient:
 
     def validation_search_without_upload_v2(
         self,
+        trace_id: str,
         file_upload_id: str,
         initial_search_task_id: str,
         metadata: FileMetadata,
@@ -312,40 +316,40 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files))
         return SearchTaskResponse(response)
 
-    def search_task_summary_v2(self, search_task_id: str) -> SearchTaskSummary:
+    def search_task_summary_v2(self, trace_id: str, search_task_id: str) -> SearchTaskSummary:
         api_path = self.SEARCH_TASK_SUMMARY_URI_FMT_V2.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
         return SearchTaskSummary(response)
 
-    def stop_search_task_v2(self, search_task_id: str):
+    def stop_search_task_v2(self, trace_id: str, search_task_id: str):
         api_path = self.STOP_SEARCH_URI_FMT_V2.format(search_task_id)
         self._with_unauth_retry(lambda: self._send_post_req(api_path))
 
-    def get_search_features_meta_v2(self, provider_search_task_id: str):
+    def get_search_features_meta_v2(self, trace_id: str, provider_search_task_id: str):
         api_path = self.SEARCH_TASK_FEATURES_META_URI_FMT_V2.format(provider_search_task_id)
         return self._with_unauth_retry(lambda: self._send_get_req(api_path))
 
-    def get_search_models_v2(self, search_task_id):
+    def get_search_models_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_MODELS_URI_FMT_V2.format(search_task_id)
         return self._with_unauth_retry(lambda: self._send_get_req(api_path))
 
-    def get_search_model_file_v2(self, trained_model_id):
+    def get_search_model_file_v2(self, trace_id: str, trained_model_id: str):
         api_path = self.SEARCH_MODEL_FILE_URI_FMT_V2.format(trained_model_id)
         return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
 
-    def get_search_scores_v2(self, search_task_id):
+    def get_search_scores_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_SCORES_URI_FMT_V2.format(search_task_id)
         return self._with_unauth_retry(lambda: self._send_get_req(api_path))
 
-    def get_search_scores_file_v2(self, ads_scores_id):
+    def get_search_scores_file_v2(self, trace_id: str, ads_scores_id: str):
         api_path = self.SEARCH_SCORES_FILE_URI_FMT_V2.format(ads_scores_id)
         return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
 
-    def get_search_features_v2(self, search_task_id):
+    def get_search_features_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_FEATURES_URI_FMT_V2.format(search_task_id)
         return self._with_unauth_retry(lambda: self._send_get_req(api_path))
 
-    def get_search_features_file_v2(self, ads_features_id):
+    def get_search_features_file_v2(self, trace_id: str, ads_features_id: str):
         api_path = self.SEARCH_FEATURES_FILE_URI_FMT_V2.format(ads_features_id)
         return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
 
@@ -458,7 +462,7 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
         token = api_token
     elif UPGINI_API_KEY not in os.environ:
         # Demo user api-key
-        token = "aIB6TC-BcuMlvoHxRwkJhn7hI-okN-dkE6RGLrZBKDw"
+        token = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
     else:
         token = os.environ[UPGINI_API_KEY]
 
@@ -495,6 +499,8 @@ def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = N
 
     rest_client = get_rest_client(backend_url, api_token)
     datadogHandler = BackendLogHandler(rest_client)
-    jsonFormatter = jsonlogger.JsonFormatter("%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s")
+    jsonFormatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s "
+    )
     datadogHandler.setFormatter(jsonFormatter)
     root.addHandler(datadogHandler)

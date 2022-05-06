@@ -1,29 +1,27 @@
 import hashlib
+import itertools
 import logging
 import sys
+import uuid
+from copy import deepcopy
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from pandas.api.types import is_string_dtype
-from sklearn.model_selection import BaseCrossValidator
-
-from sklearn.base import TransformerMixin
-from sklearn.exceptions import NotFittedError
-
-import itertools
-import uuid
-from copy import deepcopy
-
 import numpy as np
 import pandas as pd
+from mdc import MDC
+from pandas.api.types import is_string_dtype
+from sklearn.base import TransformerMixin
+from sklearn.exceptions import NotFittedError
+from sklearn.model_selection import BaseCrossValidator
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
-    EVAL_SET_INDEX,
     COUNTRY,
+    EVAL_SET_INDEX,
     SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     CVType,
@@ -148,16 +146,18 @@ class FeaturesEnricher(TransformerMixin):
                 api_key=self.api_key,
             )
             print("Checking existing search")
-            try:
-                self._search_task = search_task.poll_result(quiet=True)
-                file_metadata = self._search_task.get_file_metadata()
-                x_columns = [c.originalName or c.name for c in file_metadata.columns]
-                self.__prepare_feature_importances(x_columns)
-                # TODO validate search_keys with search_keys from file_metadata
-                print("Search found. Now you can use transform")
-            except Exception as e:
-                logging.exception("Failed to check existing search")
-                raise e
+            trace_id = str(uuid.uuid4())
+            with MDC(trace_id=trace_id):
+                try:
+                    self._search_task = search_task.poll_result(trace_id, quiet=True)
+                    file_metadata = self._search_task.get_file_metadata()
+                    x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                    self.__prepare_feature_importances(trace_id, x_columns)
+                    # TODO validate search_keys with search_keys from file_metadata
+                    print("Search found. Now you can use transform")
+                except Exception as e:
+                    logging.exception("Failed to check existing search")
+                    raise e
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
         self.random_state = random_state
@@ -194,12 +194,15 @@ class FeaturesEnricher(TransformerMixin):
         **fit_params : dict
             Additional fit parameters.
         """
-        logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
-        try:
-            self.__inner_fit(X, y, eval_set, True, **fit_params)
-        except Exception as e:
-            logging.exception("Failed inner fit")
-            raise e
+
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
+            try:
+                self.__inner_fit(trace_id, X, y, eval_set, True, **fit_params)
+            except Exception as e:
+                logging.exception("Failed inner fit")
+                raise e
 
     def fit_transform(
         self,
@@ -234,17 +237,19 @@ class FeaturesEnricher(TransformerMixin):
             Transformed dataframe, enriched with important features.
         """
 
-        logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
-        try:
-            result = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
-        except Exception as e:
-            logging.exception("Failed in inner_fit")
-            raise e
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
+            try:
+                result = self.__inner_fit(trace_id, X, y, eval_set, extract_features=True, **fit_params)
+            except Exception as e:
+                logging.exception("Failed in inner_fit")
+                raise e
 
-        if self.keep_input:
-            return result
-        else:
-            return result.drop(columns=[c for c in X.columns if c in result.columns])
+            if self.keep_input:
+                return result
+            else:
+                return result.drop(columns=[c for c in X.columns if c in result.columns])
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Transform `X`.
@@ -262,80 +267,88 @@ class FeaturesEnricher(TransformerMixin):
         X_new : pandas dataframe of shape (n_samples, n_features_new)
             Transformed dataframe, enriched with important features.
         """
-        logging.info(f"Start transform. X shape: {X.shape}")
-        try:
-            result, _ = self.__inner_transform(X)
-        except Exception as e:
-            logging.exception("Failed to inner transform")
-            raise e
 
-        if self.keep_input:
-            return result
-        else:
-            return result.drop(columns=[c for c in X.columns if c in result.columns])
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            logging.info(f"Start transform. X shape: {X.shape}")
+            try:
+                result, _ = self.__inner_transform(trace_id, X)
+            except Exception as e:
+                logging.exception("Failed to inner transform")
+                raise e
+
+            if self.keep_input:
+                return result
+            else:
+                return result.drop(columns=[c for c in X.columns if c in result.columns])
 
     def __inner_transform(
-        self, X: pd.DataFrame, silent_mode: bool = False
+        self, trace_id: str, X: pd.DataFrame, silent_mode: bool = False
     ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
-        if self._search_task is None:
-            msg = "`fit` or `fit_transform` should be called before `transform`."
-            logging.error(msg)
-            raise NotFittedError(msg)
-        if not isinstance(X, pd.DataFrame):
-            msg = f"Only pandas.DataFrame supported for X, but {type(X)} was passed."
-            logging.error(msg)
-            raise TypeError(msg)
+        with MDC(trace_id=trace_id):
+            if self._search_task is None:
+                msg = "`fit` or `fit_transform` should be called before `transform`."
+                logging.error(msg)
+                raise NotFittedError(msg)
+            if not isinstance(X, pd.DataFrame):
+                msg = f"Only pandas.DataFrame supported for X, but {type(X)} was passed."
+                logging.error(msg)
+                raise TypeError(msg)
 
-        self.__prepare_search_keys(X)
-        meaning_types = {col: key.value for col, key in self.search_keys.items()}
-        feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
+            self.__prepare_search_keys(X)
+            meaning_types = {col: key.value for col, key in self.search_keys.items()}
+            feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
-        self.__check_string_dates(X)
+            self.__check_string_dates(X)
 
-        df = X.copy()
+            df = X.copy()
 
-        df = df.reset_index(drop=True)
+            df = df.reset_index(drop=True)
 
-        self.__add_fake_date(df, meaning_types)
+            self.__add_fake_date(df, meaning_types)
 
-        self.__add_country_code(df, meaning_types)
+            self.__add_country_code(df, meaning_types)
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+            df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
+            meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
-        combined_search_keys = []
-        for L in range(1, len(self.search_keys.keys()) + 1):
-            for subset in itertools.combinations(self.search_keys.keys(), L):
-                combined_search_keys.append(subset)
+            combined_search_keys = []
+            for L in range(1, len(self.search_keys.keys()) + 1):
+                for subset in itertools.combinations(self.search_keys.keys(), L):
+                    combined_search_keys.append(subset)
 
-        # Don't pass features in backend on transform
-        if len(feature_columns) > 0:
-            df_without_features = df.drop(columns=feature_columns)
-        else:
-            df_without_features = df
+            # Don't pass features in backend on transform
+            if len(feature_columns) > 0:
+                df_without_features = df.drop(columns=feature_columns)
+            else:
+                df_without_features = df
 
-        dataset = Dataset(
-            "sample_" + str(uuid.uuid4()),
-            df=df_without_features,  # type: ignore
-            endpoint=self.endpoint,  # type: ignore
-            api_key=self.api_key,  # type: ignore
-            date_format=self.date_format,  # type: ignore
-        )
-        dataset.meaning_types = meaning_types
-        dataset.search_keys = combined_search_keys
-        validation_task = self._search_task.validation(
-            dataset, extract_features=True, runtime_parameters=self.runtime_parameters, silent_mode=silent_mode
-        )
+            dataset = Dataset(
+                "sample_" + str(uuid.uuid4()),
+                df=df_without_features,  # type: ignore
+                endpoint=self.endpoint,  # type: ignore
+                api_key=self.api_key,  # type: ignore
+                date_format=self.date_format,  # type: ignore
+            )
+            dataset.meaning_types = meaning_types
+            dataset.search_keys = combined_search_keys
+            validation_task = self._search_task.validation(
+                trace_id,
+                dataset,
+                extract_features=True,
+                runtime_parameters=self.runtime_parameters,
+                silent_mode=silent_mode,
+            )
 
-        if not silent_mode:
-            print("Executing transform step")
-            with yaspin(Spinners.material) as sp:
+            if not silent_mode:
+                print("Executing transform step")
+                with yaspin(Spinners.material) as sp:
+                    result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
+                    sp.ok("Done                         ")
+            else:
                 result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
-                sp.ok("Done                         ")
-        else:
-            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
 
-        return result
+            return result
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of fitted enricher. It's present only after fit completed"""
@@ -433,6 +446,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __inner_fit(
         self,
+        trace_id: str,
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
@@ -528,6 +542,7 @@ class FeaturesEnricher(TransformerMixin):
         ]
 
         self._search_task = dataset.search(
+            trace_id,
             extract_features=extract_features,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
@@ -536,7 +551,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__show_metrics()
 
-        self.__prepare_feature_importances(list(X.columns))
+        self.__prepare_feature_importances(trace_id, list(X.columns))
 
         self.__show_selected_features()
 
@@ -545,7 +560,7 @@ class FeaturesEnricher(TransformerMixin):
                 "Train dataset has size more than fit threshold. Transform will be executed in separate action"
             )
             try:
-                self.enriched_X, self.enriched_eval_set = self.__inner_transform(X, silent_mode=True)
+                self.enriched_X, self.enriched_eval_set = self.__inner_transform(trace_id, X, silent_mode=True)
             except Exception as e:
                 logging.exception("Failed to transform")
                 raise e
@@ -612,98 +627,105 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[BaseCrossValidator] = None,
         estimator=None,
     ) -> pd.DataFrame:
-        if (
-            (self.enriched_X is None)
-            or (self._search_task is None)
-            or (self._search_task.initial_max_hit_rate() is None)
-        ):
-            raise Exception("Fit wasn't completed successfully")
+        logging.info("Start calculating metrics")
+        try:
+            if (
+                (self.enriched_X is None)
+                or (self._search_task is None)
+                or (self._search_task.initial_max_hit_rate() is None)
+            ):
+                raise Exception("Fit wasn't completed successfully")
 
-        if scoring is None:
-            scoring = self.scoring
+            if scoring is None:
+                scoring = self.scoring
 
-        fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-        fitting_enriched_X = self.enriched_X.drop(
-            columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
-        )
-
-        model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
-        _cv = cv or self.cv
-
-        # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
-        # and calculate baseline metric
-        etalon_metric = None
-        if fitting_X.shape[1] > 0:
-            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
-                fitting_X, y
+            fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
+            fitting_enriched_X = self.enriched_X.drop(
+                columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
             )
 
-        # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
-        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
-        metric = wrapper.metric_name
+            model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+            _cv = cv or self.cv
 
-        uplift = None
-        if etalon_metric is not None:
-            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
-
-        metrics = [
-            {
-                "segment": "train",
-                "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
-                f"baseline {metric}": etalon_metric,
-                f"enriched {metric}": enriched_metric,
-                "uplift": uplift,
-            }
-        ]
-
-        # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
-        # and calculate final metric (and uplift)
-        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-        if eval_set is not None and self.enriched_eval_set is not None:
-            # Fit models
-            etalon_model = None
+            # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
+            # and calculate baseline metric
+            etalon_metric = None
             if fitting_X.shape[1] > 0:
-                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                etalon_model.fit(fitting_X, y)
-            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-            enriched_model.fit(fitting_enriched_X, y)
-
-            for idx, eval_pair in enumerate(eval_set):
-                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
-                eval_X = eval_pair[0]
-                eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
-                enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
-                enriched_eval_X = enriched_eval_X.drop(
-                    columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
-                )
-                enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
-                eval_y = eval_pair[1]
-
-                etalon_eval_metric = None
-                if etalon_model is not None:
-                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
-
-                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
-
-                eval_uplift = None
-                if etalon_eval_metric is not None:
-                    eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
-
-                metrics.append(
-                    {
-                        "segment": f"eval {idx + 1}",
-                        "match_rate": eval_hit_rate,
-                        f"baseline {metric}": etalon_eval_metric,
-                        f"enriched {metric}": enriched_eval_metric,
-                        "uplift": eval_uplift,
-                    }
+                etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
+                    fitting_X, y
                 )
 
-        metrics_df = pd.DataFrame(metrics)
-        metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis("", inplace=True)
-        return metrics_df
+            # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+            wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
+            enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
+            metric = wrapper.metric_name
+
+            uplift = None
+            if etalon_metric is not None:
+                uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+
+            metrics = [
+                {
+                    "segment": "train",
+                    "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
+                    f"baseline {metric}": etalon_metric,
+                    f"enriched {metric}": enriched_metric,
+                    "uplift": uplift,
+                }
+            ]
+
+            # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
+            # and calculate final metric (and uplift)
+            max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+            if eval_set is not None and self.enriched_eval_set is not None:
+                # Fit models
+                etalon_model = None
+                if fitting_X.shape[1] > 0:
+                    etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                    etalon_model.fit(fitting_X, y)
+                enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                enriched_model.fit(fitting_enriched_X, y)
+
+                for idx, eval_pair in enumerate(eval_set):
+                    eval_hit_rate = (
+                        max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
+                    )
+                    eval_X = eval_pair[0]
+                    eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
+                    enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
+                    enriched_eval_X = enriched_eval_X.drop(
+                        columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
+                    )
+                    enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
+                    eval_y = eval_pair[1]
+
+                    etalon_eval_metric = None
+                    if etalon_model is not None:
+                        etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
+
+                    enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
+
+                    eval_uplift = None
+                    if etalon_eval_metric is not None:
+                        eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+
+                    metrics.append(
+                        {
+                            "segment": f"eval {idx + 1}",
+                            "match_rate": eval_hit_rate,
+                            f"baseline {metric}": etalon_eval_metric,
+                            f"enriched {metric}": enriched_eval_metric,
+                            "uplift": eval_uplift,
+                        }
+                    )
+
+            metrics_df = pd.DataFrame(metrics)
+            metrics_df.set_index("segment", inplace=True)
+            metrics_df.rename_axis("", inplace=True)
+            return metrics_df
+        except Exception as e:
+            logging.exception("Failed to calculate metrics")
+            raise e
 
     def __enrich(
         self,
@@ -747,10 +769,10 @@ class FeaturesEnricher(TransformerMixin):
 
         return result_train, result_eval_set
 
-    def __prepare_feature_importances(self, x_columns: List[str]):
+    def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
             raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
-        importances = self._search_task.initial_features()
+        importances = self._search_task.initial_features(trace_id)
 
         def feature_metadata_by_name(name: str):
             for f in importances:

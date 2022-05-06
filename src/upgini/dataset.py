@@ -252,18 +252,12 @@ class Dataset(pd.DataFrame):
             logging.info("Transform date column to millis")
             if is_string_dtype(self[date]):
                 self[date] = (
-                    pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64)
-                    // 1_000_000
+                    pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
                 )
             elif is_datetime(self[date]):
                 self[date] = self[date].dt.floor("D").view(np.int64) // 1_000_000
             elif is_period_dtype(self[date]):
-                self[date] = (
-                    pd.to_datetime(self[date].astype("string")).dt.floor("D").view(
-                        np.int64
-                    )
-                    // 1_000_000
-                )
+                self[date] = pd.to_datetime(self[date].astype("string")).dt.floor("D").view(np.int64) // 1_000_000
             elif is_numeric_dtype(self[date]):
                 msg = f"Unsupported type of date column {date}. Convert to datetime manually please."
                 logging.error(msg)
@@ -372,7 +366,7 @@ class Dataset(pd.DataFrame):
         # clean target from nulls
         target.dropna(inplace=True)
         if is_numeric_dtype(target):
-            target = target.loc[np.isfinite(target)]
+            target = target.loc[np.isfinite(target)]  # type: ignore
         else:
             target = target.loc[target != ""]
 
@@ -458,7 +452,7 @@ class Dataset(pd.DataFrame):
                 raise ValidationError(msg)
 
             unique_target = target.unique()
-            for v in list(unique_target):
+            for v in list(unique_target):  # type: ignore
                 current_class_count = len(train_segment.loc[target == v])
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
@@ -485,7 +479,7 @@ class Dataset(pd.DataFrame):
                 )
 
                 if is_string_dtype(target):
-                    target_replacement = {v: i for i, v in enumerate(unique_target)}
+                    target_replacement = {v: i for i, v in enumerate(unique_target)}  # type: ignore
                     prepared_target = target.replace(target_replacement)
                 else:
                     prepared_target = target
@@ -619,7 +613,7 @@ class Dataset(pd.DataFrame):
             if col in mandatory_columns:
                 self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
 
-            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)
+            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
             optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""
@@ -971,6 +965,7 @@ class Dataset(pd.DataFrame):
 
     def search(
         self,
+        trace_id: str,
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
@@ -995,10 +990,10 @@ class Dataset(pd.DataFrame):
         )
 
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
-            self.file_upload_id, file_metadata
+            trace_id, self.file_upload_id, file_metadata
         ):
             search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_without_upload_v2(
-                self.file_upload_id, file_metadata, file_metrics, search_customization
+                trace_id, self.file_upload_id, file_metadata, file_metrics, search_customization
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1006,7 +1001,7 @@ class Dataset(pd.DataFrame):
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
-                    parquet_file_path, file_metadata, file_metrics, search_customization
+                    trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
                 self.file_upload_id = search_task_response.file_upload_id
 
@@ -1020,10 +1015,11 @@ class Dataset(pd.DataFrame):
             endpoint=self.endpoint,
             api_key=self.api_key,
         )
-        return search_task.poll_result()
+        return search_task.poll_result(trace_id)
 
     def validation(
         self,
+        trace_id: str,
         initial_search_task_id: str,
         return_scores: bool = True,
         extract_features: bool = False,
@@ -1040,10 +1036,10 @@ class Dataset(pd.DataFrame):
         )
 
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
-            self.file_upload_id, file_metadata
+            trace_id, self.file_upload_id, file_metadata
         ):
             search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_without_upload_v2(
-                self.file_upload_id, initial_search_task_id, file_metadata, file_metrics, search_customization
+                trace_id, self.file_upload_id, initial_search_task_id, file_metadata, file_metrics, search_customization
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1051,7 +1047,12 @@ class Dataset(pd.DataFrame):
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
-                    parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization
+                    trace_id,
+                    parquet_file_path,
+                    initial_search_task_id,
+                    file_metadata,
+                    file_metrics,
+                    search_customization,
                 )
                 self.file_upload_id = search_task_response.file_upload_id
 
@@ -1065,4 +1066,4 @@ class Dataset(pd.DataFrame):
             api_key=self.api_key,
         )
 
-        return search_task.poll_result(quiet=silent_mode)
+        return search_task.poll_result(trace_id, quiet=silent_mode)
