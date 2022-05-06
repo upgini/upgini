@@ -458,7 +458,7 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
         token = api_token
     elif UPGINI_API_KEY not in os.environ:
         # Demo user api-key
-        token = "aIB6TC-BcuMlvoHxRwkJhn7hI-okN-dkE6RGLrZBKDw"
+        token = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
     else:
         token = os.environ[UPGINI_API_KEY]
 
