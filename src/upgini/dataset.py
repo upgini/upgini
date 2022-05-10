@@ -24,7 +24,6 @@ from upgini.errors import ValidationError
 from upgini.http import get_rest_client
 from upgini.metadata import (
     EVAL_SET_INDEX,
-    SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     DataType,
     FeaturesFilter,
@@ -372,7 +371,7 @@ class Dataset(pd.DataFrame):
         # clean target from nulls
         target.dropna(inplace=True)
         if is_numeric_dtype(target):
-            target = target.loc[np.isfinite(target)]
+            target = target.loc[np.isfinite(target)]  # type: ignore
         else:
             target = target.loc[target != ""]
 
@@ -458,7 +457,7 @@ class Dataset(pd.DataFrame):
                 raise ValidationError(msg)
 
             unique_target = target.unique()
-            for v in list(unique_target):
+            for v in list(unique_target):  # type: ignore
                 current_class_count = len(train_segment.loc[target == v])
                 if current_class_count < min_class_count:
                     min_class_count = current_class_count
@@ -485,7 +484,7 @@ class Dataset(pd.DataFrame):
                 )
 
                 if is_string_dtype(target):
-                    target_replacement = {v: i for i, v in enumerate(unique_target)}
+                    target_replacement = {v: i for i, v in enumerate(unique_target)}  # type: ignore
                     prepared_target = target.replace(target_replacement)
                 else:
                     prepared_target = target
@@ -605,7 +604,6 @@ class Dataset(pd.DataFrame):
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
-        columns_to_validate.discard(SYSTEM_FAKE_DATE)
 
         nrows = len(self)
         validation_stats = {}
@@ -619,7 +617,7 @@ class Dataset(pd.DataFrame):
             if col in mandatory_columns:
                 self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
 
-            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)
+            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
             optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""

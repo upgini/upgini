@@ -10,7 +10,7 @@ def define_task(y: pd.Series, silent: bool = False) -> ModelTaskType:
     logging.info("Defining task")
     target = y.dropna()
     if is_numeric_dtype(target):
-        target = target.loc[np.isfinite(target)]
+        target = target.loc[np.isfinite(target)]  # type: ignore
     else:
         target = target.loc[target != ""]
     target_items = target.nunique()

@@ -55,8 +55,8 @@ def test_features_enricher(requests_mock: Mocker):
         auc=0.66,
         uplift=0.1,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)

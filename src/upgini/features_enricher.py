@@ -1,30 +1,25 @@
 import hashlib
+import itertools
 import logging
 import sys
-from datetime import date
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from pandas.api.types import is_string_dtype
-from sklearn.model_selection import BaseCrossValidator
-
-from sklearn.base import TransformerMixin
-from sklearn.exceptions import NotFittedError
-
-import itertools
 import uuid
 from copy import deepcopy
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
+from sklearn.base import TransformerMixin
+from sklearn.exceptions import NotFittedError
+from sklearn.model_selection import BaseCrossValidator
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
-    EVAL_SET_INDEX,
     COUNTRY,
-    SYSTEM_FAKE_DATE,
+    EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     CVType,
     FileColumnMeaningType,
@@ -296,8 +291,6 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        self.__add_fake_date(df, meaning_types)
-
         self.__add_country_code(df, meaning_types)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
@@ -387,7 +380,7 @@ class FeaturesEnricher(TransformerMixin):
                 if "gini" in eval_set_metrics:
                     del eval_set_metrics["gini"]
                 eval_set_index = eval_set_metrics["eval_set_index"]
-                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"]
+                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"] * 100.0
                 eval_set_metrics["segment"] = f"eval {eval_set_index}"
                 del eval_set_metrics["hit_rate"]
                 del eval_set_metrics["eval_set_index"]
@@ -502,8 +495,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__add_fit_system_record_id(df, meaning_types)
 
-        self.__add_fake_date(df, meaning_types)
-
         self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
@@ -588,14 +579,6 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    # temporary while statistic on date will not be removed
-    def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if not self.__is_date_key_present():
-            logging.info("Fake date column added with 2200-01-01 value")
-            df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
-            self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
     def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
@@ -670,7 +653,8 @@ class FeaturesEnricher(TransformerMixin):
             enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
-                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
+                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 \
+                    if max_initial_eval_set_metrics else None
                 eval_X = eval_pair[0]
                 eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
                 enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
@@ -740,10 +724,6 @@ class FeaturesEnricher(TransformerMixin):
             result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
             if result_eval_set is not None:
                 result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result_train.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-            if result_eval_set is not None:
-                result_eval_set.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
 
         return result_train, result_eval_set
 
