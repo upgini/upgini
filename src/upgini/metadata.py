@@ -4,7 +4,6 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel
 
 SYSTEM_RECORD_ID = "system_record_id"
-SYSTEM_FAKE_DATE = "system_fake_date"
 EVAL_SET_INDEX = "eval_set_index"
 COUNTRY = "country_iso_code"
 

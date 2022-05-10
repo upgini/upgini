@@ -86,7 +86,7 @@ class BlockedTimeSeriesSplit(BaseCrossValidator):
         test : ndarray
             The testing set indices for that split.
         """
-        X, y, groups = indexable(X, y, groups)
+        X, y, groups = indexable(X, y, groups)  # type: ignore
         n_samples = _num_samples(X)
         fold_size = n_samples // self.n_splits
 

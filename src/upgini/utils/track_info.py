@@ -64,7 +64,7 @@ def get_track_metrics() -> dict:
     if track["ide"] == "colab":
         try:
             from IPython.display import display, Javascript
-            from google.colab import output
+            from google.colab import output  # type: ignore
 
             display(
                 Javascript(

@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import sys
-from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pandas.api.types import is_string_dtype
@@ -24,7 +23,6 @@ from upgini.http import init_logging
 from upgini.metadata import (
     EVAL_SET_INDEX,
     COUNTRY,
-    SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     CVType,
     FileColumnMeaningType,
@@ -296,8 +294,6 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        self.__add_fake_date(df, meaning_types)
-
         self.__add_country_code(df, meaning_types)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
@@ -502,8 +498,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__add_fit_system_record_id(df, meaning_types)
 
-        self.__add_fake_date(df, meaning_types)
-
         self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
@@ -587,14 +581,6 @@ class FeaturesEnricher(TransformerMixin):
                     )
                     logging.error(msg)
                     raise Exception(msg)
-
-    # temporary while statistic on date will not be removed
-    def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if not self.__is_date_key_present():
-            logging.info("Fake date column added with 2200-01-01 value")
-            df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
-            self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
 
     def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
@@ -740,10 +726,6 @@ class FeaturesEnricher(TransformerMixin):
             result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
             if result_eval_set is not None:
                 result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result_train.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-            if result_eval_set is not None:
-                result_eval_set.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
 
         return result_train, result_eval_set
 
