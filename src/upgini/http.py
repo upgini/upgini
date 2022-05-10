@@ -88,11 +88,11 @@ class SearchTaskResponse:
 class ModelEvalSet(BaseModel):
     eval_set_index: int
     hit_rate: float
-    # uplift: Optional[float]
-    # auc: Optional[float]
-    # gini: Optional[float]
-    # rmse: Optional[float]
-    # accuracy: Optional[float]
+    uplift: Optional[float]
+    auc: Optional[float]
+    gini: Optional[float]
+    rmse: Optional[float]
+    accuracy: Optional[float]
 
 
 class ProviderTaskSummary:

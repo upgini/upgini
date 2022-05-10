@@ -380,7 +380,7 @@ class FeaturesEnricher(TransformerMixin):
                 if "gini" in eval_set_metrics:
                     del eval_set_metrics["gini"]
                 eval_set_index = eval_set_metrics["eval_set_index"]
-                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"]
+                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"] * 100.0
                 eval_set_metrics["segment"] = f"eval {eval_set_index}"
                 del eval_set_metrics["hit_rate"]
                 del eval_set_metrics["eval_set_index"]
