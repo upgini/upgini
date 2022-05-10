@@ -1,28 +1,25 @@
 import hashlib
+import itertools
 import logging
 import sys
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from pandas.api.types import is_string_dtype
-from sklearn.model_selection import BaseCrossValidator
-
-from sklearn.base import TransformerMixin
-from sklearn.exceptions import NotFittedError
-
-import itertools
 import uuid
 from copy import deepcopy
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
+from sklearn.base import TransformerMixin
+from sklearn.exceptions import NotFittedError
+from sklearn.model_selection import BaseCrossValidator
 from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.http import init_logging
 from upgini.metadata import (
-    EVAL_SET_INDEX,
     COUNTRY,
+    EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     CVType,
     FileColumnMeaningType,
@@ -656,7 +653,8 @@ class FeaturesEnricher(TransformerMixin):
             enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
-                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
+                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 \
+                    if max_initial_eval_set_metrics else None
                 eval_X = eval_pair[0]
                 eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
                 enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]

@@ -85,5 +85,5 @@ def get_track_metrics() -> dict:
         except Exception as e:
             track["err"] = str(e)
     elif track["ide"] == "kaggle":
-        None
+        pass
     return track
