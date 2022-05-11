@@ -379,10 +379,10 @@ class SearchTask:
         time.sleep(1)
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            gzip_file_name = "{0}/features.gzip".format(tmp_dir)
+            gzip_file_name = "{0}/features.parquet".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
+            return pd.read_parquet(gzip_file_name)
 
     def get_initial_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
@@ -641,10 +641,10 @@ class SearchTask:
 
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            gzip_file_name = "{0}/features.gzip".format(tmp_dir)
+            gzip_file_name = "{0}/features.parquet".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_csv(gzip_file_name, compression="gzip", low_memory=False)  # type: ignore
+            return pd.read_parquet(gzip_file_name)
 
     def get_all_validation_raw_features(self) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
