@@ -170,6 +170,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        calculate_metrics: bool = False,
         **fit_params,
     ):
         """Fit to data.
@@ -187,12 +188,15 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        calculate_metrics : bool (default=False)
+            Calculate and show metrics
+
         **fit_params : dict
             Additional fit parameters.
         """
         logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            self.__inner_fit(X, y, eval_set, True, **fit_params)
+            self.__inner_fit(X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
         except Exception as e:
             logging.exception("Failed inner fit")
             raise e
@@ -202,6 +206,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        calculate_metrics: bool = False,
         **fit_params,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -221,6 +226,9 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        calculate_metrics : bool (default=False)
+            Calculate and show metrics
+
         **fit_params : dict
             Additional fit parameters.
 
@@ -232,7 +240,7 @@ class FeaturesEnricher(TransformerMixin):
 
         logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            result = self.__inner_fit(X, y, eval_set, extract_features=True, **fit_params)
+            result = self.__inner_fit(X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
         except Exception as e:
             logging.exception("Failed in inner_fit")
             raise e
@@ -284,7 +292,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_search_keys(X)
         meaning_types = {col: key.value for col, key in self.search_keys.items()}
-        search_keys = {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
+        search_keys = self.__using_search_keys()
         feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
         self.__check_string_dates(X)
@@ -345,54 +353,6 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
-    def get_metrics(self) -> Optional[pd.DataFrame]:
-        """Returns pandas dataframe with quality metrics for main dataset and eval_set"""
-        if self._search_task is None or self._search_task.summary is None:
-            msg = "Run fit or pass search_id before get metrics."
-            logging.error(msg)
-            raise NotFittedError(msg)
-
-        metrics = []
-        initial_metrics = {}
-
-        initial_hit_rate = self._search_task.initial_max_hit_rate()
-        if initial_hit_rate is None:
-            logging.warning("Get metrics called, but initial search information is empty")
-            return None
-
-        initial_metrics["segment"] = "train"
-        initial_metrics["match rate"] = initial_hit_rate["value"]
-        metrics.append(initial_metrics)
-        initial_auc = self._search_task.initial_max_auc()
-        if initial_auc is not None:
-            initial_metrics["auc"] = initial_auc["value"]
-        initial_accuracy = self._search_task.initial_max_accuracy()
-        if initial_accuracy is not None:
-            initial_metrics["accuracy"] = initial_accuracy["value"]
-        initial_rmse = self._search_task.initial_max_rmse()
-        if initial_rmse is not None:
-            initial_metrics["rmse"] = initial_rmse["value"]
-        initial_uplift = self._search_task.initial_max_uplift()
-        if len(self.passed_features) > 0 and initial_uplift is not None:
-            initial_metrics["uplift"] = initial_uplift["value"]
-        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-
-        if max_initial_eval_set_metrics is not None:
-            for eval_set_metrics in max_initial_eval_set_metrics:
-                if "gini" in eval_set_metrics:
-                    del eval_set_metrics["gini"]
-                eval_set_index = eval_set_metrics["eval_set_index"]
-                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"] * 100.0
-                eval_set_metrics["segment"] = f"eval {eval_set_index}"
-                del eval_set_metrics["hit_rate"]
-                del eval_set_metrics["eval_set_index"]
-                metrics.append(eval_set_metrics)
-
-        metrics_df = pd.DataFrame(metrics)
-        metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis("", inplace=True)
-        return metrics_df
-
     @staticmethod
     def __validate_search_keys(search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -431,7 +391,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
-        extract_features: bool = False,
+        calculate_metrics: bool = False,
         **fit_params,
     ) -> pd.DataFrame:
         self.enriched_X = None
@@ -455,7 +415,7 @@ class FeaturesEnricher(TransformerMixin):
             **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in self.search_keys.keys()},
         }
 
-        search_keys = {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
+        search_keys = self.__using_search_keys()
 
         self.__check_string_dates(X)
 
@@ -523,13 +483,11 @@ class FeaturesEnricher(TransformerMixin):
         ]
 
         self._search_task = dataset.search(
-            extract_features=extract_features,
+            extract_features=True,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
         )
-
-        self.__show_metrics(X, y, eval_set)
 
         self.__prepare_feature_importances(list(X.columns))
 
@@ -553,7 +511,13 @@ class FeaturesEnricher(TransformerMixin):
                 logging.exception("Failed to download features")
                 raise e
 
+        if calculate_metrics:
+            self.__show_metrics(X, y, eval_set)
+
         return self.enriched_X
+
+    def __using_search_keys(self) -> Dict[str, SearchKey]:
+        return {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
 
     def __is_date_key_present(self) -> bool:
         return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
@@ -825,12 +789,15 @@ class FeaturesEnricher(TransformerMixin):
     ):
         metrics = self.calculate_metrics(X, y, eval_set)
         if metrics is not None:
-            print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
+            msg = "\nQuality metrics"
+
             try:
                 from IPython.display import display
 
+                print(Format.GREEN + Format.BOLD + msg + Format.END)
                 display(metrics)
             except ImportError:
+                print(msg)
                 print(metrics)
 
             if len(self.passed_features) > 0:
@@ -840,14 +807,16 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
     def __show_selected_features(self):
-        print(
-            Format.GREEN + Format.BOLD + f"\nWe found {len(self.feature_names_)} useful feature(s) for you" + Format.END
-        )
+        search_keys = self.__using_search_keys().keys()
+        msg = f"\nWe found {len(self.feature_names_)} useful feature(s) for you by search keys: {search_keys}"
+
         try:
             from IPython.display import display
 
+            print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info)
         except ImportError:
+            print(msg)
             print(self.features_info)
 
     @staticmethod
