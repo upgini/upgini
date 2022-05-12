@@ -228,3 +228,15 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeValue1" in str(transform_req.body)
 
     assert transformed.shape == (10000, 4)
+
+
+def test_search_with_only_personal_keys(requests_mock: Mocker):
+    url = "https://some.fake.url"
+
+    mock_default_requests(requests_mock, url)
+
+    with pytest.raises(Exception):
+        FeaturesEnricher(
+            search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL},
+            endpoint=url
+        )

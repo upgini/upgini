@@ -117,7 +117,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
-        self.__validate_search_keys(search_keys, search_id)
+        self.__validate_search_keys(search_keys, api_key, search_id)
         self.search_keys = search_keys
         self.country_code = country_code
         self.keep_input = keep_input
@@ -354,7 +354,7 @@ class FeaturesEnricher(TransformerMixin):
         return self.features_info
 
     @staticmethod
-    def __validate_search_keys(search_keys: Dict[str, SearchKey], search_id: Optional[str]):
+    def __validate_search_keys(search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
                 logging.error(f"search_id {search_id} provided without search_keys")
@@ -385,6 +385,17 @@ class FeaturesEnricher(TransformerMixin):
                 msg = f"Search key {key_type} presented multiple times"
                 logging.error(msg)
                 raise Exception(msg)
+
+        api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
+        non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
+        if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
+            msg = (
+                "Only personal search keys provided."
+                "To run without registration use DATE, COUNTRY and POSTAL_CODE keys."
+            )
+            logging.error(msg + f" Provided search keys: {key_types}")
+            raise Exception(msg)
 
     def __inner_fit(
         self,
@@ -808,7 +819,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
-        msg = f"\nWe found {len(self.feature_names_)} useful feature(s) for you by search keys: {search_keys}"
+        msg = f"\nWe found {len(self.feature_names_)} useful feature(s) for you by search keys: {list(search_keys)}"
 
         try:
             from IPython.display import display
