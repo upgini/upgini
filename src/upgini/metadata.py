@@ -36,6 +36,10 @@ class SearchKey(Enum):
     COUNTRY = FileColumnMeaningType.COUNTRY
     POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
 
+    @staticmethod
+    def personal_keys() -> List["SearchKey"]:
+        return [SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP, SearchKey.PHONE]
+
 
 class DataType(Enum):
     INT = "INT"

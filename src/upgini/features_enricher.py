@@ -2,6 +2,7 @@ import hashlib
 import itertools
 import logging
 import sys
+import os
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -16,7 +17,7 @@ from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
-from upgini.http import init_logging
+from upgini.http import init_logging, UPGINI_API_KEY
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
@@ -283,6 +284,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_search_keys(X)
         meaning_types = {col: key.value for col, key in self.search_keys.items()}
+        search_keys = {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
         feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
         self.__check_string_dates(X)
@@ -293,12 +295,12 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__add_country_code(df, meaning_types)
 
-        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
+        df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
         combined_search_keys = []
-        for L in range(1, len(self.search_keys.keys()) + 1):
-            for subset in itertools.combinations(self.search_keys.keys(), L):
+        for L in range(1, len(search_keys.keys()) + 1):
+            for subset in itertools.combinations(search_keys.keys(), L):
                 combined_search_keys.append(subset)
 
         # Don't pass features in backend on transform
@@ -419,7 +421,7 @@ class FeaturesEnricher(TransformerMixin):
             raise Exception(msg)
 
         for key_type in SearchKey.__members__.values():
-            if len(list(filter(lambda x: x == key_type, key_types))) > 1:
+            if key_type != SearchKey.CUSTOM_KEY and len(list(filter(lambda x: x == key_type, key_types))) > 1:
                 msg = f"Search key {key_type} presented multiple times"
                 logging.error(msg)
                 raise Exception(msg)
@@ -452,6 +454,8 @@ class FeaturesEnricher(TransformerMixin):
             **{col: key.value for col, key in self.search_keys.items()},
             **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in self.search_keys.keys()},
         }
+
+        search_keys = {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
 
         self.__check_string_dates(X)
 
@@ -498,8 +502,8 @@ class FeaturesEnricher(TransformerMixin):
         self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
-        for L in range(1, len(self.search_keys.keys()) + 1):
-            for subset in itertools.combinations(self.search_keys.keys(), L):
+        for L in range(1, len(search_keys.keys()) + 1):
+            for subset in itertools.combinations(search_keys.keys(), L):
                 combined_search_keys.append(subset)
 
         dataset = Dataset(
@@ -784,23 +788,31 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_search_keys(self, x: pd.DataFrame):
         valid_search_keys = {}
+        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
         for column_id, meaning_type in self.search_keys.items():
+            column_name = None
             if isinstance(column_id, str):
-                valid_search_keys[column_id] = meaning_type
+                column_name = column_id
+                valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
-                valid_search_keys[x.columns[column_id]] = meaning_type
+                column_name = x.columns[column_id]
+                valid_search_keys[column_name] = meaning_type
             else:
                 msg = f"Unsupported type of key in search_keys: {type(column_id)}."
                 logging.error(msg)
                 raise ValueError(msg)
-            if meaning_type == SearchKey.CUSTOM_KEY:
-                msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
-                logging.error(msg)
-                raise ValueError(msg)
+
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time"
                 logging.error(msg)
                 raise ValueError(msg)
+
+            if not is_registered and meaning_type in SearchKey.personal_keys():
+                msg = f"Search key {meaning_type} not available without registration. It will be changed to CUSTOM_KEY"
+                logging.warning(msg)
+                print("WARNING: " + msg)
+                valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
 
         self.search_keys = valid_search_keys
 
