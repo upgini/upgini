@@ -38,7 +38,7 @@ def test_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.csv.gz"
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
     )
 
     mock_default_requests(requests_mock, url)
@@ -132,7 +132,7 @@ def test_features_enricher(requests_mock: Mocker):
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.csv.gz"
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
     )
 
     mock_default_requests(requests_mock, url)
