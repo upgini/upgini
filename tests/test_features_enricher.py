@@ -1,12 +1,11 @@
 import os
 
 import pandas as pd
+import pytest
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
-
-import pytest
 
 from .utils import (
     mock_default_requests,
@@ -32,10 +31,7 @@ def test_search_keys_validation(requests_mock: Mocker):
         )
 
     with pytest.raises(Exception, match="COUNTRY search key should be provided if POSTAL_CODE is presented"):
-        FeaturesEnricher(
-            search_keys={"postal_code": SearchKey.POSTAL_CODE},
-            endpoint=url
-        )
+        FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url)
 
 
 def test_features_enricher(requests_mock: Mocker):
@@ -86,7 +82,7 @@ def test_features_enricher(requests_mock: Mocker):
         keep_input=True,
         endpoint=url,
         api_key="fake_api_key",
-        date_format="%Y-%m-%d"
+        date_format="%Y-%m-%d",
     )
 
     enriched_train_features = enricher.fit_transform(
@@ -94,17 +90,31 @@ def test_features_enricher(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 4)
 
-    metrics = enricher.get_metrics()
+    metrics = enricher.calculate_metrics(
+        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
+    )
     expected_metrics = pd.DataFrame(
         [
-            {"match rate": 99.9, "auc": 0.66, "uplift": 0.1},
-            {"match rate": 100.0, "auc": 0.5},
-            {"match rate": 99.0, "auc": 0.77},
+            {
+                "match_rate": 99.9,
+                "baseline roc_auc": 0.5,
+                "enriched roc_auc": 0.4926257640349131,
+                "uplift": -0.007374235965086906,
+            },
+            {"match_rate": 100.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
+            {"match_rate": 99.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
         ],
         index=["train", "eval 1", "eval 2"],
     )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
 
-    assert metrics is not None and metrics.equals(expected_metrics)
+    assert metrics is not None
+    for segment in expected_metrics.index:
+        for col in expected_metrics.columns:
+            assert metrics.loc[segment, col] == expected_metrics.loc[segment, col]
 
     print(enricher.features_info)
 
@@ -218,3 +228,15 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeValue1" in str(transform_req.body)
 
     assert transformed.shape == (10000, 4)
+
+
+def test_search_with_only_personal_keys(requests_mock: Mocker):
+    url = "https://some.fake.url"
+
+    mock_default_requests(requests_mock, url)
+
+    with pytest.raises(Exception):
+        FeaturesEnricher(
+            search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL},
+            endpoint=url
+        )

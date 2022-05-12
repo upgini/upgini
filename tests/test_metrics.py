@@ -61,6 +61,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -126,6 +127,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key",
         cv=CVType.blocked_time_series
     )
 
@@ -189,6 +191,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -322,6 +325,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
