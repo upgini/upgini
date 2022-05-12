@@ -1,8 +1,8 @@
 import hashlib
 import itertools
 import logging
-import sys
 import os
+import sys
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -17,7 +17,7 @@ from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
-from upgini.http import init_logging, UPGINI_API_KEY
+from upgini.http import UPGINI_API_KEY, init_logging
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
@@ -529,7 +529,7 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        self.__show_metrics()
+        self.__show_metrics(X, y, eval_set)
 
         self.__prepare_feature_importances(list(X.columns))
 
@@ -657,8 +657,9 @@ class FeaturesEnricher(TransformerMixin):
             enriched_model.fit(fitting_enriched_X, y)
 
             for idx, eval_pair in enumerate(eval_set):
-                eval_hit_rate = max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 \
-                    if max_initial_eval_set_metrics else None
+                eval_hit_rate = (
+                    max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 if max_initial_eval_set_metrics else None
+                )
                 eval_X = eval_pair[0]
                 eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
                 enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
@@ -816,8 +817,13 @@ class FeaturesEnricher(TransformerMixin):
 
         self.search_keys = valid_search_keys
 
-    def __show_metrics(self):
-        metrics = self.get_metrics()
+    def __show_metrics(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, list],
+        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
+    ):
+        metrics = self.calculate_metrics(X, y, eval_set)
         if metrics is not None:
             print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
             try:
@@ -827,7 +833,7 @@ class FeaturesEnricher(TransformerMixin):
             except ImportError:
                 print(metrics)
 
-            if self.__is_uplift_present_in_metrics():
+            if len(self.passed_features) > 0:
                 print(
                     "\nFollowing features was used for accuracy uplift estimation:",
                     ", ".join(self.passed_features),
@@ -843,26 +849,6 @@ class FeaturesEnricher(TransformerMixin):
             display(self.features_info)
         except ImportError:
             print(self.features_info)
-
-    def __is_uplift_present_in_metrics(self):
-        uplift_presented = False
-
-        if self._search_task is not None and self._search_task.summary is not None:
-            if len(self.passed_features) > 0 and self._search_task.initial_max_uplift() is not None:
-                uplift_presented = True
-
-            max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-
-            if max_initial_eval_set_metrics is not None:
-                for eval_set_metrics in max_initial_eval_set_metrics:
-                    if "uplift" in eval_set_metrics:
-                        uplift_presented = True
-
-            if self._search_task.summary.status == "VALIDATION_COMPLETED":
-                if len(self.passed_features) > 0 and self._search_task.validation_max_uplift() is not None:
-                    uplift_presented = True
-
-        return uplift_presented
 
     @staticmethod
     def _hash_row(row) -> int:
