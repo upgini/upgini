@@ -247,7 +247,23 @@ enricher = FeaturesEnricher(
 Sort rows in dataset according to observation order, in most cases - ascending order by date/datetime
 
 ### 🆙 Accuracy and uplift metrics calculations
-We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.  
+We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.
+```python
+from upgini import FeaturesEnricher, SearchKey
+# create enricher
+enricher = FeaturesEnricher( search_keys={"registration_date": SearchKey.DATE} )
+# fit with default metrics output - default estimator - CatBoost
+enricher.fit(X, y, eval_set=eval_set, calculate_metrics=True)
+# or you can provide custom estimator for metrics calculation. X and y - the same as on fit
+custom_estimator = LGBMRegressor()  # for example
+enricher.calculate_metrics(X, y, eval_set, estimator=custom_estimator)
+# or you can provide custom metric function (callable or name from standard sklearn functions)
+custom_scorer = "root_mean_squared_log_error"  # or aliases: rmsle, RMSLE
+enricher.calculate_metrics(X, y, eval_set, scoring=custom_scorer)
+# or you can provide custom cross validator
+custom_cv = TimeSeriesSplit(n_splits=5)
+enricher.calculate_metrics(X, y, eval_set, cv=custom_cv)
+```
 
 ### ✅ Optional: find features only give accuracy gain to existing data in the ML model
 If you already have features or other external data sources, you can specifically search new datasets & features only give accuracy gain "on top" of them.  
