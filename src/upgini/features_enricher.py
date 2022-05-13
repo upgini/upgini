@@ -301,7 +301,7 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        self.__add_country_code(df, meaning_types)
+        df = self.__add_country_code(df, meaning_types)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -391,8 +391,8 @@ class FeaturesEnricher(TransformerMixin):
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
             msg = (
-                "Only personal search keys provided."
-                "To run without registration use DATE, COUNTRY and POSTAL_CODE keys."
+                "Only person-level search keys provided."
+                "To run without registration use DATE, COUNTRY and POSTAL_CODE keys"
             )
             logging.error(msg + f" Provided search keys: {key_types}")
             raise Exception(msg)
@@ -433,7 +433,7 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        df.reset_index(drop=True, inplace=True)
+        df = df.reset_index(drop=True)
 
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
 
@@ -468,9 +468,9 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        self.__add_fit_system_record_id(df, meaning_types)
+        df = self.__add_fit_system_record_id(df, meaning_types)
 
-        self.__add_country_code(df, meaning_types)
+        df = self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
         for L in range(1, len(search_keys.keys()) + 1):
@@ -533,7 +533,9 @@ class FeaturesEnricher(TransformerMixin):
     def __is_date_key_present(self) -> bool:
         return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
 
-    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_fit_system_record_id(
+        self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]
+    ) -> pd.DataFrame:
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
                 col
@@ -542,10 +544,11 @@ class FeaturesEnricher(TransformerMixin):
             ]
             df.sort_values(by=date_column, kind="mergesort")
             pass
-        df.reset_index(drop=True, inplace=True)
-        df.reset_index(inplace=True)
-        df.rename(columns={"index": SYSTEM_RECORD_ID}, inplace=True)
+        df = df.reset_index(drop=True)
+        df = df.reset_index()
+        df = df.rename(columns={"index": SYSTEM_RECORD_ID})
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+        return df
 
     def __check_string_dates(self, df: pd.DataFrame):
         for column, search_key in self.search_keys.items():
@@ -558,12 +561,13 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
             meaning_types[COUNTRY] = FileColumnMeaningType.COUNTRY
+        return df
 
     def calculate_metrics(
         self,
@@ -664,10 +668,7 @@ class FeaturesEnricher(TransformerMixin):
                     }
                 )
 
-        metrics_df = pd.DataFrame(metrics)
-        metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis("", inplace=True)
-        return metrics_df
+        return pd.DataFrame(metrics).set_index("segment").rename_axis("")
 
     def __enrich(
         self,
@@ -694,16 +695,16 @@ class FeaturesEnricher(TransformerMixin):
         if EVAL_SET_INDEX in result.columns:
             result_train = result[result[EVAL_SET_INDEX] == 0]
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
-            result_train.drop(columns=EVAL_SET_INDEX, inplace=True)
+            result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
             result_eval_set = None
 
         result_train.index = original_index
         if SYSTEM_RECORD_ID in result.columns:
-            result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
             if result_eval_set is not None:
-                result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+                result_eval_set = result_eval_set.drop(columns=SYSTEM_RECORD_ID)
 
         return result_train, result_eval_set
 
@@ -780,12 +781,15 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValueError(msg)
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
-                msg = "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time"
+                msg = (
+                    "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time. "
+                    "Define only one"
+                )
                 logging.error(msg)
                 raise ValueError(msg)
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
-                msg = f"Search key {meaning_type} not available without registration. It will be changed to CUSTOM_KEY"
+                msg = f"Search key {meaning_type} not available without registration. It will be ignored"
                 logging.warning(msg)
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
