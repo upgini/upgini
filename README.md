@@ -230,7 +230,7 @@ enricher = FeaturesEnricher(
 	model_task_type=ModelTaskType.REGRESSION
 )
 ```
-#### ⚠️ Time Series prediction support  
+#### ⏰ Time Series prediction support  
 Time series prediction supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time series specific cross-validation strategy:
 * [Scikit-learn time series cross-validation](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html) - `CVType.time_series` parameter
 * [Blocked time series cross-validation](https://goldinlocks.github.io/Time-Series-Cross-Validation/#Blocked-and-Time-Series-Split-Cross-Validation) - `CVType.blocked_time_series` parameter
@@ -243,6 +243,8 @@ enricher = FeaturesEnricher(
 	cv=CVType.time_series
 )
 ```
+⚠️ **Pre-process search dataset** in case of time series prediction:  
+Sort rows in dataset according to observation order, in most cases - ascending order by date/datetime
 
 ### 🆙 Accuracy and uplift metrics calculations
 We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.  
