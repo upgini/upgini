@@ -533,7 +533,9 @@ class FeaturesEnricher(TransformerMixin):
     def __is_date_key_present(self) -> bool:
         return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
 
-    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]) -> pd.DataFrame:
+    def __add_fit_system_record_id(
+        self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]
+    ) -> pd.DataFrame:
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
                 col
