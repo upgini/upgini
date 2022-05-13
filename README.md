@@ -321,7 +321,7 @@ Total: **239 countries** and **up to 44 years** of history
 |Historical weather & Weather forecast by postal/ZIP code| 68 |12|
 |International holidays & events, workweek calendar| 232 |22|
 |Consumer Confidence index| 44 |22|
-|World economic indicators|191 |44|
+|World economic indicators|191 |41|
 |Markets data|-|17|
 |World demographic data by postal/ZIP code|60|-
 |Public social media profile data for email & phone|104|-
