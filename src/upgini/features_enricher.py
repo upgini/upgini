@@ -291,17 +291,15 @@ class FeaturesEnricher(TransformerMixin):
             raise TypeError(msg)
 
         self.__prepare_search_keys(X)
-        meaning_types = {col: key.value for col, key in self.search_keys.items()}
-        search_keys = self.__using_search_keys()
-        feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
-
         self.__check_string_dates(X)
 
         df = X.copy()
-
         df = df.reset_index(drop=True)
+        df = self.__add_country_code(df)
 
-        df = self.__add_country_code(df, meaning_types)
+        meaning_types = {col: key.value for col, key in self.search_keys.items()}
+        search_keys = self.__using_search_keys()
+        feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -421,13 +419,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_search_keys(X)
 
-        meaning_types = {
-            **{col: key.value for col, key in self.search_keys.items()},
-            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in self.search_keys.keys()},
-        }
-
-        search_keys = self.__using_search_keys()
-
         self.__check_string_dates(X)
 
         df: pd.DataFrame = X.copy()  # type: ignore
@@ -435,13 +426,10 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
-
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
 
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
-            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
             for idx, eval_pair in enumerate(eval_set):
                 if len(eval_pair) != 2:
                     raise TypeError(
@@ -468,9 +456,20 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        df = self.__add_fit_system_record_id(df, meaning_types)
+        df = self.__add_country_code(df)
 
-        df = self.__add_country_code(df, meaning_types)
+        non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.search_keys.keys())
+        meaning_types = {
+            **{col: key.value for col, key in self.search_keys.items()},
+            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in non_feature_columns},
+        }
+        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+        if eval_set is not None and len(eval_set) > 0:
+            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
+
+        search_keys = self.__using_search_keys()
+
+        df = self.__add_fit_system_record_id(df, meaning_types)
 
         combined_search_keys = []
         for L in range(1, len(search_keys.keys()) + 1):
@@ -561,12 +560,11 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]) -> pd.DataFrame:
+    def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
-            meaning_types[COUNTRY] = FileColumnMeaningType.COUNTRY
         return df
 
     def calculate_metrics(
