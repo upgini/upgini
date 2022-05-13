@@ -232,7 +232,7 @@ enricher = FeaturesEnricher(
 ```
 #### ⏰ Time Series prediction support  
 Time series prediction supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time series specific cross-validation strategy:
-* [Scikit-learn time series cross-validation](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html) - `CVType.time_series` parameter
+* [Scikit-learn time series cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split) - `CVType.time_series` parameter
 * [Blocked time series cross-validation](https://goldinlocks.github.io/Time-Series-Cross-Validation/#Blocked-and-Time-Series-Split-Cross-Validation) - `CVType.blocked_time_series` parameter
 
 To initiate feature search for *time series prediction*, you can pass cross-validation type parameter to `FeaturesEnricher` with time series specific CV type:
