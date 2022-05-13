@@ -35,6 +35,7 @@ def test_search_keys_validation(requests_mock: Mocker):
 
 
 def test_features_enricher(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -130,6 +131,7 @@ def test_features_enricher(requests_mock: Mocker):
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"

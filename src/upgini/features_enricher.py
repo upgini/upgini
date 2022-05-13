@@ -301,7 +301,7 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        self.__add_country_code(df, meaning_types)
+        df = self.__add_country_code(df, meaning_types)
 
         df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -468,9 +468,9 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        self.__add_fit_system_record_id(df, meaning_types)
+        df = self.__add_fit_system_record_id(df, meaning_types)
 
-        self.__add_country_code(df, meaning_types)
+        df = self.__add_country_code(df, meaning_types)
 
         combined_search_keys = []
         for L in range(1, len(search_keys.keys()) + 1):
@@ -533,7 +533,7 @@ class FeaturesEnricher(TransformerMixin):
     def __is_date_key_present(self) -> bool:
         return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
 
-    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]) -> pd.DataFrame:
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
                 col
@@ -546,6 +546,7 @@ class FeaturesEnricher(TransformerMixin):
         df = df.reset_index()
         df = df.rename(columns={"index": SYSTEM_RECORD_ID})
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+        return df
 
     def __check_string_dates(self, df: pd.DataFrame):
         for column, search_key in self.search_keys.items():
@@ -558,12 +559,13 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
             meaning_types[COUNTRY] = FileColumnMeaningType.COUNTRY
+        return df
 
     def calculate_metrics(
         self,
