@@ -91,14 +91,6 @@ class FeaturesEnricher(TransformerMixin):
 
     RANDOM_STATE = 42
 
-    _search_task: Optional[SearchTask] = None
-    passed_features: List[str] = []
-    importance_threshold: Optional[float]
-    max_features: Optional[int]
-    features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
-    enriched_X: Optional[pd.DataFrame] = None
-    enriched_eval_set: Optional[pd.DataFrame] = None
-
     def __init__(
         self,
         search_keys: Dict[str, SearchKey],
@@ -137,6 +129,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
+        self._search_task: Optional[SearchTask] = None
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -164,6 +157,11 @@ class FeaturesEnricher(TransformerMixin):
             if self.runtime_parameters.properties is None:
                 self.runtime_parameters.properties = {}
             self.runtime_parameters.properties["cv_type"] = cv.name
+
+        self.passed_features: List[str] = []
+        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+        self.enriched_X: Optional[pd.DataFrame] = None
+        self.enriched_eval_set: Optional[pd.DataFrame] = None
 
     def fit(
         self,
