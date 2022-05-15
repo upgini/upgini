@@ -39,9 +39,8 @@ We want radically simplify features search and delivery for ML pipelines to make
 
 ### 1. Quick start guide
 
-Notebook with a Kaggle example: [kaggle_example.ipynb](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb). The problem being solved is a Kaggle competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only). The goal is to predict future sales of different goods in different stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
-
-Run [example notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
+Search **new features** for  Kaggle [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only).   The goal is to predict future sales of different goods in stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
+Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
 
 [![Open example in Google Colab](https://img.shields.io/badge/run_example_in-colab-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 &nbsp;
@@ -50,7 +49,7 @@ Run [example notebook](https://github.com/upgini/upgini/blob/main/notebooks/kagg
 <!--
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->
-Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML algorithm was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
+Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML model was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
 ### 2. [Kaggle public kernel for Tabular playground series Jan 2022](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022)
 
@@ -78,13 +77,35 @@ Run docker image:
 ```bash
 docker run -p 8888:8888 upgini
 ```
-Open http://localhost:8888?token=<your_token_from_console_output> in your browser
+Open http://localhost:8888?token=<your_token_from_console_output> in your browser  
+
+## 🌎 Connected data sources and coverage 
+We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
+- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
+- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
+#### 📊 Data coverage and statistics
+Total: **239 countries** and **up to 44 years** of history
+|Data scource|Countries|History, years|
+|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |12|
+|International holidays & events, workweek calendar| 232 |22|
+|Consumer Confidence index| 44 |22|
+|World economic indicators|191 |41|
+|Markets data|-|17|
+|World demographic data by postal/ZIP code|60|-
+|Public social media profile data for email & phone|104|-
+|World mobile network coverage by postal/ZIP code|167|-
+|Geolocation profile for phone & IPv4 & email|239|-
+|World house prices by postal/ZIP code|44|-
+|🔜 Email/WWW domain profile|-|-
+
+👉 More details on [datasets and features here](https://upgini.com/#data_sources)
 
 ## 💻 How it works?
 
 ### 1. 💡 Use your labeled training dataset for search
 You can use your labeled training datasets "as is" to initiate the search. Under the hood, we'll search for relevant data using:
-- *[search keys](#-search-key-types-we-support-more-is-coming)* from training dataset to match records from potential external data sources / features
+- *[search keys](#-search-key-types-we-support-more-is-coming)* from training dataset to match records from potential data sources with a new features
 - *labels* from training dataset to estimate relevancy of feature or dataset for your ML task and calculate feature importance metrics  
 - *your features* from training dataset to find external datasets and features only give accuracy improvement to your existing data and estimate accuracy uplift ([optional](#-optional-find-datasets-and-features-only-give-accuracy-gain-to-your-existing-data-in-the-ml-model))  
 
@@ -326,29 +347,8 @@ enricher = FeaturesEnricher(
 enricher.transform(X)
 ```
 
-## 🌎 Data sources and coverage 
-We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
-- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
-- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
-#### 📊 Data coverage and statistics
-Total: **239 countries** and **up to 44 years** of history
-|Data scource|Countries|History, years|
-|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |12|
-|International holidays & events, workweek calendar| 232 |22|
-|Consumer Confidence index| 44 |22|
-|World economic indicators|191 |41|
-|Markets data|-|17|
-|World demographic data by postal/ZIP code|60|-
-|Public social media profile data for email & phone|104|-
-|World mobile network coverage by postal/ZIP code|167|-
-|Geolocation profile for phone & IPv4 & email|239|-
-|World house prices by postal/ZIP code|44|-
-|🔜 Email/WWW domain profile|-|-
-
-More details on [datasets and features here](https://upgini.com/#data_sources)
-#### How can I share data/features with a community ? 
-If you have ANY data which you might consider as royalty / license free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for supervised ML applications, you may publish it for **community usage**:   
+### 👩🏻‍💻 How can I share data/features with a community ? 
+If you have ANY data which you might consider as royalty / license free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for ML applications, you may publish it for **community usage**:   
 1. Please Sign Up [here](https://profile.upgini.com)
 2. Copy *Upgini API key* from profile and upload your data from Upgini python library with this key:
 ```python
