@@ -39,7 +39,7 @@ We want radically simplify features search and delivery for ML pipelines to make
 
 ### 1. Quick start guide
 
-Search **new features** for  Kaggle [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only).   The goal is to predict future sales of different goods in stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
+Search **new features** for  Kaggle [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only).   The goal is to predict future sales of different goods in stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
 
 [![Open example in Google Colab](https://img.shields.io/badge/run_example_in-colab-blue?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
