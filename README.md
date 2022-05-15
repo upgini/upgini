@@ -84,7 +84,7 @@ We have [two types of data sources](https://upgini.com/#data_sources) with pre-c
 - **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
 - **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
 #### 📊 Data coverage and statistics
-Total: **239 countries** and **up to 44 years** of history
+Total: **239 countries** and **up to 41 years** of history
 |Data scource|Countries|History, years|
 |--|--|--|
 |Historical weather & Weather forecast by postal/ZIP code| 68 |12|
