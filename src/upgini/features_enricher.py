@@ -1,10 +1,10 @@
 import hashlib
 import itertools
 import logging
+import os
 import sys
 import uuid
 from copy import deepcopy
-from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -18,11 +18,10 @@ from yaspin import yaspin
 from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
-from upgini.http import init_logging
+from upgini.http import UPGINI_API_KEY, init_logging
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
-    SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     CVType,
     FileColumnMeaningType,
@@ -93,14 +92,6 @@ class FeaturesEnricher(TransformerMixin):
 
     RANDOM_STATE = 42
 
-    _search_task: Optional[SearchTask] = None
-    passed_features: List[str] = []
-    importance_threshold: Optional[float]
-    max_features: Optional[int]
-    features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
-    enriched_X: Optional[pd.DataFrame] = None
-    enriched_eval_set: Optional[pd.DataFrame] = None
-
     def __init__(
         self,
         search_keys: Dict[str, SearchKey],
@@ -119,7 +110,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
-        self.__validate_search_keys(search_keys, search_id)
+        self.__validate_search_keys(search_keys, api_key, search_id)
         self.search_keys = search_keys
         self.country_code = country_code
         self.keep_input = keep_input
@@ -139,6 +130,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
+        self._search_task: Optional[SearchTask] = None
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -150,7 +142,7 @@ class FeaturesEnricher(TransformerMixin):
             with MDC(trace_id=trace_id):
                 try:
                     self._search_task = search_task.poll_result(trace_id, quiet=True)
-                    file_metadata = self._search_task.get_file_metadata()
+                    file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
                     self.__prepare_feature_importances(trace_id, x_columns)
                     # TODO validate search_keys with search_keys from file_metadata
@@ -169,11 +161,17 @@ class FeaturesEnricher(TransformerMixin):
                 self.runtime_parameters.properties = {}
             self.runtime_parameters.properties["cv_type"] = cv.name
 
+        self.passed_features: List[str] = []
+        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+        self.enriched_X: Optional[pd.DataFrame] = None
+        self.enriched_eval_set: Optional[pd.DataFrame] = None
+
     def fit(
         self,
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        calculate_metrics: bool = False,
         **fit_params,
     ):
         """Fit to data.
@@ -191,6 +189,9 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        calculate_metrics : bool (default=False)
+            Calculate and show metrics
+
         **fit_params : dict
             Additional fit parameters.
         """
@@ -199,7 +200,7 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
             try:
-                self.__inner_fit(trace_id, X, y, eval_set, True, **fit_params)
+                self.__inner_fit(trace_id, X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
             except Exception as e:
                 logging.exception("Failed inner fit")
                 raise e
@@ -209,6 +210,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        calculate_metrics: bool = False,
         **fit_params,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -228,6 +230,9 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        calculate_metrics : bool (default=False)
+            Calculate and show metrics
+
         **fit_params : dict
             Additional fit parameters.
 
@@ -241,7 +246,7 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
             try:
-                result = self.__inner_fit(trace_id, X, y, eval_set, extract_features=True, **fit_params)
+                result = self.__inner_fit(trace_id, X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
             except Exception as e:
                 logging.exception("Failed in inner_fit")
                 raise e
@@ -296,25 +301,22 @@ class FeaturesEnricher(TransformerMixin):
                 raise TypeError(msg)
 
             self.__prepare_search_keys(X)
-            meaning_types = {col: key.value for col, key in self.search_keys.items()}
-            feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
-
             self.__check_string_dates(X)
 
             df = X.copy()
-
             df = df.reset_index(drop=True)
+            df = self.__add_country_code(df)
 
-            self.__add_fake_date(df, meaning_types)
+            meaning_types = {col: key.value for col, key in self.search_keys.items()}
+            search_keys = self.__using_search_keys()
+            feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
-            self.__add_country_code(df, meaning_types)
-
-            df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[self.search_keys.keys()]), axis=1)
+            df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             combined_search_keys = []
-            for L in range(1, len(self.search_keys.keys()) + 1):
-                for subset in itertools.combinations(self.search_keys.keys(), L):
+            for L in range(1, len(search_keys.keys()) + 1):
+                for subset in itertools.combinations(search_keys.keys(), L):
                     combined_search_keys.append(subset)
 
             # Don't pass features in backend on transform
@@ -343,10 +345,10 @@ class FeaturesEnricher(TransformerMixin):
             if not silent_mode:
                 print("Executing transform step")
                 with yaspin(Spinners.material) as sp:
-                    result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
+                    result = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
                     sp.ok("Done                         ")
             else:
-                result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
+                result = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
 
             return result
 
@@ -363,56 +365,8 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
-    def get_metrics(self) -> Optional[pd.DataFrame]:
-        """Returns pandas dataframe with quality metrics for main dataset and eval_set"""
-        if self._search_task is None or self._search_task.summary is None:
-            msg = "Run fit or pass search_id before get metrics."
-            logging.error(msg)
-            raise NotFittedError(msg)
-
-        metrics = []
-        initial_metrics = {}
-
-        initial_hit_rate = self._search_task.initial_max_hit_rate()
-        if initial_hit_rate is None:
-            logging.warning("Get metrics called, but initial search information is empty")
-            return None
-
-        initial_metrics["segment"] = "train"
-        initial_metrics["match rate"] = initial_hit_rate["value"]
-        metrics.append(initial_metrics)
-        initial_auc = self._search_task.initial_max_auc()
-        if initial_auc is not None:
-            initial_metrics["auc"] = initial_auc["value"]
-        initial_accuracy = self._search_task.initial_max_accuracy()
-        if initial_accuracy is not None:
-            initial_metrics["accuracy"] = initial_accuracy["value"]
-        initial_rmse = self._search_task.initial_max_rmse()
-        if initial_rmse is not None:
-            initial_metrics["rmse"] = initial_rmse["value"]
-        initial_uplift = self._search_task.initial_max_uplift()
-        if len(self.passed_features) > 0 and initial_uplift is not None:
-            initial_metrics["uplift"] = initial_uplift["value"]
-        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-
-        if max_initial_eval_set_metrics is not None:
-            for eval_set_metrics in max_initial_eval_set_metrics:
-                if "gini" in eval_set_metrics:
-                    del eval_set_metrics["gini"]
-                eval_set_index = eval_set_metrics["eval_set_index"]
-                eval_set_metrics["match rate"] = eval_set_metrics["hit_rate"]
-                eval_set_metrics["segment"] = f"eval {eval_set_index}"
-                del eval_set_metrics["hit_rate"]
-                del eval_set_metrics["eval_set_index"]
-                metrics.append(eval_set_metrics)
-
-        metrics_df = pd.DataFrame(metrics)
-        metrics_df.set_index("segment", inplace=True)
-        metrics_df.rename_axis("", inplace=True)
-        return metrics_df
-
     @staticmethod
-    def __validate_search_keys(search_keys: Dict[str, SearchKey], search_id: Optional[str]):
+    def __validate_search_keys(search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
                 logging.error(f"search_id {search_id} provided without search_keys")
@@ -439,10 +393,21 @@ class FeaturesEnricher(TransformerMixin):
             raise Exception(msg)
 
         for key_type in SearchKey.__members__.values():
-            if len(list(filter(lambda x: x == key_type, key_types))) > 1:
+            if key_type != SearchKey.CUSTOM_KEY and len(list(filter(lambda x: x == key_type, key_types))) > 1:
                 msg = f"Search key {key_type} presented multiple times"
                 logging.error(msg)
                 raise Exception(msg)
+
+        api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
+        non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
+        if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
+            msg = (
+                "Only person-level search keys provided."
+                "To run without registration use DATE, COUNTRY and POSTAL_CODE keys"
+            )
+            logging.error(msg + f" Provided search keys: {key_types}")
+            raise Exception(msg)
 
     def __inner_fit(
         self,
@@ -450,7 +415,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
-        extract_features: bool = False,
+        calculate_metrics: bool = False,
         **fit_params,
     ) -> pd.DataFrame:
         self.enriched_X = None
@@ -469,25 +434,17 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_search_keys(X)
 
-        meaning_types = {
-            **{col: key.value for col, key in self.search_keys.items()},
-            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in self.search_keys.keys()},
-        }
-
         self.__check_string_dates(X)
 
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        df.reset_index(drop=True, inplace=True)
-
-        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+        df = df.reset_index(drop=True)
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
 
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
-            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
             for idx, eval_pair in enumerate(eval_set):
                 if len(eval_pair) != 2:
                     raise TypeError(
@@ -514,15 +471,24 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        self.__add_fit_system_record_id(df, meaning_types)
+        df = self.__add_country_code(df)
 
-        self.__add_fake_date(df, meaning_types)
+        non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.search_keys.keys())
+        meaning_types = {
+            **{col: key.value for col, key in self.search_keys.items()},
+            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in non_feature_columns},
+        }
+        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+        if eval_set is not None and len(eval_set) > 0:
+            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
 
-        self.__add_country_code(df, meaning_types)
+        search_keys = self.__using_search_keys()
+
+        df = self.__add_fit_system_record_id(df, meaning_types)
 
         combined_search_keys = []
-        for L in range(1, len(self.search_keys.keys()) + 1):
-            for subset in itertools.combinations(self.search_keys.keys(), L):
+        for L in range(1, len(search_keys.keys()) + 1):
+            for subset in itertools.combinations(search_keys.keys(), L):
                 combined_search_keys.append(subset)
 
         dataset = Dataset(
@@ -543,13 +509,11 @@ class FeaturesEnricher(TransformerMixin):
 
         self._search_task = dataset.search(
             trace_id,
-            extract_features=extract_features,
+            extract_features=True,
             importance_threshold=self.importance_threshold,
             max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
         )
-
-        self.__show_metrics()
 
         self.__prepare_feature_importances(trace_id, list(X.columns))
 
@@ -567,18 +531,26 @@ class FeaturesEnricher(TransformerMixin):
         else:
             try:
                 self.enriched_X, self.enriched_eval_set = self.__enrich(
-                    df, self._search_task.get_all_initial_raw_features(), X.index
+                    df, self._search_task.get_all_initial_raw_features(trace_id), X.index
                 )
             except Exception as e:
                 logging.exception("Failed to download features")
                 raise e
 
+        if calculate_metrics:
+            self.__show_metrics(X, y, eval_set)
+
         return self.enriched_X
+
+    def __using_search_keys(self) -> Dict[str, SearchKey]:
+        return {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
 
     def __is_date_key_present(self) -> bool:
         return len({SearchKey.DATE, SearchKey.DATETIME}.intersection(self.search_keys.values())) != 0
 
-    def __add_fit_system_record_id(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_fit_system_record_id(
+        self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]
+    ) -> pd.DataFrame:
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
                 col
@@ -587,10 +559,11 @@ class FeaturesEnricher(TransformerMixin):
             ]
             df.sort_values(by=date_column, kind="mergesort")
             pass
-        df.reset_index(drop=True, inplace=True)
-        df.reset_index(inplace=True)
-        df.rename(columns={"index": SYSTEM_RECORD_ID}, inplace=True)
+        df = df.reset_index(drop=True)
+        df = df.reset_index()
+        df = df.rename(columns={"index": SYSTEM_RECORD_ID})
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+        return df
 
     def __check_string_dates(self, df: pd.DataFrame):
         for column, search_key in self.search_keys.items():
@@ -603,20 +576,12 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    # temporary while statistic on date will not be removed
-    def __add_fake_date(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
-        if not self.__is_date_key_present():
-            logging.info("Fake date column added with 2200-01-01 value")
-            df[SYSTEM_FAKE_DATE] = date(2200, 1, 1)  # remove when statistics by date will be deleted
-            self.search_keys[SYSTEM_FAKE_DATE] = SearchKey.DATE
-            meaning_types[SYSTEM_FAKE_DATE] = FileColumnMeaningType.DATE
-
-    def __add_country_code(self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]):
+    def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
-            meaning_types[COUNTRY] = FileColumnMeaningType.COUNTRY
+        return df
 
     def calculate_metrics(
         self,
@@ -636,8 +601,7 @@ class FeaturesEnricher(TransformerMixin):
             ):
                 raise Exception("Fit wasn't completed successfully")
 
-            if scoring is None:
-                scoring = self.scoring
+            scoring = scoring or self.scoring
 
             fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
             fitting_enriched_X = self.enriched_X.drop(
@@ -650,10 +614,13 @@ class FeaturesEnricher(TransformerMixin):
             # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
             # and calculate baseline metric
             etalon_metric = None
+            etalon_model = None
             if fitting_X.shape[1] > 0:
-                etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
-                    fitting_X, y
-                )
+                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                etalon_model.fit(fitting_X, y)
+                etalon_metric = etalon_model.cross_val_predict(fitting_X, y)
+            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+            enriched_model.fit(fitting_enriched_X, y)
 
             # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
             wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
@@ -678,17 +645,10 @@ class FeaturesEnricher(TransformerMixin):
             # and calculate final metric (and uplift)
             max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
             if eval_set is not None and self.enriched_eval_set is not None:
-                # Fit models
-                etalon_model = None
-                if fitting_X.shape[1] > 0:
-                    etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                    etalon_model.fit(fitting_X, y)
-                enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                enriched_model.fit(fitting_enriched_X, y)
 
                 for idx, eval_pair in enumerate(eval_set):
                     eval_hit_rate = (
-                        max_initial_eval_set_metrics[idx]["hit_rate"] if max_initial_eval_set_metrics else None
+                        max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 if max_initial_eval_set_metrics else None
                     )
                     eval_X = eval_pair[0]
                     eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
@@ -719,10 +679,7 @@ class FeaturesEnricher(TransformerMixin):
                         }
                     )
 
-            metrics_df = pd.DataFrame(metrics)
-            metrics_df.set_index("segment", inplace=True)
-            metrics_df.rename_axis("", inplace=True)
-            return metrics_df
+            return pd.DataFrame(metrics).set_index("segment").rename_axis("")
         except Exception as e:
             logging.exception("Failed to calculate metrics")
             raise e
@@ -752,20 +709,16 @@ class FeaturesEnricher(TransformerMixin):
         if EVAL_SET_INDEX in result.columns:
             result_train = result[result[EVAL_SET_INDEX] == 0]
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
-            result_train.drop(columns=EVAL_SET_INDEX, inplace=True)
+            result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
             result_eval_set = None
 
         result_train.index = original_index
         if SYSTEM_RECORD_ID in result.columns:
-            result_train.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+            result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
             if result_eval_set is not None:
-                result_eval_set.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-        if SYSTEM_FAKE_DATE in result.columns:
-            result_train.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
-            if result_eval_set is not None:
-                result_eval_set.drop(columns=SYSTEM_FAKE_DATE, inplace=True)
+                result_eval_set = result_eval_set.drop(columns=SYSTEM_RECORD_ID)
 
         return result_train, result_eval_set
 
@@ -826,73 +779,68 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_search_keys(self, x: pd.DataFrame):
         valid_search_keys = {}
+        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
         for column_id, meaning_type in self.search_keys.items():
+            column_name = None
             if isinstance(column_id, str):
-                valid_search_keys[column_id] = meaning_type
+                column_name = column_id
+                valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
-                valid_search_keys[x.columns[column_id]] = meaning_type
+                column_name = x.columns[column_id]
+                valid_search_keys[column_name] = meaning_type
             else:
                 msg = f"Unsupported type of key in search_keys: {type(column_id)}."
                 logging.error(msg)
                 raise ValueError(msg)
-            if meaning_type == SearchKey.CUSTOM_KEY:
-                msg = "SearchKey.CUSTOM_KEY is not supported for FeaturesEnricher."
-                logging.error(msg)
-                raise ValueError(msg)
+
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
-                msg = "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time"
+                msg = (
+                    "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time. "
+                    "Define only one"
+                )
                 logging.error(msg)
                 raise ValueError(msg)
+
+            if not is_registered and meaning_type in SearchKey.personal_keys():
+                msg = f"Search key {meaning_type} not available without registration. It will be ignored"
+                logging.warning(msg)
+                print("WARNING: " + msg)
+                valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
 
         self.search_keys = valid_search_keys
 
-    def __show_metrics(self):
-        metrics = self.get_metrics()
+    def __show_metrics(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, list],
+        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
+    ):
+        metrics = self.calculate_metrics(X, y, eval_set)
         if metrics is not None:
-            print(Format.GREEN + Format.BOLD + "\nQuality metrics" + Format.END)
+            msg = "\nQuality metrics"
+
             try:
                 from IPython.display import display
 
+                print(Format.GREEN + Format.BOLD + msg + Format.END)
                 display(metrics)
             except ImportError:
+                print(msg)
                 print(metrics)
 
-            if self.__is_uplift_present_in_metrics():
-                print(
-                    "\nFollowing features was used for accuracy uplift estimation:",
-                    ", ".join(self.passed_features),
-                )
-
     def __show_selected_features(self):
-        print(
-            Format.GREEN + Format.BOLD + f"\nWe found {len(self.feature_names_)} useful feature(s) for you" + Format.END
-        )
+        search_keys = self.__using_search_keys().keys()
+        msg = f"\nWe found {len(self.feature_names_)} useful feature(s) for you by search keys: {list(search_keys)}"
+
         try:
             from IPython.display import display
 
+            print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info)
         except ImportError:
+            print(msg)
             print(self.features_info)
-
-    def __is_uplift_present_in_metrics(self):
-        uplift_presented = False
-
-        if self._search_task is not None and self._search_task.summary is not None:
-            if len(self.passed_features) > 0 and self._search_task.initial_max_uplift() is not None:
-                uplift_presented = True
-
-            max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-
-            if max_initial_eval_set_metrics is not None:
-                for eval_set_metrics in max_initial_eval_set_metrics:
-                    if "uplift" in eval_set_metrics:
-                        uplift_presented = True
-
-            if self._search_task.summary.status == "VALIDATION_COMPLETED":
-                if len(self.passed_features) > 0 and self._search_task.validation_max_uplift() is not None:
-                    uplift_presented = True
-
-        return uplift_presented
 
     @staticmethod
     def _hash_row(row) -> int:

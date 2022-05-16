@@ -24,7 +24,6 @@ from upgini.errors import ValidationError
 from upgini.http import get_rest_client
 from upgini.metadata import (
     EVAL_SET_INDEX,
-    SYSTEM_FAKE_DATE,
     SYSTEM_RECORD_ID,
     DataType,
     FeaturesFilter,
@@ -599,7 +598,6 @@ class Dataset(pd.DataFrame):
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
-        columns_to_validate.discard(SYSTEM_FAKE_DATE)
 
         nrows = len(self)
         validation_stats = {}

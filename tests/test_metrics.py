@@ -36,8 +36,8 @@ def test_default_metric_binary(requests_mock: Mocker):
         search_task_id,
         hit_rate=99.0,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
@@ -48,7 +48,7 @@ def test_default_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     X = df.loc[0:499, ["phone", "feature1"]]
@@ -61,6 +61,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -101,8 +102,8 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         search_task_id,
         hit_rate=99.0,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
@@ -113,7 +114,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     X = df.loc[0:499, ["phone", "feature1"]]
@@ -126,6 +127,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key",
         cv=CVType.blocked_time_series
     )
 
@@ -164,8 +166,8 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         search_task_id,
         hit_rate=99.0,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.5},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.5},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
@@ -176,7 +178,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     X = df.loc[0:499, ["phone", "feature1"]]
@@ -189,6 +191,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -231,8 +234,8 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         search_task_id,
         hit_rate=99.0,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
@@ -243,7 +246,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     X = df.loc[0:499, ["phone", "feature1"]]
@@ -297,8 +300,8 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         search_task_id,
         hit_rate=99.0,
         eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
@@ -309,7 +312,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.csv.gz"))
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     X = df.loc[0:499, ["phone", "feature1"]]
@@ -322,6 +325,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key"
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
