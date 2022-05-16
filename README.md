@@ -268,15 +268,18 @@ enricher = FeaturesEnricher(
 Sort rows in dataset according to observation order, in most cases - ascending order by date/datetime
 
 ### 🆙 Accuracy and uplift metrics calculations
-`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter (example below).
+`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter (example below).  
 You can use any model estimator with scikit-learn compartible interface, some examples are:
 * [All Scikit-Learn supervised models](https://scikit-learn.org/stable/supervised_learning.html)
 * [Xgboost](https://xgboost.readthedocs.io/en/stable/python/python_api.html#module-xgboost.sklearn)
 * [LightGBM](https://lightgbm.readthedocs.io/en/latest/Python-API.html#scikit-learn-api)
 * [CatBoost](https://catboost.ai/en/docs/concepts/python-quickstart)
 
-Evaluation metric should be passed to `calculate_metrics()` by `scoring`  parameter, out-of-the box Upgini supports:
-
+<details>
+	<summary>
+		Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
+		out-of-the box Upgini supports 👉
+	</summary>
 <table style="table-layout: fixed;">
   <tr>
     <th>Metric</th>
@@ -380,6 +383,7 @@ Evaluation metric should be passed to `calculate_metrics()` by `scoring`  parame
     <td>Compute the Brier score loss</td>
   </tr>
 </table>
+</details>
 
 In addition to that list, you can define custom evaluation metric function using [scikit-learn make_scorer](https://scikit-learn.org/0.15/modules/model_evaluation.html#defining-your-scoring-strategy-from-score-functions), for example [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error)
 
