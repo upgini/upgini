@@ -252,7 +252,7 @@ enricher = FeaturesEnricher(
 )
 ```
 #### ⏰ Time Series prediction support  
-Time series prediction supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time series specific cross-validation strategy:
+Time series prediction supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time series specific cross-validation split:
 * [Scikit-learn time series cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split) - `CVType.time_series` parameter
 * [Blocked time series cross-validation](https://goldinlocks.github.io/Time-Series-Cross-Validation/#Blocked-and-Time-Series-Split-Cross-Validation) - `CVType.blocked_time_series` parameter
 
@@ -268,20 +268,141 @@ enricher = FeaturesEnricher(
 Sort rows in dataset according to observation order, in most cases - ascending order by date/datetime
 
 ### 🆙 Accuracy and uplift metrics calculations
-We calculate all the accuracy metrics and uplifts for non-linear machine learning algorithms, like gradient boosting or neural networks. If your external data consumer is a linear ML algorithm (like log regression), you might notice different accuracy metrics after data enrichment.
+`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter (example below).
+You can use any model estimator with scikit-learn compartible interface, some examples are:
+* [All Scikit-Learn supervised models](https://scikit-learn.org/stable/supervised_learning.html)
+* [Xgboost](https://xgboost.readthedocs.io/en/stable/python/python_api.html#module-xgboost.sklearn)
+* [LightGBM](https://lightgbm.readthedocs.io/en/latest/Python-API.html#scikit-learn-api)
+* [CatBoost](https://catboost.ai/en/docs/concepts/python-quickstart)
+
+Evaluation metric should be passed to `calculate_metrics()` by `scoring`  parameter, out-of-the box Upgini supports:
+
+<table style="table-layout: fixed;">
+  <tr>
+    <th>Metric</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><tt>explained_variance</tt></td>
+    <td>Explained variance regression score function</td>
+  </tr>
+  <tr>
+    <td><tt>r2</tt></td>
+    <td>R<sup>2</sup> (coefficient of determination) regression score function</td>
+  </tr>
+  <tr>
+    <td><tt>max_error</tt></td>
+    <td>Calculates the maximum residual error (negative - greater is better)</td>
+  </tr>
+  <tr>
+    <td><tt>median_absolute_error</tt></td>
+    <td>Median absolute error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_absolute_error</tt></td>
+    <td>Mean absolute error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_absolute_percentage_error</tt></td>
+    <td>Mean absolute percentage error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_squared_error</tt></td>
+    <td>Mean squared error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_squared_log_error (or aliases: msle, MSLE)</tt></td>
+    <td>Mean squared logarithmic error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>root_mean_squared_log_error (or aliases: rmsle, RMSLE)</tt></td>
+    <td>Root mean squared logarithmic error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>root_mean_squared_error</tt></td>
+    <td>Root mean squared error regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_poisson_deviance</tt></td>
+    <td>Mean Poisson deviance regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>mean_gamma_deviance</tt></td>
+    <td>Mean Gamma deviance regression loss</td>
+  </tr>
+  <tr>
+    <td><tt>accuracy</tt></td>
+    <td>Accuracy classification score</td>
+  </tr>
+  <tr>
+    <td><tt>top_k_accuracy</tt></td>
+    <td>Top-k Accuracy classification score</td>
+  </tr>
+  <tr>
+    <td><tt>roc_auc</tt></td>
+    <td>Area Under the Receiver Operating Characteristic Curve (ROC AUC)
+    from prediction scores</td>
+  </tr>
+  <tr>
+    <td><tt>roc_auc_ovr</tt></td>
+    <td>Area Under the Receiver Operating Characteristic Curve (ROC AUC)
+    from prediction scores (multi_class="ovr")</td>
+  </tr>
+  <tr>
+    <td><tt>roc_auc_ovo</tt></td>
+    <td>Area Under the Receiver Operating Characteristic Curve (ROC AUC)
+    from prediction scores (multi_class="ovo")</td>
+  </tr>
+  <tr>
+    <td><tt>roc_auc_ovr_weighted</tt></td>
+    <td>Area Under the Receiver Operating Characteristic Curve (ROC AUC)
+    from prediction scores (multi_class="ovr", average="weighted")</td>
+  </tr>
+  <tr>
+    <td><tt>roc_auc_ovo_weighted</tt></td>
+    <td>Area Under the Receiver Operating Characteristic Curve (ROC AUC)
+    from prediction scores (multi_class="ovo", average="weighted")</td>
+  </tr>
+  <tr>
+    <td><tt>balanced_accuracy</tt></td>
+    <td>Compute the balanced accuracy</td>
+  </tr>
+  <tr>
+    <td><tt>average_precision</tt></td>
+    <td>Compute average precision (AP) from prediction scores</td>
+  </tr>
+  <tr>
+    <td><tt>log_loss</tt></td>
+    <td>Log loss, aka logistic loss or cross-entropy loss</td>
+  </tr>
+  <tr>
+    <td><tt>brier_score</tt></td>
+    <td>Compute the Brier score loss</td>
+  </tr>
+</table>
+
+In addition to that list, you can define custom evaluation metric function using [scikit-learn make_scorer](https://scikit-learn.org/0.15/modules/model_evaluation.html#defining-your-scoring-strategy-from-score-functions), for example [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error)
+
+By default, `calculate_metrics()` method calculates evaluation metric with the same cross-validation split as selected for `FeaturesEnricher.fit()` by parameter `cv = CVType.<cross-validation-split>`   
+But you can easily define new split by passing parameter `cv = CVType.<cross-validation-split>` in `calculate_metrics()`
+
+Example with more tips-and-tricks:
 ```python
 from upgini import FeaturesEnricher, SearchKey
-# create enricher
 enricher = FeaturesEnricher( search_keys={"registration_date": SearchKey.DATE} )
-# fit with default metrics output - default estimator - CatBoost
+
+# Fit with default setup for metrics calculation
+# CatBoost will be used
 enricher.fit(X, y, eval_set=eval_set, calculate_metrics=True)
-# or you can provide custom estimator for metrics calculation. X and y - the same as on fit
-custom_estimator = LGBMRegressor()  # for example
+
+# LightGBM estimator for metrics. X and y - same as for fit
+custom_estimator = LGBMRegressor()
 enricher.calculate_metrics(X, y, eval_set, estimator=custom_estimator)
-# or you can provide custom metric function (callable or name from standard sklearn functions)
-custom_scorer = "root_mean_squared_log_error"  # or aliases: rmsle, RMSLE
-enricher.calculate_metrics(X, y, eval_set, scoring=custom_scorer)
-# or you can provide custom cross validator
+
+# Custom metric function to scoring param (callable or name)
+enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
+
+# Custom cross validator
 custom_cv = TimeSeriesSplit(n_splits=5)
 enricher.calculate_metrics(X, y, eval_set, cv=custom_cv)
 ```
