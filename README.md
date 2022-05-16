@@ -314,11 +314,11 @@ You can use any model estimator with scikit-learn compartible interface, some ex
     <td>Mean squared error regression loss</td>
   </tr>
   <tr>
-    <td><tt>mean_squared_log_error (or aliases: msle, MSLE)</tt></td>
+	  <td><tt>mean_squared_log_error</tt> (or aliases: <tt>msle</tt>, <tt>MSLE</tt>)</td>
     <td>Mean squared logarithmic error regression loss</td>
   </tr>
   <tr>
-    <td><tt>root_mean_squared_log_error (or aliases: rmsle, RMSLE)</tt></td>
+    <td><tt>root_mean_squared_log_error</tt> (or aliases: <tt>rmsle</tt>, <tt>RMSLE</tt>)</td>
     <td>Root mean squared logarithmic error regression loss</td>
   </tr>
   <tr>
