@@ -121,7 +121,7 @@ y = train_df["churn_flag"]
 *Search keys* columns will be used to match records from all potential external data sources / features 👓. Define at least one search key with `FeaturesEnricher` class initialization.  
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher ( search_keys={"subscription_activation_date": SearchKey.DATE} )
+enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
 ```
 #### ✨ Search key types we support (more is coming!)
 Our team works hard to introduce new search key types, currently we support:
@@ -199,7 +199,7 @@ X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 
 # now we're going to create `FeaturesEnricher` class
-enricher = FeaturesEnricher( search_keys={"subscription_activation_date": SearchKey.DATE} )
+enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
 
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
 # we send email notification, just register on upgini.com
@@ -268,7 +268,7 @@ enricher = FeaturesEnricher(
 Sort rows in dataset according to observation order, in most cases - ascending order by date/datetime
 
 ### 🆙 Accuracy and uplift metrics calculations
-`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter (example below).  
+`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter in `fit` or `fit_transform` methods (example below).  
 You can use any model estimator with scikit-learn compartible interface, some examples are:
 * [All Scikit-Learn supervised models](https://scikit-learn.org/stable/supervised_learning.html)
 * [Xgboost](https://xgboost.readthedocs.io/en/stable/python/python_api.html#module-xgboost.sklearn)
@@ -388,12 +388,12 @@ You can use any model estimator with scikit-learn compartible interface, some ex
 In addition to that list, you can define custom evaluation metric function using [scikit-learn make_scorer](https://scikit-learn.org/0.15/modules/model_evaluation.html#defining-your-scoring-strategy-from-score-functions), for example [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error)
 
 By default, `calculate_metrics()` method calculates evaluation metric with the same cross-validation split as selected for `FeaturesEnricher.fit()` by parameter `cv = CVType.<cross-validation-split>`   
-But you can easily define new split by passing parameter `cv = CVType.<cross-validation-split>` in `calculate_metrics()`
+But you can easily define new split by passing child of BaseCrossValidator to parameter `cv` in `calculate_metrics()`
 
 Example with more tips-and-tricks:
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher( search_keys={"registration_date": SearchKey.DATE} )
+enricher = FeaturesEnricher(search_keys={"registration_date": SearchKey.DATE})
 
 # Fit with default setup for metrics calculation
 # CatBoost will be used
@@ -428,7 +428,7 @@ eval_df = pd.read_csv("validation.csv")
 eval_ids_and_features = eval_df.drop(columns="label")
 eval_label = eval_df["label"]
 # create FeaturesEnricher
-enricher = FeaturesEnricher( search_keys={"registration_date": SearchKey.DATE} )
+enricher = FeaturesEnricher(search_keys={"registration_date": SearchKey.DATE})
 
 # now we fit WITH eval_set parameter to calculate accuracy metrics on Out-of-time dataset.
 # the output will contain quality metrics for both the training data set and
