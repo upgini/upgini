@@ -534,7 +534,7 @@ class FeaturesEnricher(TransformerMixin):
         self.__prepare_feature_importances(list(X.columns))
 
         self.__show_selected_features()
-        
+
         try:
             self.enriched_X, self.enriched_eval_set = self.__enrich(
                 df, self._search_task.get_all_initial_raw_features(), X.index
