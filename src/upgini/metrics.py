@@ -45,7 +45,7 @@ class EstimatorWrapper:
         self.cv = cv
 
     def fit(self, X, y, **kwargs):
-        X, fit_params = self._prepare_to_fit(X)
+        X, fit_params = self._prepare_to_fit(X.copy())
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -57,7 +57,7 @@ class EstimatorWrapper:
         raise NotImplementedError()
 
     def cross_val_predict(self, X, y):
-        X, fit_params = self._prepare_to_fit(X)
+        X, fit_params = self._prepare_to_fit(X.copy())
 
         metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 

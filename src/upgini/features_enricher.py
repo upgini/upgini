@@ -95,38 +95,20 @@ class FeaturesEnricher(TransformerMixin):
         self,
         search_keys: Dict[str, SearchKey],
         country_code: Optional[str] = None,
-        keep_input: bool = False,
         model_task_type: Optional[ModelTaskType] = None,
-        importance_threshold: Optional[float] = 0,
-        max_features: Optional[int] = 400,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
         random_state: int = 42,
-        scoring: Optional[Callable] = None,
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
         self.__validate_search_keys(search_keys, api_key, search_id)
         self.search_keys = search_keys
         self.country_code = country_code
-        self.keep_input = keep_input
         self.model_task_type = model_task_type
-        self.scoring = scoring
-        if importance_threshold is not None:
-            try:
-                self.importance_threshold = float(importance_threshold)
-            except ValueError:
-                logging.exception(f"Invalid importance_threshold provided: {importance_threshold}")
-                raise ValueError("importance_threshold should be float")
-        if max_features is not None:
-            try:
-                self.max_features = int(max_features)
-            except ValueError:
-                logging.exception(f"Invalid max_features provided: {max_features}")
-                raise ValueError("max_features should be int")
         self.endpoint = endpoint
         self.api_key = api_key
         self._search_task: Optional[SearchTask] = None
@@ -169,6 +151,9 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
         calculate_metrics: bool = False,
+        scoring: Optional[Callable] = None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         **fit_params,
     ):
         """Fit to data.
@@ -194,7 +179,16 @@ class FeaturesEnricher(TransformerMixin):
         """
         logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
         try:
-            self.__inner_fit(X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
+            self.__inner_fit(
+                X,
+                y,
+                eval_set,
+                calculate_metrics=calculate_metrics,
+                scoring=scoring,
+                importance_threshold=importance_threshold,
+                max_features=max_features,
+                **fit_params,
+            )
         except Exception as e:
             logging.exception("Failed inner fit")
             raise e
@@ -204,7 +198,11 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        keep_input: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
         calculate_metrics: bool = False,
+        scoring: Optional[Callable] = None,
         **fit_params,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -237,18 +235,37 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
+
+        importance_threshold = self.__validate_importance_threshold(importance_threshold)
+        max_features = self.__validate_max_features(max_features)
+
         try:
-            result = self.__inner_fit(X, y, eval_set, calculate_metrics=calculate_metrics, **fit_params)
+            result = self.__inner_fit(
+                X,
+                y,
+                eval_set,
+                calculate_metrics=calculate_metrics,
+                scoring=scoring,
+                importance_threshold=importance_threshold,
+                max_features=max_features,
+                **fit_params,
+            )
         except Exception as e:
             logging.exception("Failed in inner_fit")
             raise e
 
-        if self.keep_input:
+        if keep_input:
             return result
         else:
             return result.drop(columns=[c for c in X.columns if c in result.columns])
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        self,
+        X: pd.DataFrame,
+        keep_input: bool = False,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
+    ) -> pd.DataFrame:
         """Transform `X`.
 
         Returns a transformed version of `X`.
@@ -265,20 +282,28 @@ class FeaturesEnricher(TransformerMixin):
             Transformed dataframe, enriched with important features.
         """
         logging.info(f"Start transform. X shape: {X.shape}")
+
+        importance_threshold = self.__validate_importance_threshold(importance_threshold)
+        max_features = self.__validate_max_features(max_features)
+
         try:
-            result, _ = self.__inner_transform(X)
+            result = self.__inner_transform(X, importance_threshold, max_features)
         except Exception as e:
             logging.exception("Failed to inner transform")
             raise e
 
-        if self.keep_input:
+        if keep_input:
             return result
         else:
             return result.drop(columns=[c for c in X.columns if c in result.columns])
 
     def __inner_transform(
-        self, X: pd.DataFrame, silent_mode: bool = False
-    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        self,
+        X: pd.DataFrame,
+        importance_threshold: Optional[float],
+        max_features: Optional[int],
+        silent_mode: bool = False,
+    ) -> pd.DataFrame:
         if self._search_task is None:
             msg = "`fit` or `fit_transform` should be called before `transform`."
             logging.error(msg)
@@ -329,12 +354,18 @@ class FeaturesEnricher(TransformerMixin):
         if not silent_mode:
             print("Executing transform step")
             with yaspin(Spinners.material) as sp:
-                result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
+                result, _ = self.__enrich(
+                    df, validation_task.get_all_validation_raw_features(), X.index
+                )
                 sp.ok("Done                         ")
         else:
-            result = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
+            result, _ = self.__enrich(
+                df, validation_task.get_all_validation_raw_features(), X.index
+            )
 
-        return result
+        filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
+
+        return result[filtered_columns]
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of fitted enricher. It's present only after fit completed"""
@@ -396,9 +427,12 @@ class FeaturesEnricher(TransformerMixin):
     def __inner_fit(
         self,
         X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list, None] = None,
-        eval_set: Optional[List[tuple]] = None,
-        calculate_metrics: bool = False,
+        y: Union[pd.Series, np.ndarray, list, None],
+        eval_set: Optional[List[tuple]],
+        calculate_metrics: bool,
+        scoring: Optional[Callable],
+        importance_threshold: Optional[float],
+        max_features: Optional[int],
         **fit_params,
     ) -> pd.DataFrame:
         self.enriched_X = None
@@ -440,6 +474,8 @@ class FeaturesEnricher(TransformerMixin):
                     raise TypeError(
                         f"Only pandas.DataFrame supported for X in eval_set, but {type(eval_X)} was passed."
                     )
+                if eval_X.columns.to_list() != X.columns.to_list():
+                    raise Exception("Eval set columns differ to X columns")
                 if (
                     not isinstance(eval_y, pd.Series)
                     and not isinstance(eval_y, np.ndarray)
@@ -492,8 +528,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self._search_task = dataset.search(
             extract_features=True,
-            importance_threshold=self.importance_threshold,
-            max_features=self.max_features,
             runtime_parameters=self.runtime_parameters,
         )
 
@@ -501,28 +535,20 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__show_selected_features()
 
-        if dataset.sampled:
-            logging.info(
-                "Train dataset has size more than fit threshold. Transform will be executed in separate action"
+        try:
+            self.enriched_X, self.enriched_eval_set = self.__enrich(
+                df, self._search_task.get_all_initial_raw_features(), X.index
             )
-            try:
-                self.enriched_X, self.enriched_eval_set = self.__inner_transform(X, silent_mode=True)
-            except Exception as e:
-                logging.exception("Failed to transform")
-                raise e
-        else:
-            try:
-                self.enriched_X, self.enriched_eval_set = self.__enrich(
-                    df, self._search_task.get_all_initial_raw_features(), X.index
-                )
-            except Exception as e:
-                logging.exception("Failed to download features")
-                raise e
+        except Exception as e:
+            logging.exception("Failed to download features")
+            raise e
 
         if calculate_metrics:
-            self.__show_metrics(X, y, eval_set)
+            self.__show_metrics(X, y, eval_set, scoring, importance_threshold, max_features)
 
-        return self.enriched_X
+        filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
+
+        return self.enriched_X[filtered_columns]
 
     def __using_search_keys(self) -> Dict[str, SearchKey]:
         return {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
@@ -573,6 +599,8 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         cv: Optional[BaseCrossValidator] = None,
         estimator=None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
     ) -> pd.DataFrame:
         if (
             (self.enriched_X is None)
@@ -581,13 +609,12 @@ class FeaturesEnricher(TransformerMixin):
         ):
             raise Exception("Fit wasn't completed successfully")
 
-        if scoring is None:
-            scoring = self.scoring
+        filtered_columns = self.__filtered_columns(
+            X.columns.to_list(), importance_threshold, max_features, only_features=True
+        )
 
         fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-        fitting_enriched_X = self.enriched_X.drop(
-            columns=[col for col in self.search_keys.keys() if col in self.enriched_X.columns]
-        )
+        fitting_enriched_X = self.enriched_X[filtered_columns]
 
         model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
         _cv = cv or self.cv
@@ -638,10 +665,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_X = eval_pair[0]
                 eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
                 enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
-                enriched_eval_X = enriched_eval_X.drop(
-                    columns=[col for col in self.search_keys.keys() if col in enriched_eval_X.columns]
-                )
-                enriched_eval_X = enriched_eval_X.drop(columns=EVAL_SET_INDEX)
+                enriched_eval_X = enriched_eval_X[filtered_columns]
                 eval_y = eval_pair[1]
 
                 etalon_eval_metric = None
@@ -675,10 +699,11 @@ class FeaturesEnricher(TransformerMixin):
         if result_features is None:
             logging.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError("Search engine crashed on this request.")
-
-        sorted_result_columns = [name for name in self.__filtered_importance_names() if name in result_features.columns]
-        result_features = result_features[[SYSTEM_RECORD_ID] + sorted_result_columns]
-
+        result_features = (
+            result_features.drop(columns=EVAL_SET_INDEX)
+            if EVAL_SET_INDEX in result_features.columns
+            else result_features
+        )
         df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
         result = pd.merge(
             df_without_target,
@@ -743,19 +768,21 @@ class FeaturesEnricher(TransformerMixin):
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
 
-    def __filtered_importance_names(self) -> List[str]:
+    def __filtered_importance_names(
+        self, importance_threshold: Optional[float], max_features: Optional[int]
+    ) -> List[str]:
         if len(self.feature_names_) == 0:
             return []
 
-        filtered_importances = zip(self.feature_names_, self.feature_importances_)
-        if self.importance_threshold is not None:
+        filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
+        if importance_threshold is not None:
             filtered_importances = [
-                (name, importance)
-                for name, importance in filtered_importances
-                if importance > self.importance_threshold
+                (name, importance) for name, importance in filtered_importances if importance > importance_threshold
             ]
-        if self.max_features is not None:
-            filtered_importances = list(filtered_importances)[: self.max_features]
+        if max_features is not None:
+            filtered_importances = list(filtered_importances)[:max_features]
+        if len(filtered_importances) == 0:
+            return []
         filtered_importance_names, _ = zip(*filtered_importances)
         return list(filtered_importance_names)
 
@@ -796,9 +823,14 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list],
-        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
+        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]],
+        scoring: Optional[Callable],
+        importance_threshold: Optional[float],
+        max_features: Optional[int],
     ):
-        metrics = self.calculate_metrics(X, y, eval_set)
+        metrics = self.calculate_metrics(
+            X, y, eval_set, scoring=scoring, importance_threshold=importance_threshold, max_features=max_features
+        )
         if metrics is not None:
             msg = "\nQuality metrics"
 
@@ -810,12 +842,6 @@ class FeaturesEnricher(TransformerMixin):
             except ImportError:
                 print(msg)
                 print(metrics)
-
-            if len(self.passed_features) > 0:
-                print(
-                    "\nFollowing features was used for accuracy uplift estimation:",
-                    ", ".join(self.passed_features),
-                )
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
@@ -871,6 +897,38 @@ class FeaturesEnricher(TransformerMixin):
                 if max_auc["value"] < 0.55:
                     return True
         return False
+
+    @staticmethod
+    def __validate_importance_threshold(importance_threshold: Optional[float]) -> float:
+        try:
+            return float(importance_threshold) if importance_threshold is not None else 0.0
+        except ValueError:
+            logging.exception(f"Invalid importance_threshold provided: {importance_threshold}")
+            raise ValueError("importance_threshold should be float")
+
+    @staticmethod
+    def __validate_max_features(max_features: Optional[int]) -> int:
+        try:
+            return int(max_features) if max_features is not None else 400
+        except ValueError:
+            logging.exception(f"Invalid max_features provided: {max_features}")
+            raise ValueError("max_features should be int")
+
+    def __filtered_columns(
+        self,
+        x_columns: List[str],
+        importance_threshold: Optional[float],
+        max_features: Optional[int],
+        only_features: bool = False,
+    ) -> List[str]:
+        importance_threshold = self.__validate_importance_threshold(importance_threshold)
+        max_features = self.__validate_max_features(max_features)
+
+        exclude_columns = self.search_keys.keys() if only_features else []
+
+        return [col for col in x_columns if col not in exclude_columns] + self.__filtered_importance_names(
+            importance_threshold, max_features
+        )
 
     def __check_quality(self, no_data_found: bool):
         if no_data_found or self.__is_quality_by_metrics_low():
