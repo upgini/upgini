@@ -972,14 +972,14 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
-        importance_threshold: Optional[float] = None,
-        max_features: Optional[int] = None,
-        filter_features: Optional[dict] = None,
+        importance_threshold: Optional[float] = None,  # deprecated
+        max_features: Optional[int] = None,  # deprecated
+        filter_features: Optional[dict] = None,  # deprecated
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
         if self.etalon_def is None:
             self.validate()
-        file_metrics = FileMetrics()  # self.calculate_metrics()
+        file_metrics = FileMetrics()
 
         file_metadata = self.__construct_metadata()
         search_customization = self.__construct_search_customization(

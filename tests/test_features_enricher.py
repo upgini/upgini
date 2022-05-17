@@ -80,14 +80,16 @@ def test_features_enricher(requests_mock: Mocker):
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-        keep_input=True,
         endpoint=url,
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
     )
 
     enriched_train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -175,7 +177,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-        keep_input=True,
         date_format="%Y-%m-%d",
         endpoint=url,
         api_key="fake_api_key",
@@ -184,7 +185,10 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert enricher.runtime_parameters is not None
 
     enricher.fit(
-        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
     )
 
     fit_req = None
@@ -195,7 +199,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 
     # TODO: can be better with
     #  https://metareal.blog/en/post/2020/05/03/validating-multipart-form-data-with-requests-mock/
-    # It's do-able to parse req with cgi module and verify contents
+    # It"s do-able to parse req with cgi module and verify contents
     assert fit_req is not None
     assert "runtimeProperty1" in str(fit_req.body)
     assert "runtimeValue1" in str(fit_req.body)
@@ -217,7 +221,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
-    transformed = enricher.transform(train_features)
+    transformed = enricher.transform(train_features, keep_input=True)
 
     transform_req = None
     transform_url = url + "/public/api/v2/search/validation?initialSearchTaskId=" + search_task_id
@@ -238,7 +242,206 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
 
     with pytest.raises(Exception):
-        FeaturesEnricher(
-            search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL},
-            endpoint=url
-        )
+        FeaturesEnricher(search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL}, endpoint=url)
+
+
+def test_filter_by_importance(requests_mock: Mocker):
+    url = "https://some.fake.url"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 0.3, "matchedInPercent": 100.0}],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000]
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"]
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        date_format="%Y-%m-%d",
+        endpoint=url,
+        api_key="fake_api_key",
+    )
+
+    eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+
+    enricher.fit(train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8)
+
+    assert enricher.enriched_X is not None
+    # assert len(enricher.enriched_X) == 10000
+    # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
+    # assert enricher.enriched_eval_set is not None
+    # assert len(enricher.enriched_eval_set) == 2000
+    # assert enricher.enriched_eval_set.columns.to_list() == [
+    #     "SystemRecordId_473310000",
+    #     "phone_num",
+    #     "rep_date",
+    #     "eval_set_index"
+    # ]
+
+    metrics = enricher.calculate_metrics(train_features, train_target, eval_set, importance_threshold=0.8)
+
+    assert metrics.loc["train", "baseline roc_auc"] == 0.5
+    assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
+    assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
+
+    train_features = enricher.fit_transform(
+        train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8
+    )
+
+    assert train_features.shape == (10000, 3)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.8)
+
+    assert test_features.shape == (1000, 3)
+
+
+def test_filter_by_max_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 0.3, "matchedInPercent": 100.0}],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000]
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"]
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        date_format="%Y-%m-%d",
+        endpoint=url,
+        api_key="fake_api_key",
+    )
+
+    eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+
+    enricher.fit(train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0)
+
+    # assert enricher.enriched_X is not None
+    # assert len(enricher.enriched_X) == 10000
+    # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
+    # assert enricher.enriched_eval_set is not None
+    # assert len(enricher.enriched_eval_set) == 2000
+    # assert enricher.enriched_eval_set.columns.to_list() == [
+    #     "SystemRecordId_473310000",
+    #     "phone_num",
+    #     "rep_date",
+    #     "eval_set_index"
+    # ]
+
+    metrics = enricher.calculate_metrics(train_features, train_target, eval_set, max_features=0)
+
+    assert metrics.loc["train", "baseline roc_auc"] == 0.5
+    assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
+    assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
+
+    train_features = enricher.fit_transform(
+        train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0
+    )
+
+    assert train_features.shape == (10000, 3)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
+
+    assert test_features.shape == (1000, 3)
