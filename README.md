@@ -81,7 +81,7 @@ Run docker image:</br>
 <i>
 docker run -p 8888:8888 upgini</br>
 </i></br>
-Open http://localhost:8888?token=<your_token_from_console_output> in your browser  
+Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
 </details>
 
 ## 🌎 Connected data sources and coverage 
