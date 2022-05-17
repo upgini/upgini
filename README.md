@@ -61,23 +61,28 @@ Work in progress..
 ```python
 %pip install upgini
 ```
-### 🐳 Docker-way
-Clone `$ git clone https://github.com/upgini/upgini` or download upgini git repo locally and follow steps below to build docker container 👇  
-Build docker image  
- - ... from cloned git repo:
-```bash
-cd upgini
-docker build -t upgini .
-```
- - ...or directly from GitHub:
-```bash
-DOCKER_BUILDKIT=0 docker build -t upgini git@github.com:upgini/upgini.git#main
-```
-Run docker image:
-```bash
-docker run -p 8888:8888 upgini
-```
+<details>
+	<summary>
+	🐳 <b>Docker-way</b>
+	</summary>
+</br>
+Clone <i>$ git clone https://github.com/upgini/upgini</i> or download upgini git repo locally </br>
+and follow steps below to build docker container 👇 </br>
+Build docker image</br>
+</br>  
+ - ... from cloned git repo:</br>
+<i>cd upgini </br>
+docker build -t upgini .</i></br>
+ - ...or directly from GitHub:</br>
+</br>
+<i>DOCKER_BUILDKIT=0 docker build -t upgini</i></br> <i>git@github.com:upgini/upgini.git#main</i></br>
+</br>
+Run docker image:</br>
+<i>
+docker run -p 8888:8888 upgini</br>
+</i></br>
 Open http://localhost:8888?token=<your_token_from_console_output> in your browser  
+</details>
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
