@@ -104,11 +104,10 @@ def test_string_date_to_timestamp_convertion():
         "date": FileColumnMeaningType.DATE,
     }
     dataset._Dataset__to_millis()
+    assert dataset.shape[0] == 3
     assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000
     assert dataset["date"].isnull().sum() == 2
-    dataset._Dataset__remove_empty_date_rows()
-    assert dataset.shape[0] == 1
 
 
 def test_string_datetime_to_timestamp_convertion():
@@ -123,7 +122,6 @@ def test_string_datetime_to_timestamp_convertion():
         "date": FileColumnMeaningType.DATE,
     }
     dataset._Dataset__to_millis()
-    dataset._Dataset__remove_empty_date_rows()
     assert dataset.shape[0] == 1
     assert dataset["date"].dtype == "Int64"
     assert dataset["date"].iloc[0] == 1577836800000

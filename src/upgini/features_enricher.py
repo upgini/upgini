@@ -851,10 +851,10 @@ class FeaturesEnricher(TransformerMixin):
             from IPython.display import display
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display(self.features_info)
+            display(self.features_info.head(60))
         except ImportError:
             print(msg)
-            print(self.features_info)
+            print(self.features_info.head(60))
 
     @staticmethod
     def _hash_row(row) -> int:
