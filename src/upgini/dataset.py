@@ -1,3 +1,4 @@
+import os
 import csv
 import html
 import logging
@@ -21,7 +22,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import get_rest_client
+from upgini.http import get_rest_client, UPGINI_API_KEY
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
@@ -41,13 +42,15 @@ from upgini.search_task import SearchTask
 
 
 class Dataset(pd.DataFrame):
-    MIN_ROWS_COUNT: int = 100
-    FIT_SAMPLE_ROWS: int = 100_000
-    FIT_SAMPLE_THRESHOLD: int = FIT_SAMPLE_ROWS * 3
-    IMBALANCE_THESHOLD: float = 0.4
-    MIN_TARGET_CLASS_COUNT: int = 100
-    MAX_MULTICLASS_CLASS_COUNT: int = 100
-    MIN_SUPPORTED_DATE_TS: int = 1114992000000  # 2005-05-02
+    MIN_ROWS_COUNT = 100
+    MAX_ROWS_REGISTERED = 299_999
+    MAX_ROWS_UNREGISTERED = 149_999
+    FIT_SAMPLE_ROWS = 100_000
+    FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+    IMBALANCE_THESHOLD = 0.4
+    MIN_TARGET_CLASS_COUNT = 100
+    MAX_MULTICLASS_CLASS_COUNT = 100
+    MIN_SUPPORTED_DATE_TS = 1114992000000  # 2005-05-02
 
     _metadata = [
         "dataset_name",
@@ -143,10 +146,25 @@ class Dataset(pd.DataFrame):
 
         return self.etalon_def
 
-    def __validate_rows_count(self):
-        logging.info("Validate rows count")
+    def __validate_min_rows_count(self):
         if self.shape[0] < self.MIN_ROWS_COUNT:
             raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows.")
+
+    def __validate_max_row_count(self):
+        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
+        if is_registered:
+            if len(self) > self.MAX_ROWS_REGISTERED:
+                raise ValueError(
+                    f"Total X + eval_set rows count limit is {self.MAX_ROWS_REGISTERED}. "
+                    "Please sample X and eval_set"
+                )
+        else:
+            if len(self) > self.MAX_ROWS_UNREGISTERED:
+                raise ValueError(
+                    f"For unregistered users total rows count limit for X + eval_set is {self.MAX_ROWS_UNREGISTERED}. "
+                    "Please register to increase the limit"
+                )
 
     def __rename_columns(self):
         logging.info("Replace restricted symbols in column names")
@@ -212,7 +230,7 @@ class Dataset(pd.DataFrame):
         logging.info("Converting bool to int")
         for col in self.columns:
             if is_bool(self[col]):
-                logging.info(f"Converting {col} from bool to int")
+                # logging.info(f"Converting {col} from bool to int")
                 self[col] = self[col].astype("Int64")
 
     def __convert_float16(self):
@@ -220,7 +238,7 @@ class Dataset(pd.DataFrame):
         logging.info("Converting float16 to float")
         for col in self.columns:
             if is_float_dtype(self[col]):
-                logging.info(f"Converting {col} from float16 to float64")
+                # logging.info(f"Converting {col} from float16 to float64")
                 self[col] = self[col].astype("float64")
 
     def __correct_decimal_comma(self):
@@ -232,7 +250,7 @@ class Dataset(pd.DataFrame):
         cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
         for col in cls_to_check:
             if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
-                logging.info(f"Correcting comma sep in {col}")
+                # logging.info(f"Correcting comma sep in {col}")
                 self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
 
     def __to_millis(self):
@@ -346,17 +364,6 @@ class Dataset(pd.DataFrame):
                 msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
                 logging.warning(msg)
                 print("WARN: ", msg)
-
-    def __remove_empty_date_rows(self):
-        """Clean DataSet from empty date rows"""
-        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
-        if date_column is not None:
-            logging.info("cleaning empty rows")
-            drop_idx = self[(self[date_column] == "") | self[date_column].isna()].index
-            self.drop(drop_idx, inplace=True)
-            logging.info(f"df with valid date column: {self.shape}")
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
@@ -546,13 +553,13 @@ class Dataset(pd.DataFrame):
         logging.info("Remove almost constant and almost empty columns")
         for f in self.__features():
             value_counts = self[f].value_counts(dropna=False, normalize=True)
-            most_frequent_value = value_counts.index[0]
+            # most_frequent_value = value_counts.index[0]
             most_frequent_percent = value_counts.iloc[0]
             if most_frequent_percent >= 0.99:
-                logging.warning(
-                    f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
-                    " and will be droped from tds"
-                )
+                # logging.warning(
+                #     f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
+                #     " and will be dropped from tds"
+                # )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
@@ -745,132 +752,9 @@ class Dataset(pd.DataFrame):
 
             self.__resample()
 
-            self.__validate_rows_count()
+            self.__validate_min_rows_count()
 
-    # def calculate_metrics(self) -> FileMetrics:
-    #     """Calculate initial metadata for DataSet
-
-    #     Returns:
-    #         InitialMetadata: initial metadata
-    #     """
-    #     logging.info("Calculating metrics")
-    #     if self.etalon_def is None:
-    #         self.validate()
-
-    #     self.__remove_empty_date_rows()
-    #     date_millis = (
-    #         self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
-    #         or self.etalon_def_checked.get(FileColumnMeaningType.DATETIME.value)
-    #         or ""
-    #     )
-    #     target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
-    #     score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
-    #     cls_metadata = [date_millis, target, score, "is_valid"]
-    #     cls_metadata = [i for i in cls_metadata if i is not None]
-    #     # df with columns for metadata calculation
-    #     df: pd.DataFrame = self[cls_metadata].copy()  # type: ignore
-    #     count = len(df)
-    #     valid_count = int(df["is_valid"].sum())
-    #     valid_rate = 100 * valid_count / count
-    #     avg_target = None
-    #     metrics_binary_etalon = None
-    #     metrics_regression_etalon = None
-    #     metrics_multiclass_etalon = None
-
-    #     if target is None:
-    #         raise ValueError("Target column is absent in meaning_types.")
-    #     target_values: pd.Series = df.loc[df.is_valid == 1, target]  # type: ignore
-    #     tgt = target_values.values
-    #     if self.task_type != ModelTaskType.MULTICLASS:
-    #         avg_target = target_values.mean()
-
-    #     if self.task_type == ModelTaskType.BINARY:
-    #         label = ModelLabelType.AUC
-    #     elif self.task_type == ModelTaskType.REGRESSION:
-    #         label = ModelLabelType.RMSE
-    #     else:
-    #         label = ModelLabelType.ACCURACY
-
-    #     if score is not None:
-    #         try:
-    #             from sklearn.metrics import (  # type: ignore
-    #                 accuracy_score,
-    #                 mean_squared_error,
-    #                 mean_squared_log_error,
-    #                 roc_auc_score,
-    #             )
-    #         except ModuleNotFoundError:
-    #             raise ModuleNotFoundError("To calculate score performance please install scikit-learn.")
-    #         sc = df.loc[df.is_valid == 1, score].values  # type: ignore
-    #         try:
-    #             if self.task_type == ModelTaskType.REGRESSION:
-    #                 sc = sc.astype(float)
-    #                 tgt = tgt.astype(float)
-    #                 metrics_regression_etalon = RegressionTask(
-    #                     mse=mean_squared_error(tgt, sc),
-    #                     rmse=np.sqrt(mean_squared_error(tgt, sc)),
-    #                     msle=mean_squared_log_error(tgt, sc),
-    #                     rmsle=np.sqrt(mean_squared_log_error(tgt, sc)),
-    #                 )
-    #             elif self.task_type == ModelTaskType.BINARY:
-    #                 auc = roc_auc_score(tgt, sc)
-    #                 auc = max(auc, 1 - auc)
-    #                 gini = 100 * (2 * auc - 1)
-    #                 metrics_binary_etalon = BinaryTask(auc=auc, gini=gini)
-    #             else:
-    #                 accuracy100 = 100 * max(0.0, accuracy_score(tgt, sc))
-    #                 metrics_multiclass_etalon = MulticlassTask(accuracy=accuracy100)
-    #         except Exception:
-    #             logging.error("Can't calculate etalon's score performance")
-    #     else:
-    #         sc = []
-
-    #     df["date_cut"], cuts = pd.cut(df[date_millis], bins=6, include_lowest=True, retbins=True)
-    #     # save bins for future
-    #     cuts = cuts.tolist()
-    #     df["date_cut"] = df.date_cut.apply(lambda x: x.mid).astype(int)
-    #     df["count_tgt"] = df.groupby("date_cut")[target].transform(lambda x: len(set(x)))
-
-    #     if self.task_type == ModelTaskType.MULTICLASS:
-    #         df_stat = df.groupby("date_cut").apply(
-    #             lambda x: pd.Series(
-    #                 {
-    #                     "count": len(x),
-    #                     "valid_count": x["is_valid"].sum(),
-    #                     "valid_rate": 100 * x["is_valid"].mean(),
-    #                 }
-    #             )
-    #         )
-    #     else:
-    #         df_stat = df.groupby("date_cut").apply(
-    #             lambda x: pd.Series(
-    #                 {
-    #                     "avg_target": x[target].mean(),
-    #                     "count": len(x),
-    #                     "valid_count": x["is_valid"].sum(),
-    #                     "valid_rate": 100 * x["is_valid"].mean(),
-    #                 }
-    #             )
-    #         )
-
-    #     if score is not None and len(sc) > 0:
-    #         df_stat["avg_score_etalon"] = df[df.is_valid == 1].groupby("date_cut")[score].mean()
-
-    #     df_stat.dropna(inplace=True)
-    #     interval = df_stat.reset_index().to_dict(orient="records")
-    #     return FileMetrics(
-    #         task_type=self.task_type,
-    #         label=label,
-    #         count=count,
-    #         valid_count=valid_count,
-    #         valid_rate=valid_rate,
-    #         avg_target=avg_target,
-    #         metrics_binary_etalon=metrics_binary_etalon,
-    #         metrics_regression_etalon=metrics_regression_etalon,
-    #         metrics_multiclass_etalon=metrics_multiclass_etalon,
-    #         cuts=cuts,
-    #         interval=interval,
-    #     )
+        self.__validate_max_row_count()
 
     def __construct_metadata(self) -> FileMetadata:
         logging.info("Constructing dataset metadata")
