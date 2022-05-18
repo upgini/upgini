@@ -53,7 +53,7 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 ### 2. [Kaggle public kernel for Tabular playground series Jan 2022](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022)
 
-Work in progress..
+The goal is to improve accuracy of TOP1 winning Kaggle solution from new relevant external data. Competition is a product sales forecasting.
 
 ## Install  
 
