@@ -51,7 +51,7 @@ Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/note
 -->
 Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML model was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
-### 2. [Kaggle public kernel for Tabular playground series Jan 2022](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### 2. [Kaggle public notebook for Tabular playground series Jan 2022](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
 The goal is to improve accuracy of TOP1 winning Kaggle solution from new relevant external features & data.  
 Competition is a product sales forecasting.
