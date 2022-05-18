@@ -75,7 +75,6 @@ class FeaturesEnricher(TransformerMixin):
     """
 
     TARGET_NAME = "target"
-
     RANDOM_STATE = 42
 
     def __init__(
@@ -520,7 +519,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if not silent_mode:
             print("Executing transform step")
-            with yaspin(Spinners.material) as sp:
+            with yaspin(Spinners.clock) as sp:
                 result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
                 sp.ok("Done                         ")
         else:
