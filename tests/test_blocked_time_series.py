@@ -18,7 +18,7 @@ def _prepare_data():
 def test_bts_split_logic():
     X, y, cv, df_etalon_stat, _ = _prepare_data()
     df_stat = []
-    for i, (train_idx, test_idx) in enumerate(cv.split(X, y)):
+    for _, (train_idx, test_idx) in enumerate(cv.split(X, y)):
         df_stat.append([len(train_idx), min(train_idx), max(train_idx), len(test_idx), min(test_idx), max(test_idx)])
     columns = ["train_len", "train_min", "train_max", "test_len", "test_min", "test_max"]
     df_stat = pd.DataFrame(df_stat, columns=columns)
