@@ -409,11 +409,15 @@ custom_estimator = LGBMRegressor()
 enricher.calculate_metrics(X, y, eval_set, estimator=custom_estimator)
 
 # Custom metric function to scoring param (callable or name)
-enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
+custom_scoring = "RMSLE"
+enricher.calculate_metrics(X, y, eval_set, scoring=custom_scoring)
 
 # Custom cross validator
 custom_cv = TimeSeriesSplit(n_splits=5)
 enricher.calculate_metrics(X, y, eval_set, cv=custom_cv)
+
+# All this custom parameters could be combined in both methods: fit, fit_transform and calculate_metrics:
+enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator, scoring=custom_scoring, cv=custom_cv)
 ```
 
 ### ✅ Optional: find features only give accuracy gain to existing data in the ML model
@@ -456,11 +460,9 @@ enricher.fit(
 And `keep_input=True` will keep all initial columns from search dataset X:  
 ```python
 enricher = FeaturesEnricher(
-	search_keys={"subscription_activation_date": SearchKey.DATE},
-	keep_input=True,
-	max_features=2,	
+	search_keys={"subscription_activation_date": SearchKey.DATE}
 )
-enriched_dataframe.fit_transform(X, y)
+enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
 ```
 
 ### ✅ Optional: reuse completed search for enrichment

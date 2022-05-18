@@ -93,7 +93,7 @@ def test_initial_and_validation_search(requests_mock):
         "target": FileColumnMeaningType.TARGET,
     }
     search_keys = [("phone_num", "rep_date")]
-    etalon = Dataset("my_dataset", "description", df=df, model_task_type=ModelTaskType.BINARY)
+    etalon = Dataset("my_dataset", "description", df=df, model_task_type=ModelTaskType.BINARY)  # type: ignore
     etalon.meaning_types = meaning_types
     etalon.search_keys = search_keys
 
@@ -112,7 +112,7 @@ def test_initial_and_validation_search(requests_mock):
     assert search_task.initial_max_auc()["value"] == 0.66
     assert search_task.initial_max_uplift() is None
 
-    validation_dataset = Dataset("my_validation", df=df)
+    validation_dataset = Dataset("my_validation", df=df)  # type: ignore
     validation_dataset.meaning_types = meaning_types
     validation_dataset.search_keys = search_keys
 

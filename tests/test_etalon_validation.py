@@ -13,7 +13,7 @@ from upgini.metadata import ModelTaskType
 
 def test_etalon_validation(etalon: Dataset):
     print("Initial dataset:\n", etalon)
-    Dataset.MIN_ROWS_COUNT = 1
+    Dataset.MIN_ROWS_COUNT = 1  # type: ignore
     count = len(etalon)
     etalon.validate()
     valid_count = len(etalon)
@@ -32,7 +32,7 @@ def test_email_to_hem_convertion():
             {"email": "fake"},
         ]
     )
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "email": FileColumnMeaningType.EMAIL,
     }
@@ -51,7 +51,7 @@ def test_string_ip_to_int_conversion():
             {"ip": None},
         ]
     )
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -67,7 +67,7 @@ def test_python_ip_to_int_conversion():
             {"ip": ipaddress.ip_address("192.168.1.1")},
         ]
     )
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -82,7 +82,7 @@ def test_int_ip_to_int_conversion():
             {"ip": 3232235777},
         ]
     )
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -99,7 +99,7 @@ def test_string_date_to_timestamp_convertion():
         ]
     )
     df["date"] = pd.to_datetime(df["date"])
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATE,
     }
@@ -117,7 +117,7 @@ def test_string_datetime_to_timestamp_convertion():
         ]
     )
     df["date"] = pd.to_datetime(df["date"])
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATE,
     }
@@ -130,7 +130,7 @@ def test_string_datetime_to_timestamp_convertion():
 def test_period_range_to_timestamp_conversion():
     df = pd.DataFrame({"date": pd.period_range(start="2020-01-01", periods=3, freq="D")})
     print(df)
-    dataset = Dataset("test2", df=df)
+    dataset = Dataset("test2", df=df)  # type: ignore
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
     assert dataset["date"].dtype == "Int64"
@@ -147,7 +147,7 @@ def test_python_date_to_timestamp_conversion():
             {"date": date(2020, 1, 3)},
         ]
     )
-    dataset = Dataset("test3", df=df)
+    dataset = Dataset("test3", df=df)  # type: ignore
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
     assert dataset["date"].dtype == "Int64"
@@ -164,7 +164,7 @@ def test_python_datetime_to_timestamp_conversion():
             {"date": datetime(2020, 1, 3, 0, 0, 0)},
         ]
     )
-    dataset = Dataset("test3", df=df)
+    dataset = Dataset("test3", df=df)  # type: ignore
     dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
     dataset._Dataset__to_millis()
     assert dataset["date"].dtype == "Int64"
@@ -178,7 +178,7 @@ def test_constant_and_empty_validation():
         [{"phone": random.randint(1, 99999999999), "a": 1, "b": None}] * 995
         + [{"phone": random.randint(1, 99999999999), "a": 2, "b": 3}] * 5
     )
-    dataset = Dataset("test4", df=df)
+    dataset = Dataset("test4", df=df)  # type: ignore
     dataset.meaning_types = {
         "phone": FileColumnMeaningType.MSISDN,
         "a": FileColumnMeaningType.FEATURE,
@@ -195,7 +195,7 @@ def test_imbalanced_target():
         "f": ["123"] * 2000,
         "target": ["a"]*100 + ["b"] * 400 + ["c"] * 500 + ["d"] * 1000
     })
-    dataset = Dataset("test123", df=df)
+    dataset = Dataset("test123", df=df)  # type: ignore
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
         "phone": FileColumnMeaningType.MSISDN,
@@ -220,7 +220,7 @@ def test_fail_on_small_class_observations():
         "f": ["123"] * 20,
         "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10
     })
-    dataset = Dataset("test123", df=df)
+    dataset = Dataset("test123", df=df)  # type: ignore
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
         "phone": FileColumnMeaningType.MSISDN,
@@ -239,7 +239,7 @@ def test_fail_on_too_many_classes():
         "f": ["123"] * 200,
         "target": range(200)
     })
-    dataset = Dataset("test123", df=df)
+    dataset = Dataset("test123", df=df)  # type: ignore
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
         "phone": FileColumnMeaningType.MSISDN,
@@ -255,7 +255,7 @@ def test_iso_code_normalization():
     df = pd.DataFrame({
         "iso_code": ["  rU 1", " Uk", "G B "]
     })
-    dataset = Dataset("test321", df=df)
+    dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {
         "iso_code": FileColumnMeaningType.COUNTRY
     }
@@ -269,7 +269,7 @@ def test_postal_code_normalization():
     df = pd.DataFrame({
         "postal_code": ["  0ab-0123 ", "0123  3948  "]
     })
-    dataset = Dataset("test321", df=df)
+    dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {
         "postal_code": FileColumnMeaningType.POSTAL_CODE
     }
@@ -282,7 +282,7 @@ def test_number_postal_code_normalization():
     df = pd.DataFrame({
         "postal_code": [103305, 111222]
     })
-    dataset = Dataset("test321", df=df)
+    dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {
         "postal_code": FileColumnMeaningType.POSTAL_CODE
     }
@@ -295,7 +295,7 @@ def test_old_dates_drop():
     df = pd.DataFrame({
         "date": ["2020-01-01", "2005-05-02", "1999-12-31", None]
     })
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATE
     }
@@ -308,7 +308,7 @@ def test_time_cutoff_from_str():
     df = pd.DataFrame({
         "date": ["2020-01-01 00:01:00", "2000-01-01 00:00:00", "1999-12-31 02:00:00", None]
     })
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATETIME
     }
@@ -324,7 +324,7 @@ def test_time_cutoff_from_datetime():
     df = pd.DataFrame({
         "date": [datetime(2020, 1, 1, 0, 1, 0), datetime(2000, 1, 1, 0, 0, 0), datetime(1999, 12, 31, 2, 0, 0), None]
     })
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATETIME
     }
@@ -340,7 +340,7 @@ def test_time_cutoff_from_period():
         "date": pd.date_range("2020-01-01", periods=24, freq="H")
     })
     print(df)
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATETIME
     }
@@ -354,7 +354,7 @@ def test_time_cutoff_from_timestamp():
         "date": [1577836800000000000, 1577840400000000000, 1577844000000000000]
     })
     print(df)
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df)  # type: ignore
     dataset.meaning_types = {
         "date": FileColumnMeaningType.DATETIME
     }

@@ -30,12 +30,12 @@ def etalon_search_keys():
 def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     ds = Dataset(
-        dataset_name="test Dataset",
-        description="test",
-        df=df,
-        meaning_types=etalon_definition,
-        search_keys=etalon_search_keys,
-        model_task_type=ModelTaskType.BINARY,
+        dataset_name="test Dataset",  # type: ignore
+        description="test",  # type: ignore
+        df=df,  # type: ignore
+        meaning_types=etalon_definition,  # type: ignore
+        search_keys=etalon_search_keys,  # type: ignore
+        model_task_type=ModelTaskType.BINARY,  # type: ignore
     )
     ds.validate()
     expected_valid_rows = 15555
@@ -46,12 +46,12 @@ def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys)
 def test_binary_dataset_path(datafiles, etalon_definition, etalon_search_keys):
     path = datafiles / "data.csv"
     ds_path = Dataset(
-        dataset_name="test Dataset",
-        description="test",
-        path=path,
-        meaning_types=etalon_definition,
-        search_keys=etalon_search_keys,
-        model_task_type=ModelTaskType.BINARY,
+        dataset_name="test Dataset",  # type: ignore
+        description="test",  # type: ignore
+        path=path,  # type: ignore
+        meaning_types=etalon_definition,  # type: ignore
+        search_keys=etalon_search_keys,  # type: ignore
+        model_task_type=ModelTaskType.BINARY,  # type: ignore
     )
     ds_path.validate()
     expected_valid_rows = 15555
