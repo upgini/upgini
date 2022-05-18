@@ -46,17 +46,8 @@ class FeaturesEnricher(TransformerMixin):
     country_code: str, optional (default=None)
         ISO-3166 COUNTRY code of country for all rows in dataset.
 
-    keep_input: bool, optional (default=False)
-        If True, copy original input columns to the output dataframe.
-
     model_task_type: ModelTaskType, optional (default=None)
         If defined, used as type of training model, else autdefined type will be used
-
-    importance_threshold: float, optional (default=None)
-        Minimum importance shap value for selected features. By default minimum importance is 0.0
-
-    max_features: int, optional (default=None)
-        Maximum count of selected most important features. By default it is unlimited
 
     api_key: str, optional (default=None)
         Token to authorize search requests. You can get it on https://profile.upgini.com/.
@@ -77,10 +68,6 @@ class FeaturesEnricher(TransformerMixin):
 
     date_format: str, optional (default=None)
         Format for date column with string type. For example: %Y-%m-%d
-
-    scoring: string, callable or None, optional, default: None
-        A string or a scorer callable object / function with signature scorer(estimator, X, y).
-        If None, the estimator's score method is used.
 
     cv: CVType, optional (default=None)
         Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
@@ -150,11 +137,12 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        *,
         calculate_metrics: bool = False,
-        scoring: Optional[Callable] = None,
+        estimator: Optional[Any] = None,
+        scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        **fit_params,
     ):
         """Fit to data.
 
@@ -171,11 +159,26 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        keep_input: bool, optional (default=False)
+            If True, copy original input columns to the output dataframe.
+
+        importance_threshold: float, optional (default=None)
+            Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+        max_features: int, optional (default=None)
+            Maximum count of selected most important features. By default it is unlimited
+
         calculate_metrics : bool (default=False)
             Calculate and show metrics
 
-        **fit_params : dict
-            Additional fit parameters.
+        estimator : optional (default=None)
+            Custom estimator for metrics calculation. It should be sklearn-compatible
+
+        scoring: string, callable or None, optional, default: None
+            A string or a scorer callable object / function with signature scorer(estimator, X, y).
+            If None, the estimator's score method is used.
+
+
         """
         logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
         try:
@@ -184,10 +187,10 @@ class FeaturesEnricher(TransformerMixin):
                 y,
                 eval_set,
                 calculate_metrics=calculate_metrics,
+                estimator=estimator,
                 scoring=scoring,
                 importance_threshold=importance_threshold,
                 max_features=max_features,
-                **fit_params,
             )
         except Exception as e:
             logging.exception("Failed inner fit")
@@ -198,12 +201,13 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
+        *,
         keep_input: bool = False,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         calculate_metrics: bool = False,
-        scoring: Optional[Callable] = None,
-        **fit_params,
+        scoring: Union[Callable, str, None] = None,
+        estimator: Optional[Any] = None,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
 
@@ -222,11 +226,24 @@ class FeaturesEnricher(TransformerMixin):
         eval_set : List[tuple], optional (default=None)
             List of pairs like (X, y) for validation
 
+        keep_input: bool, optional (default=False)
+            If True, copy original input columns to the output dataframe.
+
+        importance_threshold: float, optional (default=None)
+            Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+        max_features: int, optional (default=None)
+            Maximum count of selected most important features. By default it is unlimited
+
         calculate_metrics : bool (default=False)
             Calculate and show metrics
 
-        **fit_params : dict
-            Additional fit parameters.
+        scoring: string, callable or None, optional, default: None
+            A string or a scorer callable object / function with signature scorer(estimator, X, y).
+            If None, the estimator's score method is used.
+
+        estimator : optional (default=None)
+            Custom estimator for metrics calculation. It should be sklearn-compatible
 
         Returns
         -------
@@ -246,9 +263,9 @@ class FeaturesEnricher(TransformerMixin):
                 eval_set,
                 calculate_metrics=calculate_metrics,
                 scoring=scoring,
+                estimator=estimator,
                 importance_threshold=importance_threshold,
                 max_features=max_features,
-                **fit_params,
             )
         except Exception as e:
             logging.exception("Failed in inner_fit")
@@ -262,6 +279,7 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
+        *,
         keep_input: bool = False,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -276,6 +294,15 @@ class FeaturesEnricher(TransformerMixin):
         X : pandas dataframe of shape (n_samples, n_features)
             Input samples.
 
+        keep_input: bool, optional (default=False)
+            If True, copy original input columns to the output dataframe.
+
+        importance_threshold: float, optional (default=None)
+            Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+        max_features: int, optional (default=None)
+            Maximum count of selected most important features. By default it is unlimited
+
         Returns
         -------
         X_new : pandas dataframe of shape (n_samples, n_features_new)
@@ -287,7 +314,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features = self.__validate_max_features(max_features)
 
         try:
-            result = self.__inner_transform(X, importance_threshold, max_features)
+            result = self.__inner_transform(X, importance_threshold=importance_threshold, max_features=max_features)
         except Exception as e:
             logging.exception("Failed to inner transform")
             raise e
@@ -297,9 +324,149 @@ class FeaturesEnricher(TransformerMixin):
         else:
             return result.drop(columns=[c for c in X.columns if c in result.columns])
 
+    def calculate_metrics(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, list],
+        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
+        scoring: Union[Callable, str, None] = None,
+        cv: Optional[BaseCrossValidator] = None,
+        estimator=None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Calculate metrics
+
+        X : pandas dataframe of shape (n_samples, n_features)
+            Input samples.
+
+        y :  array-like of shape (n_samples,) default=None
+            Target values.
+
+        eval_set : List[tuple], optional (default=None)
+            List of pairs like (X, y) for validation
+
+        scoring: string, callable or None, optional, default: None
+            A string or a scorer callable object / function with signature scorer(estimator, X, y).
+            If None, the estimator's score method is used.
+
+        cv : BaseCrossValidator, optional (default=None)
+            Custom cross validator for metric calculation on train segment
+
+        estimator : sklearn-compatible estimator, optional (default=None)
+            Custom estimator for metrics calculation. If not passed then CatBoost will be used
+
+        importance_threshold: float, optional (default=None)
+            Minimum importance shap value for selected features. By default minimum importance is 0.0
+
+        max_features: int, optional (default=None)
+            Maximum count of selected most important features. By default it is unlimited
+        """
+        if (
+            (self.enriched_X is None)
+            or (self._search_task is None)
+            or (self._search_task.initial_max_hit_rate() is None)
+        ):
+            raise Exception("Fit wasn't completed successfully")
+
+        filtered_columns = self.__filtered_columns(
+            X.columns.to_list(), importance_threshold, max_features, only_features=True
+        )
+
+        fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
+        fitting_enriched_X = self.enriched_X[filtered_columns]
+
+        model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+        _cv = cv or self.cv
+
+        # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
+        # and calculate baseline metric
+        etalon_metric = None
+        if fitting_X.shape[1] > 0:
+            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
+                fitting_X, y
+            )
+
+        # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+        wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
+        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
+        metric = wrapper.metric_name
+
+        uplift = None
+        if etalon_metric is not None:
+            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+
+        metrics = [
+            {
+                "segment": "train",
+                "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
+                f"baseline {metric}": etalon_metric,
+                f"enriched {metric}": enriched_metric,
+                "uplift": uplift,
+            }
+        ]
+
+        # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
+        # and calculate final metric (and uplift)
+        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+        if eval_set is not None and self.enriched_eval_set is not None:
+            # Fit models
+            etalon_model = None
+            if fitting_X.shape[1] > 0:
+                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                etalon_model.fit(fitting_X, y)
+            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+            enriched_model.fit(fitting_enriched_X, y)
+
+            for idx, eval_pair in enumerate(eval_set):
+                eval_hit_rate = (
+                    max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 if max_initial_eval_set_metrics else None
+                )
+                eval_X = eval_pair[0]
+                eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
+                enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
+                enriched_eval_X = enriched_eval_X[filtered_columns]
+                eval_y = eval_pair[1]
+
+                etalon_eval_metric = None
+                if etalon_model is not None:
+                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
+
+                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
+
+                eval_uplift = None
+                if etalon_eval_metric is not None:
+                    eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+
+                metrics.append(
+                    {
+                        "segment": f"eval {idx + 1}",
+                        "match_rate": eval_hit_rate,
+                        f"baseline {metric}": etalon_eval_metric,
+                        f"enriched {metric}": enriched_eval_metric,
+                        "uplift": eval_uplift,
+                    }
+                )
+
+        return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+
+    def get_search_id(self) -> Optional[str]:
+        """Returns search_id of fitted enricher. It's present only after fit completed"""
+        return self._search_task.search_task_id if self._search_task else None
+
+    def get_features_info(self) -> pd.DataFrame:
+        """Returns pandas dataframe with importances for each feature"""
+        if self._search_task is None or self._search_task.summary is None:
+            msg = "Run fit or pass search_id before get features info."
+            logging.info(msg)
+            raise NotFittedError(msg)
+
+        return self.features_info
+
     def __inner_transform(
         self,
         X: pd.DataFrame,
+        *,
         importance_threshold: Optional[float],
         max_features: Optional[int],
         silent_mode: bool = False,
@@ -354,31 +521,14 @@ class FeaturesEnricher(TransformerMixin):
         if not silent_mode:
             print("Executing transform step")
             with yaspin(Spinners.material) as sp:
-                result, _ = self.__enrich(
-                    df, validation_task.get_all_validation_raw_features(), X.index
-                )
+                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
                 sp.ok("Done                         ")
         else:
-            result, _ = self.__enrich(
-                df, validation_task.get_all_validation_raw_features(), X.index
-            )
+            result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
 
         filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
 
         return result[filtered_columns]
-
-    def get_search_id(self) -> Optional[str]:
-        """Returns search_id of fitted enricher. It's present only after fit completed"""
-        return self._search_task.search_task_id if self._search_task else None
-
-    def get_features_info(self) -> pd.DataFrame:
-        """Returns pandas dataframe with importances for each feature"""
-        if self._search_task is None or self._search_task.summary is None:
-            msg = "Run fit or pass search_id before get features info."
-            logging.info(msg)
-            raise NotFittedError(msg)
-
-        return self.features_info
 
     @staticmethod
     def __validate_search_keys(search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]):
@@ -429,11 +579,12 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None],
         eval_set: Optional[List[tuple]],
+        *,
         calculate_metrics: bool,
-        scoring: Optional[Callable],
+        scoring: Union[Callable, str, None],
+        estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
-        **fit_params,
     ) -> pd.DataFrame:
         self.enriched_X = None
         if not isinstance(X, pd.DataFrame):
@@ -544,7 +695,7 @@ class FeaturesEnricher(TransformerMixin):
             raise e
 
         if calculate_metrics:
-            self.__show_metrics(X, y, eval_set, scoring, importance_threshold, max_features)
+            self.__show_metrics(X, y, eval_set, scoring, estimator, importance_threshold, max_features)
 
         filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
 
@@ -590,105 +741,6 @@ class FeaturesEnricher(TransformerMixin):
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
         return df
-
-    def calculate_metrics(
-        self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list],
-        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
-        scoring: Union[Callable, str, None] = None,
-        cv: Optional[BaseCrossValidator] = None,
-        estimator=None,
-        importance_threshold: Optional[float] = None,
-        max_features: Optional[int] = None,
-    ) -> pd.DataFrame:
-        if (
-            (self.enriched_X is None)
-            or (self._search_task is None)
-            or (self._search_task.initial_max_hit_rate() is None)
-        ):
-            raise Exception("Fit wasn't completed successfully")
-
-        filtered_columns = self.__filtered_columns(
-            X.columns.to_list(), importance_threshold, max_features, only_features=True
-        )
-
-        fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-        fitting_enriched_X = self.enriched_X[filtered_columns]
-
-        model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
-        _cv = cv or self.cv
-
-        # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
-        # and calculate baseline metric
-        etalon_metric = None
-        if fitting_X.shape[1] > 0:
-            etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
-                fitting_X, y
-            )
-
-        # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-        wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
-        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
-        metric = wrapper.metric_name
-
-        uplift = None
-        if etalon_metric is not None:
-            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
-
-        metrics = [
-            {
-                "segment": "train",
-                "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
-                f"baseline {metric}": etalon_metric,
-                f"enriched {metric}": enriched_metric,
-                "uplift": uplift,
-            }
-        ]
-
-        # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
-        # and calculate final metric (and uplift)
-        max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-        if eval_set is not None and self.enriched_eval_set is not None:
-            # Fit models
-            etalon_model = None
-            if fitting_X.shape[1] > 0:
-                etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                etalon_model.fit(fitting_X, y)
-            enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-            enriched_model.fit(fitting_enriched_X, y)
-
-            for idx, eval_pair in enumerate(eval_set):
-                eval_hit_rate = (
-                    max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0 if max_initial_eval_set_metrics else None
-                )
-                eval_X = eval_pair[0]
-                eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
-                enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
-                enriched_eval_X = enriched_eval_X[filtered_columns]
-                eval_y = eval_pair[1]
-
-                etalon_eval_metric = None
-                if etalon_model is not None:
-                    etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
-
-                enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
-
-                eval_uplift = None
-                if etalon_eval_metric is not None:
-                    eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
-
-                metrics.append(
-                    {
-                        "segment": f"eval {idx + 1}",
-                        "match_rate": eval_hit_rate,
-                        f"baseline {metric}": etalon_eval_metric,
-                        f"enriched {metric}": enriched_eval_metric,
-                        "uplift": eval_uplift,
-                    }
-                )
-
-        return pd.DataFrame(metrics).set_index("segment").rename_axis("")
 
     def __enrich(
         self,
@@ -824,12 +876,19 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list],
         eval_set: Optional[List[Tuple[pd.DataFrame, Any]]],
-        scoring: Optional[Callable],
+        scoring: Union[Callable, str, None],
+        estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
     ):
         metrics = self.calculate_metrics(
-            X, y, eval_set, scoring=scoring, importance_threshold=importance_threshold, max_features=max_features
+            X,
+            y,
+            eval_set,
+            scoring=scoring,
+            estimator=estimator,
+            importance_threshold=importance_threshold,
+            max_features=max_features,
         )
         if metrics is not None:
             msg = "\nQuality metrics"
