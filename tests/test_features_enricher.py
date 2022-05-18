@@ -188,7 +188,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         train_features,
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        keep_input=True,
     )
 
     fit_req = None
@@ -298,7 +297,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8)
+    enricher.fit(train_features, train_target, eval_set=eval_set, importance_threshold=0.8)
 
     assert enricher.enriched_X is not None
     # assert len(enricher.enriched_X) == 10000
@@ -399,7 +398,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0)
+    enricher.fit(train_features, train_target, eval_set=eval_set, max_features=0)
 
     # assert enricher.enriched_X is not None
     # assert len(enricher.enriched_X) == 10000

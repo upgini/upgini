@@ -52,7 +52,7 @@ def test_bts_exceptions():
     with pytest.raises(
         ValueError, match=r"The number of folds must be of Integral type. .* of type <class 'float'> was passed."
     ):
-        _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)
+        _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)  # type: ignore
 
     with pytest.raises(
         ValueError,
