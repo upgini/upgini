@@ -59,7 +59,7 @@ class SearchTask:
 
         try:
             with yaspin(Spinners.clock) as sp:
-                time.sleep(1)
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
                 while self.summary.status not in completed_statuses:
                     time.sleep(5)
@@ -78,12 +78,12 @@ class SearchTask:
                         )
                     time.sleep(5)
                 sp.ok("Done                         ")
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
             print("Search interrupted. Stopping search request")
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(search_task_id)
             logging.warn(f"Search {search_task_id} stopped by user")
             print("Search request stopped")
-            raise
+            raise e
         print()
 
         has_completed_provider_task = False
@@ -376,7 +376,7 @@ class SearchTask:
             return scores  # type: ignore
 
     def _download_features_file(self, features_id) -> pd.DataFrame:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/features.parquet".format(tmp_dir)
@@ -386,7 +386,7 @@ class SearchTask:
 
     def get_initial_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(self.search_task_id)
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         features_id = None
@@ -407,7 +407,7 @@ class SearchTask:
 
     @lru_cache()
     def _get_all_initial_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
@@ -627,6 +627,7 @@ class SearchTask:
     def get_validation_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         validation_task_id = self._search_task_id_by_provider_id(provider_summaries, provider_id)
+        time.sleep(1)
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(validation_task_id)
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         features_id = None
@@ -639,6 +640,7 @@ class SearchTask:
             print(f"Features for provider {provider_id} not found in validation search")
             return None
 
+        time.sleep(1)
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/features.parquet".format(tmp_dir)
@@ -652,7 +654,7 @@ class SearchTask:
 
     @lru_cache()
     def _get_all_validation_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:

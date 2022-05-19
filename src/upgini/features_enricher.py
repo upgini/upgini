@@ -457,7 +457,7 @@ class FeaturesEnricher(TransformerMixin):
         """Returns pandas dataframe with importances for each feature"""
         if self._search_task is None or self._search_task.summary is None:
             msg = "Run fit or pass search_id before get features info."
-            logging.info(msg)
+            logging.warning(msg)
             raise NotFittedError(msg)
 
         return self.features_info
@@ -903,7 +903,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
-        msg = f"\nWe found {len(self.feature_names_)} useful feature(s) for you by search keys: {list(search_keys)}"
+        msg = f"\nWe found {len(self.feature_names_)} relevant feature(s) for you by search keys: {list(search_keys)}"
 
         try:
             from IPython.display import display

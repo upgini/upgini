@@ -6,6 +6,7 @@ import tempfile
 from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
+import time
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -167,7 +168,7 @@ class Dataset(pd.DataFrame):
                 )
 
     def __rename_columns(self):
-        logging.info("Replace restricted symbols in column names")
+        # logging.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
                 raise ValueError("Some of column names are empty. Fill them and try again, please.")
@@ -188,7 +189,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
-        logging.info("Validate too long string values")
+        # logging.info("Validate too long string values")
         for col in self.columns:
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
@@ -200,12 +201,12 @@ class Dataset(pd.DataFrame):
 
     def __clean_duplicates(self):
         """Clean DataSet from full duplicates."""
-        logging.info("Clean full duplicates")
+        # logging.info("Clean full duplicates")
         nrows = len(self)
         unique_columns = self.columns.tolist()
-        logging.info(f"Input data shape: {self.shape}")
+        logging.info(f"Dataset shape before clean duplicates: {self.shape}")
         self.drop_duplicates(subset=unique_columns, inplace=True)
-        logging.info(f"Data without duplicates: {self.shape}")
+        logging.info(f"Dataset shape after clean duplicates: {self.shape}")
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
@@ -227,30 +228,27 @@ class Dataset(pd.DataFrame):
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
-        logging.info("Converting bool to int")
+        # logging.info("Converting bool to int")
         for col in self.columns:
             if is_bool(self[col]):
-                # logging.info(f"Converting {col} from bool to int")
                 self[col] = self[col].astype("Int64")
 
     def __convert_float16(self):
         """Convert float16 to float"""
-        logging.info("Converting float16 to float")
+        # logging.info("Converting float16 to float")
         for col in self.columns:
             if is_float_dtype(self[col]):
-                # logging.info(f"Converting {col} from float16 to float64")
                 self[col] = self[col].astype("float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
-        logging.info("Correct decimal commas")
+        # logging.info("Correct decimal commas")
         tmp = self.head(10)
         # all columns with sep="," will have dtype == 'object', i.e string
         # sep="." will be casted to numeric automatically
         cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
         for col in cls_to_check:
             if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
-                # logging.info(f"Correcting comma sep in {col}")
                 self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
 
     def __to_millis(self):
@@ -266,7 +264,7 @@ class Dataset(pd.DataFrame):
                 return i
 
         if date is not None and date in self.columns:
-            logging.info("Transform date column to millis")
+            # logging.info("Transform date column to millis")
             if is_string_dtype(self[date]):
                 self[date] = (
                     pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64)
@@ -299,7 +297,7 @@ class Dataset(pd.DataFrame):
         """Add column with HEM if email presented in search keys"""
         email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
         if email is not None and email in self.columns:
-            logging.info("Hashing email")
+            # logging.info("Hashing email")
             generated_hem_name = "generated_hem"
             self[generated_hem_name] = self[email].apply(self.__email_to_hem)
             self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
@@ -324,13 +322,13 @@ class Dataset(pd.DataFrame):
         """Convert ip address to int"""
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.columns:
-            logging.info("Convert ip address to int")
+            # logging.info("Convert ip address to int")
             self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
         if iso_code is not None and iso_code in self.columns:
-            logging.info("Normalize iso code column")
+            # logging.info("Normalize iso code column")
             self[iso_code] = (
                 self[iso_code]
                 .astype(str)
@@ -342,7 +340,7 @@ class Dataset(pd.DataFrame):
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
-            logging.info("Normalize postal code")
+            # logging.info("Normalize postal code")
             self[postal_code] = (
                 self[postal_code]
                 .astype(str)
@@ -369,7 +367,7 @@ class Dataset(pd.DataFrame):
         """Drop ignore columns"""
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
         if len(columns_to_drop) > 0:
-            logging.info(f"Dropping ignore columns: {self.ignore_columns}")
+            # logging.info(f"Dropping ignore columns: {self.ignore_columns}")
             self.drop(columns_to_drop, axis=1, inplace=True)
 
     def __target_value(self) -> pd.Series:
@@ -385,7 +383,7 @@ class Dataset(pd.DataFrame):
         return target
 
     def __validate_target(self):
-        logging.info("Validating target")
+        # logging.info("Validating target")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         target = self[target_column]
 
@@ -438,7 +436,7 @@ class Dataset(pd.DataFrame):
                     )
 
     def __resample(self):
-        logging.info("Resampling etalon")
+        # logging.info("Resampling etalon")
         # Resample imbalanced target. Only train segment (without eval_set)
         if self.task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
             if EVAL_SET_INDEX in self.columns:
@@ -528,10 +526,10 @@ class Dataset(pd.DataFrame):
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
-        logging.info("Convert phone to int")
+        # logging.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
         if msisdn_column is not None and msisdn_column in self.columns:
-            logging.info(f"going to apply phone_to_int for column {msisdn_column}")
+            # logging.info(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
 
@@ -541,7 +539,7 @@ class Dataset(pd.DataFrame):
         ]
 
     def __remove_dates_from_features(self):
-        logging.info("Remove date columns from features")
+        # logging.info("Remove date columns from features")
 
         for f in self.__features():
             if is_datetime(self[f]) or is_period_dtype(self[f]):
@@ -550,7 +548,7 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
     def __remove_empty_and_constant_features(self):
-        logging.info("Remove almost constant and almost empty columns")
+        # logging.info("Remove almost constant and almost empty columns")
         for f in self.__features():
             value_counts = self[f].value_counts(dropna=False, normalize=True)
             # most_frequent_value = value_counts.index[0]
@@ -564,20 +562,20 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
     def __remove_high_cardinality_features(self):
-        logging.info("Remove columns with high cardinality")
+        # logging.info("Remove columns with high cardinality")
 
         count = len(self)
         for f in self.__features():
             if (is_string_dtype(self[f]) or is_integer_dtype(self[f])) and self[f].nunique() / count >= 0.9:
-                logging.warning(
-                    f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
-                    "and will be droped from tds"
-                )
+                # logging.warning(
+                #     f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
+                #     "and will be droped from tds"
+                # )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
     def __convert_features_types(self):
-        logging.info("Convert features to supported data types")
+        # logging.info("Convert features to supported data types")
 
         for f in self.__features():
             if self[f].dtype == object:
@@ -587,7 +585,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
-        logging.info("validating etalon")
+        # logging.info("validating etalon")
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -679,7 +677,7 @@ class Dataset(pd.DataFrame):
                 print(df_stats)
 
     def __validate_meaning_types(self, validate_target: bool):
-        logging.info("Validating meaning types")
+        # logging.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
 
@@ -694,7 +692,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Target column is not presented in meaning types. Specify it, please.")
 
     def __validate_search_keys(self):
-        logging.info("Validating search keys")
+        # logging.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
             raise ValueError("Please pass `search_keys` argument before validation.")
         for keys_group in self.search_keys:
@@ -703,7 +701,7 @@ class Dataset(pd.DataFrame):
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
-        logging.info("Validating dataset")
+        # logging.info("Validating dataset")
 
         self.__rename_columns()
 
@@ -757,7 +755,7 @@ class Dataset(pd.DataFrame):
         self.__validate_max_row_count()
 
     def __construct_metadata(self) -> FileMetadata:
-        logging.info("Constructing dataset metadata")
+        # logging.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
             if column_name not in self.ignore_columns:
@@ -822,7 +820,7 @@ class Dataset(pd.DataFrame):
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
-        logging.info("Constructing search customization")
+        # logging.info("Constructing search customization")
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
@@ -887,6 +885,7 @@ class Dataset(pd.DataFrame):
                 parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     parquet_file_path, file_metadata, file_metrics, search_customization
                 )

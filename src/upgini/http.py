@@ -6,6 +6,7 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Optional
 from urllib.parse import urljoin
+import threading
 
 import requests
 from pydantic import BaseModel
@@ -475,15 +476,21 @@ class BackendLogHandler(logging.Handler):
         text = self.format(record)
         tags = get_track_metrics()
         tags["version"] = __version__
-        self.rest_client.send_log_event(
-            LogEvent(
-                source="python",
-                tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
-                hostname=self.hostname,
-                message=text,
-                service="PyLib",
+
+        def task():
+            # time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+            self.rest_client.send_log_event(
+                LogEvent(
+                    source="python",
+                    tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
+                    hostname=self.hostname,
+                    message=text,
+                    service="PyLib",
+                )
             )
-        )
+
+        thread = threading.Thread(target=task)
+        thread.start()
 
 
 def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
