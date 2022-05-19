@@ -13,10 +13,11 @@ from pandas.api.types import is_string_dtype
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
-from yaspin import yaspin
-from yaspin.spinners import Spinners
+# from yaspin import yaspin
+# from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
+from upgini.spinner import Spinner
 from upgini.http import UPGINI_API_KEY, init_logging
 from upgini.metadata import (
     COUNTRY,
@@ -519,9 +520,8 @@ class FeaturesEnricher(TransformerMixin):
 
         if not silent_mode:
             print("Executing transform step")
-            with yaspin(Spinners.clock) as sp:
+            with Spinner():
                 result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
-                sp.ok("Done                         ")
         else:
             result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(), X.index)
 
