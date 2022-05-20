@@ -739,6 +739,7 @@ class FeaturesEnricher(TransformerMixin):
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
+            self.country_code = None
         return df
 
     def __enrich(
