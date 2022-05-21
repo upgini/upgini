@@ -30,6 +30,7 @@ CATBOOST_PARAMS = {
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": 42,
+    "allow_writing_files": False
 }
 
 N_FOLDS = 5

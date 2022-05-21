@@ -503,6 +503,9 @@ class BackendLogHandler(logging.Handler):
 def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
     root = logging.getLogger()
     if root.hasHandlers():
+        if isinstance(root.handlers[0], BackendLogHandler):
+            return
+
         root.handlers.clear()
 
     root.setLevel(logging.INFO)
