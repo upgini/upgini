@@ -1,12 +1,13 @@
 import logging
 import os
+import random
+import threading
 import time
 from functools import lru_cache
 from http.client import HTTPConnection
 from json import dumps
 from typing import Optional
 from urllib.parse import urljoin
-import threading
 
 import requests
 from pydantic import BaseModel
@@ -203,7 +204,7 @@ class _RestClient:
         else:
             return self._refresh_access_token()
 
-    def _with_unauth_retry(self, request):
+    def _with_unauth_retry(self, request, try_number: int = 0):
         try:
             return request()
         except RequestException as e:
@@ -213,6 +214,12 @@ class _RestClient:
         except UnauthorizedError:
             self._refresh_access_token()
             return request()
+        except HttpError as e:
+            if e.status_code == 429 and try_number == 0:
+                time.sleep(random.randint(1, 10))
+                return self._with_unauth_retry(request, 1)
+            else:
+                raise e
 
     def initial_search_v2(
         self,
@@ -496,6 +503,9 @@ class BackendLogHandler(logging.Handler):
 def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
     root = logging.getLogger()
     if root.hasHandlers():
+        if isinstance(root.handlers[0], BackendLogHandler):
+            return
+
         root.handlers.clear()
 
     root.setLevel(logging.INFO)

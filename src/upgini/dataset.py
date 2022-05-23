@@ -931,6 +931,7 @@ class Dataset(pd.DataFrame):
                 parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
+                time.sleep(1)
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     parquet_file_path, initial_search_task_id, file_metadata, file_metrics, search_customization
                 )
