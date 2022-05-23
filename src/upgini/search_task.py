@@ -6,8 +6,6 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-# from yaspin import yaspin
-# from yaspin.spinners import Spinners
 
 from upgini import dataset
 from upgini.spinner import Spinner

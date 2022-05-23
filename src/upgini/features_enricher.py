@@ -13,8 +13,6 @@ from pandas.api.types import is_string_dtype
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
-# from yaspin import yaspin
-# from yaspin.spinners import Spinners
 
 from upgini.dataset import Dataset
 from upgini.spinner import Spinner
