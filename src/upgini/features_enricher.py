@@ -319,7 +319,7 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             logging.info(f"Start transform. X shape: {X.shape}")
             try:
-                result, _ = self.__inner_transform(
+                result = self.__inner_transform(
                     trace_id, X, importance_threshold=importance_threshold, max_features=max_features
                 )
             except Exception as e:
