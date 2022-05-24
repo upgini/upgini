@@ -1,5 +1,7 @@
 import logging
 import os
+import random
+import threading
 import time
 from functools import lru_cache
 from http.client import HTTPConnection
@@ -203,7 +205,7 @@ class _RestClient:
         else:
             return self._refresh_access_token()
 
-    def _with_unauth_retry(self, request):
+    def _with_unauth_retry(self, request, try_number: int = 0):
         try:
             return request()
         except RequestException as e:
@@ -213,6 +215,12 @@ class _RestClient:
         except UnauthorizedError:
             self._refresh_access_token()
             return request()
+        except HttpError as e:
+            if e.status_code == 429 and try_number == 0:
+                time.sleep(random.randint(1, 10))
+                return self._with_unauth_retry(request, 1)
+            else:
+                raise e
 
     def initial_search_v2(
         self,
@@ -493,29 +501,40 @@ class BackendLogHandler(logging.Handler):
         self.hostname = get_track_metrics()["ip"]
 
     def emit(self, record: logging.LogRecord) -> None:
-        text = self.format(record)
-        tags = get_track_metrics()
-        tags["version"] = __version__
-        self.rest_client.send_log_event(
-            LogEvent(
-                source="python",
-                tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
-                hostname=self.hostname,
-                message=text,
-                service="PyLib",
+        def task():
+            text = self.format(record)
+            tags = get_track_metrics()
+            tags["version"] = __version__
+            # time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+            self.rest_client.send_log_event(
+                LogEvent(
+                    source="python",
+                    tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
+                    hostname=self.hostname,
+                    message=text,
+                    service="PyLib",
+                )
             )
-        )
+
+        thread = threading.Thread(target=task)
+        thread.start()
 
 
 def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
     root = logging.getLogger()
     if root.hasHandlers():
+        if isinstance(root.handlers[0], BackendLogHandler):
+            return
+
         root.handlers.clear()
 
     root.setLevel(logging.INFO)
 
     rest_client = get_rest_client(backend_url, api_token)
     datadogHandler = BackendLogHandler(rest_client)
-    jsonFormatter = jsonlogger.JsonFormatter("%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s ")
+    jsonFormatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
+        timestamp=True,
+    )
     datadogHandler.setFormatter(jsonFormatter)
     root.addHandler(datadogHandler)

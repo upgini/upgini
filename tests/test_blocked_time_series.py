@@ -18,7 +18,7 @@ def _prepare_data():
 def test_bts_split_logic():
     X, y, cv, df_etalon_stat, _ = _prepare_data()
     df_stat = []
-    for i, (train_idx, test_idx) in enumerate(cv.split(X, y)):
+    for _, (train_idx, test_idx) in enumerate(cv.split(X, y)):
         df_stat.append([len(train_idx), min(train_idx), max(train_idx), len(test_idx), min(test_idx), max(test_idx)])
     columns = ["train_len", "train_min", "train_max", "test_len", "test_min", "test_max"]
     df_stat = pd.DataFrame(df_stat, columns=columns)
@@ -52,7 +52,7 @@ def test_bts_exceptions():
     with pytest.raises(
         ValueError, match=r"The number of folds must be of Integral type. .* of type <class 'float'> was passed."
     ):
-        _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)
+        _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)  # type: ignore
 
     with pytest.raises(
         ValueError,

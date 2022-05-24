@@ -29,11 +29,11 @@ def etalon_search_keys():
 def test_categorical_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     ds = Dataset(
-        dataset_name="test Dataset",
-        description="test",
-        df=df,
-        meaning_types=etalon_definition,
-        search_keys=etalon_search_keys,
+        dataset_name="test Dataset",  # type: ignore
+        description="test",  # type: ignore
+        df=df,  # type: ignore
+        meaning_types=etalon_definition,  # type: ignore
+        search_keys=etalon_search_keys,  # type: ignore
     )
     ds.validate()
     expected_valid_rows = 16913

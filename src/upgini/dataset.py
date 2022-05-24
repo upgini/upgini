@@ -1,3 +1,4 @@
+import os
 import csv
 import html
 import logging
@@ -5,6 +6,7 @@ import tempfile
 from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
+import time
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -21,7 +23,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import get_rest_client
+from upgini.http import get_rest_client, UPGINI_API_KEY
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
@@ -41,13 +43,15 @@ from upgini.search_task import SearchTask
 
 
 class Dataset(pd.DataFrame):
-    MIN_ROWS_COUNT: int = 100
-    FIT_SAMPLE_ROWS: int = 100_000
-    FIT_SAMPLE_THRESHOLD: int = FIT_SAMPLE_ROWS * 3
-    IMBALANCE_THESHOLD: float = 0.4
-    MIN_TARGET_CLASS_COUNT: int = 100
-    MAX_MULTICLASS_CLASS_COUNT: int = 100
-    MIN_SUPPORTED_DATE_TS: int = 1114992000000  # 2005-05-02
+    MIN_ROWS_COUNT = 100
+    MAX_ROWS_REGISTERED = 299_999
+    MAX_ROWS_UNREGISTERED = 149_999
+    FIT_SAMPLE_ROWS = 100_000
+    FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+    IMBALANCE_THESHOLD = 0.4
+    MIN_TARGET_CLASS_COUNT = 100
+    MAX_MULTICLASS_CLASS_COUNT = 100
+    MIN_SUPPORTED_DATE_TS = 1114992000000  # 2005-05-02
 
     _metadata = [
         "dataset_name",
@@ -143,13 +147,28 @@ class Dataset(pd.DataFrame):
 
         return self.etalon_def
 
-    def __validate_rows_count(self):
-        logging.info("Validate rows count")
+    def __validate_min_rows_count(self):
         if self.shape[0] < self.MIN_ROWS_COUNT:
             raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows.")
 
+    def __validate_max_row_count(self):
+        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+        is_registered = api_key is not None and api_key != ""
+        if is_registered:
+            if len(self) > self.MAX_ROWS_REGISTERED:
+                raise ValueError(
+                    f"Total X + eval_set rows count limit is {self.MAX_ROWS_REGISTERED}. "
+                    "Please sample X and eval_set"
+                )
+        else:
+            if len(self) > self.MAX_ROWS_UNREGISTERED:
+                raise ValueError(
+                    f"For unregistered users total rows count limit for X + eval_set is {self.MAX_ROWS_UNREGISTERED}. "
+                    "Please register to increase the limit"
+                )
+
     def __rename_columns(self):
-        logging.info("Replace restricted symbols in column names")
+        # logging.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
                 raise ValueError("Some of column names are empty. Fill them and try again, please.")
@@ -170,7 +189,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_too_long_string_values(self):
         """Check that string values less than 400 characters"""
-        logging.info("Validate too long string values")
+        # logging.info("Validate too long string values")
         for col in self.columns:
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
@@ -182,12 +201,12 @@ class Dataset(pd.DataFrame):
 
     def __clean_duplicates(self):
         """Clean DataSet from full duplicates."""
-        logging.info("Clean full duplicates")
+        # logging.info("Clean full duplicates")
         nrows = len(self)
         unique_columns = self.columns.tolist()
-        logging.info(f"Input data shape: {self.shape}")
+        logging.info(f"Dataset shape before clean duplicates: {self.shape}")
         self.drop_duplicates(subset=unique_columns, inplace=True)
-        logging.info(f"Data without duplicates: {self.shape}")
+        logging.info(f"Dataset shape after clean duplicates: {self.shape}")
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
@@ -209,30 +228,27 @@ class Dataset(pd.DataFrame):
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
-        logging.info("Converting bool to int")
+        # logging.info("Converting bool to int")
         for col in self.columns:
             if is_bool(self[col]):
-                logging.info(f"Converting {col} from bool to int")
                 self[col] = self[col].astype("Int64")
 
     def __convert_float16(self):
         """Convert float16 to float"""
-        logging.info("Converting float16 to float")
+        # logging.info("Converting float16 to float")
         for col in self.columns:
             if is_float_dtype(self[col]):
-                logging.info(f"Converting {col} from float16 to float64")
                 self[col] = self[col].astype("float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
-        logging.info("Correct decimal commas")
+        # logging.info("Correct decimal commas")
         tmp = self.head(10)
         # all columns with sep="," will have dtype == 'object', i.e string
         # sep="." will be casted to numeric automatically
         cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
         for col in cls_to_check:
             if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
-                logging.info(f"Correcting comma sep in {col}")
                 self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
 
     def __to_millis(self):
@@ -248,7 +264,7 @@ class Dataset(pd.DataFrame):
                 return i
 
         if date is not None and date in self.columns:
-            logging.info("Transform date column to millis")
+            # logging.info("Transform date column to millis")
             if is_string_dtype(self[date]):
                 self[date] = (
                     pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
@@ -275,7 +291,7 @@ class Dataset(pd.DataFrame):
         """Add column with HEM if email presented in search keys"""
         email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
         if email is not None and email in self.columns:
-            logging.info("Hashing email")
+            # logging.info("Hashing email")
             generated_hem_name = "generated_hem"
             self[generated_hem_name] = self[email].apply(self.__email_to_hem)
             self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
@@ -300,13 +316,13 @@ class Dataset(pd.DataFrame):
         """Convert ip address to int"""
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.columns:
-            logging.info("Convert ip address to int")
+            # logging.info("Convert ip address to int")
             self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
         if iso_code is not None and iso_code in self.columns:
-            logging.info("Normalize iso code column")
+            # logging.info("Normalize iso code column")
             self[iso_code] = (
                 self[iso_code]
                 .astype(str)
@@ -318,7 +334,7 @@ class Dataset(pd.DataFrame):
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
-            logging.info("Normalize postal code")
+            # logging.info("Normalize postal code")
             self[postal_code] = (
                 self[postal_code]
                 .astype(str)
@@ -341,22 +357,11 @@ class Dataset(pd.DataFrame):
                 logging.warning(msg)
                 print("WARN: ", msg)
 
-    def __remove_empty_date_rows(self):
-        """Clean DataSet from empty date rows"""
-        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
-        if date_column is not None:
-            logging.info("cleaning empty rows")
-            drop_idx = self[(self[date_column] == "") | self[date_column].isna()].index
-            self.drop(drop_idx, inplace=True)
-            logging.info(f"df with valid date column: {self.shape}")
-
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
         columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
         if len(columns_to_drop) > 0:
-            logging.info(f"Dropping ignore columns: {self.ignore_columns}")
+            # logging.info(f"Dropping ignore columns: {self.ignore_columns}")
             self.drop(columns_to_drop, axis=1, inplace=True)
 
     def __target_value(self) -> pd.Series:
@@ -372,7 +377,7 @@ class Dataset(pd.DataFrame):
         return target
 
     def __validate_target(self):
-        logging.info("Validating target")
+        # logging.info("Validating target")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
         target = self[target_column]
 
@@ -425,7 +430,7 @@ class Dataset(pd.DataFrame):
                     )
 
     def __resample(self):
-        logging.info("Resampling etalon")
+        # logging.info("Resampling etalon")
         # Resample imbalanced target. Only train segment (without eval_set)
         if self.task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
             if EVAL_SET_INDEX in self.columns:
@@ -515,10 +520,10 @@ class Dataset(pd.DataFrame):
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
-        logging.info("Convert phone to int")
+        # logging.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
         if msisdn_column is not None and msisdn_column in self.columns:
-            logging.info(f"going to apply phone_to_int for column {msisdn_column}")
+            # logging.info(f"going to apply phone_to_int for column {msisdn_column}")
             phone_to_int(self, msisdn_column)
             self[msisdn_column] = self[msisdn_column].astype("Int64")
 
@@ -528,7 +533,7 @@ class Dataset(pd.DataFrame):
         ]
 
     def __remove_dates_from_features(self):
-        logging.info("Remove date columns from features")
+        # logging.info("Remove date columns from features")
 
         for f in self.__features():
             if is_datetime(self[f]) or is_period_dtype(self[f]):
@@ -537,34 +542,34 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
     def __remove_empty_and_constant_features(self):
-        logging.info("Remove almost constant and almost empty columns")
+        # logging.info("Remove almost constant and almost empty columns")
         for f in self.__features():
             value_counts = self[f].value_counts(dropna=False, normalize=True)
-            most_frequent_value = value_counts.index[0]
+            # most_frequent_value = value_counts.index[0]
             most_frequent_percent = value_counts.iloc[0]
             if most_frequent_percent >= 0.99:
-                logging.warning(
-                    f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
-                    " and will be droped from tds"
-                )
+                # logging.warning(
+                #     f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
+                #     " and will be dropped from tds"
+                # )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
     def __remove_high_cardinality_features(self):
-        logging.info("Remove columns with high cardinality")
+        # logging.info("Remove columns with high cardinality")
 
         count = len(self)
         for f in self.__features():
             if (is_string_dtype(self[f]) or is_integer_dtype(self[f])) and self[f].nunique() / count >= 0.9:
-                logging.warning(
-                    f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
-                    "and will be droped from tds"
-                )
+                # logging.warning(
+                #     f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
+                #     "and will be droped from tds"
+                # )
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
     def __convert_features_types(self):
-        logging.info("Convert features to supported data types")
+        # logging.info("Convert features to supported data types")
 
         for f in self.__features():
             if self[f].dtype == object:
@@ -574,7 +579,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
-        logging.info("validating etalon")
+        # logging.info("validating etalon")
         date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -666,7 +671,7 @@ class Dataset(pd.DataFrame):
                 print(df_stats)
 
     def __validate_meaning_types(self, validate_target: bool):
-        logging.info("Validating meaning types")
+        # logging.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError("Please pass the `meaning_types` argument before validation.")
 
@@ -681,7 +686,7 @@ class Dataset(pd.DataFrame):
             raise ValueError("Target column is not presented in meaning types. Specify it, please.")
 
     def __validate_search_keys(self):
-        logging.info("Validating search keys")
+        # logging.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
             raise ValueError("Please pass `search_keys` argument before validation.")
         for keys_group in self.search_keys:
@@ -690,7 +695,7 @@ class Dataset(pd.DataFrame):
                     raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
-        logging.info("Validating dataset")
+        # logging.info("Validating dataset")
 
         self.__rename_columns()
 
@@ -739,135 +744,12 @@ class Dataset(pd.DataFrame):
 
             self.__resample()
 
-            self.__validate_rows_count()
+            self.__validate_min_rows_count()
 
-    # def calculate_metrics(self) -> FileMetrics:
-    #     """Calculate initial metadata for DataSet
-
-    #     Returns:
-    #         InitialMetadata: initial metadata
-    #     """
-    #     logging.info("Calculating metrics")
-    #     if self.etalon_def is None:
-    #         self.validate()
-
-    #     self.__remove_empty_date_rows()
-    #     date_millis = (
-    #         self.etalon_def_checked.get(FileColumnMeaningType.DATE.value)
-    #         or self.etalon_def_checked.get(FileColumnMeaningType.DATETIME.value)
-    #         or ""
-    #     )
-    #     target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
-    #     score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
-    #     cls_metadata = [date_millis, target, score, "is_valid"]
-    #     cls_metadata = [i for i in cls_metadata if i is not None]
-    #     # df with columns for metadata calculation
-    #     df: pd.DataFrame = self[cls_metadata].copy()  # type: ignore
-    #     count = len(df)
-    #     valid_count = int(df["is_valid"].sum())
-    #     valid_rate = 100 * valid_count / count
-    #     avg_target = None
-    #     metrics_binary_etalon = None
-    #     metrics_regression_etalon = None
-    #     metrics_multiclass_etalon = None
-
-    #     if target is None:
-    #         raise ValueError("Target column is absent in meaning_types.")
-    #     target_values: pd.Series = df.loc[df.is_valid == 1, target]  # type: ignore
-    #     tgt = target_values.values
-    #     if self.task_type != ModelTaskType.MULTICLASS:
-    #         avg_target = target_values.mean()
-
-    #     if self.task_type == ModelTaskType.BINARY:
-    #         label = ModelLabelType.AUC
-    #     elif self.task_type == ModelTaskType.REGRESSION:
-    #         label = ModelLabelType.RMSE
-    #     else:
-    #         label = ModelLabelType.ACCURACY
-
-    #     if score is not None:
-    #         try:
-    #             from sklearn.metrics import (  # type: ignore
-    #                 accuracy_score,
-    #                 mean_squared_error,
-    #                 mean_squared_log_error,
-    #                 roc_auc_score,
-    #             )
-    #         except ModuleNotFoundError:
-    #             raise ModuleNotFoundError("To calculate score performance please install scikit-learn.")
-    #         sc = df.loc[df.is_valid == 1, score].values  # type: ignore
-    #         try:
-    #             if self.task_type == ModelTaskType.REGRESSION:
-    #                 sc = sc.astype(float)
-    #                 tgt = tgt.astype(float)
-    #                 metrics_regression_etalon = RegressionTask(
-    #                     mse=mean_squared_error(tgt, sc),
-    #                     rmse=np.sqrt(mean_squared_error(tgt, sc)),
-    #                     msle=mean_squared_log_error(tgt, sc),
-    #                     rmsle=np.sqrt(mean_squared_log_error(tgt, sc)),
-    #                 )
-    #             elif self.task_type == ModelTaskType.BINARY:
-    #                 auc = roc_auc_score(tgt, sc)
-    #                 auc = max(auc, 1 - auc)
-    #                 gini = 100 * (2 * auc - 1)
-    #                 metrics_binary_etalon = BinaryTask(auc=auc, gini=gini)
-    #             else:
-    #                 accuracy100 = 100 * max(0.0, accuracy_score(tgt, sc))
-    #                 metrics_multiclass_etalon = MulticlassTask(accuracy=accuracy100)
-    #         except Exception:
-    #             logging.error("Can't calculate etalon's score performance")
-    #     else:
-    #         sc = []
-
-    #     df["date_cut"], cuts = pd.cut(df[date_millis], bins=6, include_lowest=True, retbins=True)
-    #     # save bins for future
-    #     cuts = cuts.tolist()
-    #     df["date_cut"] = df.date_cut.apply(lambda x: x.mid).astype(int)
-    #     df["count_tgt"] = df.groupby("date_cut")[target].transform(lambda x: len(set(x)))
-
-    #     if self.task_type == ModelTaskType.MULTICLASS:
-    #         df_stat = df.groupby("date_cut").apply(
-    #             lambda x: pd.Series(
-    #                 {
-    #                     "count": len(x),
-    #                     "valid_count": x["is_valid"].sum(),
-    #                     "valid_rate": 100 * x["is_valid"].mean(),
-    #                 }
-    #             )
-    #         )
-    #     else:
-    #         df_stat = df.groupby("date_cut").apply(
-    #             lambda x: pd.Series(
-    #                 {
-    #                     "avg_target": x[target].mean(),
-    #                     "count": len(x),
-    #                     "valid_count": x["is_valid"].sum(),
-    #                     "valid_rate": 100 * x["is_valid"].mean(),
-    #                 }
-    #             )
-    #         )
-
-    #     if score is not None and len(sc) > 0:
-    #         df_stat["avg_score_etalon"] = df[df.is_valid == 1].groupby("date_cut")[score].mean()
-
-    #     df_stat.dropna(inplace=True)
-    #     interval = df_stat.reset_index().to_dict(orient="records")
-    #     return FileMetrics(
-    #         task_type=self.task_type,
-    #         label=label,
-    #         count=count,
-    #         valid_count=valid_count,
-    #         valid_rate=valid_rate,
-    #         avg_target=avg_target,
-    #         metrics_binary_etalon=metrics_binary_etalon,
-    #         metrics_regression_etalon=metrics_regression_etalon,
-    #         metrics_multiclass_etalon=metrics_multiclass_etalon,
-    #         cuts=cuts,
-    #         interval=interval,
-    #     )
+        self.__validate_max_row_count()
 
     def __construct_metadata(self) -> FileMetadata:
-        logging.info("Constructing dataset metadata")
+        # logging.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
             if column_name not in self.ignore_columns:
@@ -932,7 +814,7 @@ class Dataset(pd.DataFrame):
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchCustomization:
-        logging.info("Constructing search customization")
+        # logging.info("Constructing search customization")
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
@@ -967,14 +849,14 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
-        importance_threshold: Optional[float] = None,
-        max_features: Optional[int] = None,
-        filter_features: Optional[dict] = None,
+        importance_threshold: Optional[float] = None,  # deprecated
+        max_features: Optional[int] = None,  # deprecated
+        filter_features: Optional[dict] = None,  # deprecated
         runtime_parameters: Optional[RuntimeParameters] = None,
     ) -> SearchTask:
         if self.etalon_def is None:
             self.validate()
-        file_metrics = FileMetrics()  # self.calculate_metrics()
+        file_metrics = FileMetrics()
 
         file_metadata = self.__construct_metadata()
         search_customization = self.__construct_search_customization(
@@ -998,6 +880,7 @@ class Dataset(pd.DataFrame):
                 parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
@@ -1044,6 +927,7 @@ class Dataset(pd.DataFrame):
                 parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
                 self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
                 logging.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
+                time.sleep(1)
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     trace_id,
                     parquet_file_path,

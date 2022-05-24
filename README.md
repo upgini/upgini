@@ -51,9 +51,10 @@ Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/note
 -->
 Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML model was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
-### 2. [Kaggle public kernel for Tabular playground series Jan 2022](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022)
+### 2. [Kaggle public notebook for Tabular playground series Jan 2022](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
-Work in progress..
+The goal is to improve accuracy of TOP1 winning Kaggle solution from new relevant external features & data.  
+Competition is a product sales forecasting.
 
 ## Install  
 
@@ -61,23 +62,28 @@ Work in progress..
 ```python
 %pip install upgini
 ```
-### 🐳 Docker-way
-Clone `$ git clone https://github.com/upgini/upgini` or download upgini git repo locally and follow steps below to build docker container 👇  
-Build docker image  
- - ... from cloned git repo:
-```bash
-cd upgini
-docker build -t upgini .
-```
- - ...or directly from GitHub:
-```bash
-DOCKER_BUILDKIT=0 docker build -t upgini git@github.com:upgini/upgini.git#main
-```
-Run docker image:
-```bash
-docker run -p 8888:8888 upgini
-```
-Open http://localhost:8888?token=<your_token_from_console_output> in your browser  
+<details>
+	<summary>
+	🐳 <b>Docker-way</b>
+	</summary>
+</br>
+Clone <i>$ git clone https://github.com/upgini/upgini</i> or download upgini git repo locally </br>
+and follow steps below to build docker container 👇 </br>
+Build docker image</br>
+</br>  
+ - ... from cloned git repo:</br>
+<i>cd upgini </br>
+docker build -t upgini .</i></br>
+ - ...or directly from GitHub:</br>
+</br>
+<i>DOCKER_BUILDKIT=0 docker build -t upgini</i></br> <i>git@github.com:upgini/upgini.git#main</i></br>
+</br>
+Run docker image:</br>
+<i>
+docker run -p 8888:8888 upgini</br>
+</i></br>
+Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
+</details>
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
@@ -404,11 +410,15 @@ custom_estimator = LGBMRegressor()
 enricher.calculate_metrics(X, y, eval_set, estimator=custom_estimator)
 
 # Custom metric function to scoring param (callable or name)
-enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
+custom_scoring = "RMSLE"
+enricher.calculate_metrics(X, y, eval_set, scoring=custom_scoring)
 
 # Custom cross validator
 custom_cv = TimeSeriesSplit(n_splits=5)
 enricher.calculate_metrics(X, y, eval_set, cv=custom_cv)
+
+# All this custom parameters could be combined in both methods: fit, fit_transform and calculate_metrics:
+enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator, scoring=custom_scoring, cv=custom_cv)
 ```
 
 ### ✅ Optional: find features only give accuracy gain to existing data in the ML model
@@ -451,11 +461,9 @@ enricher.fit(
 And `keep_input=True` will keep all initial columns from search dataset X:  
 ```python
 enricher = FeaturesEnricher(
-	search_keys={"subscription_activation_date": SearchKey.DATE},
-	keep_input=True,
-	max_features=2,	
+	search_keys={"subscription_activation_date": SearchKey.DATE}
 )
-enriched_dataframe.fit_transform(X, y)
+enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
 ```
 
 ### ✅ Optional: reuse completed search for enrichment

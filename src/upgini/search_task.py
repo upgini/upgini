@@ -6,8 +6,6 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from yaspin import yaspin
-from yaspin.spinners import Spinners
 
 from upgini import dataset
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
@@ -17,6 +15,7 @@ from upgini.metadata import (
     ModelTaskType,
     RuntimeParameters,
 )
+from upgini.spinner import Spinner
 
 
 class SearchTask:
@@ -58,8 +57,8 @@ class SearchTask:
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
 
         try:
-            with yaspin(Spinners.material) as sp:
-                time.sleep(1)
+            with Spinner():
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
                     trace_id, search_task_id
                 )
@@ -81,13 +80,12 @@ class SearchTask:
                             "Try with another set of search keys or different time period"
                         )
                     time.sleep(5)
-                sp.ok("Done                         ")
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
             print("Search interrupted. Stopping search request")
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
             logging.warn(f"Search {search_task_id} stopped by user")
             print("Search request stopped")
-            raise
+            raise e
         print()
 
         has_completed_provider_task = False
@@ -384,7 +382,7 @@ class SearchTask:
             return scores  # type: ignore
 
     def _download_features_file(self, trace_id: str, features_id: str) -> pd.DataFrame:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(
             trace_id, features_id
         )
@@ -396,7 +394,7 @@ class SearchTask:
 
     def get_initial_raw_features_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
             trace_id, self.search_task_id
         )
@@ -419,7 +417,7 @@ class SearchTask:
 
     @lru_cache()
     def _get_all_initial_raw_features(self, trace_id: str, search_task_id: str) -> Optional[pd.DataFrame]:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
             trace_id, search_task_id
         )
@@ -645,6 +643,7 @@ class SearchTask:
     def get_validation_raw_features_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         validation_task_id = self._search_task_id_by_provider_id(provider_summaries, provider_id)
+        time.sleep(1)
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
             trace_id, validation_task_id
         )
@@ -659,6 +658,7 @@ class SearchTask:
             print(f"Features for provider {provider_id} not found in validation search")
             return None
 
+        time.sleep(1)
         gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(
             trace_id, features_id
         )
@@ -674,7 +674,7 @@ class SearchTask:
 
     @lru_cache()
     def _get_all_validation_raw_features(self, trace_id: str, search_task_id: str) -> Optional[pd.DataFrame]:
-        time.sleep(1)
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
             trace_id, search_task_id
         )

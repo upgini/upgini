@@ -30,6 +30,7 @@ CATBOOST_PARAMS = {
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": 42,
+    "allow_writing_files": False
 }
 
 N_FOLDS = 5
@@ -45,7 +46,7 @@ class EstimatorWrapper:
         self.cv = cv
 
     def fit(self, X, y, **kwargs):
-        X, fit_params = self._prepare_to_fit(X)
+        X, fit_params = self._prepare_to_fit(X.copy())
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -57,7 +58,7 @@ class EstimatorWrapper:
         raise NotImplementedError()
 
     def cross_val_predict(self, X, y):
-        X, fit_params = self._prepare_to_fit(X)
+        X, fit_params = self._prepare_to_fit(X.copy())
 
         metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 
