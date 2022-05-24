@@ -111,6 +111,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.__prepare_feature_importances(x_columns)
                 # TODO validate search_keys with search_keys from file_metadata
                 print("Search found. Now you can use transform")
+                logging.info(f"FeaturesEnricher successfully initialized with searchTaskId: {search_id}")
             except Exception as e:
                 logging.exception("Failed to check existing search")
                 raise e
