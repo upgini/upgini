@@ -480,11 +480,10 @@ class BackendLogHandler(logging.Handler):
         self.hostname = get_track_metrics()["ip"]
 
     def emit(self, record: logging.LogRecord) -> None:
-        text = self.format(record)
-        tags = get_track_metrics()
-        tags["version"] = __version__
-
         def task():
+            text = self.format(record)
+            tags = get_track_metrics()
+            tags["version"] = __version__
             # time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
             self.rest_client.send_log_event(
                 LogEvent(
@@ -512,6 +511,9 @@ def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = N
 
     rest_client = get_rest_client(backend_url, api_token)
     datadogHandler = BackendLogHandler(rest_client)
-    jsonFormatter = jsonlogger.JsonFormatter("%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s")
+    jsonFormatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
+        timestamp=True,
+    )
     datadogHandler.setFormatter(jsonFormatter)
     root.addHandler(datadogHandler)
