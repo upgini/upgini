@@ -33,6 +33,8 @@ except ImportError:
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
 
+refresh_token_lock = threading.Lock()
+
 
 def debug_requests_on():
     """Switches on logging of the requests module."""
@@ -174,18 +176,18 @@ class _RestClient:
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
     CONTENT_TYPE_HEADER_VALUE_JSON = "application/json;charset=UTF8"
+    TRACE_ID_HEADER_NAME = "Trace-Id"
     CHUNK_SIZE = 0x200000
     DEFAULT_OWNER = "Python SDK"
     USER_AGENT_HEADER_NAME = "User-Agent"
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
 
-    _access_token: Optional[str] = None
-
     def __init__(self, service_endpoint, refresh_token):
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
-        self._refresh_access_token()
+        self._access_token = self._refresh_access_token()
+        self.last_refresh_time = time.time()
 
     def _refresh_access_token(self) -> str:
         api_path = self.REFRESH_TOKEN_URI_FMT
@@ -198,11 +200,19 @@ class _RestClient:
         self._access_token = response.json()["access_token"]
         return self._access_token
 
+    def _syncronized_refresh_access_token(self) -> str:
+        with refresh_token_lock:
+            now = time.time()
+            if (now - self.last_refresh_time) > 60 or self._access_token is None:
+                self._refresh_access_token()
+                self.last_refresh_time = now
+        return self._access_token
+
     def _get_access_token(self) -> str:
         if self._access_token is not None:
             return self._access_token
         else:
-            return self._refresh_access_token()
+            return self._syncronized_refresh_access_token()
 
     def _with_unauth_retry(self, request, try_number: int = 0):
         try:
@@ -212,7 +222,7 @@ class _RestClient:
             time.sleep(10)
             return self._with_unauth_retry(request)
         except UnauthorizedError:
-            self._refresh_access_token()
+            self._syncronized_refresh_access_token()
             return request()
         except HttpError as e:
             if e.status_code == 429 and try_number == 0:
@@ -223,6 +233,7 @@ class _RestClient:
 
     def initial_search_v2(
         self,
+        trace_id: str,
         file_path: str,
         metadata: FileMetadata,
         metrics: FileMetrics,
@@ -245,18 +256,21 @@ class _RestClient:
                     )
                 files["tracking"] = ("tracking.json", dumps(get_track_metrics()).encode(), "application/json")
 
-                return self._send_post_file_req_v2(api_path, files)
+                return self._send_post_file_req_v2(api_path, files, trace_id=trace_id)
 
         response = self._with_unauth_retry(lambda: open_and_send())
         return SearchTaskResponse(response)
 
-    def check_uploaded_file_v2(self, file_upload_id: str, metadata: FileMetadata) -> bool:
+    def check_uploaded_file_v2(self, trace_id: str, file_upload_id: str, metadata: FileMetadata) -> bool:
         api_path = self.CHECK_UPLOADED_FILE_URL_FMT_V2.format(file_upload_id)
-        response = self._with_unauth_retry(lambda: self._send_post_req(api_path, metadata.json(exclude_none=True)))
+        response = self._with_unauth_retry(
+            lambda: self._send_post_req(api_path, trace_id, metadata.json(exclude_none=True))
+        )
         return bool(response)
 
     def initial_search_without_upload_v2(
         self,
+        trace_id: str,
         file_upload_id: str,
         metadata: FileMetadata,
         metrics: FileMetrics,
@@ -269,11 +283,12 @@ class _RestClient:
         }
         if search_customization is not None:
             files["customization"] = search_customization.json(exclude_none=True).encode()
-        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files))
+        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id))
         return SearchTaskResponse(response)
 
     def validation_search_v2(
         self,
+        trace_id: str,
         file_path: str,
         initial_search_task_id: str,
         metadata: FileMetadata,
@@ -297,13 +312,14 @@ class _RestClient:
                     )
                 files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
 
-                return self._send_post_file_req_v2(api_path, files)
+                return self._send_post_file_req_v2(api_path, files, trace_id=trace_id)
 
         response = self._with_unauth_retry(lambda: open_and_send())
         return SearchTaskResponse(response)
 
     def validation_search_without_upload_v2(
         self,
+        trace_id: str,
         file_upload_id: str,
         initial_search_task_id: str,
         metadata: FileMetadata,
@@ -317,45 +333,45 @@ class _RestClient:
         }
         if search_customization is not None:
             files["customization"] = search_customization.json(exclude_none=True).encode()
-        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files))
+        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id))
         return SearchTaskResponse(response)
 
-    def search_task_summary_v2(self, search_task_id: str) -> SearchTaskSummary:
+    def search_task_summary_v2(self, trace_id: str, search_task_id: str) -> SearchTaskSummary:
         api_path = self.SEARCH_TASK_SUMMARY_URI_FMT_V2.format(search_task_id)
-        response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return SearchTaskSummary(response)
 
-    def stop_search_task_v2(self, search_task_id: str):
+    def stop_search_task_v2(self, trace_id: str, search_task_id: str):
         api_path = self.STOP_SEARCH_URI_FMT_V2.format(search_task_id)
-        self._with_unauth_retry(lambda: self._send_post_req(api_path))
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id=trace_id))
 
-    def get_search_features_meta_v2(self, provider_search_task_id: str):
+    def get_search_features_meta_v2(self, trace_id: str, provider_search_task_id: str):
         api_path = self.SEARCH_TASK_FEATURES_META_URI_FMT_V2.format(provider_search_task_id)
-        return self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
-    def get_search_models_v2(self, search_task_id):
+    def get_search_models_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_MODELS_URI_FMT_V2.format(search_task_id)
-        return self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
-    def get_search_model_file_v2(self, trained_model_id):
+    def get_search_model_file_v2(self, trace_id: str, trained_model_id: str):
         api_path = self.SEARCH_MODEL_FILE_URI_FMT_V2.format(trained_model_id)
-        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path, trace_id))
 
-    def get_search_scores_v2(self, search_task_id):
+    def get_search_scores_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_SCORES_URI_FMT_V2.format(search_task_id)
-        return self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
-    def get_search_scores_file_v2(self, ads_scores_id):
+    def get_search_scores_file_v2(self, trace_id: str, ads_scores_id: str):
         api_path = self.SEARCH_SCORES_FILE_URI_FMT_V2.format(ads_scores_id)
-        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path, trace_id))
 
-    def get_search_features_v2(self, search_task_id):
+    def get_search_features_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_FEATURES_URI_FMT_V2.format(search_task_id)
-        return self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
-    def get_search_features_file_v2(self, ads_features_id):
+    def get_search_features_file_v2(self, trace_id: str, ads_features_id: str):
         api_path = self.SEARCH_FEATURES_FILE_URI_FMT_V2.format(ads_features_id)
-        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path))
+        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path, trace_id))
 
     def upload_user_ads(self, file_path: str, metadata: FileMetadata):
         api_path = self.UPLOAD_USER_ADS_URI
@@ -371,9 +387,9 @@ class _RestClient:
 
         return self._with_unauth_retry(lambda: open_and_send())
 
-    def get_search_file_metadata(self, search_task_id: str) -> FileMetadata:
+    def get_search_file_metadata(self, search_task_id: str, trace_id: str) -> FileMetadata:
         api_path = self.SEARCH_FILE_METADATA_URI_FMT_V2.format(search_task_id)
-        response = self._with_unauth_retry(lambda: self._send_get_req(api_path))
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return FileMetadata.parse_obj(response)
 
     def send_log_event(self, log_event: LogEvent):
@@ -381,6 +397,7 @@ class _RestClient:
         self._with_unauth_retry(
             lambda: self._send_post_req(
                 api_path,
+                trace_id=None,
                 json_data=log_event.dict(exclude_none=True),
                 content_type="application/json",
                 result_format="text",
@@ -390,16 +407,20 @@ class _RestClient:
 
     # ---
 
-    def _send_get_req(self, api_path):
-        response = requests.get(url=urljoin(self._service_endpoint, api_path), headers=self._get_headers())
+    def _send_get_req(self, api_path: str, trace_id: Optional[str]):
+        response = requests.get(
+            url=urljoin(self._service_endpoint, api_path), headers=self._get_headers(trace_id=trace_id)
+        )
 
         if response.status_code >= 400:
             raise HttpError(response.text, status_code=response.status_code)
 
         return response.json()
 
-    def _send_get_file_req(self, api_path):
-        response = requests.get(url=urljoin(self._service_endpoint, api_path), headers=self._get_headers())
+    def _send_get_file_req(self, api_path: str, trace_id: Optional[str]):
+        response = requests.get(
+            url=urljoin(self._service_endpoint, api_path), headers=self._get_headers(trace_id=trace_id)
+        )
 
         if response.status_code >= 400:
             raise HttpError(response.text, status_code=response.status_code)
@@ -407,13 +428,20 @@ class _RestClient:
         return response.content
 
     def _send_post_req(
-        self, api_path, json_data=None, data=None, content_type=None, result_format="json", silent=False
+        self,
+        api_path: str,
+        trace_id: Optional[str],
+        json_data=None,
+        data=None,
+        content_type=None,
+        result_format="json",
+        silent=False,
     ):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
             json=json_data,
-            headers=self._get_headers(content_type),
+            headers=self._get_headers(content_type, trace_id=trace_id),
         )
 
         if response.status_code >= 400:
@@ -426,12 +454,12 @@ class _RestClient:
         else:
             return response.text
 
-    def _send_post_file_req_v2(self, api_path, files, data=None):
+    def _send_post_file_req_v2(self, api_path, files, data=None, trace_id: Optional[str] = None):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
             files=files,
-            headers=self._get_headers(),
+            headers=self._get_headers(trace_id=trace_id),
         )
 
         if response.status_code >= 400:
@@ -439,13 +467,15 @@ class _RestClient:
 
         return response.json()
 
-    def _get_headers(self, content_type=None):
+    def _get_headers(self, content_type: Optional[str] = None, trace_id: Optional[str] = None):
         headers = {
             self.USER_AGENT_HEADER_NAME: self.USER_AGENT_HEADER_VALUE,
             self.ACCESS_TOKEN_HEADER_NAME: "Bearer " + self._get_access_token(),
         }
         if content_type:
             headers[self.CONTENT_TYPE_HEADER_NAME] = content_type
+        if trace_id:
+            headers[self.TRACE_ID_HEADER_NAME] = trace_id
         return headers
 
     @staticmethod

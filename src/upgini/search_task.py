@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from upgini import dataset
-from upgini.spinner import Spinner
 from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
@@ -16,6 +15,7 @@ from upgini.metadata import (
     ModelTaskType,
     RuntimeParameters,
 )
+from upgini.spinner import Spinner
 
 
 class SearchTask:
@@ -44,7 +44,7 @@ class SearchTask:
         self.endpoint = endpoint
         self.api_key = api_key
 
-    def poll_result(self, quiet: bool = False) -> "SearchTask":
+    def poll_result(self, trace_id: str, quiet: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
         failed_statuses = {"FAILED", "VALIDATION_FAILED"}
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
@@ -59,10 +59,14 @@ class SearchTask:
         try:
             with Spinner():
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-                self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
+                self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
+                    trace_id, search_task_id
+                )
                 while self.summary.status not in completed_statuses:
                     time.sleep(5)
-                    self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(search_task_id)
+                    self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
+                        trace_id, search_task_id
+                    )
                     if self.summary.status in failed_statuses:
                         logging.error(f"Search {search_task_id} failed with status {self.summary.status}")
                         raise RuntimeError("Oh! Server did something wrong, please retry with new search request")
@@ -78,7 +82,7 @@ class SearchTask:
                     time.sleep(5)
         except KeyboardInterrupt as e:
             print("Search interrupted. Stopping search request")
-            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(search_task_id)
+            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
             logging.warn(f"Search {search_task_id} stopped by user")
             print("Search request stopped")
             raise e
@@ -126,12 +130,14 @@ class SearchTask:
 
     def validation(
         self,
+        trace_id: str,
         validation_dataset: "dataset.Dataset",
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         silent_mode: bool = False,
     ) -> "SearchTask":
         return validation_dataset.validation(
+            trace_id,
             self.search_task_id,
             return_scores=True,
             extract_features=extract_features,
@@ -337,9 +343,11 @@ class SearchTask:
             result = pd.merge(result, uplift_df, on="provider_id")
         return result
 
-    def get_initial_scores_by_provider_id(self, provider_id: str) -> Optional[pd.DataFrame]:
+    def get_initial_scores_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
-        scores_response = get_rest_client(self.endpoint, self.api_key).get_search_scores_v2(self.search_task_id)
+        scores_response = get_rest_client(self.endpoint, self.api_key).get_search_scores_v2(
+            trace_id, self.search_task_id
+        )
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         scores_id = None
         for score_block in scores_response["adsSearchTaskTrainedScoresDTO"]:
@@ -354,7 +362,7 @@ class SearchTask:
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
-        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_scores_file_v2(scores_id)
+        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_scores_file_v2(trace_id, scores_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/scores.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
@@ -373,19 +381,23 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.initial_dataset.metadata.date_column, inplace=True)
             return scores  # type: ignore
 
-    def _download_features_file(self, features_id) -> pd.DataFrame:
+    def _download_features_file(self, trace_id: str, features_id: str) -> pd.DataFrame:
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
+        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(
+            trace_id, features_id
+        )
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/features.parquet".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
             return pd.read_parquet(gzip_file_name)
 
-    def get_initial_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
+    def get_initial_raw_features_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(self.search_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
+            trace_id, self.search_task_id
+        )
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         features_id = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
@@ -397,21 +409,23 @@ class SearchTask:
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
-        return self._download_features_file(features_id)
+        return self._download_features_file(trace_id, features_id)
 
-    def get_all_initial_raw_features(self) -> Optional[pd.DataFrame]:
+    def get_all_initial_raw_features(self, trace_id: str) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
-        return self._get_all_initial_raw_features(self.search_task_id)
+        return self._get_all_initial_raw_features(trace_id, self.search_task_id)
 
     @lru_cache()
-    def _get_all_initial_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
+    def _get_all_initial_raw_features(self, trace_id: str, search_task_id: str) -> Optional[pd.DataFrame]:
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
+            trace_id, search_task_id
+        )
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
             if feature_block["searchType"] == "INITIAL":
                 features_id = feature_block["adsSearchTaskFeaturesId"]
-                features_df = self._download_features_file(features_id)
+                features_df = self._download_features_file(trace_id, features_id)
                 if result_df is None:
                     result_df = features_df
                 else:
@@ -423,9 +437,11 @@ class SearchTask:
                     result_df.rename(columns={column: column[7:]}, inplace=True)
         return result_df
 
-    def download_model_by_provider_id(self, provider_id: str, model_path: str) -> None:
+    def download_model_by_provider_id(self, trace_id: str, provider_id: str, model_path: str) -> None:
         provider_summaries = self._check_finished_initial_search()
-        models_response = get_rest_client(self.endpoint, self.api_key).get_search_models_v2(self.search_task_id)
+        models_response = get_rest_client(self.endpoint, self.api_key).get_search_models_v2(
+            trace_id, self.search_task_id
+        )
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         model_id = None
         for model_block in models_response["adsSearchTaskTrainedModelDTO"]:
@@ -440,7 +456,7 @@ class SearchTask:
             print(f"Provider's {provider_id} task wasn't completed in initial search")
             return None
 
-        model_bytes = get_rest_client(self.endpoint, self.api_key).get_search_model_file_v2(model_id)
+        model_bytes = get_rest_client(self.endpoint, self.api_key).get_search_model_file_v2(trace_id, model_id)
         if model_path.startswith("/") and not os.path.exists(os.path.dirname(model_path)):
             os.makedirs(os.path.dirname(model_path))
         with open(model_path, "wb") as model_file:
@@ -586,10 +602,12 @@ class SearchTask:
             result = pd.merge(result, uplift_df, on="provider_id")
         return result
 
-    def get_validation_scores_by_provider_id(self, provider_id: str) -> Optional[pd.DataFrame]:
+    def get_validation_scores_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         validation_task_id = self._search_task_id_by_provider_id(provider_summaries, provider_id)
-        scores_response = get_rest_client(self.endpoint, self.api_key).get_search_scores_v2(validation_task_id)
+        scores_response = get_rest_client(self.endpoint, self.api_key).get_search_scores_v2(
+            trace_id, validation_task_id
+        )
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         scores_id = None
         for score_block in scores_response["adsSearchTaskTrainedScoresDTO"]:
@@ -604,7 +622,7 @@ class SearchTask:
             print("Provider ", provider_id, " not found in validation search")
             return None
 
-        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_scores_file_v2(scores_id)
+        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_scores_file_v2(trace_id, scores_id)
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/scores.gzip".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
@@ -622,11 +640,13 @@ class SearchTask:
             #     scores.drop(columns="etalon_" + self.validation_dataset.metadata.date_column, inplace=True)
             return scores  # type: ignore
 
-    def get_validation_raw_features_by_provider_id(self, provider_id) -> Optional[pd.DataFrame]:
+    def get_validation_raw_features_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         validation_task_id = self._search_task_id_by_provider_id(provider_summaries, provider_id)
         time.sleep(1)
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(validation_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
+            trace_id, validation_task_id
+        )
         ads_search_task_id = self._ads_search_task_id_by_provider_id(provider_summaries, provider_id)
         features_id = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
@@ -639,26 +659,30 @@ class SearchTask:
             return None
 
         time.sleep(1)
-        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(features_id)
+        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(
+            trace_id, features_id
+        )
         with tempfile.TemporaryDirectory() as tmp_dir:
             gzip_file_name = "{0}/features.parquet".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
             return pd.read_parquet(gzip_file_name)
 
-    def get_all_validation_raw_features(self) -> Optional[pd.DataFrame]:
+    def get_all_validation_raw_features(self, trace_id: str) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
-        return self._get_all_validation_raw_features(self.search_task_id)
+        return self._get_all_validation_raw_features(trace_id, self.search_task_id)
 
     @lru_cache()
-    def _get_all_validation_raw_features(self, search_task_id: str) -> Optional[pd.DataFrame]:
+    def _get_all_validation_raw_features(self, trace_id: str, search_task_id: str) -> Optional[pd.DataFrame]:
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(search_task_id)
+        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
+            trace_id, search_task_id
+        )
         result_df = None
         for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
             if feature_block["searchType"] == "VALIDATION":
                 features_id = feature_block["adsSearchTaskFeaturesId"]
-                features_df = self._download_features_file(features_id)
+                features_df = self._download_features_file(trace_id, features_id)
                 if result_df is None:
                     result_df = features_df
                 else:
@@ -666,9 +690,9 @@ class SearchTask:
 
         return result_df
 
-    def _get_features(self, provider_summaries: List[ProviderTaskSummary]) -> List[Dict[str, Any]]:
+    def _get_features(self, trace_id: str, provider_summaries: List[ProviderTaskSummary]) -> List[Dict[str, Any]]:
         features = []
-        file_metadata = self.get_file_metadata()
+        file_metadata = self.get_file_metadata(trace_id)
 
         def get_original_column_name(name: str) -> str:
             for column_metadata in file_metadata.columns:
@@ -679,7 +703,7 @@ class SearchTask:
         for provider_summary in provider_summaries:
             if provider_summary.status == "COMPLETED":
                 provider_features = get_rest_client(self.endpoint, self.api_key).get_search_features_meta_v2(
-                    provider_summary.ads_search_task_id
+                    trace_id, provider_summary.ads_search_task_id
                 )
                 for feature in provider_features["providerFeatures"] + provider_features["etalonFeatures"]:
                     feature_meta = {
@@ -691,13 +715,13 @@ class SearchTask:
                     features.append(feature_meta)
         return features
 
-    def initial_features(self) -> List[Dict[str, Any]]:
+    def initial_features(self, trace_id: str) -> List[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
-        return self._get_features(provider_summaries)
+        return self._get_features(trace_id, provider_summaries)
 
-    def validation_features(self) -> List[Dict[str, Any]]:
+    def validation_features(self, trace_id: str) -> List[Dict[str, Any]]:
         provider_summaries = self._check_finished_validation_search()
-        return self._get_features(provider_summaries)
+        return self._get_features(trace_id, provider_summaries)
 
-    def get_file_metadata(self) -> FileMetadata:
-        return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id)
+    def get_file_metadata(self, trace_id: str) -> FileMetadata:
+        return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id, trace_id)
