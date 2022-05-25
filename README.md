@@ -1,5 +1,5 @@
 <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning</h2>
-<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community data sources and enriches your dataset with new external features in minutes</b> </p>
+<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community shared data sources and enriches your dataset with new external features in minutes</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
