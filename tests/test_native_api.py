@@ -97,7 +97,7 @@ def test_initial_and_validation_search(requests_mock):
     etalon.meaning_types = meaning_types
     etalon.search_keys = search_keys
 
-    search_task = etalon.search(return_scores=True)
+    search_task = etalon.search(trace_id="123", return_scores=True)
 
     initial_metadata = search_task.initial_metadata()
 
@@ -116,7 +116,7 @@ def test_initial_and_validation_search(requests_mock):
     validation_dataset.meaning_types = meaning_types
     validation_dataset.search_keys = search_keys
 
-    validation_search = search_task.validation(validation_dataset)
+    validation_search = search_task.validation("123", validation_dataset)
 
     validation_metadata = validation_search.validation_metadata()
 
