@@ -20,7 +20,7 @@ here = Path(__file__).parent.resolve()
 setup(
     name="upgini",
     version="0.10.0a112",
-    description="Features search library for supervised machine learning on tabular data",
+    description="Low-code feature search and enrichment library for machine learning",
     long_description=(here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
     url="https://upgini.com/",

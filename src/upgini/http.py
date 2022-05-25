@@ -33,6 +33,8 @@ except ImportError:
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
 
+refresh_token_lock = threading.Lock()
+
 
 def debug_requests_on():
     """Switches on logging of the requests module."""
@@ -180,13 +182,12 @@ class _RestClient:
     USER_AGENT_HEADER_NAME = "User-Agent"
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
 
-    _access_token: Optional[str] = None
-
     def __init__(self, service_endpoint, refresh_token):
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
-        self._refresh_access_token()
+        self._access_token = self._refresh_access_token()
+        self.last_refresh_time = time.time()
 
     def _refresh_access_token(self) -> str:
         api_path = self.REFRESH_TOKEN_URI_FMT
@@ -199,11 +200,19 @@ class _RestClient:
         self._access_token = response.json()["access_token"]
         return self._access_token
 
+    def _syncronized_refresh_access_token(self) -> str:
+        with refresh_token_lock:
+            now = time.time()
+            if (now - self.last_refresh_time) > 60 or self._access_token is None:
+                self._refresh_access_token()
+                self.last_refresh_time = now
+        return self._access_token
+
     def _get_access_token(self) -> str:
         if self._access_token is not None:
             return self._access_token
         else:
-            return self._refresh_access_token()
+            return self._syncronized_refresh_access_token()
 
     def _with_unauth_retry(self, request, try_number: int = 0):
         try:
@@ -213,7 +222,7 @@ class _RestClient:
             time.sleep(10)
             return self._with_unauth_retry(request)
         except UnauthorizedError:
-            self._refresh_access_token()
+            self._syncronized_refresh_access_token()
             return request()
         except HttpError as e:
             if e.status_code == 429 and try_number == 0:
