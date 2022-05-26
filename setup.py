@@ -56,6 +56,7 @@ setup(
         "imbalanced-learn>=0.9.0",
         "pydantic>=1.8.2",
         "fastparquet>=0.7.1",
+        "Jinja2>=3.0.2",
         "python-json-logger>=2.0.2",
         "catboost>=1.0.3",
         "lightgbm>=3.0.0",
