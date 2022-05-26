@@ -390,14 +390,15 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         with MDC(trace_id=trace_id):
-            if (
-                (self.enriched_X is None)
-                or (self._search_task is None)
-                or (self._search_task.initial_max_hit_rate() is None)
-            ):
+            if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
                 msg = "Fit wasn't completed successfully"
                 logging.error(msg)
                 raise Exception(msg)
+            if self.enriched_X is None:
+                msg = "Metrics calculation unavailable after restart. Please run fit again"
+                logging.error(msg)
+                raise Exception(msg)
+
             logging.info("Start calculating metrics")
             print("Start calculating metrics")
 
