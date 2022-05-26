@@ -507,7 +507,10 @@ class BackendLogHandler(logging.Handler):
     def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
-        self.hostname = get_track_metrics()["ip"]
+        if "ip" in get_track_metrics().keys():
+            self.hostname = get_track_metrics()["ip"]
+        else:
+            self.hostname = "0.0.0.0"
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():

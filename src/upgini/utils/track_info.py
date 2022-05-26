@@ -56,8 +56,9 @@ def _get_client_uuid() -> str:
 def get_track_metrics() -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
+    ident_res = "https://api.ipify.org"
     try:
-        track["ip"] = get("https://ident.me").text
+        track["ip"] = get(ident_res).text
     except Exception as e:
         track["err"] = str(e)
     # get real info depending on ide
@@ -68,12 +69,12 @@ def get_track_metrics() -> dict:
 
             display(
                 Javascript(
+                    f"""
+                        window.clientIP =
+                        fetch("{ident_res}")
+                        .then(response => response.text())
+                        .then(data => data);
                     """
-                window.clientIP =
-                fetch("https://ident.me")
-                .then(response => response.text())
-                .then(data => data);
-            """
                 )
             )
             track["ip"] = output.eval_js("window.clientIP")
