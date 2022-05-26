@@ -55,7 +55,10 @@ class EstimatorWrapper:
         return self.estimator.predict(**kwargs)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-        raise NotImplementedError()
+        for c in X.columns:
+            if is_numeric_dtype(X[c]):
+                X[c] = X[c].astype(float)
+        return X, {}
 
     def cross_val_predict(self, X, y):
         X, fit_params = self._prepare_to_fit(X.copy())
@@ -126,9 +129,11 @@ class CatBoostWrapper(EstimatorWrapper):
         super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+        X, params = super()._prepare_to_fit(X)
         cat_features_idx, cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].fillna("")
-        return X, {"cat_features": cat_features_idx}
+        params.update({"cat_features": cat_features_idx})
+        return X, params
 
 
 class LightGBMWrapper(EstimatorWrapper):
@@ -143,12 +148,13 @@ class LightGBMWrapper(EstimatorWrapper):
         super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X) -> Tuple[pd.DataFrame, dict]:
+        X, params = super()._prepare_to_fit(X)
         _, cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].fillna("")
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
 
-        return X, {}
+        return X, params
 
 
 class OtherEstimatorWrapper(EstimatorWrapper):
@@ -163,6 +169,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
     def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+        X, params = super()._prepare_to_fit(X)
         _, cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in cat_features]
         X[num_features] = X[num_features].fillna(-999)
@@ -170,7 +177,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         # TODO use one-hot encoding if cardinality is less 50
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
-        return X, {}
+        return X, params
 
 
 def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:
