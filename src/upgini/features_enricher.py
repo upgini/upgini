@@ -91,9 +91,9 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
-        self.__validate_search_keys(search_keys, api_key, search_id)
         self.search_keys = search_keys
         self.country_code = country_code
+        self.__validate_search_keys(search_keys, api_key, search_id)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self.api_key = api_key
@@ -574,8 +574,9 @@ class FeaturesEnricher(TransformerMixin):
 
             return result[filtered_columns]
 
-    @staticmethod
-    def __validate_search_keys(search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]):
+    def __validate_search_keys(
+        self, search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]
+    ):
         if len(search_keys) == 0:
             if search_id:
                 logging.error(f"search_id {search_id} provided without search_keys")
@@ -596,7 +597,7 @@ class FeaturesEnricher(TransformerMixin):
             logging.error(msg)
             raise Exception(msg)
 
-        if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types:
+        if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key should be provided if POSTAL_CODE is presented"
             logging.error(msg)
             raise Exception(msg)
@@ -941,7 +942,7 @@ class FeaturesEnricher(TransformerMixin):
             estimator=estimator,
             importance_threshold=importance_threshold,
             max_features=max_features,
-            trace_id=trace_id
+            trace_id=trace_id,
         )
         if metrics is not None:
             msg = "\nQuality metrics"
