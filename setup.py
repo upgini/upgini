@@ -19,7 +19,7 @@ from setuptools import find_packages, setup
 here = Path(__file__).parent.resolve()
 setup(
     name="upgini",
-    version="0.10.0a118",
+    version="0.10.0a119",
     description="Low-code feature search and enrichment library for machine learning",
     long_description=(here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
@@ -56,7 +56,6 @@ setup(
         "imbalanced-learn>=0.9.0",
         "pydantic>=1.8.2",
         "fastparquet>=0.7.1",
-        "Jinja2>=3.0.2",
         "python-json-logger>=2.0.2",
         "catboost>=1.0.3",
         "lightgbm>=3.0.0",

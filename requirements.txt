@@ -16,7 +16,7 @@ pytest-datafiles==2.0
 pytest-timeout==1.4.2
 requests-mock==1.9.3
 unittest-xml-reporting==3.0.4
-Jinja2==3.0.2
+# Jinja2==3.0.2
 python-json-logger==2.0.2
 catboost==1.0.5
 lightgbm==3.3.2
