@@ -61,6 +61,28 @@ The goal is accuracy improvement for TOP1 winning Kaggle solution from new relev
 The goal is saving time on feature search and engineering. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
 [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
+## 🌎 Connected data sources and coverage 
+We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
+- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
+- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
+#### 📊 Data coverage and statistics
+Total: **239 countries** and **up to 41 years** of history
+|Data scource|Countries|History, years|
+|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |12|
+|International holidays & events, workweek calendar| 232 |22|
+|Consumer Confidence index| 44 |22|
+|World economic indicators|191 |41|
+|Markets data|-|17|
+|World demographic data by postal/ZIP code|60|-
+|Public social media profile data for email & phone|104|-
+|World mobile network coverage by postal/ZIP code|167|-
+|Geolocation profile for phone & IPv4 & email|239|-
+|World house prices by postal/ZIP code|44|-
+|🔜 Email/WWW domain profile|-|-
+
+👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
+
 ## Install  
 
 ### 🐍 Install from PyPI
@@ -89,28 +111,6 @@ docker run -p 8888:8888 upgini</br>
 </i></br>
 3. Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
 </details>
-
-## 🌎 Connected data sources and coverage 
-We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
-- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
-- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
-#### 📊 Data coverage and statistics
-Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|
-|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |12|
-|International holidays & events, workweek calendar| 232 |22|
-|Consumer Confidence index| 44 |22|
-|World economic indicators|191 |41|
-|Markets data|-|17|
-|World demographic data by postal/ZIP code|60|-
-|Public social media profile data for email & phone|104|-
-|World mobile network coverage by postal/ZIP code|167|-
-|Geolocation profile for phone & IPv4 & email|239|-
-|World house prices by postal/ZIP code|44|-
-|🔜 Email/WWW domain profile|-|-
-
-👉 More details on [datasets and features here](https://upgini.com/#data_sources)
 
 ## 💻 How it works?
 
