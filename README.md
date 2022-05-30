@@ -75,7 +75,7 @@ Total: **239 countries** and **up to 41 years** of history
 |Consumer Confidence index| 44 |22|
 |World economic indicators|191 |41|
 |Markets data|-|17|
-|World demographic data by postal/ZIP code|60|-
+|World demographic data by postal/ZIP code|90|-
 |Public social media profile data for email & phone|104|-
 |World mobile network coverage by postal/ZIP code|167|-
 |Geolocation profile for phone & IPv4 & email|239|-
