@@ -37,7 +37,7 @@ We want radically simplify features search and delivery for ML pipelines to make
   - 🔜 [recommender system](https://en.wikipedia.org/wiki/Recommender_system)  
 ## 🏁 Quick start and guides
 
-### 1. Quick start guide
+### 1. Quick start guide (use as a template)
 
 Search **new features** for  Kaggle [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only).   The goal is to predict future sales of different goods in stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
@@ -51,10 +51,15 @@ Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/note
 -->
 Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML model was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
-### 2. [How to boost accuracy for Kaggle TOP1 Leaderboard in 10 minutes, Tabular playground series Jan 2022](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### 2. [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
 The goal is accuracy improvement for TOP1 winning Kaggle solution from new relevant external features & data.  
-Competition is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+[Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+
+### 3. [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
+
+The goal is saving time on feature search and engineering. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
+[Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
 ## Install  
 
@@ -69,20 +74,20 @@ Competition is a product sales forecasting, evaluation metric is [SMAPE](https:/
 </br>
 Clone <i>$ git clone https://github.com/upgini/upgini</i> or download upgini git repo locally </br>
 and follow steps below to build docker container 👇 </br>
-Build docker image</br>
 </br>  
- - ... from cloned git repo:</br>
+1. Build docker image from cloned git repo:</br>
 <i>cd upgini </br>
 docker build -t upgini .</i></br>
- - ...or directly from GitHub:</br>
+</br>
+...or directly from GitHub:
 </br>
 <i>DOCKER_BUILDKIT=0 docker build -t upgini</i></br> <i>git@github.com:upgini/upgini.git#main</i></br>
 </br>
-Run docker image:</br>
+2. Run docker image:</br>
 <i>
 docker run -p 8888:8888 upgini</br>
 </i></br>
-Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
+3. Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
 </details>
 
 ## 🌎 Connected data sources and coverage 
