@@ -529,10 +529,10 @@ Some convenient ways to start contributing are:
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links
-- [Quick start guide](https://upgini.com/#quick-start)
-- [Kaggle example notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
+- [Quick start guide as a template notebook](#1-quick-start-guide-use-as-a-template)
+- [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
 - [Project on PyPI](https://pypi.org/project/upgini)
-- [Get API Key](https://profile.upgini.com)
+- [More perks for registered users](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
 Please report it here.</a></sup>
