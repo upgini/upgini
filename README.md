@@ -53,13 +53,14 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 ### 2. [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
-The goal is accuracy improvement for TOP1 winning Kaggle solution from new relevant external features & data.  
-[Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* The goal is **accuracy improvement for TOP1 winning Kaggle solution** from new relevant external features & data.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
 ### 3. [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
 
-The goal is saving time on feature search and engineering. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
-[Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* The goal is **saving time on feature search and engineering**. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
