@@ -132,7 +132,13 @@ class CatBoostWrapper(EstimatorWrapper):
         X, params = super()._prepare_to_fit(X)
         cat_features_idx, cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].fillna("")
-        params.update({"cat_features": cat_features_idx})
+        unique_cat_features_idx = []
+        for idx, name in zip(cat_features_idx, cat_features):
+            # Remove constant categorical features
+            if X[name].nunique() > 1:
+                unique_cat_features_idx.append(idx)
+
+        params.update({"cat_features": unique_cat_features_idx})
         return X, params
 
 
