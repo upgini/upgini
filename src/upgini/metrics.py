@@ -137,6 +137,8 @@ class CatBoostWrapper(EstimatorWrapper):
             # Remove constant categorical features
             if X[name].nunique() > 1:
                 unique_cat_features_idx.append(idx)
+            else:
+                X = X.drop(columns=name)
 
         params.update({"cat_features": unique_cat_features_idx})
         return X, params
