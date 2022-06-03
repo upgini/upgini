@@ -51,12 +51,15 @@ def test_default_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
-    X = df.loc[0:499, ["phone", "feature1"]]
-    y = df.loc[0:499, "target"].values
-    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
-    eval_y_1 = df.loc[500:749, "target"].values
-    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
-    eval_y_2 = df.loc[750:999, "target"].values
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
@@ -117,12 +120,15 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
-    X = df.loc[0:499, ["phone", "feature1"]]
-    y = df.loc[0:499, "target"].values
-    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
-    eval_y_1 = df.loc[500:749, "target"].values
-    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
-    eval_y_2 = df.loc[750:999, "target"].values
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
@@ -181,12 +187,15 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
-    X = df.loc[0:499, ["phone", "feature1"]]
-    y = df.loc[0:499, "target"].values
-    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
-    eval_y_1 = df.loc[500:749, "target"].values
-    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
-    eval_y_2 = df.loc[750:999, "target"].values
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
@@ -249,16 +258,20 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
-    X = df.loc[0:499, ["phone", "feature1"]]
-    y = df.loc[0:499, "target"].values
-    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
-    eval_y_1 = df.loc[500:749, "target"].values
-    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
-    eval_y_2 = df.loc[750:999, "target"].values
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
+        api_key="fake_api_key",
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -275,18 +288,18 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.502001)  # Investigate same values
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.502001)
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.4886355)  # Investigate same values
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.4886355)
     assert metrics_df.loc["train", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.532685)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.532685)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.500872)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.500872)
     assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.544197)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.544197)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.521455)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.521455)
     assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
 
 
@@ -315,12 +328,15 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
-    X = df.loc[0:499, ["phone", "feature1"]]
-    y = df.loc[0:499, "target"].values
-    eval_X_1 = df.loc[500:749, ["phone", "feature1"]]
-    eval_y_1 = df.loc[500:749, "target"].values
-    eval_X_2 = df.loc[750:999, ["phone", "feature1"]]
-    eval_y_2 = df.loc[750:999, "target"].values
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},

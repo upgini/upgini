@@ -58,13 +58,22 @@ class EstimatorWrapper:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
-        joined = X.join(y)
+        joined = X
+        if isinstance(y, pd.Series):
+            pass
+        elif isinstance(y, np.ndarray) or isinstance(y, list):
+            y = pd.Series(y, name="target")
+        else:
+            msg = f"Unsupported type of y: {type(y)}"
+            raise Exception(msg)
+
+        joined[y.name] = y
         joined = joined[joined[y.name].notna()]
         X = joined.drop(columns=y.name)
         y = joined[y.name]  # type: ignore
         return X, y, {}
 
-    def cross_val_predict(self, X, y):
+    def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
         X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
 
         metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
