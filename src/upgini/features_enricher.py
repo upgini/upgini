@@ -404,7 +404,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise Exception(f"Unsupported y type: {type(y)}")
 
                 logging.info("Start calculating metrics")
-                print("Start calculating metrics")   
+                print("Start calculating metrics")
 
                 with Spinner():
                     filtered_columns = self.__filtered_columns(
@@ -417,15 +417,16 @@ class FeaturesEnricher(TransformerMixin):
                     model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
                     _cv = cv or self.cv
 
-                    # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
-                    # and calculate baseline metric
+                    # 1 If client features are presented - fit and predict with KFold CatBoost model
+                    # on etalon features and calculate baseline metric
                     etalon_metric = None
                     if fitting_X.shape[1] > 0:
-                        etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
-                            fitting_X, y
-                        )
+                        etalon_metric = EstimatorWrapper.create(
+                            estimator, model_task_type, _cv, scoring
+                        ).cross_val_predict(fitting_X, y)
 
-                    # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
+                    # 2 Fit and predict with KFold Catboost model on enriched tds
+                    # and calculate final metric (and uplift)
                     wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
                     enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                     metric = wrapper.metric_name
@@ -444,8 +445,8 @@ class FeaturesEnricher(TransformerMixin):
                         }
                     ]
 
-                    # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
-                    # and calculate final metric (and uplift)
+                    # 3 If eval_set is presented - fit final model on train enriched data and score each
+                    # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
                     if eval_set is not None and self.enriched_eval_set is not None:
                         # Fit models
@@ -463,7 +464,9 @@ class FeaturesEnricher(TransformerMixin):
                                 else None
                             )
                             eval_X = eval_pair[0]
-                            eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
+                            eval_X = eval_X.drop(
+                                columns=[col for col in self.search_keys.keys() if col in eval_X.columns]
+                            )
                             enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
                             enriched_eval_X = enriched_eval_X[filtered_columns]
                             eval_y = eval_pair[1]
