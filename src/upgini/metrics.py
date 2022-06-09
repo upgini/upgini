@@ -45,8 +45,8 @@ class EstimatorWrapper:
         self.multiplier = multiplier
         self.cv = cv
 
-    def fit(self, X, y, **kwargs):
-        X, fit_params = self._prepare_to_fit(X.copy())
+    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs):
+        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -54,18 +54,34 @@ class EstimatorWrapper:
     def predict(self, **kwargs):
         return self.estimator.predict(**kwargs)
 
-    def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-        raise NotImplementedError()
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+        for c in X.columns:
+            if is_numeric_dtype(X[c]):
+                X[c] = X[c].astype(float)
+        joined = X
+        if isinstance(y, pd.Series):
+            pass
+        elif isinstance(y, np.ndarray) or isinstance(y, list):
+            y = pd.Series(y, name="target")
+        else:
+            msg = f"Unsupported type of y: {type(y)}"
+            raise Exception(msg)
 
-    def cross_val_predict(self, X, y):
-        X, fit_params = self._prepare_to_fit(X.copy())
+        joined[y.name] = y
+        joined = joined[joined[y.name].notna()]
+        X = joined.drop(columns=y.name)
+        y = joined[y.name]  # type: ignore
+        return X, y, {}
+
+    def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
+        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
 
         metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 
         return np.mean(metrics_by_fold) * self.multiplier
 
     def calculate_metric(self, X: pd.DataFrame, y) -> float:
-        X, _ = self._prepare_to_fit(X)
+        X, y, _ = self._prepare_to_fit(X, y)
         return self.scorer(self.estimator, X, y) * self.multiplier
 
     @staticmethod
@@ -125,10 +141,20 @@ class CatBoostWrapper(EstimatorWrapper):
     ):
         super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
-    def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+        X, y, params = super()._prepare_to_fit(X, y)
         cat_features_idx, cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].fillna("")
-        return X, {"cat_features": cat_features_idx}
+        unique_cat_features_idx = []
+        for idx, name in zip(cat_features_idx, cat_features):
+            # Remove constant categorical features
+            if X[name].nunique() > 1:
+                unique_cat_features_idx.append(idx)
+            else:
+                X = X.drop(columns=name)
+
+        params.update({"cat_features": unique_cat_features_idx})
+        return X, y, params
 
 
 class LightGBMWrapper(EstimatorWrapper):
@@ -142,13 +168,14 @@ class LightGBMWrapper(EstimatorWrapper):
     ):
         super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
-    def _prepare_to_fit(self, X) -> Tuple[pd.DataFrame, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+        X, y, params = super()._prepare_to_fit(X, y)
         _, cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].fillna("")
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
 
-        return X, {}
+        return X, y, params
 
 
 class OtherEstimatorWrapper(EstimatorWrapper):
@@ -162,7 +189,8 @@ class OtherEstimatorWrapper(EstimatorWrapper):
     ):
         super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
 
-    def _prepare_to_fit(self, X: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+        X, y, params = super()._prepare_to_fit(X, y)
         _, cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in cat_features]
         X[num_features] = X[num_features].fillna(-999)
@@ -170,7 +198,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         # TODO use one-hot encoding if cardinality is less 50
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
-        return X, {}
+        return X, y, params
 
 
 def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:

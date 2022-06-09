@@ -1,12 +1,11 @@
-import os
 import csv
-import html
 import logging
+import os
 import tempfile
+import time
 from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
-import time
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -23,7 +22,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import get_rest_client, UPGINI_API_KEY
+from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
@@ -656,17 +655,29 @@ class Dataset(pd.DataFrame):
             df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
             df_stats.reset_index(inplace=True)
             df_stats.columns = ["Column name", "Status", "Description"]
-            styled_df_stats = df_stats.copy()
-            styled_df_stats["Description"] = styled_df_stats["Description"].apply(
-                lambda x: html.escape(x)
-            )  # type: ignore
-            colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
-            styled_df_stats = styled_df_stats.style
-            styled_df_stats.applymap(lambda x: f"background-color: {colormap[x]}", subset="Status")
             try:
-                from IPython.display import display  # type: ignore
+                import html
 
-                display(styled_df_stats)
+                from IPython.display import HTML, display  # type: ignore
+
+                def map_color(text):
+                    colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
+                    return (
+                        f"<td style='background-color:{colormap[text]};color:black'>{text}</td>"
+                        if text in colormap
+                        else f"<td>{text}</td>"
+                    )
+
+                df_stats["Description"] = df_stats["Description"].apply(lambda x: html.escape(x))
+                html_stats = (
+                    "<table>"
+                    + "<tr>"
+                    + "".join(f"<th style='font-weight:bold'>{col}</th>" for col in df_stats.columns)
+                    + "</tr>"
+                    + "".join("<tr>" + "".join(map(map_color, row[1:])) + "</tr>" for row in df_stats.itertuples())
+                    + "</table>"
+                )
+                display(HTML(html_stats))
             except ImportError:
                 print(df_stats)
 

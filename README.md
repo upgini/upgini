@@ -1,11 +1,12 @@
 <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning</h2>
-<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community shared data sources and enriches your dataset with new external features in minutes</b> </p>
+<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community shared data sources and enriches your training dataset with relevant external features</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
     <a href="https://upgini.com/">Upgini.com</a> |
     <a href="https://profile.upgini.com">Sign In</a> |
-    <a href="https://upgini.slack.com/messages/C02MW49ADSN">Slack Community</a> 
+    <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a>
+    <!-- <a href="https://upgini.slack.com/messages/C02MW49ADSN">Slack Community</a>  -->
  </p>
 
 [![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
@@ -13,17 +14,18 @@
 [![PyPI Latest Release](https://img.shields.io/badge/pypi-v0.10.0-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
 [![stability-release-candidate](https://img.shields.io/badge/stability-pre--release-br?logo=circleci&logoColor=white)](https://pypi.org/project/upgini/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
-[![Slack upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
+[![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://upgini.slack.com/messages/C02MW49ADSN)
+[![Gitter Сommunity](https://badges.gitter.im/upgini/community.svg)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 ## ❔ Overview
 
-**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only features that improve the prediction power of your ML model are returned.  
+**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only relevant features that improve the prediction power of your ML model are returned.  
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
 We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 **Mission:** Democratize access to data sources for data science community
 
 ## 🚀 Awesome features
-⭐️ Find only features that *give accuracy improvement* according to accuracy metric: ROC AUC, RMSE, MAE, Accuracy, etc. Not just correlated with target variable, which 9 out of 10 cases gives zero accuracy improvement for production ML cases  
+⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement for real ML cases  
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
 ⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
@@ -37,7 +39,7 @@ We want radically simplify features search and delivery for ML pipelines to make
   - 🔜 [recommender system](https://en.wikipedia.org/wiki/Recommender_system)  
 ## 🏁 Quick start and guides
 
-### 1. Quick start guide
+### 1. Quick start guide (use as a template)
 
 Search **new features** for  Kaggle [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only).   The goal is to predict future sales of different goods in stores based on a 5-year history of sales. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
@@ -51,39 +53,16 @@ Run [quick start guide notebook](https://github.com/upgini/upgini/blob/main/note
 -->
 Competition dataset was split into train (2013-2016 year) and test (2017 year) parts. `FeaturesEnricher` was fitted on train part. And both datasets  were enriched with external features. Finally, ML model was fitted both of the initial and the enriched datasets to compare accuracy improvement. With a solid improvement of the evaluation metric achieved by the enriched ML model.
 
-### 2. [How to boost accuracy for Kaggle TOP1 Leaderboard in 10 minutes, Tabular playground series Jan 2022](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### 2. [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
-The goal is accuracy improvement for TOP1 winning Kaggle solution from new relevant external features & data.  
-Competition is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* The goal is **accuracy improvement for TOP1 winning Kaggle solution** from new relevant external features & data.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
-## Install  
+### 3. [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
 
-### 🐍 Install from PyPI
-```python
-%pip install upgini
-```
-<details>
-	<summary>
-	🐳 <b>Docker-way</b>
-	</summary>
-</br>
-Clone <i>$ git clone https://github.com/upgini/upgini</i> or download upgini git repo locally </br>
-and follow steps below to build docker container 👇 </br>
-Build docker image</br>
-</br>  
- - ... from cloned git repo:</br>
-<i>cd upgini </br>
-docker build -t upgini .</i></br>
- - ...or directly from GitHub:</br>
-</br>
-<i>DOCKER_BUILDKIT=0 docker build -t upgini</i></br> <i>git@github.com:upgini/upgini.git#main</i></br>
-</br>
-Run docker image:</br>
-<i>
-docker run -p 8888:8888 upgini</br>
-</i></br>
-Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
-</details>
+* The goal is **saving time on feature search and engineering**. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
@@ -98,14 +77,43 @@ Total: **239 countries** and **up to 41 years** of history
 |Consumer Confidence index| 44 |22|
 |World economic indicators|191 |41|
 |Markets data|-|17|
-|World demographic data by postal/ZIP code|60|-
+|World demographic data by postal/ZIP code|90|-
 |Public social media profile data for email & phone|104|-
 |World mobile network coverage by postal/ZIP code|167|-
 |Geolocation profile for phone & IPv4 & email|239|-
 |World house prices by postal/ZIP code|44|-
 |🔜 Email/WWW domain profile|-|-
 
-👉 More details on [datasets and features here](https://upgini.com/#data_sources)
+👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
+
+## Install  
+
+### 🐍 Install from PyPI
+```python
+%pip install upgini
+```
+<details>
+	<summary>
+	🐳 <b>Docker-way</b>
+	</summary>
+</br>
+Clone <i>$ git clone https://github.com/upgini/upgini</i> or download upgini git repo locally </br>
+and follow steps below to build docker container 👇 </br>
+</br>  
+1. Build docker image from cloned git repo:</br>
+<i>cd upgini </br>
+docker build -t upgini .</i></br>
+</br>
+...or directly from GitHub:
+</br>
+<i>DOCKER_BUILDKIT=0 docker build -t upgini</i></br> <i>git@github.com:upgini/upgini.git#main</i></br>
+</br>
+2. Run docker image:</br>
+<i>
+docker run -p 8888:8888 upgini</br>
+</i></br>
+3. Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
+</details>
 
 ## 💻 How it works?
 
@@ -524,10 +532,10 @@ Some convenient ways to start contributing are:
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links
-- [Quick start guide](https://upgini.com/#quick-start)
-- [Kaggle example notebook](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
+- [Quick start guide as a template notebook](#1-quick-start-guide-use-as-a-template)
+- [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
 - [Project on PyPI](https://pypi.org/project/upgini)
-- [Get API Key](https://profile.upgini.com)
+- [More perks for registered users](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
 Please report it here.</a></sup>

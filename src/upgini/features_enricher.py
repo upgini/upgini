@@ -91,9 +91,9 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
-        self.__validate_search_keys(search_keys, api_key, search_id)
         self.search_keys = search_keys
         self.country_code = country_code
+        self.__validate_search_keys(search_keys, api_key, search_id)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self.api_key = api_key
@@ -390,100 +390,111 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         with MDC(trace_id=trace_id):
-            if (
-                (self.enriched_X is None)
-                or (self._search_task is None)
-                or (self._search_task.initial_max_hit_rate() is None)
-            ):
-                msg = "Fit wasn't completed successfully"
-                logging.error(msg)
-                raise Exception(msg)
-            logging.info("Start calculating metrics")
-            print("Start calculating metrics")
+            try:
+                if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
+                    raise Exception("Fit wasn't completed successfully")
+                if self.enriched_X is None:
+                    raise Exception("Metrics calculation unavailable after restart. Please run fit again")
 
-            with Spinner():
-                filtered_columns = self.__filtered_columns(
-                    X.columns.to_list(), importance_threshold, max_features, only_features=True
-                )
+                if isinstance(y, pd.Series):
+                    pass
+                elif isinstance(y, np.ndarray) or isinstance(y, list):
+                    y = pd.Series(y, name="target")
+                else:
+                    raise Exception(f"Unsupported y type: {type(y)}")
 
-                fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-                fitting_enriched_X = self.enriched_X[filtered_columns]
+                logging.info("Start calculating metrics")
+                print("Start calculating metrics")
 
-                model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
-                _cv = cv or self.cv
-
-                # 1 If client features are presented - fit and predict with KFold CatBoost model on etalon features
-                # and calculate baseline metric
-                etalon_metric = None
-                if fitting_X.shape[1] > 0:
-                    etalon_metric = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring).cross_val_predict(
-                        fitting_X, y
+                with Spinner():
+                    filtered_columns = self.__filtered_columns(
+                        X.columns.to_list(), importance_threshold, max_features, only_features=True
                     )
 
-                # 2 Fit and predict with KFold Catboost model on enriched tds and calculate final metric (and uplift)
-                wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
-                enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
-                metric = wrapper.metric_name
+                    fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
+                    fitting_enriched_X = self.enriched_X[filtered_columns]
 
-                uplift = None
-                if etalon_metric is not None:
-                    uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+                    model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+                    _cv = cv or self.cv
 
-                metrics = [
-                    {
-                        "segment": "train",
-                        "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
-                        f"baseline {metric}": etalon_metric,
-                        f"enriched {metric}": enriched_metric,
-                        "uplift": uplift,
-                    }
-                ]
-
-                # 3 If eval_set is presented - fit final model on train enriched data and score each validation dataset
-                # and calculate final metric (and uplift)
-                max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-                if eval_set is not None and self.enriched_eval_set is not None:
-                    # Fit models
-                    etalon_model = None
+                    # 1 If client features are presented - fit and predict with KFold CatBoost model
+                    # on etalon features and calculate baseline metric
+                    etalon_metric = None
                     if fitting_X.shape[1] > 0:
-                        etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                        etalon_model.fit(fitting_X, y)
-                    enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
-                    enriched_model.fit(fitting_enriched_X, y)
+                        etalon_metric = EstimatorWrapper.create(
+                            estimator, model_task_type, _cv, scoring
+                        ).cross_val_predict(fitting_X, y)
 
-                    for idx, eval_pair in enumerate(eval_set):
-                        eval_hit_rate = (
-                            max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
-                            if max_initial_eval_set_metrics
-                            else None
-                        )
-                        eval_X = eval_pair[0]
-                        eval_X = eval_X.drop(columns=[col for col in self.search_keys.keys() if col in eval_X.columns])
-                        enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
-                        enriched_eval_X = enriched_eval_X[filtered_columns]
-                        eval_y = eval_pair[1]
+                    # 2 Fit and predict with KFold Catboost model on enriched tds
+                    # and calculate final metric (and uplift)
+                    wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
+                    enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
+                    metric = wrapper.metric_name
 
-                        etalon_eval_metric = None
-                        if etalon_model is not None:
-                            etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
+                    uplift = None
+                    if etalon_metric is not None:
+                        uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
 
-                        enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
+                    metrics = [
+                        {
+                            "segment": "train",
+                            "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
+                            f"baseline {metric}": etalon_metric,
+                            f"enriched {metric}": enriched_metric,
+                            "uplift": uplift,
+                        }
+                    ]
 
-                        eval_uplift = None
-                        if etalon_eval_metric is not None:
-                            eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+                    # 3 If eval_set is presented - fit final model on train enriched data and score each
+                    # validation dataset and calculate final metric (and uplift)
+                    max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+                    if eval_set is not None and self.enriched_eval_set is not None:
+                        # Fit models
+                        etalon_model = None
+                        if fitting_X.shape[1] > 0:
+                            etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                            etalon_model.fit(fitting_X, y)
+                        enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                        enriched_model.fit(fitting_enriched_X, y)
 
-                        metrics.append(
-                            {
-                                "segment": f"eval {idx + 1}",
-                                "match_rate": eval_hit_rate,
-                                f"baseline {metric}": etalon_eval_metric,
-                                f"enriched {metric}": enriched_eval_metric,
-                                "uplift": eval_uplift,
-                            }
-                        )
-                logging.info("Calculate metrics finished successfully")
-                return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                        for idx, eval_pair in enumerate(eval_set):
+                            eval_hit_rate = (
+                                max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
+                                if max_initial_eval_set_metrics
+                                else None
+                            )
+                            eval_X = eval_pair[0]
+                            eval_X = eval_X.drop(
+                                columns=[col for col in self.search_keys.keys() if col in eval_X.columns]
+                            )
+                            enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
+                            enriched_eval_X = enriched_eval_X[filtered_columns]
+                            eval_y = eval_pair[1]
+
+                            etalon_eval_metric = None
+                            if etalon_model is not None:
+                                etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
+
+                            enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
+
+                            eval_uplift = None
+                            if etalon_eval_metric is not None:
+                                eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+
+                            metrics.append(
+                                {
+                                    "segment": f"eval {idx + 1}",
+                                    "match_rate": eval_hit_rate,
+                                    f"baseline {metric}": etalon_eval_metric,
+                                    f"enriched {metric}": enriched_eval_metric,
+                                    "uplift": eval_uplift,
+                                }
+                            )
+                    logging.info("Calculate metrics finished successfully")
+                    return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+            except Exception as e:
+                logging.exception("Failed to calculate metrics")
+                raise e
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of fitted enricher. It's present only after fit completed"""
@@ -573,8 +584,9 @@ class FeaturesEnricher(TransformerMixin):
 
             return result[filtered_columns]
 
-    @staticmethod
-    def __validate_search_keys(search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]):
+    def __validate_search_keys(
+        self, search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]
+    ):
         if len(search_keys) == 0:
             if search_id:
                 logging.error(f"search_id {search_id} provided without search_keys")
@@ -595,7 +607,7 @@ class FeaturesEnricher(TransformerMixin):
             logging.error(msg)
             raise Exception(msg)
 
-        if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types:
+        if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key should be provided if POSTAL_CODE is presented"
             logging.error(msg)
             raise Exception(msg)
@@ -940,7 +952,7 @@ class FeaturesEnricher(TransformerMixin):
             estimator=estimator,
             importance_threshold=importance_threshold,
             max_features=max_features,
-            trace_id=trace_id
+            trace_id=trace_id,
         )
         if metrics is not None:
             msg = "\nQuality metrics"

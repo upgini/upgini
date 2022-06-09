@@ -40,6 +40,6 @@ class Spinner:
     def spin(self):
         i = 0
         while not self.stop:
-            print(self.frames[i % self.iterations], end="\r")
+            print(self.frames[i % self.iterations], end="\r", flush=True)
             time.sleep(self.step_time)
             i += 1
