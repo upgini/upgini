@@ -1,8 +1,6 @@
-import hashlib
 import itertools
 import logging
 import os
-import sys
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -401,7 +399,7 @@ class FeaturesEnricher(TransformerMixin):
                     y = pd.Series(y, name="target")
                 else:
                     raise Exception(f"Unsupported y type: {type(y)}")
-                
+
                 # TODO check if no features (client or ads)
 
                 logging.info("Start calculating metrics")
@@ -540,7 +538,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys = self.__using_search_keys()
             feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
-            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]
+            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             combined_search_keys = []
@@ -979,28 +977,6 @@ class FeaturesEnricher(TransformerMixin):
         except ImportError:
             print(msg)
             print(self.features_info.head(60))
-
-    @staticmethod
-    def _hash_row(row) -> int:
-        return hash(tuple(row))
-
-        # t = tuple(row)
-        # m = hashlib.md5()
-        # for i in t:
-        #     m.update(str(i).encode())
-        # return FeaturesEnricher._hex_to_int(m.hexdigest())
-
-    # @staticmethod
-    # def _hex_to_int(s: str) -> int:
-    #     chars = []
-    #     for ch in s:
-    #         if not ch.isdecimal():
-    #             ch = str(ord(ch) - 97)
-    #         chars.append(ch)
-    #     result = int("".join(chars))
-    #     if result > sys.maxsize:
-    #         result = result % sys.maxsize
-    #     return result
 
     def __is_quality_by_metrics_low(self) -> bool:
         if self._search_task is None:
