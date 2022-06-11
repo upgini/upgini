@@ -202,7 +202,9 @@ class Dataset(pd.DataFrame):
         """Clean DataSet from full duplicates."""
         # logging.info("Clean full duplicates")
         nrows = len(self)
+        # Remove absolute duplicates (exclude system_record_id)
         unique_columns = self.columns.tolist()
+        unique_columns.remove(SYSTEM_RECORD_ID)
         logging.info(f"Dataset shape before clean duplicates: {self.shape}")
         self.drop_duplicates(subset=unique_columns, inplace=True)
         logging.info(f"Dataset shape after clean duplicates: {self.shape}")
@@ -495,7 +497,7 @@ class Dataset(pd.DataFrame):
                 if validation_segment is not None:
                     resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)
                 self._update_inplace(resampled_data)
-                logging.info(f"Shape after resampling: {self.shape}")
+                logging.info(f"Shape after rebalance resampling: {self.shape}")
                 self.sampled = True
 
         # Resample over fit threshold
@@ -514,7 +516,7 @@ class Dataset(pd.DataFrame):
             if validation_segment is not None:
                 resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)
             self._update_inplace(resampled_data)
-            logging.info(f"Shape after resampling: {self.shape}")
+            logging.info(f"Shape after threshold resampling: {self.shape}")
             self.sampled = True
 
     def __convert_phone(self):
@@ -534,38 +536,52 @@ class Dataset(pd.DataFrame):
     def __remove_dates_from_features(self):
         # logging.info("Remove date columns from features")
 
+        removed_features = []
         for f in self.__features():
             if is_datetime(self[f]) or is_period_dtype(self[f]):
-                logging.warning(f"Column {f} has datetime or period type but is feature and will be dropped from tds")
+                removed_features.append(f)
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
+        if removed_features:
+            msg = f"Columns {removed_features} has datetime or period type but is feature and will be dropped from tds"
+            print(msg)
+            logging.warning(msg)
+
     def __remove_empty_and_constant_features(self):
         # logging.info("Remove almost constant and almost empty columns")
+        removed_features = []
         for f in self.__features():
             value_counts = self[f].value_counts(dropna=False, normalize=True)
             # most_frequent_value = value_counts.index[0]
             most_frequent_percent = value_counts.iloc[0]
             if most_frequent_percent >= 0.99:
-                # logging.warning(
-                #     f"Column {f} has value {most_frequent_value} with {most_frequent_percent * 100}% > 99% "
-                #     " and will be dropped from tds"
-                # )
+                removed_features.append(f)
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
+
+        if removed_features:
+            msg = f"Columns {removed_features} has value with frequency more than 99% " " and will be dropped from tds"
+            print(msg)
+            logging.warning(msg)
 
     def __remove_high_cardinality_features(self):
         # logging.info("Remove columns with high cardinality")
 
         count = len(self)
+        removed_features = []
         for f in self.__features():
             if (is_string_dtype(self[f]) or is_integer_dtype(self[f])) and self[f].nunique() / count >= 0.9:
-                # logging.warning(
-                #     f"Column {f} has high cardinality (more than 90% uniques and string or integer type) "
-                #     "and will be droped from tds"
-                # )
+                removed_features.append(f)
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
+        if removed_features:
+            msg = (
+                f"Columns {removed_features} has high cardinality (more than 90% uniques and string or integer type) "
+                "and will be droped from tds"
+            )
+            print(msg)
+            logging.warning(msg)
 
     def __convert_features_types(self):
         # logging.info("Convert features to supported data types")
@@ -716,6 +732,12 @@ class Dataset(pd.DataFrame):
 
         self.__drop_ignore_columns()
 
+        self.__remove_dates_from_features()
+
+        self.__remove_empty_and_constant_features()
+
+        self.__remove_high_cardinality_features()
+
         self.__validate_too_long_string_values()
 
         self.__clean_duplicates()
@@ -739,12 +761,6 @@ class Dataset(pd.DataFrame):
         self.__normalize_iso_code()
 
         self.__normalize_postal_code()
-
-        self.__remove_dates_from_features()
-
-        self.__remove_empty_and_constant_features()
-
-        self.__remove_high_cardinality_features()
 
         self.__convert_features_types()
 

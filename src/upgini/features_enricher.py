@@ -278,7 +278,7 @@ class FeaturesEnricher(TransformerMixin):
                     ]
                 )
             try:
-                result = self.__inner_fit(
+                self.__inner_fit(
                     trace_id,
                     X,
                     y,
@@ -294,10 +294,9 @@ class FeaturesEnricher(TransformerMixin):
                 logging.exception("Failed in inner_fit")
                 raise e
 
-            if keep_input:
-                return result
-            else:
-                return result.drop(columns=[c for c in X.columns if c in result.columns])
+            return self.transform(
+                X, keep_input=keep_input, importance_threshold=importance_threshold, max_features=max_features
+            )
 
     def transform(
         self,
@@ -402,6 +401,8 @@ class FeaturesEnricher(TransformerMixin):
                     y = pd.Series(y, name="target")
                 else:
                     raise Exception(f"Unsupported y type: {type(y)}")
+                
+                # TODO check if no features (client or ads)
 
                 logging.info("Start calculating metrics")
                 print("Start calculating metrics")
@@ -539,7 +540,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys = self.__using_search_keys()
             feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
 
-            df[SYSTEM_RECORD_ID] = df.apply(lambda row: self._hash_row(row[search_keys.keys()]), axis=1)
+            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             combined_search_keys = []
@@ -981,23 +982,25 @@ class FeaturesEnricher(TransformerMixin):
 
     @staticmethod
     def _hash_row(row) -> int:
-        t = tuple(row)
-        m = hashlib.md5()
-        for i in t:
-            m.update(str(i).encode())
-        return FeaturesEnricher._hex_to_int(m.hexdigest())
+        return hash(tuple(row))
 
-    @staticmethod
-    def _hex_to_int(s: str) -> int:
-        chars = []
-        for ch in s:
-            if not ch.isdecimal():
-                ch = str(ord(ch) - 97)
-            chars.append(ch)
-        result = int("".join(chars))
-        if result > sys.maxsize:
-            result = result % sys.maxsize
-        return result
+        # t = tuple(row)
+        # m = hashlib.md5()
+        # for i in t:
+        #     m.update(str(i).encode())
+        # return FeaturesEnricher._hex_to_int(m.hexdigest())
+
+    # @staticmethod
+    # def _hex_to_int(s: str) -> int:
+    #     chars = []
+    #     for ch in s:
+    #         if not ch.isdecimal():
+    #             ch = str(ord(ch) - 97)
+    #         chars.append(ch)
+    #     result = int("".join(chars))
+    #     if result > sys.maxsize:
+    #         result = result % sys.maxsize
+    #     return result
 
     def __is_quality_by_metrics_low(self) -> bool:
         if self._search_task is None:
