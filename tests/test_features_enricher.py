@@ -66,6 +66,23 @@ def test_features_enricher(requests_mock: Mocker):
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
     train_df = df.head(10000)
@@ -317,12 +334,6 @@ def test_filter_by_importance(requests_mock: Mocker):
     assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
     assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
 
-    train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8
-    )
-
-    assert train_features.shape == (10000, 3)
-
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
         requests_mock,
@@ -339,6 +350,12 @@ def test_filter_by_importance(requests_mock: Mocker):
         ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    train_features = enricher.fit_transform(
+        train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8
+    )
+
+    assert train_features.shape == (10000, 3)
 
     test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.8)
 
@@ -418,12 +435,6 @@ def test_filter_by_max_features(requests_mock: Mocker):
     assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
     assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
 
-    train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0
-    )
-
-    assert train_features.shape == (10000, 3)
-
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
         requests_mock,
@@ -440,6 +451,12 @@ def test_filter_by_max_features(requests_mock: Mocker):
         ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    train_features = enricher.fit_transform(
+        train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0
+    )
+
+    assert train_features.shape == (10000, 3)
 
     test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
 

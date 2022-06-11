@@ -215,7 +215,7 @@ class Dataset(pd.DataFrame):
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
-            unique_columns.remove(SYSTEM_RECORD_ID)
+            # unique_columns.remove(SYSTEM_RECORD_ID)
             self.drop_duplicates(subset=unique_columns, inplace=True)
             nrows_after_tgt_dedup = len(self)
             share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
