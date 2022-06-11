@@ -18,6 +18,9 @@ from .utils import (
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_validation_search,
+    mock_validation_summary,
+    mock_validation_raw_features,
 )
 
 FIXTURE_DIR = os.path.join(
@@ -48,7 +51,25 @@ def test_default_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df_train = df[0:500]
@@ -117,7 +138,25 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df_train = df[0:500]
@@ -184,7 +223,25 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df_train = df[0:500]
@@ -255,7 +312,25 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
-    mock_raw_features(requests_mock, url, search_task_id, os.path.join(FIXTURE_DIR, "features.parquet"))
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df_train = df[0:500]
