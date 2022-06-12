@@ -99,11 +99,11 @@ class Dataset(pd.DataFrame):
                 kwargs["sep"] = sep
                 data = pd.read_csv(path, **kwargs)
         else:
-            raise ValueError("DataFrame or path to file should be passed.")
+            raise ValueError("DataFrame or path to file should be passed")
         if isinstance(data, pd.DataFrame):
             super(Dataset, self).__init__(data)  # type: ignore
         else:
-            raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again.")
+            raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again")
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
@@ -126,14 +126,14 @@ class Dataset(pd.DataFrame):
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
         if self.meaning_types is None:
-            raise ValueError("meaning_types is empty.")
+            raise ValueError("meaning_types is empty")
         else:
             return self.meaning_types
 
     @property
     def search_keys_checked(self) -> List[Tuple[str, ...]]:
         if self.search_keys is None:
-            raise ValueError("search_keys is empty.")
+            raise ValueError("search_keys is empty")
         else:
             return self.search_keys
 
@@ -148,7 +148,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_min_rows_count(self):
         if self.shape[0] < self.MIN_ROWS_COUNT:
-            raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows.")
+            raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows")
 
     def __validate_max_row_count(self):
         api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
@@ -170,7 +170,7 @@ class Dataset(pd.DataFrame):
         # logging.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
-                raise ValueError("Some of column names are empty. Fill them and try again, please.")
+                raise ValueError("Some of column names are empty. Add names and try again, please")
             new_column = str(column).lower()
             if ord(new_column[0]) not in range(ord("a"), ord("z")):
                 new_column = "a" + new_column
@@ -194,8 +194,8 @@ class Dataset(pd.DataFrame):
                 max_length: int = self[col].astype("str").str.len().max()
                 if max_length > 400:
                     raise ValueError(
-                        f"Some of column {col} values are too long: {max_length} characters. "
-                        "Remove this column or trim values to 50 characters."
+                        f"Columns {col} are too long: {max_length} characters. "
+                        "Remove this columns or trim length to 50 characters"
                     )
 
     def __clean_duplicates(self):
@@ -222,7 +222,7 @@ class Dataset(pd.DataFrame):
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
                 msg = (
                     f"{share_tgt_dedup:.5f}% of rows in X are duplicates with different y values. "
-                    "Please check the dataframe and restart fit"
+                    "Please check X dataframe"
                 )
                 logging.error(msg)
                 raise ValueError(msg)
@@ -275,7 +275,7 @@ class Dataset(pd.DataFrame):
             elif is_period_dtype(self[date]):
                 self[date] = pd.to_datetime(self[date].astype("string")).dt.floor("D").view(np.int64) // 1_000_000
             elif is_numeric_dtype(self[date]):
-                msg = f"Unsupported type of date column {date}. Convert to datetime manually please."
+                msg = f"Unsupported type of date column {date}. Convert to datetime please."
                 logging.error(msg)
                 raise Exception(msg)
 
@@ -544,7 +544,7 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = f"Columns {removed_features} has datetime or period type but is feature and will be dropped from tds"
+            msg = f"Columns {removed_features} is a datetime or period type but not used as a search key and has been droped from X"
             print(msg)
             logging.warning(msg)
 
@@ -561,7 +561,7 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = f"Columns {removed_features} has value with frequency more than 99% " " and will be dropped from tds"
+            msg = f"Columns {removed_features} has value with frequency more than 99% " "and has been droped from X"
             print(msg)
             logging.warning(msg)
 
@@ -577,7 +577,7 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
         if removed_features:
             msg = (
-                f"Columns {removed_features} has high cardinality (>90% unique values)"
+                f"Columns {removed_features} has high cardinality (>90% unique values) "
                 "and has been droped from X"
             )
             print(msg)
@@ -602,13 +602,13 @@ class Dataset(pd.DataFrame):
         score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
         if validate_target:
             if target is None:
-                raise ValidationError("Target column is absent in meaning_types.")
+                raise ValidationError("Target column is absent in meaning_types")
 
             if self.task_type != ModelTaskType.MULTICLASS:
                 target_value = self.__target_value()
                 target_items = target_value.nunique()
                 if target_items == 1:
-                    raise ValidationError("Target contains only one distinct value.")
+                    raise ValidationError("Target contains only one distinct value")
                 elif target_items == 0:
                     raise ValidationError("Target contains only NaN or incorrect values.")
 
@@ -641,14 +641,14 @@ class Dataset(pd.DataFrame):
             elif 0 < valid_share < 1:
                 valid_status = "Some invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )
@@ -700,7 +700,7 @@ class Dataset(pd.DataFrame):
     def __validate_meaning_types(self, validate_target: bool):
         # logging.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
-            raise ValueError("Please pass the `meaning_types` argument before validation.")
+            raise ValueError("Please pass the `meaning_types` argument before validation")
 
         if SYSTEM_RECORD_ID not in self.columns:
             self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
@@ -708,18 +708,18 @@ class Dataset(pd.DataFrame):
 
         for column in self.meaning_types:
             if column not in self.columns:
-                raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}.")
+                raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}")
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
-            raise ValueError("Target column is not presented in meaning types. Specify it, please.")
+            raise ValueError("Target column is not presented in meaning types. Specify it, please")
 
     def __validate_search_keys(self):
         # logging.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
-            raise ValueError("Please pass `search_keys` argument before validation.")
+            raise ValueError("Please pass `search_keys` argument before validation")
         for keys_group in self.search_keys:
             for key in keys_group:
                 if key not in self.columns:
-                    raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}.")
+                    raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}")
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # logging.info("Validating dataset")
