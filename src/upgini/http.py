@@ -6,7 +6,7 @@ import time
 from functools import lru_cache
 from http.client import HTTPConnection
 from json import dumps
-from typing import Optional
+from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
@@ -15,7 +15,12 @@ from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
 
 from upgini.errors import HttpError, UnauthorizedError
-from upgini.metadata import FileMetadata, FileMetrics, SearchCustomization
+from upgini.metadata import (
+    FileColumnMeaningType,
+    FileMetadata,
+    FileMetrics,
+    SearchCustomization,
+)
 from upgini.utils.track_info import get_track_metrics
 
 try:
@@ -181,6 +186,7 @@ class _RestClient:
     DEFAULT_OWNER = "Python SDK"
     USER_AGENT_HEADER_NAME = "User-Agent"
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
+    SEARCH_KEYS_HEADER_NAME = "Search-Keys"
 
     def __init__(self, service_endpoint, refresh_token):
         # debug_requests_on()
@@ -231,6 +237,19 @@ class _RestClient:
             else:
                 raise e
 
+    @staticmethod
+    def meaning_type_by_name(name: str, metadata: FileMetadata) -> Optional[FileColumnMeaningType]:
+        for c in metadata.columns:
+            if c.name == name:
+                return c.meaningType
+        return None
+
+    @staticmethod
+    def search_keys_meaning_types(metadata: FileMetadata) -> List[str]:
+        search_key_names = {key for keys in metadata.searchKeys for key in keys}
+        meaning_types = [_RestClient.meaning_type_by_name(name, metadata) for name in search_key_names]
+        return [meaning_type.value for meaning_type in meaning_types if meaning_type is not None]
+
     def initial_search_v2(
         self,
         trace_id: str,
@@ -255,8 +274,11 @@ class _RestClient:
                         "application/json",
                     )
                 files["tracking"] = ("tracking.json", dumps(get_track_metrics()).encode(), "application/json")
+                additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
 
-                return self._send_post_file_req_v2(api_path, files, trace_id=trace_id)
+                return self._send_post_file_req_v2(
+                    api_path, files, trace_id=trace_id, additional_headers=additional_headers
+                )
 
         response = self._with_unauth_retry(lambda: open_and_send())
         return SearchTaskResponse(response)
@@ -283,7 +305,12 @@ class _RestClient:
         }
         if search_customization is not None:
             files["customization"] = search_customization.json(exclude_none=True).encode()
-        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id))
+        additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
+        response = self._with_unauth_retry(
+            lambda: self._send_post_file_req_v2(
+                api_path, files, trace_id=trace_id, additional_headers=additional_headers
+            )
+        )
         return SearchTaskResponse(response)
 
     def validation_search_v2(
@@ -312,7 +339,11 @@ class _RestClient:
                     )
                 files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
 
-                return self._send_post_file_req_v2(api_path, files, trace_id=trace_id)
+                additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
+
+                return self._send_post_file_req_v2(
+                    api_path, files, trace_id=trace_id, additional_headers=additional_headers
+                )
 
         response = self._with_unauth_retry(lambda: open_and_send())
         return SearchTaskResponse(response)
@@ -333,7 +364,12 @@ class _RestClient:
         }
         if search_customization is not None:
             files["customization"] = search_customization.json(exclude_none=True).encode()
-        response = self._with_unauth_retry(lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id))
+        additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
+        response = self._with_unauth_retry(
+            lambda: self._send_post_file_req_v2(
+                api_path, files, trace_id=trace_id, additional_headers=additional_headers
+            )
+        )
         return SearchTaskResponse(response)
 
     def search_task_summary_v2(self, trace_id: str, search_task_id: str) -> SearchTaskSummary:
@@ -454,12 +490,14 @@ class _RestClient:
         else:
             return response.text
 
-    def _send_post_file_req_v2(self, api_path, files, data=None, trace_id: Optional[str] = None):
+    def _send_post_file_req_v2(
+        self, api_path, files, data=None, trace_id: Optional[str] = None, additional_headers: Dict[str, str] = {}
+    ):
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
             files=files,
-            headers=self._get_headers(trace_id=trace_id),
+            headers=self._get_headers(trace_id=trace_id, additional_headers=additional_headers),
         )
 
         if response.status_code >= 400:
@@ -467,7 +505,12 @@ class _RestClient:
 
         return response.json()
 
-    def _get_headers(self, content_type: Optional[str] = None, trace_id: Optional[str] = None):
+    def _get_headers(
+        self,
+        content_type: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        additional_headers: Dict[str, str] = {},
+    ):
         headers = {
             self.USER_AGENT_HEADER_NAME: self.USER_AGENT_HEADER_VALUE,
             self.ACCESS_TOKEN_HEADER_NAME: "Bearer " + self._get_access_token(),
@@ -476,6 +519,8 @@ class _RestClient:
             headers[self.CONTENT_TYPE_HEADER_NAME] = content_type
         if trace_id:
             headers[self.TRACE_ID_HEADER_NAME] = trace_id
+        for header_key, header_value in additional_headers.items():
+            headers[header_key] = header_value
         return headers
 
     @staticmethod
