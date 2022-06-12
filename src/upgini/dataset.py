@@ -577,8 +577,8 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
         if removed_features:
             msg = (
-                f"Columns {removed_features} has high cardinality (more than 90% uniques and string or integer type) "
-                "and will be droped from tds"
+                f"Columns {removed_features} has high cardinality (>90% unique values)"
+                "and has been droped from X"
             )
             print(msg)
             logging.warning(msg)
