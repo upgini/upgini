@@ -544,7 +544,10 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = f"Columns {removed_features} is a datetime or period type but not used as a search key and has been droped from X"
+            msg = (
+                f"Columns {removed_features} is a datetime or period type "
+                "but not used as a search key and has been droped from X"
+            )
             print(msg)
             logging.warning(msg)
 

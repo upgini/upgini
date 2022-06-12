@@ -356,7 +356,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator=None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        trace_id: str = str(uuid.uuid4()),
+        trace_id: Optional[str] = None,
     ) -> pd.DataFrame:
         """Calculate metrics
 
@@ -386,6 +386,7 @@ class FeaturesEnricher(TransformerMixin):
             Maximum count of selected most important features. By default it is unlimited
         """
 
+        trace_id = trace_id or str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
                 if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
