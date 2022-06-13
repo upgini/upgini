@@ -29,9 +29,12 @@ def get_version(package, url_pattern=URL_PATTERN):
 
 
 def validate_version():
-    current_version = parse(__version__)
-    latest_version = get_version("upgini")
-    if latest_version != current_version:
-        msg = f"You use {current_version} version, but latest is {latest_version}"
-        logging.warning(msg)
-        print("WARNING: " + msg)
+    try:
+        current_version = parse(__version__)
+        latest_version = get_version("upgini")
+        if latest_version != current_version:
+            msg = f"You use {current_version} version, but latest is {latest_version}"
+            logging.warning(msg)
+            print("WARNING: " + msg)
+    except Exception as e:
+        logging.exception(f"Failed to validate verion: {e}")

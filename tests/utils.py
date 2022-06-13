@@ -8,6 +8,7 @@ def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.get("https://ident.me", content="1.1.1.1".encode())
     requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
+    requests_mock.get("https://pypi.python.org/pypi/upgini/json", json={"releases": {"1.0.0": [{}]}})
 
 
 def random_id() -> str:
