@@ -30,6 +30,7 @@ from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.format import Format
 from upgini.utils.target_utils import define_task
+from upgini.version_validator import validate_version
 
 
 class FeaturesEnricher(TransformerMixin):
@@ -89,6 +90,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         init_logging(endpoint, api_key)
+        validate_version()
         self.search_keys = search_keys
         self.country_code = country_code
         self.__validate_search_keys(search_keys, api_key, search_id)
