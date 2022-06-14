@@ -72,7 +72,7 @@ We have [two types of data sources](https://upgini.com/#data_sources) with pre-c
 Total: **239 countries** and **up to 41 years** of history
 |Data scource|Countries|History, years|
 |--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |12|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |22|
 |International holidays & events, workweek calendar| 232 |22|
 |Consumer Confidence index| 44 |22|
 |World economic indicators|191 |41|
