@@ -51,6 +51,7 @@ class Dataset(pd.DataFrame):
     MIN_TARGET_CLASS_COUNT = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 1114992000000  # 2005-05-02
+    MAX_FEATURES_COUNT = 160
 
     _metadata = [
         "dataset_name",
@@ -586,6 +587,12 @@ class Dataset(pd.DataFrame):
             print(msg)
             logging.warning(msg)
 
+    def __validate_features_count(self):
+        if len(self.__features()) > self.MAX_FEATURES_COUNT:
+            msg = f"Maximum count of features is {self.MAX_FEATURES_COUNT}"
+            logging.error(msg)
+            raise Exception(msg)
+
     def __convert_features_types(self):
         # logging.info("Convert features to supported data types")
 
@@ -740,6 +747,8 @@ class Dataset(pd.DataFrame):
         self.__remove_empty_and_constant_features()
 
         self.__remove_high_cardinality_features()
+
+        self.__validate_features_count()
 
         self.__validate_too_long_string_values()
 
