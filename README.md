@@ -143,38 +143,39 @@ Our team works hard to introduce new search key types, currently we support:
   <tr>
     <th> Search Key<br/>Meaning Type </th>
     <th> Description </th>
-    <th> Allowed pandas dtypes </th>
+    <th> Allowed pandas dtypes (python types) </th>
     <th> Example </th>
   </tr>
   <tr>
     <td> SearchKey.EMAIL </td>
     <td> e-mail </td>
-    <td> <tt>object</tt> </td>
+    <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>support@upgini.com </tt> </td>
   </tr>
   <tr>
     <td> SearchKey.HEM </td>
     <td>  <tt>sha256(lowercase(email)) </tt> </td>
-    <td> <tt>object</tt> </td>
+    <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>0e2dfefcddc929933dcec9a5c7db7b172482814e63c80b8460b36a791384e955</tt> </td>
   </tr>
   <tr>
     <td> SearchKey.IP </td>
     <td> IP address (version 4) </td>
-    <td> <tt>object</tt> </td>
+    <td> <tt>object(str, ipaddress.IPv4Address)</tt> <br/> <tt>string</tt> <br/> <tt>int64</tt> </td>
     <td> <tt>192.168.0.1 </tt> </td>
   </tr>
   <tr>
     <td> SearchKey.PHONE </td>
     <td> phone number, <a href="https://en.wikipedia.org/wiki/E.164">E.164 standard</a> </td>
-    <td> <tt>object</tt> <br/> <tt>int64</tt> <br/> <tt>float64</tt> </td>
+    <td> <tt>object(str)</tt> <br/> <tt>string</tt> <br/> <tt>int64</tt> <br/> <tt>float64</tt> </td>
     <td> <tt>443451925138 </tt> </td>
   </tr>
   <tr>
     <td> SearchKey.DATE </td>
     <td> date </td>
     <td> 
-      <tt>object</tt> <br/> 
+      <tt>object(str)</tt> <br/> 
+      <tt>string</tt> <br/>
       <tt>datetime64[ns]</tt> <br/>
       <tt>period[D]</tt> <br/>
     </td>
@@ -187,7 +188,8 @@ Our team works hard to introduce new search key types, currently we support:
     <td> SearchKey.DATETIME </td>
     <td> datetime </td>
     <td> 
-      <tt>object</tt> <br/> 
+      <tt>object(str)</tt> <br/> 
+      <tt>string</tt> <br/>
       <tt>datetime64[ns]</tt> <br/>
       <tt>period[D]</tt> <br/>
     </td>
@@ -196,21 +198,24 @@ Our team works hard to introduce new search key types, currently we support:
   <tr>
     <td> SearchKey.COUNTRY </td>
     <td> <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes">Country code</a> </td>
-    <td> <tt>object</tt> </td>
+    <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>GB </tt> <br/> <tt>US </tt> <br/> <tt>IN </tt> </td>
   </tr> 
   <tr>
     <td> SearchKey.POSTAL_CODE </td>
     <td> Postal code a.k.a. ZIP code. Could be used only with SearchKey.COUNTRY  </td>
-    <td> <tt>object</tt> </td>
+    <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>21174 </tt> <br/> <tt>061107 </tt> <br/> <tt>SE-999-99 </tt> </td>
   </tr>
 </table>
 
-For the meaning types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with dtype <tt>object</tt> you have to clarify date/datetime format by passing <tt>date_format</tt> parameter to `FeaturesEnricher`. For example:
+For the meaning types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with dtypes <tt>object</tt> or <tt>string</tt> you have to clarify date/datetime format by passing <tt>date_format</tt> parameter to `FeaturesEnricher`. For example:
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE}, date_format="%Y-%d-%m")
+enricher = FeaturesEnricher(
+	search_keys={"subscription_activation_date": SearchKey.DATE}, 
+	date_format="%Y-%d-%m"
+)
 ```
 
 #### ⚠️ Requirements for search initialization dataset  
