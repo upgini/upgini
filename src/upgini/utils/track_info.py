@@ -28,7 +28,7 @@ def _check_installed(package):
     return loc["result"]
 
 
-def _env_contains(envs):
+def _env_contains(envs) -> bool:
     return set(envs).issubset(set(os.environ.keys()))
 
 
@@ -41,16 +41,6 @@ def _get_execution_ide() -> str:
         return "binder"
     else:
         return "other"
-
-
-def _get_client_uuid() -> str:
-    client_uuid = os.environ.get("UPGINI_UUID")
-    if client_uuid:
-        return client_uuid
-    else:
-        client_uuid = str(uuid4())
-        os.environ["UPGINI_UUID"] = client_uuid
-        return client_uuid
 
 
 @lru_cache()
