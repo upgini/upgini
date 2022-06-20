@@ -91,11 +91,15 @@ def get_track_metrics() -> dict:
             track["err"] = str(e)
     elif track["ide"] == "binder":
         try:
-            track["ip"] = os.environ["CLIENT_IP"]
+            if "CLIENT_IP" in os.environ.keys():
+                track["ip"] = os.environ["CLIENT_IP"]
+                track["visitorId"] = sha256(os.environ["CLIENT_IP"].encode()).hexdigest()
+        except Exception as e:
+            track["err"] = str(e)
+    elif track["ide"] == "kaggle":
+        try:
             if "KAGGLE_USER_SECRETS_TOKEN" in os.environ.keys():
                 track["visitorId"] = sha256(os.environ["KAGGLE_USER_SECRETS_TOKEN"].encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
-    elif track["ide"] == "kaggle":
-        pass
     return track
