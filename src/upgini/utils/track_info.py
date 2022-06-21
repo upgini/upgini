@@ -1,10 +1,11 @@
-from functools import lru_cache
 import os
 import sys
+from functools import lru_cache
 from getpass import getuser
-from uuid import uuid4
-from requests import get
+from hashlib import sha256
+from uuid import getnode, uuid4
 
+from requests import get
 
 _ide_env_variables = {
     "colab": ["GCS_READ_CACHE_BLOCK_SIZE_MB"],
@@ -27,7 +28,7 @@ def _check_installed(package):
     return loc["result"]
 
 
-def _env_contains(envs):
+def _env_contains(envs) -> bool:
     return set(envs).issubset(set(os.environ.keys()))
 
 
@@ -42,16 +43,6 @@ def _get_execution_ide() -> str:
         return "other"
 
 
-def _get_client_uuid() -> str:
-    client_uuid = os.environ.get("UPGINI_UUID")
-    if client_uuid:
-        return client_uuid
-    else:
-        client_uuid = str(uuid4())
-        os.environ["UPGINI_UUID"] = client_uuid
-        return client_uuid
-
-
 @lru_cache()
 def get_track_metrics() -> dict:
     # default values
@@ -59,32 +50,46 @@ def get_track_metrics() -> dict:
     ident_res = "https://api.ipify.org"
     try:
         track["ip"] = get(ident_res).text
+        track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
     except Exception as e:
         track["err"] = str(e)
     # get real info depending on ide
     if track["ide"] == "colab":
         try:
-            from IPython.display import display, Javascript
             from google.colab import output  # type: ignore
+            from IPython.display import Javascript, display
 
             display(
                 Javascript(
                     f"""
                         window.clientIP =
-                        fetch("{ident_res}")
-                        .then(response => response.text())
-                        .then(data => data);
+                            fetch("{ident_res}")
+                            .then(response => response.text())
+                            .then(data => data);
+                        const fpPromise = import('https://openfpcdn.io/fingerprintjs/v3')
+                            .then(FingerprintJS => FingerprintJS.load())
+                        window.visitorId = 
+                            fpPromise
+                            .then(fp => fp.get())
+                            .then(result => result.visitorId)
                     """
                 )
             )
             track["ip"] = output.eval_js("window.clientIP")
+            track["visitorId"] = output.eval_js("window.visitorId")
         except Exception as e:
             track["err"] = str(e)
     elif track["ide"] == "binder":
         try:
-            track["ip"] = os.environ["CLIENT_IP"]
+            if "CLIENT_IP" in os.environ.keys():
+                track["ip"] = os.environ["CLIENT_IP"]
+                track["visitorId"] = sha256(os.environ["CLIENT_IP"].encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
     elif track["ide"] == "kaggle":
-        pass
+        try:
+            if "KAGGLE_USER_SECRETS_TOKEN" in os.environ.keys():
+                track["visitorId"] = sha256(os.environ["KAGGLE_USER_SECRETS_TOKEN"].encode()).hexdigest()
+        except Exception as e:
+            track["err"] = str(e)
     return track
