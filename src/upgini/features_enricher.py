@@ -135,6 +135,7 @@ class FeaturesEnricher(TransformerMixin):
         self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
         self.enriched_X: Optional[pd.DataFrame] = None
         self.enriched_eval_set: Optional[pd.DataFrame] = None
+        self.country_added = False
 
     def fit(
         self,
@@ -211,6 +212,9 @@ class FeaturesEnricher(TransformerMixin):
             except Exception as e:
                 logging.exception("Failed inner fit")
                 raise e
+            finally:
+                if self.country_added and COUNTRY in self.search_keys.keys():
+                    del self.search_keys[COUNTRY]
 
     def fit_transform(
         self,
@@ -293,6 +297,9 @@ class FeaturesEnricher(TransformerMixin):
             except Exception as e:
                 logging.exception("Failed in inner_fit")
                 raise e
+            finally:
+                if self.country_added and COUNTRY in self.search_keys.keys():
+                    del self.search_keys[COUNTRY]
 
             return self.transform(
                 X, keep_input=keep_input, importance_threshold=importance_threshold, max_features=max_features
@@ -342,6 +349,9 @@ class FeaturesEnricher(TransformerMixin):
             except Exception as e:
                 logging.exception("Failed to inner transform")
                 raise e
+            finally:
+                if self.country_added and COUNTRY in self.search_keys.keys():
+                    del self.search_keys[COUNTRY]
 
             if keep_input:
                 return result
@@ -535,7 +545,7 @@ class FeaturesEnricher(TransformerMixin):
 
             df = X.copy()
             df = df.reset_index(drop=True)
-            df, is_country_added = self.__add_country_code(df)
+            df = self.__add_country_code(df)
 
             meaning_types = {col: key.value for col, key in self.search_keys.items()}
             search_keys = self.__using_search_keys()
@@ -580,9 +590,6 @@ class FeaturesEnricher(TransformerMixin):
                 result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
 
             filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
-
-            if is_country_added:
-                del self.search_keys[COUNTRY]
 
             return result[filtered_columns]
 
@@ -699,7 +706,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
 
-        df, is_country_added = self.__add_country_code(df)
+        df = self.__add_country_code(df)
 
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.search_keys.keys())
         meaning_types = {
@@ -758,9 +765,6 @@ class FeaturesEnricher(TransformerMixin):
 
         filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
 
-        if is_country_added:
-            del self.search_keys[COUNTRY]
-
         return self.enriched_X[filtered_columns]
 
     def __using_search_keys(self) -> Dict[str, SearchKey]:
@@ -797,14 +801,13 @@ class FeaturesEnricher(TransformerMixin):
                     logging.error(msg)
                     raise Exception(msg)
 
-    def __add_country_code(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, bool]:
+    def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
             logging.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
-            return df, True
-        else:
-            return df, False
+            self.country_added = True
+        return df
 
     def __enrich(
         self,
