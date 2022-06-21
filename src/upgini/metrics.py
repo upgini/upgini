@@ -4,7 +4,11 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-from lightgbm import LGBMClassifier, LGBMRegressor
+try:
+    from lightgbm import LGBMClassifier, LGBMRegressor
+except ModuleNotFoundError:
+    print("WARNING: Failed to import LightGBM. Some metrics will not be available")
+
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, get_scorer, make_scorer
@@ -117,15 +121,19 @@ class EstimatorWrapper:
                 raise Exception(f"Unsupported type of target: {target_type}")
         else:
             kwargs["estimator"] = estimator
-            if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
-                estimator = CatBoostWrapper(**kwargs)
-            elif isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
-                estimator = LightGBMWrapper(**kwargs)
-            else:
-                logging.warning(
-                    f"Unexpected estimator is used for metrics: {estimator}. "
-                    "Default strategy for category features will be used"
-                )
+            try:
+                if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
+                    estimator = CatBoostWrapper(**kwargs)
+                elif isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
+                    estimator = LightGBMWrapper(**kwargs)
+                else:
+                    logging.warning(
+                        f"Unexpected estimator is used for metrics: {estimator}. "
+                        "Default strategy for category features will be used"
+                    )
+                    estimator = OtherEstimatorWrapper(**kwargs)
+            except Exception as e:
+                logging.exception(f"Failed to instantiate wrapper. Default strategy will be used: {e}")
                 estimator = OtherEstimatorWrapper(**kwargs)
         return estimator
 
@@ -160,7 +168,7 @@ class CatBoostWrapper(EstimatorWrapper):
 class LightGBMWrapper(EstimatorWrapper):
     def __init__(
         self,
-        estimator: Union[LGBMClassifier, LGBMRegressor],
+        estimator,
         scorer: Callable,
         metric_name: str,
         multiplier: int,

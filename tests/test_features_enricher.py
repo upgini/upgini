@@ -110,6 +110,14 @@ def test_features_enricher(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 4)
 
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
+
     metrics = enricher.calculate_metrics(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
