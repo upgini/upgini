@@ -13,6 +13,8 @@ def define_task(y: pd.Series, silent: bool = False) -> ModelTaskType:
         target = target.loc[np.isfinite(target)]  # type: ignore
     else:
         target = target.loc[target != ""]
+    if len(target) == 0:
+        raise ValueError("Target is empty in all rows")
     target_items = target.nunique()
     target_ratio = target_items / len(target)
     if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
@@ -21,7 +23,7 @@ def define_task(y: pd.Series, silent: bool = False) -> ModelTaskType:
         if is_numeric_dtype(target):
             task = ModelTaskType.BINARY
         else:
-            raise ValueError("Binary target should be numerical.")
+            raise ValueError("Binary target should be numerical")
     else:
         task = ModelTaskType.MULTICLASS
     logging.info(f"Detected task type: {task}")

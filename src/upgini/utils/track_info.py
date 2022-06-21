@@ -3,7 +3,7 @@ import sys
 from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
-from uuid import getnode, uuid4
+from uuid import getnode
 
 from requests import get
 
@@ -68,7 +68,7 @@ def get_track_metrics() -> dict:
                             .then(data => data);
                         const fpPromise = import('https://openfpcdn.io/fingerprintjs/v3')
                             .then(FingerprintJS => FingerprintJS.load())
-                        window.visitorId = 
+                        window.visitorId =
                             fpPromise
                             .then(fp => fp.get())
                             .then(result => result.visitorId)

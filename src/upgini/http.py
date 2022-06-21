@@ -528,7 +528,6 @@ class _RestClient:
         return {"columns": [x.to_json() for x in update_columns]}
 
 
-@lru_cache()
 def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
     if backend_url is not None:
         url = backend_url
@@ -545,7 +544,12 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
     else:
         token = os.environ[UPGINI_API_KEY]
 
-    return _RestClient(url, token)
+    return _get_rest_client(url, token)
+
+
+@lru_cache()
+def _get_rest_client(backend_url: str, api_token: str) -> _RestClient:
+    return _RestClient(backend_url, api_token)
 
 
 class BackendLogHandler(logging.Handler):
