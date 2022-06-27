@@ -1,5 +1,6 @@
-<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning</h2>
-<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community shared data sources and enriches your training dataset with relevant external features</b> </p>
+<!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning </h2> -->
+<h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> 
+<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community shared data sources and enriches your training dataset with only the relevant features</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
@@ -19,7 +20,7 @@
 [![Gitter Сommunity](https://badges.gitter.im/upgini/community.svg)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 ## ❔ Overview
 
-**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only relevant features that improve the prediction power of your ML model are returned.  
+**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
 We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 **Mission:** Democratize access to data sources for data science community
@@ -63,6 +64,11 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 * The goal is **saving time on feature search and engineering**. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 * Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
+
+### 4. [How to improve accuracy of Multivariate Time Series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
+
+* The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [RMSLE](https://www.kaggle.com/code/carlmcbrideellis/store-sales-using-the-average-of-the-last-16-days#Note-regarding-calculating-the-average). 
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
