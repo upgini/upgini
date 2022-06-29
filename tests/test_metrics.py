@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import pytest
 from catboost import CatBoostClassifier
-from lightgbm import LGBMClassifier
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import get_scorer
@@ -359,6 +358,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     assert enricher.enriched_eval_set is not None
     assert len(enricher.enriched_eval_set) == 500
 
+    from lightgbm import LGBMClassifier  # type: ignore
     estimator = LGBMClassifier(random_seed=42)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
     print(metrics_df)

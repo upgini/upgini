@@ -314,9 +314,11 @@ class SearchTask:
 
     def initial_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_initial_search()
-        return pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE")).rename(
-            columns={"value": "hit_rate"}, inplace=False
+        result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
+        result.rename(
+            columns={"value": "hit_rate"}, inplace=True
         )
+        return result
 
     def initial_metadata(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_initial_search()
@@ -560,9 +562,11 @@ class SearchTask:
 
     def validation_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_validation_search()
-        return pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE")).rename(
-            columns={"value": "hit_rate"}, inplace=False
+        result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
+        result.rename(
+            columns={"value": "hit_rate"}, inplace=True
         )
+        return result
 
     def _validation_min_hit_rate(self) -> float:
         provider_summaries = self._check_finished_validation_search()
