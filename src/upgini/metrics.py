@@ -154,7 +154,7 @@ class CatBoostWrapper(EstimatorWrapper):
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features_idx, cat_features = _get_cat_features(X)
-        X[cat_features] = X[cat_features].astype("string").fillna("")
+        X[cat_features] = X[cat_features].astype(str).fillna("")
         unique_cat_features_idx = []
         for idx, name in zip(cat_features_idx, cat_features):
             # Remove constant categorical features
@@ -181,7 +181,7 @@ class LightGBMWrapper(EstimatorWrapper):
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         _, cat_features = _get_cat_features(X)
-        X[cat_features] = X[cat_features].astype("string").fillna("")
+        X[cat_features] = X[cat_features].astype(str).fillna("")
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
 
@@ -204,7 +204,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         _, cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in cat_features]
         X[num_features] = X[num_features].fillna(-999)
-        X[cat_features] = X[cat_features].astype("string").fillna("")
+        X[cat_features] = X[cat_features].astype(str).fillna("")
         # TODO use one-hot encoding if cardinality is less 50
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
