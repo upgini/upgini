@@ -19,7 +19,7 @@ from setuptools import find_packages, setup
 here = Path(__file__).parent.resolve()
 setup(
     name="upgini",
-    version="0.10.0a127",
+    version="1.0.0",
     description="Low-code feature search and enrichment library for machine learning",
     long_description=(here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
@@ -27,7 +27,7 @@ setup(
     author="Upgini Developers",
     author_email="madewithlove@upgini.com",
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Customer Service",
         "Intended Audience :: Developers",
         "Intended Audience :: Financial and Insurance Industry",
