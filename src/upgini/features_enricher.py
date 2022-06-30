@@ -830,6 +830,7 @@ class FeaturesEnricher(TransformerMixin):
             left_on=SYSTEM_RECORD_ID,
             right_on=SYSTEM_RECORD_ID,
             how="left",
+            # suffixes=("_ads", "")
         )
 
         if EVAL_SET_INDEX in result.columns:
@@ -894,6 +895,10 @@ class FeaturesEnricher(TransformerMixin):
             return []
 
         filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
+        # temporary workaround. generate this column later
+        filtered_importances = [
+                (name, importance) for name, importance in filtered_importances if name != "email_domain"
+            ]
         if importance_threshold is not None:
             filtered_importances = [
                 (name, importance) for name, importance in filtered_importances if importance > importance_threshold
@@ -1032,7 +1037,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold = self.__validate_importance_threshold(importance_threshold)
         max_features = self.__validate_max_features(max_features)
 
-        exclude_columns = self.search_keys.keys() if only_features else []
+        exclude_columns = list(self.search_keys.keys()) if only_features else []
 
         return [col for col in x_columns if col not in exclude_columns] + self.__filtered_importance_names(
             importance_threshold, max_features

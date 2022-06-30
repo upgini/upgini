@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+import numpy as np
 import pytest
 from catboost import CatBoostClassifier
 from requests_mock.mocker import Mocker
@@ -71,6 +72,8 @@ def test_default_metric_binary(requests_mock: Mocker):
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
+    df["feature_2_cat"] = np.random.randint(0, 10, len(df))
+    df["feature_2_cat"] = df["feature_2_cat"].astype(str).astype("category")
     df_train = df[0:500]
     X = df_train[["phone", "feature1"]]
     y = df_train["target"]
