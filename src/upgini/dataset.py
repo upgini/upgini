@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from imblearn.under_sampling import RandomUnderSampler
+from upgini.sampler.random_under_sampler import RandomUnderSampler
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import (
