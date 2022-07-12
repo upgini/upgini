@@ -67,7 +67,8 @@ class EstimatorWrapper:
             msg = f"Unsupported type of y: {type(y)}"
             raise Exception(msg)
 
-        joined[y.name] = y
+        joined = pd.concat([joined, y.to_frame(name=y.name)], axis=1)
+        # joined[y.name] = y.to_frame(name=y.name)
         joined = joined[joined[y.name].notna()]
         X = joined.drop(columns=y.name)
         y = joined[y.name]  # type: ignore
