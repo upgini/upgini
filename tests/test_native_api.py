@@ -5,7 +5,6 @@ import pandas as pd
 from upgini import Dataset, FileColumnMeaningType
 from upgini.http import UPGINI_API_KEY, UPGINI_URL
 from upgini.metadata import ModelTaskType
-from upgini.http import init_logging
 
 
 def test_initial_and_validation_search(requests_mock):
@@ -18,8 +17,6 @@ def test_initial_and_validation_search(requests_mock):
     requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
 
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
-
-    init_logging(url)
 
     requests_mock.post(
         url + "/public/api/v2/search/initial",

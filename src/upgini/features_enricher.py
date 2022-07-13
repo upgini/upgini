@@ -1,5 +1,4 @@
 import itertools
-import logging
 import os
 import uuid
 from copy import deepcopy
@@ -14,7 +13,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
-from upgini.http import UPGINI_API_KEY, init_logging
+from upgini.http import UPGINI_API_KEY, LoggerFactory
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
@@ -89,7 +88,7 @@ class FeaturesEnricher(TransformerMixin):
         random_state: int = 42,
         cv: Optional[CVType] = None,
     ):
-        init_logging(endpoint, api_key)
+        self.logger = LoggerFactory().get_logger(endpoint, api_key)
         validate_version()
         self.search_keys = search_keys
         self.country_code = country_code
@@ -115,9 +114,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.__prepare_feature_importances(trace_id, x_columns)
                     # TODO validate search_keys with search_keys from file_metadata
                     print("Search found. Now you can use transform")
-                    logging.info(f"FeaturesEnricher successfully initialized with searchTaskId: {search_id}")
+                    self.logger.info(f"FeaturesEnricher successfully initialized with searchTaskId: {search_id}")
                 except Exception as e:
-                    logging.exception("Failed to check existing search")
+                    self.logger.exception("Failed to check existing search")
                     raise e
 
         self.runtime_parameters = runtime_parameters
@@ -187,9 +186,9 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
-            logging.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
+            self.logger.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
             if eval_set:
-                logging.info(
+                self.logger.info(
                     [
                         f"Eval {i} X shape: {eval_X.shape}, y shape: {len(eval_y)}"
                         for i, (eval_X, eval_y) in enumerate(eval_set)
@@ -208,9 +207,9 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                 )
-                logging.info("Fit finished successfully")
+                self.logger.info("Fit finished successfully")
             except Exception as e:
-                logging.exception("Failed inner fit")
+                self.logger.exception("Failed inner fit")
                 raise e
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
@@ -273,9 +272,9 @@ class FeaturesEnricher(TransformerMixin):
 
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
-            logging.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
+            self.logger.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
             if eval_set:
-                logging.info(
+                self.logger.info(
                     [
                         f"Eval {i} X shape: {eval_X.shape}, y shape: {len(eval_y)}"
                         for i, (eval_X, eval_y) in enumerate(eval_set)
@@ -293,9 +292,9 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                 )
-                logging.info("Fit_transform finished successfully")
+                self.logger.info("Fit_transform finished successfully")
             except Exception as e:
-                logging.exception("Failed in inner_fit")
+                self.logger.exception("Failed in inner_fit")
                 raise e
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
@@ -340,14 +339,14 @@ class FeaturesEnricher(TransformerMixin):
 
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
-            logging.info(f"Start transform. X shape: {X.shape}")
+            self.logger.info(f"Start transform. X shape: {X.shape}")
             try:
                 result = self.__inner_transform(
                     trace_id, X, importance_threshold=importance_threshold, max_features=max_features
                 )
-                logging.info("Transform finished successfully")
+                self.logger.info("Transform finished successfully")
             except Exception as e:
-                logging.exception("Failed to inner transform")
+                self.logger.exception("Failed to inner transform")
                 raise e
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
@@ -415,7 +414,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 # TODO check if no features (client or ads)
 
-                logging.info("Start calculating metrics")
+                self.logger.info("Start calculating metrics")
                 print("Start calculating metrics")
 
                 with Spinner():
@@ -434,12 +433,12 @@ class FeaturesEnricher(TransformerMixin):
                     etalon_metric = None
                     if fitting_X.shape[1] > 0:
                         etalon_metric = EstimatorWrapper.create(
-                            estimator, model_task_type, _cv, scoring
+                            estimator, self.logger, model_task_type, _cv, scoring
                         ).cross_val_predict(fitting_X, y)
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
-                    wrapper = EstimatorWrapper.create(estimator, model_task_type, _cv, scoring)
+                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
                     enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                     metric = wrapper.metric_name
 
@@ -464,9 +463,9 @@ class FeaturesEnricher(TransformerMixin):
                         # Fit models
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
-                            etalon_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                            etalon_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
                             etalon_model.fit(fitting_X, y)
-                        enriched_model = EstimatorWrapper.create(deepcopy(estimator), model_task_type, _cv, scoring)
+                        enriched_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
                         enriched_model.fit(fitting_enriched_X, y)
 
                         for idx, eval_pair in enumerate(eval_set):
@@ -502,10 +501,10 @@ class FeaturesEnricher(TransformerMixin):
                                     "uplift": eval_uplift,
                                 }
                             )
-                    logging.info("Calculate metrics finished successfully")
+                    self.logger.info("Calculate metrics finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except Exception as e:
-                logging.exception("Failed to calculate metrics")
+                self.logger.exception("Failed to calculate metrics")
                 raise e
 
     def get_search_id(self) -> Optional[str]:
@@ -516,7 +515,7 @@ class FeaturesEnricher(TransformerMixin):
         """Returns pandas dataframe with importances for each feature"""
         if self._search_task is None or self._search_task.summary is None:
             msg = "Run fit or pass search_id before get features info."
-            logging.warning(msg)
+            self.logger.warning(msg)
             raise NotFittedError(msg)
 
         return self.features_info
@@ -533,11 +532,11 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             if self._search_task is None:
                 msg = "`fit` or `fit_transform` should be called before `transform`."
-                logging.error(msg)
+                self.logger.error(msg)
                 raise NotFittedError(msg)
             if not isinstance(X, pd.DataFrame):
                 msg = f"Only pandas.DataFrame supported for X, but {type(X)} was passed."
-                logging.error(msg)
+                self.logger.error(msg)
                 raise TypeError(msg)
 
             self.__prepare_search_keys(X)
@@ -598,33 +597,33 @@ class FeaturesEnricher(TransformerMixin):
     ):
         if len(search_keys) == 0:
             if search_id:
-                logging.error(f"search_id {search_id} provided without search_keys")
+                self.logger.error(f"search_id {search_id} provided without search_keys")
                 raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
             else:
-                logging.error("search_keys not provided")
+                self.logger.error("search_keys not provided")
                 raise ValueError("Key columns should be marked up by search_keys.")
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
             msg = "Date and datetime search keys are presented simultaniously. Select only one of them"
-            logging.error(msg)
+            self.logger.error(msg)
             raise Exception(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
             msg = "Email and HEM search keys are presented simultaniously. Select only one of them"
-            logging.error(msg)
+            self.logger.error(msg)
             raise Exception(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key should be provided if POSTAL_CODE is presented"
-            logging.error(msg)
+            self.logger.error(msg)
             raise Exception(msg)
 
         for key_type in SearchKey.__members__.values():
             if key_type != SearchKey.CUSTOM_KEY and len(list(filter(lambda x: x == key_type, key_types))) > 1:
                 msg = f"Search key {key_type} presented multiple times"
-                logging.error(msg)
+                self.logger.error(msg)
                 raise Exception(msg)
 
         api_key = api_key or os.environ.get(UPGINI_API_KEY)
@@ -635,7 +634,7 @@ class FeaturesEnricher(TransformerMixin):
                 "Only person-level search keys provided."
                 "To run without registration use DATE, COUNTRY and POSTAL_CODE keys"
             )
-            logging.error(msg + f" Provided search keys: {key_types}")
+            self.logger.error(msg + f" Provided search keys: {key_types}")
             raise Exception(msg)
 
     def __inner_fit(
@@ -757,7 +756,7 @@ class FeaturesEnricher(TransformerMixin):
                 df, self._search_task.get_all_initial_raw_features(trace_id), X.index
             )
         except Exception as e:
-            logging.exception("Failed to download features")
+            self.logger.exception("Failed to download features")
             raise e
 
         if calculate_metrics:
@@ -798,12 +797,12 @@ class FeaturesEnricher(TransformerMixin):
                         f"Date column `{column}` has string type, but constructor argument `date_format` is empty.\n"
                         "Please, convert column to datetime type or pass date format implicitly"
                     )
-                    logging.error(msg)
+                    self.logger.error(msg)
                     raise Exception(msg)
 
     def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
-            logging.info(f"Add COUNTRY column with {self.country_code} value")
+            self.logger.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
             self.country_added = True
@@ -816,7 +815,7 @@ class FeaturesEnricher(TransformerMixin):
         original_index: pd.Index,
     ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         if result_features is None:
-            logging.error(f"result features not found by search_task_id: {self.get_search_id()}")
+            self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError("Search engine crashed on this request.")
         result_features = (
             result_features.drop(columns=EVAL_SET_INDEX)
@@ -924,7 +923,7 @@ class FeaturesEnricher(TransformerMixin):
                 valid_search_keys[column_name] = meaning_type
             else:
                 msg = f"Unsupported type of key in search_keys: {type(column_id)}."
-                logging.error(msg)
+                self.logger.error(msg)
                 raise ValueError(msg)
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
@@ -932,12 +931,12 @@ class FeaturesEnricher(TransformerMixin):
                     "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time. "
                     "Define only one"
                 )
-                logging.error(msg)
+                self.logger.error(msg)
                 raise ValueError(msg)
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
                 msg = f"Search key {meaning_type} not available without registration. It will be ignored"
-                logging.warning(msg)
+                self.logger.warning(msg)
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
 
@@ -1011,20 +1010,18 @@ class FeaturesEnricher(TransformerMixin):
                     return True
         return False
 
-    @staticmethod
-    def __validate_importance_threshold(importance_threshold: Optional[float]) -> float:
+    def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
             return float(importance_threshold) if importance_threshold is not None else 0.0
         except ValueError:
-            logging.exception(f"Invalid importance_threshold provided: {importance_threshold}")
+            self.logger.exception(f"Invalid importance_threshold provided: {importance_threshold}")
             raise ValueError("importance_threshold should be float")
 
-    @staticmethod
-    def __validate_max_features(max_features: Optional[int]) -> int:
+    def __validate_max_features(self, max_features: Optional[int]) -> int:
         try:
             return int(max_features) if max_features is not None else 400
         except ValueError:
-            logging.exception(f"Invalid max_features provided: {max_features}")
+            self.logger.exception(f"Invalid max_features provided: {max_features}")
             raise ValueError("max_features should be int")
 
     def __filtered_columns(
