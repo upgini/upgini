@@ -528,21 +528,28 @@ class _RestClient:
         return {"columns": [x.to_json() for x in update_columns]}
 
 
-def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
+def _resolve_backend_url(backend_url: Optional[str]) -> str:
     if backend_url is not None:
-        url = backend_url
-    elif UPGINI_URL not in os.environ:
-        url = "https://search.upgini.com"
+        return backend_url
+    elif UPGINI_URL in os.environ and os.environ[UPGINI_URL]:
+        return os.environ[UPGINI_URL]
     else:
-        url = os.environ[UPGINI_URL]
+        return "https://search.upgini.com"
 
+
+def _resolve_api_token(api_token: Optional[str]) -> str:
     if api_token is not None:
-        token = api_token
-    elif UPGINI_API_KEY not in os.environ:
-        # Demo user api-key
-        token = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
+        return api_token
+    elif UPGINI_API_KEY in os.environ and os.environ[UPGINI_API_KEY]:
+        return os.environ[UPGINI_API_KEY]
     else:
-        token = os.environ[UPGINI_API_KEY]
+        # Demo user api-key
+        return "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
+
+
+def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
+    url = _resolve_backend_url(backend_url)
+    token = _resolve_api_token(api_token)
 
     return _get_rest_client(url, token)
 
@@ -583,21 +590,44 @@ class BackendLogHandler(logging.Handler):
         thread.start()
 
 
-def init_logging(backend_url: Optional[str] = None, api_token: Optional[str] = None):
-    root = logging.getLogger()
-    if root.hasHandlers():
-        if isinstance(root.handlers[0], BackendLogHandler):
-            return
+class LoggerFactory:
+    _instance = None
+    _lock = threading.Lock()
 
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            with cls._lock:
+                # another thread could have created the instance
+                # before we acquired the lock. So check that the
+                # instance is still nonexistent.
+                if not cls._instance:
+                    cls._instance = super(LoggerFactory, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, *args, **kwargs):
+        super(LoggerFactory).__init__(*args, **kwargs)
+        self._loggers: Dict[str, logging.Logger] = {}
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
         root.handlers.clear()
 
-    root.setLevel(logging.INFO)
+    def get_logger(self, backend_url: Optional[str] = None, api_token: Optional[str] = None) -> logging.Logger:
+        url = _resolve_backend_url(backend_url)
+        token = _resolve_api_token(api_token)
+        key = url + token
 
-    rest_client = get_rest_client(backend_url, api_token)
-    datadogHandler = BackendLogHandler(rest_client)
-    jsonFormatter = jsonlogger.JsonFormatter(
-        "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
-        timestamp=True,
-    )
-    datadogHandler.setFormatter(jsonFormatter)
-    root.addHandler(datadogHandler)
+        if key in self._loggers:
+            return self._loggers[key]
+
+        upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
+        rest_client = get_rest_client(backend_url, api_token)
+        datadog_handler = BackendLogHandler(rest_client)
+        json_formatter = jsonlogger.JsonFormatter(
+            "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
+            timestamp=True,
+        )
+        datadog_handler.setFormatter(json_formatter)
+        upgini_logger.addHandler(datadog_handler)
+        self._loggers[key] = upgini_logger
+
+        return upgini_logger

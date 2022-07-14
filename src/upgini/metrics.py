@@ -102,6 +102,7 @@ class EstimatorWrapper:
     @staticmethod
     def create(
         estimator,
+        logger: logging.Logger,
         target_type: ModelTaskType,
         cv: Union[BaseCrossValidator, CVType, None],
         scoring: Union[Callable, str, None] = None,
@@ -126,13 +127,13 @@ class EstimatorWrapper:
                     if isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
                         estimator = LightGBMWrapper(**kwargs)
                     else:
-                        logging.warning(
+                        logger.warning(
                             f"Unexpected estimator is used for metrics: {estimator}. "
                             "Default strategy for category features will be used"
                         )
                         estimator = OtherEstimatorWrapper(**kwargs)
                 except ModuleNotFoundError:
-                    logging.warning(
+                    logger.warning(
                         f"Unexpected estimator is used for metrics: {estimator}. "
                         "Default strategy for category features will be used"
                     )
