@@ -463,9 +463,13 @@ class FeaturesEnricher(TransformerMixin):
                         # Fit models
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
-                            etalon_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
+                            etalon_model = EstimatorWrapper.create(
+                                deepcopy(estimator), self.logger, model_task_type, _cv, scoring
+                            )
                             etalon_model.fit(fitting_X, y)
-                        enriched_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
+                        enriched_model = EstimatorWrapper.create(
+                            deepcopy(estimator), self.logger, model_task_type, _cv, scoring
+                        )
                         enriched_model.fit(fitting_enriched_X, y)
 
                         for idx, eval_pair in enumerate(eval_set):
@@ -896,8 +900,8 @@ class FeaturesEnricher(TransformerMixin):
         filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
         # temporary workaround. generate this column later
         filtered_importances = [
-                (name, importance) for name, importance in filtered_importances if name != "email_domain"
-            ]
+            (name, importance) for name, importance in filtered_importances if name != "email_domain"
+        ]
         if importance_threshold is not None:
             filtered_importances = [
                 (name, importance) for name, importance in filtered_importances if importance > importance_threshold
