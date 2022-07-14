@@ -1,4 +1,3 @@
-import logging
 import os
 import tempfile
 import time
@@ -8,7 +7,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from upgini import dataset
-from upgini.http import ProviderTaskSummary, SearchTaskSummary, get_rest_client
+from upgini.http import LoggerFactory, ProviderTaskSummary, SearchTaskSummary, get_rest_client
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
     FileMetadata,
@@ -43,6 +42,7 @@ class SearchTask:
         self.summary = None
         self.endpoint = endpoint
         self.api_key = api_key
+        self.logger = LoggerFactory().get_logger(endpoint, api_key)
 
     def poll_result(self, trace_id: str, quiet: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
@@ -68,13 +68,13 @@ class SearchTask:
                         trace_id, search_task_id
                     )
                     if self.summary.status in failed_statuses:
-                        logging.error(f"Search {search_task_id} failed with status {self.summary.status}")
+                        self.logger.error(f"Search {search_task_id} failed with status {self.summary.status}")
                         raise RuntimeError("Oh! Server did something wrong, please retry with new search request")
                     if (
                         self.summary.status in submitted_statuses
                         and len(self._get_provider_summaries(self.summary)) == 0
                     ):
-                        logging.error(f"No provider summaries for search {search_task_id}")
+                        self.logger.error(f"No provider summaries for search {search_task_id}")
                         raise RuntimeError(
                             "No datasets found to intersect"
                             "Try with another set of search keys or different time period"
@@ -83,7 +83,7 @@ class SearchTask:
         except KeyboardInterrupt as e:
             print("Search interrupted. Stopping search request")
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
-            logging.warn(f"Search {search_task_id} stopped by user")
+            self.logger.warn(f"Search {search_task_id} stopped by user")
             print("Search request stopped")
             raise e
         print()
@@ -96,10 +96,10 @@ class SearchTask:
         if not has_completed_provider_task:
             error_messages = [self._error_message(x) for x in self._get_provider_summaries(self.summary)]
             if len(error_messages) == 1 and (error_messages[0] is None or error_messages[0].endswith("Internal error")):
-                logging.error(f"Search failed with error: {error_messages[0]}")
+                self.logger.error(f"Search failed with error: {error_messages[0]}")
                 raise RuntimeError("All search tasks in the request have failed")
             else:
-                logging.error(f"Search failed with errors: {','.join(error_messages)}")
+                self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
                 raise RuntimeError("All search tasks in the request have failed: " + ",".join(error_messages) + ".")
 
         return self
@@ -360,7 +360,7 @@ class SearchTask:
                     scores_id = score_block["adsSearchTaskScoresId"]
 
         if scores_id is None:
-            logging.error(f"Initial scores by provider {provider_id} not found")
+            self.logger.error(f"Initial scores by provider {provider_id} not found")
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
@@ -407,7 +407,7 @@ class SearchTask:
                 features_id = feature_block["adsSearchTaskFeaturesId"]
 
         if features_id is None:
-            logging.error(f"Initial features by provider {provider_id} not found")
+            self.logger.error(f"Initial features by provider {provider_id} not found")
             print(f"Provider {provider_id} task wasn't completed in initial search")
             return None
 
@@ -454,7 +454,7 @@ class SearchTask:
                     model_id = model_block["adsSearchTaskTrainedModelId"]
 
         if model_id is None:
-            logging.error(f"Model by provider {provider_id} not found")
+            self.logger.error(f"Model by provider {provider_id} not found")
             print(f"Provider's {provider_id} task wasn't completed in initial search")
             return None
 
@@ -622,7 +622,7 @@ class SearchTask:
                     scores_id = score_block["adsSearchTaskScoresId"]
 
         if scores_id is None:
-            logging.error(f"Validation scores by provider {provider_id} not found")
+            self.logger.error(f"Validation scores by provider {provider_id} not found")
             print("Provider ", provider_id, " not found in validation search")
             return None
 
@@ -658,7 +658,7 @@ class SearchTask:
                 features_id = feature_block["adsSearchTaskFeaturesId"]
 
         if features_id is None:
-            logging.error(f"Validation features by provider {provider_id} not found")
+            self.logger.error(f"Validation features by provider {provider_id} not found")
             print(f"Features for provider {provider_id} not found in validation search")
             return None
 

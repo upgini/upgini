@@ -89,7 +89,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
-        validate_version()
+        validate_version(self.logger)
         self.search_keys = search_keys
         self.country_code = country_code
         self.__validate_search_keys(search_keys, api_key, search_id)
@@ -425,7 +425,7 @@ class FeaturesEnricher(TransformerMixin):
                     fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
                     fitting_enriched_X = self.enriched_X[filtered_columns]
 
-                    model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+                    model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
                     _cv = cv or self.cv
 
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -463,9 +463,13 @@ class FeaturesEnricher(TransformerMixin):
                         # Fit models
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
-                            etalon_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
+                            etalon_model = EstimatorWrapper.create(
+                                deepcopy(estimator), self.logger, model_task_type, _cv, scoring
+                            )
                             etalon_model.fit(fitting_X, y)
-                        enriched_model = EstimatorWrapper.create(deepcopy(estimator), self.logger, model_task_type, _cv, scoring)
+                        enriched_model = EstimatorWrapper.create(
+                            deepcopy(estimator), self.logger, model_task_type, _cv, scoring
+                        )
                         enriched_model.fit(fitting_enriched_X, y)
 
                         for idx, eval_pair in enumerate(eval_set):
@@ -673,7 +677,7 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
+        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
@@ -896,8 +900,8 @@ class FeaturesEnricher(TransformerMixin):
         filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
         # temporary workaround. generate this column later
         filtered_importances = [
-                (name, importance) for name, importance in filtered_importances if name != "email_domain"
-            ]
+            (name, importance) for name, importance in filtered_importances if name != "email_domain"
+        ]
         if importance_threshold is not None:
             filtered_importances = [
                 (name, importance) for name, importance in filtered_importances if importance > importance_threshold
