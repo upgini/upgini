@@ -23,18 +23,18 @@ def get_version(package, url_pattern=URL_PATTERN):
         releases = j.get("releases", [])
         for release in releases:
             ver = parse(release)
-            # if not ver.is_prerelease:  # TODO return after release
-            version = max(version, ver)
+            if not ver.is_prerelease:
+                version = max(version, ver)
     return version
 
 
-def validate_version():
+def validate_version(logger: logging.Logger):
     try:
         current_version = parse(__version__)
         latest_version = get_version("upgini")
         if latest_version != current_version:
             msg = f"You use {current_version} version, but latest is {latest_version}"
-            logging.warning(msg)
+            logger.warning(msg)
             print("WARNING: " + msg)
     except Exception as e:
-        logging.exception(f"Failed to validate verion: {e}")
+        logger.exception(f"Failed to validate verion: {e}")

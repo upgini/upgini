@@ -89,7 +89,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
     ):
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
-        validate_version()
+        validate_version(self.logger)
         self.search_keys = search_keys
         self.country_code = country_code
         self.__validate_search_keys(search_keys, api_key, search_id)
@@ -425,7 +425,7 @@ class FeaturesEnricher(TransformerMixin):
                     fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
                     fitting_enriched_X = self.enriched_X[filtered_columns]
 
-                    model_task_type = self.model_task_type or define_task(pd.Series(y), silent=True)
+                    model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
                     _cv = cv or self.cv
 
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -677,7 +677,7 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True)
 
-        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME])
+        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0

@@ -6,8 +6,7 @@ import logging
 from upgini.metadata import ModelTaskType
 
 
-def define_task(y: pd.Series, silent: bool = False) -> ModelTaskType:
-    # logging.info("Defining task")
+def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> ModelTaskType:
     target = y.dropna()
     if is_numeric_dtype(target):
         target = target.loc[np.isfinite(target)]  # type: ignore
@@ -26,7 +25,7 @@ def define_task(y: pd.Series, silent: bool = False) -> ModelTaskType:
             raise ValueError("Binary target should be numerical")
     else:
         task = ModelTaskType.MULTICLASS
-    logging.info(f"Detected task type: {task}")
+    logger.info(f"Detected task type: {task}")
     if not silent:
         print(f"Detected task type: {task}")
     return task
