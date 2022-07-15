@@ -620,6 +620,7 @@ class LoggerFactory:
             return self._loggers[key]
 
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
+        upgini_logger.handlers.clear()
         rest_client = get_rest_client(backend_url, api_token)
         datadog_handler = BackendLogHandler(rest_client)
         json_formatter = jsonlogger.JsonFormatter(
