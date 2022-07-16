@@ -1,11 +1,12 @@
 import os
+import re
 import sys
 from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
 from uuid import getnode
 
-from requests import get
+from requests import get, post
 
 _ide_env_variables = {
     "colab": ["GCS_READ_CACHE_BLOCK_SIZE_MB"],
@@ -88,8 +89,17 @@ def get_track_metrics() -> dict:
             track["err"] = str(e)
     elif track["ide"] == "kaggle":
         try:
-            if "KAGGLE_USER_SECRETS_TOKEN" in os.environ.keys():
-                track["visitorId"] = sha256(os.environ["KAGGLE_USER_SECRETS_TOKEN"].encode()).hexdigest()
+            url = "https://www.kaggle.com/requests/GetUserSecretByLabelRequest"
+            jwt_token = os.getenv("KAGGLE_USER_SECRETS_TOKEN")
+            headers = {
+                "Content-type": "application/json",
+                "X-Kaggle-Authorization": f"Bearer {jwt_token}",
+            }
+            with post(url, headers=headers, json={"Label": "api-key"}) as resp:
+                err = resp.json()["errors"][0]
+                match = re.search("No user secrets exist for kernel id (\\d+) .*", err)
+                if match:
+                    track["visitorId"] = match.group(1)
         except Exception as e:
             track["err"] = str(e)
     return track
