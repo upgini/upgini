@@ -32,9 +32,9 @@ def validate_version(logger: logging.Logger):
     try:
         current_version = parse(__version__)
         latest_version = get_version("upgini")
-        if latest_version != current_version:
+        if current_version < latest_version:  # type: ignore
             msg = f"You use {current_version} version, but latest is {latest_version}"
             logger.warning(msg)
             print("WARNING: " + msg)
-    except Exception as e:
-        logger.exception(f"Failed to validate verion: {e}")
+    except Exception:
+        logger.exception("Failed to validate version")
