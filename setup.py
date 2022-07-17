@@ -1,9 +1,9 @@
+import sys
 from logging import Formatter
 from pathlib import Path
 
 import requests
 from setuptools import find_packages, setup
-import sys
 
 # To build:
 # python setup.py sdist
@@ -23,7 +23,7 @@ here = Path(__file__).parent.resolve()
 try:
     setup(
         name="upgini",
-        version="1.1.4",
+        version="1.1.5",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -74,8 +74,8 @@ except Exception as e:
         tb = Formatter().formatException(sys.exc_info())
         requests.post(
             url="https://search.upgini.com/private/api/v2/events/send-light",
-            json={"message": f"Failed to setup PyLib: {e}\n{tb}"}
-            )
+            json={"message": f"Failed to setup PyLib: {e}\n{tb}"},
+        )
     except Exception:
         pass
     raise e
