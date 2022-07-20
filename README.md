@@ -7,7 +7,7 @@
     <a href="https://upgini.com/">Upgini.com</a> |
     <a href="https://profile.upgini.com">Sign In</a> |
     <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
-    <a href="https://bit.ly/3RJ4IRI">Slack Community</a>
+    <!-- <a href="https://bit.ly/3RJ4IRI">Slack Community</a> -->
  </p>
 
 [![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
