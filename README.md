@@ -16,7 +16,7 @@
 [![stability-release-candidate](https://img.shields.io/badge/stability-pre--release-br?logo=circleci&logoColor=white)](https://pypi.org/project/upgini/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
-[![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://bit.ly/3RJ4IRI)
+<!-- [![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://bit.ly/3RJ4IRI) -->
 <!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
