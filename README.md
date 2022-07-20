@@ -6,7 +6,7 @@
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
     <a href="https://upgini.com/">Upgini.com</a> |
     <a href="https://profile.upgini.com">Sign In</a> |
-    <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> |
+    <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
     <a href="https://bit.ly/3RJ4IRI">Slack Community</a>
  </p>
 
@@ -17,7 +17,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
 [![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://bit.ly/3RJ4IRI)
-[![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+<!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
 **Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
