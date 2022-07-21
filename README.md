@@ -7,7 +7,7 @@
     <a href="https://upgini.com/">Upgini.com</a> |
     <a href="https://profile.upgini.com">Sign In</a> |
     <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
-    <!-- <a href="https://bit.ly/3RJ4IRI">Slack Community</a> -->
+    <a href="https://4mlg.short.gy/join-upgini-community">Slack Community</a>
  </p>
 
 [![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
@@ -16,7 +16,7 @@
 [![stability-release-candidate](https://img.shields.io/badge/stability-pre--release-br?logo=circleci&logoColor=white)](https://pypi.org/project/upgini/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
-<!-- [![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://bit.ly/3RJ4IRI) -->
+[![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://4mlg.short.gy/join-upgini-community)
 <!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
@@ -544,7 +544,7 @@ upload_user_ads("test", sample_df, {
 ## 🛠 Getting Help & Community
 Please note, that we are still in a beta stage.
 Requests and support, in preferred order  
-[![Claim help in slack](https://img.shields.io/badge/slack-@upgini-orange.svg?style=for-the-badge&logo=slack)](https://bit.ly/3RJ4IRI)
+[![Claim help in slack](https://img.shields.io/badge/slack-@upgini-orange.svg?style=for-the-badge&logo=slack)](https://4mlg.short.gy/join-upgini-community)
 [![Open GitHub issue](https://img.shields.io/badge/open%20issue%20on-github-blue?style=for-the-badge&logo=github)](https://github.com/upgini/upgini/issues)  
 Please try to create bug reports that are:
 - _Reproducible._ Include steps to reproduce the problem.
