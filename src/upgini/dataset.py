@@ -50,7 +50,7 @@ class Dataset(pd.DataFrame):
     MIN_TARGET_CLASS_COUNT = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 1114992000000  # 2005-05-02
-    MAX_FEATURES_COUNT = 160
+    MAX_FEATURES_COUNT = 1100
 
     _metadata = [
         "dataset_name",
