@@ -151,6 +151,8 @@ class LogEvent(BaseModel):
 
 
 class _RestClient:
+    PROD_BACKEND_URL = "https://search.upgini.com"
+
     SERVICE_ROOT = "public/api/v1/"
     SERVICE_ROOT_V2 = "public/api/v2/"
 
@@ -430,15 +432,27 @@ class _RestClient:
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI
-        self._with_unauth_retry(
-            lambda: self._send_post_req(
-                api_path,
-                trace_id=None,
-                json_data=log_event.dict(exclude_none=True),
-                content_type="application/json",
-                result_format="text",
-                silent=True,
+        try:
+            self._with_unauth_retry(
+                lambda: self._send_post_req(
+                    api_path,
+                    trace_id=None,
+                    json_data=log_event.dict(exclude_none=True),
+                    content_type="application/json",
+                    result_format="text",
+                    silent=True,
+                )
             )
+        except Exception:
+            self.send_log_event_unauth(log_event)
+
+    @staticmethod
+    def send_log_event_unauth(log_event: LogEvent):
+        api_path = _RestClient.SEND_LOG_EVENT_URI
+        requests.post(
+            url=urljoin(_RestClient.PROD_BACKEND_URL, api_path),
+            json=log_event.dict(exclude_none=True),
+            headers=_RestClient._get_base_headers(content_type="application/json"),
         )
 
     # ---
@@ -505,22 +519,32 @@ class _RestClient:
 
         return response.json()
 
+    @staticmethod
+    def _get_base_headers(
+        content_type: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        additional_headers: Dict[str, str] = {}
+    ) -> Dict[str, str]:
+        headers = {
+            _RestClient.USER_AGENT_HEADER_NAME: _RestClient.USER_AGENT_HEADER_VALUE,
+        }
+        if content_type:
+            headers[_RestClient.CONTENT_TYPE_HEADER_NAME] = content_type
+        if trace_id:
+            headers[_RestClient.TRACE_ID_HEADER_NAME] = trace_id
+        for header_key, header_value in additional_headers.items():
+            headers[header_key] = header_value
+        return headers
+
     def _get_headers(
         self,
         content_type: Optional[str] = None,
         trace_id: Optional[str] = None,
         additional_headers: Dict[str, str] = {},
     ):
-        headers = {
-            self.USER_AGENT_HEADER_NAME: self.USER_AGENT_HEADER_VALUE,
-            self.ACCESS_TOKEN_HEADER_NAME: "Bearer " + self._get_access_token(),
-        }
-        if content_type:
-            headers[self.CONTENT_TYPE_HEADER_NAME] = content_type
-        if trace_id:
-            headers[self.TRACE_ID_HEADER_NAME] = trace_id
-        for header_key, header_value in additional_headers.items():
-            headers[header_key] = header_value
+        headers = self._get_base_headers(content_type, trace_id, additional_headers)
+        headers[self.ACCESS_TOKEN_HEADER_NAME] = "Bearer " + self._get_access_token()
+
         return headers
 
     @staticmethod
@@ -534,7 +558,7 @@ def _resolve_backend_url(backend_url: Optional[str]) -> str:
     elif UPGINI_URL in os.environ and os.environ[UPGINI_URL]:
         return os.environ[UPGINI_URL]
     else:
-        return "https://search.upgini.com"
+        return _RestClient.PROD_BACKEND_URL
 
 
 def _resolve_api_token(api_token: Optional[str]) -> str:
@@ -620,6 +644,7 @@ class LoggerFactory:
             return self._loggers[key]
 
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
+        upgini_logger.handlers.clear()
         rest_client = get_rest_client(backend_url, api_token)
         datadog_handler = BackendLogHandler(rest_client)
         json_formatter = jsonlogger.JsonFormatter(
