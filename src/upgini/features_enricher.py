@@ -544,16 +544,19 @@ class FeaturesEnricher(TransformerMixin):
                 raise TypeError(msg)
 
             self.__prepare_search_keys(X)
-            self.__check_string_dates(X)
 
             df = X.copy()
-            if "index" in self.search_keys.keys():
+            index_name = df.index.name or "index"
+            if index_name in self.search_keys.keys():
                 df = df.reset_index(drop=False)
-                df = df.rename(columns={"index": "index_col"})
-                self.search_keys["index_col"] = self.search_keys["index"]
-                del self.search_keys["index"]
+                if index_name == "index":
+                    df = df.rename(columns={"index": "index_col"})
+                    self.search_keys["index_col"] = self.search_keys["index"]
+                    del self.search_keys["index"]
             else:
                 df = df.reset_index(drop=True)
+
+            self.__check_string_dates(X)
             df = self.__add_country_code(df)
 
             meaning_types = {col: key.value for col, key in self.search_keys.items()}
@@ -676,18 +679,20 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_search_keys(X)
 
-        self.__check_string_dates(X)
-
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        if "index" in self.search_keys.keys():
+        index_name = df.index.name or "index"
+        if index_name in self.search_keys.keys():
             df = df.reset_index(drop=False)
-            df = df.rename(columns={"index": "index_col"})
-            self.search_keys["index_col"] = self.search_keys["index"]
-            del self.search_keys["index"]
+            if index_name == "index":
+                df = df.rename(columns={"index": "index_col"})
+                self.search_keys["index_col"] = self.search_keys["index"]
+                del self.search_keys["index"]
         else:
             df = df.reset_index(drop=True)
+
+        self.__check_string_dates(df)
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
