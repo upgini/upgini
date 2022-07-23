@@ -55,6 +55,7 @@ def get_track_metrics() -> dict:
     except Exception as e:
         track["err"] = str(e)
     # get real info depending on ide
+
     if track["ide"] == "colab":
         try:
             from google.colab import output  # type: ignore
@@ -80,6 +81,9 @@ def get_track_metrics() -> dict:
             track["visitorId"] = output.eval_js("window.visitorId")
         except Exception as e:
             track["err"] = str(e)
+            track["ip"] = "0.0.0.0"
+            track["visitorId"] = "None"
+
     elif track["ide"] == "binder":
         try:
             if "CLIENT_IP" in os.environ.keys():
@@ -87,6 +91,9 @@ def get_track_metrics() -> dict:
                 track["visitorId"] = sha256(os.environ["CLIENT_IP"].encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
+            track["ip"] = "0.0.0.0"
+            track["visitorId"] = "None"
+
     elif track["ide"] == "kaggle":
         try:
             url = "https://www.kaggle.com/requests/GetUserSecretByLabelRequest"
@@ -95,11 +102,16 @@ def get_track_metrics() -> dict:
                 "Content-type": "application/json",
                 "X-Kaggle-Authorization": f"Bearer {jwt_token}",
             }
-            with post(url, headers=headers, json={"Label": "api-key"}) as resp:
+            with post(url, headers=headers, json={"Label": "api-key"}, timeout=3) as resp:
                 err = resp.json()["errors"][0]
-                match = re.search("No user secrets exist for kernel id (\\d+) .*", err)
+                match = re.search(".*\\s(\\d{5,})\\s.*", err)
                 if match:
                     track["visitorId"] = match.group(1)
+                else:
+                    raise Exception(err)
         except Exception as e:
             track["err"] = str(e)
+            track["ip"] = "0.0.0.0"
+            track["visitorId"] = "None"
+
     return track
