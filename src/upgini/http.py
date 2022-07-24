@@ -194,7 +194,7 @@ class _RestClient:
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
-        self._access_token = self._refresh_access_token()
+        self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
 
     def _refresh_access_token(self) -> str:
@@ -212,7 +212,7 @@ class _RestClient:
         with refresh_token_lock:
             now = time.time()
             if (now - self.last_refresh_time) > 60 or self._access_token is None:
-                self._refresh_access_token()
+                self._access_token = self._refresh_access_token()
                 self.last_refresh_time = now
         return self._access_token
 
@@ -222,13 +222,16 @@ class _RestClient:
         else:
             return self._syncronized_refresh_access_token()
 
-    def _with_unauth_retry(self, request, try_number: int = 0):
+    def _with_unauth_retry(self, request, try_number: int = 0, need_connection_retry: bool = True):
         try:
             return request()
         except RequestException as e:
-            print(f"Connection error: {e}. Retrying in 10 seconds...")
-            time.sleep(10)
-            return self._with_unauth_retry(request)
+            if need_connection_retry:
+                print(f"Connection error: {e}. Retrying in 10 seconds...")
+                time.sleep(10)
+                return self._with_unauth_retry(request)
+            else:
+                raise e
         except UnauthorizedError:
             self._syncronized_refresh_access_token()
             return request()
@@ -441,7 +444,8 @@ class _RestClient:
                     content_type="application/json",
                     result_format="text",
                     silent=True,
-                )
+                ),
+                need_connection_retry=False
             )
         except Exception:
             self.send_log_event_unauth(log_event)
@@ -449,11 +453,14 @@ class _RestClient:
     @staticmethod
     def send_log_event_unauth(log_event: LogEvent):
         api_path = _RestClient.SEND_LOG_EVENT_URI
-        requests.post(
-            url=urljoin(_RestClient.PROD_BACKEND_URL, api_path),
-            json=log_event.dict(exclude_none=True),
-            headers=_RestClient._get_base_headers(content_type="application/json"),
-        )
+        try:
+            requests.post(
+                url=urljoin(_RestClient.PROD_BACKEND_URL, api_path),
+                json=log_event.dict(exclude_none=True),
+                headers=_RestClient._get_base_headers(content_type="application/json"),
+            )
+        except Exception:
+            pass
 
     # ---
 
@@ -521,9 +528,7 @@ class _RestClient:
 
     @staticmethod
     def _get_base_headers(
-        content_type: Optional[str] = None,
-        trace_id: Optional[str] = None,
-        additional_headers: Dict[str, str] = {}
+        content_type: Optional[str] = None, trace_id: Optional[str] = None, additional_headers: Dict[str, str] = {}
     ) -> Dict[str, str]:
         headers = {
             _RestClient.USER_AGENT_HEADER_NAME: _RestClient.USER_AGENT_HEADER_VALUE,

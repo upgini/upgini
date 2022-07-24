@@ -546,15 +546,8 @@ class FeaturesEnricher(TransformerMixin):
             self.__prepare_search_keys(X)
 
             df = X.copy()
-            index_name = df.index.name or "index"
-            if index_name in self.search_keys.keys():
-                df = df.reset_index(drop=False)
-                if index_name == "index":
-                    df = df.rename(columns={"index": "index_col"})
-                    self.search_keys["index_col"] = self.search_keys["index"]
-                    del self.search_keys["index"]
-            else:
-                df = df.reset_index(drop=True)
+
+            df = self.__handle_index_search_keys(df)
 
             self.__check_string_dates(X)
             df = self.__add_country_code(df)
@@ -682,15 +675,7 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        index_name = df.index.name or "index"
-        if index_name in self.search_keys.keys():
-            df = df.reset_index(drop=False)
-            if index_name == "index":
-                df = df.rename(columns={"index": "index_col"})
-                self.search_keys["index_col"] = self.search_keys["index"]
-                del self.search_keys["index"]
-        else:
-            df = df.reset_index(drop=True)
+        df = self.__handle_index_search_keys(df)
 
         self.__check_string_dates(df)
 
@@ -786,6 +771,18 @@ class FeaturesEnricher(TransformerMixin):
         filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
 
         return self.enriched_X[filtered_columns]
+
+    def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
+        index_names = df.index.names if df.index.names != [None] else ["index"]
+        if len(set(index_names).intersection(self.search_keys.keys())) > 0:
+            df = df.reset_index(drop=False)
+            if "index" in index_names:
+                df = df.rename(columns={"index": "index_col"})
+                self.search_keys["index_col"] = self.search_keys["index"]
+                del self.search_keys["index"]
+        else:
+            df = df.reset_index(drop=True)
+        return df
 
     def __using_search_keys(self) -> Dict[str, SearchKey]:
         return {col: key for col, key in self.search_keys.items() if key != SearchKey.CUSTOM_KEY}
