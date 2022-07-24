@@ -16,7 +16,9 @@ from upgini.dataset import Dataset
 from upgini.http import UPGINI_API_KEY, LoggerFactory
 from upgini.metadata import (
     COUNTRY,
+    DEFAULT_INDEX,
     EVAL_SET_INDEX,
+    RENAMED_INDEX,
     SYSTEM_RECORD_ID,
     CVType,
     FileColumnMeaningType,
@@ -135,6 +137,7 @@ class FeaturesEnricher(TransformerMixin):
         self.enriched_X: Optional[pd.DataFrame] = None
         self.enriched_eval_set: Optional[pd.DataFrame] = None
         self.country_added = False
+        self.index_renamed = False
 
     def fit(
         self,
@@ -214,6 +217,10 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
+                if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
+                    index_key = self.search_keys[RENAMED_INDEX]
+                    self.search_keys[DEFAULT_INDEX] = index_key
+                    del self.search_keys[RENAMED_INDEX]
 
     def fit_transform(
         self,
@@ -299,6 +306,10 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
+                if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
+                    index_key = self.search_keys[RENAMED_INDEX]
+                    self.search_keys[DEFAULT_INDEX] = index_key
+                    del self.search_keys[RENAMED_INDEX]
 
             return self.transform(
                 X, keep_input=keep_input, importance_threshold=importance_threshold, max_features=max_features
@@ -351,6 +362,10 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
+                if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
+                    index_key = self.search_keys[RENAMED_INDEX]
+                    self.search_keys["index"] = index_key
+                    del self.search_keys[RENAMED_INDEX]
 
             if keep_input:
                 return result
@@ -547,6 +562,8 @@ class FeaturesEnricher(TransformerMixin):
 
             df = X.copy()
 
+            self.logger.info(f"First dataset row:\n{df.head(1)}")
+
             df = self.__handle_index_search_keys(df)
 
             self.__check_string_dates(X)
@@ -675,6 +692,8 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
+        self.logger.info(f"First dataset row:\n{df.head(1)}")
+
         df = self.__handle_index_search_keys(df)
 
         self.__check_string_dates(df)
@@ -773,13 +792,14 @@ class FeaturesEnricher(TransformerMixin):
         return self.enriched_X[filtered_columns]
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
-        index_names = df.index.names if df.index.names != [None] else ["index"]
+        index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
         if len(set(index_names).intersection(self.search_keys.keys())) > 0:
             df = df.reset_index(drop=False)
-            if "index" in index_names:
-                df = df.rename(columns={"index": "index_col"})
-                self.search_keys["index_col"] = self.search_keys["index"]
-                del self.search_keys["index"]
+            if DEFAULT_INDEX in index_names:
+                df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
+                self.search_keys[RENAMED_INDEX] = self.search_keys[DEFAULT_INDEX]
+                del self.search_keys[DEFAULT_INDEX]
+                self.index_renamed = True
         else:
             df = df.reset_index(drop=True)
         return df
@@ -803,7 +823,7 @@ class FeaturesEnricher(TransformerMixin):
             pass
         df = df.reset_index(drop=True)
         df = df.reset_index()
-        df = df.rename(columns={"index": SYSTEM_RECORD_ID})
+        df = df.rename(columns={DEFAULT_INDEX: SYSTEM_RECORD_ID})
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
 
