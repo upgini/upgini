@@ -30,20 +30,20 @@ We want radically simplify features search and delivery to make external data a 
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
 ⭐️ Curated and updated data sources, including public datasets and community-shared data  
-⭐️ Easy to use - single request to enrich training dataset with *all of the keys at once*:
-- ☑️ [date/datetime](#-search-key-types-we-support-more-to-come)  
-- ☑️ [postal/ZIP code](#-search-key-types-we-support-more-to-come)
-- ☑️ [country](#-search-key-types-we-support-more-to-come)
-- ☑️ [phone number](#-search-key-types-we-support-more-to-come)
-- ☑️ [hashed email/HEM](#-search-key-types-we-support-more-to-come)
-- ☑️ [IP-address](#-search-key-types-we-support-more-to-come)   
+⭐️ Easy to use - single request to enrich training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
+
+|||
+|--|--|
+|1. date/datetime|4. phone number|
+|2. postal/ZIP code|5. hashed email/HEM|
+|3. country|6. IP-address|
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for all supervised ML tasks on tabular data:  
-  - ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)  
-  - ☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification)  
-  - ☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)  
-  - ☑️ [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)   
+|||
+|--|--|
+| ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)|☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)|
+|☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification) |☑️ [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)|
 
 ## 🌎 Connected data sources and coverage 
 [Two types of data sources](https://upgini.com/#data_sources) with pre-computed features - Public data and Community shared data:
