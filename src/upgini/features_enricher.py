@@ -1015,7 +1015,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
-        msg = f"\nWe found {len(self.feature_names_)} relevant feature(s) for you by search keys: {list(search_keys)}"
+        msg = f"\n{len(self.feature_names_)} relevant feature(s) found with the search keys: {list(search_keys)}"
 
         try:
             from IPython.display import display
