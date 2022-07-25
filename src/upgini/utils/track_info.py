@@ -1,5 +1,7 @@
+import getpass
 import os
 import re
+import socket
 import sys
 from functools import lru_cache
 from getpass import getuser
@@ -52,6 +54,8 @@ def get_track_metrics() -> dict:
     try:
         track["ip"] = get(ident_res).text
         track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
+        track["hostname"] = socket.gethostname()
+        track["whoami"] = getpass.getuser()
     except Exception as e:
         track["err"] = str(e)
     # get real info depending on ide
