@@ -38,12 +38,35 @@ We want radically simplify features search and delivery to make external data a 
 - ☑️ [hashed email/HEM](#-search-key-types-we-support-more-is-coming)
 - ☑️ [IP-address](#-search-key-types-we-support-more-is-coming)   
 
-⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
+⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for all supervised ML tasks on tabular data:  
   - ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)  
   - ☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification)  
   - ☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)  
   - ☑️ [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)   
+
+## 🌎 Connected data sources and coverage 
+[Two types of data sources](https://upgini.com/#data_sources) with pre-computed features - Public data and Community shared data:
+- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
+- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
+#### 📊 Data coverage and statistics
+Total: **239 countries** and **up to 41 years** of history
+|Data scource|Countries|History, years|
+|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |22|
+|International holidays & events, workweek calendar| 232 |22|
+|Consumer Confidence index| 44 |22|
+|World economic indicators|191 |41|
+|Markets data|-|17|
+|World demographic data by postal/ZIP code|90|-
+|Public social media profile data for email & phone|104|-
+|World mobile network coverage by postal/ZIP code|167|-
+|Geolocation profile for phone & IPv4 & email|239|-
+|World house prices by postal/ZIP code|44|-
+|🔜 Email/WWW domain profile|-|-
+
+👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
+
 ## 🏁 Quick start and guides
 
 ### 1. Quick start guide (use as a template)
@@ -80,28 +103,6 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 * The goal is **saving time on external data wrangling and feature calculation code** for hypothesis tests.  The main challenge here is a time dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As result, special data enrichment strategy was used.   
 * [Kaggle Competition](https://www.kaggle.com/competitions/amex-default-prediction) is a credit default prediction, evaluation metric is [normalized Gini coefficient](https://www.kaggle.com/competitions/amex-default-prediction/discussion/327464).
-
-## 🌎 Connected data sources and coverage 
-We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
-- **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
-- **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
-#### 📊 Data coverage and statistics
-Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|
-|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |22|
-|International holidays & events, workweek calendar| 232 |22|
-|Consumer Confidence index| 44 |22|
-|World economic indicators|191 |41|
-|Markets data|-|17|
-|World demographic data by postal/ZIP code|90|-
-|Public social media profile data for email & phone|104|-
-|World mobile network coverage by postal/ZIP code|167|-
-|Geolocation profile for phone & IPv4 & email|239|-
-|World house prices by postal/ZIP code|44|-
-|🔜 Email/WWW domain profile|-|-
-
-👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
 
 ## Install  
 
