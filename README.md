@@ -22,22 +22,28 @@
 
 **Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
-We want radically simplify features search and delivery for ML pipelines to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
+We want radically simplify features search and delivery to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 **Mission:** Democratize access to data sources for data science community
 
 ## 🚀 Awesome features
 ⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement for real ML cases  
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
-⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
 ⭐️ Curated and updated data sources, including public datasets and community shared data  
-⭐️ Support for several search key types (including <i>**date/datetime, country, postal/ZIP code, SHA256 hashed email, IPv4, phone**</i>), more to come...  
-⭐️ Supported supervised ML tasks:  
+⭐️ Easy to use - single request to enrich training dataset with all of the keys at once:
+- ☑️ [date/datetime](#-search-key-types-we-support-more-is-coming)  
+- ☑️ [postal/ZIP code](#-search-key-types-we-support-more-is-coming)
+- ☑️ [country](#-search-key-types-we-support-more-is-coming)
+- ☑️ [phone number](#-search-key-types-we-support-more-is-coming)
+- ☑️ [hashed email/HEM](#-search-key-types-we-support-more-is-coming)
+- ☑️ [IP-address](#-search-key-types-we-support-more-is-coming)   
+
+⭐️ Scikit-learn compatible interface for quick data integration with your existing ML pipelines  
+⭐️ Support for all supervised ML tasks on tabular data:  
   - ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)  
   - ☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification)  
   - ☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)  
   - ☑️ [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)   
-  - 🔜 [recommender system](https://en.wikipedia.org/wiki/Recommender_system)  
 ## 🏁 Quick start and guides
 
 ### 1. Quick start guide (use as a template)
@@ -69,6 +75,11 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 * The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [RMSLE](https://www.kaggle.com/code/carlmcbrideellis/store-sales-using-the-average-of-the-last-16-days#Note-regarding-calculating-the-average). 
+
+### 5. [How to speed up feature engineering hypothesis tests with ready to use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
+
+* The goal is **saving time on external data wrangling and feature calculation code** for hypothesis tests.  The main challenge here is a time dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As result, special data enrichment strategy was used.   
+* [Kaggle Competition](https://www.kaggle.com/competitions/amex-default-prediction) is a credit default prediction, evaluation metric is [normalized Gini coefficient](https://www.kaggle.com/competitions/amex-default-prediction/discussion/327464).
 
 ## 🌎 Connected data sources and coverage 
 We have [two types of data sources](https://upgini.com/#data_sources) with pre-computed features: Public data and Community shared data:
@@ -143,8 +154,7 @@ y = train_df["churn_flag"]
 from upgini import FeaturesEnricher, SearchKey
 enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
 ```
-#### ✨ Search key types we support (more is coming!)
-Our team works hard to introduce new search key types, currently we support:
+#### ✨ Search key types we support (more to come!)
 <table style="table-layout: fixed; text-align: left">
   <tr>
     <th> Search Key<br/>Meaning Type </th>
