@@ -20,16 +20,16 @@
 <!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
-**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time for external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
+**Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time on external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.  
 We want radically simplify features search and delivery to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 **Mission:** Democratize access to data sources for data science community
 
 ## 🚀 Awesome features
-⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement for real ML cases  
+⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement for real-world ML case  
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
-⭐️ Curated and updated data sources, including public datasets and community shared data  
+⭐️ Curated and updated data sources, including public datasets and community-shared data  
 ⭐️ Easy to use - single request to enrich training dataset with *all of the keys at once*:
 - ☑️ [date/datetime](#-search-key-types-we-support-more-to-come)  
 - ☑️ [postal/ZIP code](#-search-key-types-we-support-more-to-come)
@@ -90,18 +90,18 @@ Competition dataset was split into train (2013-2016 year) and test (2017 year) p
 
 ### 3. [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
 
-* The goal is **saving time on feature search and engineering**. If there are some ready-to-use external features and data sources, let's use it to maximize overall AutoML accuracy, right out of the box.  
+* The goal is **to save time on feature search and engineering**. If there are some ready-to-use external features and data sources, let's use them to maximize overall AutoML accuracy, right out of the box.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 * Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
 
 ### 4. [How to improve accuracy of Multivariate Time Series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
 
-* The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
+* The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when a component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [RMSLE](https://www.kaggle.com/code/carlmcbrideellis/store-sales-using-the-average-of-the-last-16-days#Note-regarding-calculating-the-average). 
 
-### 5. [How to speed up feature engineering hypothesis tests with ready to use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
+### 5. [How to speed up feature engineering hypothesis tests with ready-to-use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
 
-* The goal is **saving time on external data wrangling and feature calculation code** for hypothesis tests.  The main challenge here is a time dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As result, special data enrichment strategy was used.   
+* The goal is to **save time on external data wrangling and feature calculation code** for hypothesis tests. The key challenge here is a time-dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As a result, special data enrichment strategy is used.   
 * [Kaggle Competition](https://www.kaggle.com/competitions/amex-default-prediction) is a credit default prediction, evaluation metric is [normalized Gini coefficient](https://www.kaggle.com/competitions/amex-default-prediction/discussion/327464).
 
 ## Install  
