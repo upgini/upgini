@@ -30,13 +30,13 @@ We want radically simplify features search and delivery to make external data a 
 ⭐️ Calculate *accuracy metrics and uplifts* if you'll enrich your existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
 ⭐️ Curated and updated data sources, including public datasets and community shared data  
-⭐️ Easy to use - single request to enrich training dataset with all of the keys at once:
-- ☑️ [date/datetime](#-search-key-types-we-support-more-is-coming)  
-- ☑️ [postal/ZIP code](#-search-key-types-we-support-more-is-coming)
-- ☑️ [country](#-search-key-types-we-support-more-is-coming)
-- ☑️ [phone number](#-search-key-types-we-support-more-is-coming)
-- ☑️ [hashed email/HEM](#-search-key-types-we-support-more-is-coming)
-- ☑️ [IP-address](#-search-key-types-we-support-more-is-coming)   
+⭐️ Easy to use - single request to enrich training dataset with *all of the keys at once*:
+- ☑️ [date/datetime](#-search-key-types-we-support-more-to-come)  
+- ☑️ [postal/ZIP code](#-search-key-types-we-support-more-to-come)
+- ☑️ [country](#-search-key-types-we-support-more-to-come)
+- ☑️ [phone number](#-search-key-types-we-support-more-to-come)
+- ☑️ [hashed email/HEM](#-search-key-types-we-support-more-to-come)
+- ☑️ [IP-address](#-search-key-types-we-support-more-to-come)   
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for all supervised ML tasks on tabular data:  
