@@ -51,19 +51,19 @@ We want radically simplify features search and delivery to make external data a 
 - **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
 #### 📊 Data coverage and statistics
 Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|
-|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |22|
-|International holidays & events, workweek calendar| 232 |22|
-|Consumer Confidence index| 44 |22|
-|World economic indicators|191 |41|
-|Markets data|-|17|
-|World demographic data by postal/ZIP code|90|-
-|Public social media profile data for email & phone|104|-
-|World mobile network coverage by postal/ZIP code|167|-
-|Geolocation profile for phone & IPv4 & email|239|-
-|World house prices by postal/ZIP code|44|-
-|🔜 Email/WWW domain profile|-|-
+|Data scource|Countries|History, years|Sign in required
+|--|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |22|No
+|International holidays & events, workweek calendar| 232 |22|No
+|Consumer Confidence index| 44 |22|No
+|World economic indicators|191 |41|No
+|Markets data|-|17|No
+|World demographic data by postal/ZIP code|90|-|No
+|Public social media profile data for email & phone|104|-|Yes
+|World mobile network coverage by postal/ZIP code|167|-|No
+|Geolocation profile for phone & IPv4 & email|239|-|Yes
+|World house prices by postal/ZIP code|44|-|No
+|🔜 Email/WWW domain profile|-|-|-
 
 👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
 
@@ -532,6 +532,17 @@ enricher = FeaturesEnricher(
 
 enricher.transform(X)
 ```
+### 🔑 Benefits of becoming a registered user
+
+[Register](https://profile.upgini.com) and get a free API token for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
+600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses
+
+|Benefit|No Sign-up | Registered user |
+|--|--|--|
+|Enrichment with **date/datetime, postal/ZIP code and country keys**  | Yes |  Yes |
+|Enrichment with **phone number, hashed email/HEM and IP-address keys**  | No |  Yes |
+|Email notification on **search task completion** | No |  Yes |
+|Email notification on **new data source activation** 🔜 | No |  Yes |
 
 ### 👩🏻‍💻 How can I share data/features with a community ? 
 If you have ANY data which you might consider as royalty / license free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for ML applications, you may publish it for **community usage**:   
