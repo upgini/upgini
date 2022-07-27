@@ -6,17 +6,10 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-# import inspect
 import logging
-# import sys
-# from functools import wraps
 
-# from future import standard_library
 from upgini.mdc.context import new_log_context, get_mdc_fields
-# from upgini.mdc.decorators import *
 from pythonjsonlogger import jsonlogger
-
-# standard_library.install_aliases()
 
 
 MDContext = new_log_context

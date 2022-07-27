@@ -6,10 +6,6 @@
 
 .. moduleauthor:: Aljosha Friemann a.friemann@automate.wtf
 """
-# from __future__ import unicode_literals
-# from __future__ import print_function
-# from __future__ import division
-# from __future__ import absolute_import
 
 import time
 import uuid
@@ -22,13 +18,13 @@ from contextlib import contextmanager
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.ERROR)
 
-logging._mdc = threading.local()
+logging._mdc = threading.local()  # type: ignore
 start = time.time()
 
 
 def get_mdc_fields():
     result = collections.defaultdict(None)
-    contexts = vars(logging._mdc)
+    contexts = vars(logging._mdc)  # type: ignore
     for context_id in sorted(contexts, key=lambda x: contexts[x].__creation_time__):
         result.update(**vars(contexts[context_id]))
     return result
@@ -42,9 +38,9 @@ def new_log_context(**kwargs):
 
     LOGGER.debug("creating context %s", context_id)
 
-    setattr(logging._mdc, context_id, threading.local())
+    setattr(logging._mdc, context_id, threading.local())  # type: ignore
 
-    context = getattr(logging._mdc, context_id)
+    context = getattr(logging._mdc, context_id)  # type: ignore
 
     context.__creation_time__ = time.time() - start
 
@@ -60,7 +56,7 @@ def new_log_context(**kwargs):
         LOGGER.debug("deleting context %s", context_id)
 
         try:
-            delattr(logging._mdc, context_id)
+            delattr(logging._mdc, context_id)  # type: ignore
         except AttributeError:
             LOGGER.warning("context was already deleted %s", context_id)
 
