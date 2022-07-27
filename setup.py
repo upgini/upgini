@@ -23,7 +23,7 @@ here = Path(__file__).parent.resolve()
 try:
     setup(
         name="upgini",
-        version="1.1.7a1",
+        version="1.1.7",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -62,7 +62,6 @@ try:
             "fastparquet>=0.7.1",
             "python-json-logger>=2.0.2",
             "catboost>=1.0.3",
-            "mdc>=1.2.1",
         ],
         project_urls={
             "Bug Reports": "https://github.com/upgini/upgini/issues",

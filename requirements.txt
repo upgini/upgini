@@ -18,4 +18,3 @@ unittest-xml-reporting==3.0.4
 python-json-logger==2.0.2
 catboost==1.0.5
 lightgbm==3.3.2
-mdc==1.2.1
