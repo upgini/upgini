@@ -62,7 +62,6 @@ try:
             "fastparquet>=0.7.1",
             "python-json-logger>=2.0.2",
             "catboost>=1.0.3",
-            "mdc>=1.2.1",
         ],
         project_urls={
             "Bug Reports": "https://github.com/upgini/upgini/issues",
