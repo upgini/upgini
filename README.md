@@ -32,11 +32,20 @@ We want radically simplify features search and delivery to make external data a 
 ⭐️ Curated and updated data sources, including public datasets and community-shared data  
 ⭐️ Easy to use - single request to enrich training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
 
-|||
-|--|--|
-|1. date/datetime|4. phone number|
-|2. postal/ZIP code|5. hashed email/HEM|
-|3. country|6. IP-address|
+<table>
+  <tr>
+    <td> 1. date / datetime </td>
+    <td> 4. phone number </td>
+  </tr>
+  <tr>
+    <td> 2. postal / ZIP code </td>
+    <td> 5. hashed email / HEM </td>
+  </tr>
+  <tr>
+    <td> 3. country </td>
+    <td> 6. IP-address </td>
+  </tr>
+</table>
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for all supervised ML tasks on tabular data:  
