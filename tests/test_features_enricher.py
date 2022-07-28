@@ -1,4 +1,6 @@
+from datetime import date
 import os
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import pytest
@@ -6,6 +8,7 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
+from upgini.search_task import SearchTask
 
 from .utils import (
     mock_default_requests,
@@ -469,3 +472,28 @@ def test_filter_by_max_features(requests_mock: Mocker):
     test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
 
     assert test_features.shape == (1000, 3)
+
+
+def test_validation_metrics_calculation(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    tds = pd.DataFrame({
+        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
+        "target": [0, 1, 0]
+    })
+    X = tds[["date"]]
+    y = tds.target
+
+    search_task = SearchTask("")
+
+    def initial_max_hit_rate() -> Optional[Dict[str, Any]]:
+        return {"value": 1.0}
+
+    search_task.initial_max_hit_rate = initial_max_hit_rate
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._search_task = search_task
+    enricher.enriched_X = pd.DataFrame({
+        "system_record_id": [1, 2, 3]
+    })
+    assert enricher.calculate_metrics(X, y) is None

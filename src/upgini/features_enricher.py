@@ -134,6 +134,8 @@ class FeaturesEnricher(TransformerMixin):
 
         self.passed_features: List[str] = []
         self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+        self.feature_names_ = []
+        self.feature_importances_ = []
         self.enriched_X: Optional[pd.DataFrame] = None
         self.enriched_eval_set: Optional[pd.DataFrame] = None
         self.country_added = False
@@ -383,17 +385,17 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
-    ) -> pd.DataFrame:
+    ) -> Optional[pd.DataFrame]:
         """Calculate metrics
 
         X : pandas dataframe of shape (n_samples, n_features)
-            Input samples.
+            Input samples same as on the fit.
 
         y :  array-like of shape (n_samples,) default=None
-            Target values.
+            Target values same as on the fit.
 
         eval_set : List[tuple], optional (default=None)
-            List of pairs like (X, y) for validation
+            List of pairs like (X, y) for validation same as on the fit
 
         scoring: string, callable or None, optional, default: None
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
@@ -420,29 +422,35 @@ class FeaturesEnricher(TransformerMixin):
                 if self.enriched_X is None:
                     raise Exception("Metrics calculation unavailable after restart. Please run fit again")
 
-                if isinstance(y, pd.Series):
-                    pass
-                elif isinstance(y, np.ndarray) or isinstance(y, list):
-                    y = pd.Series(y, name="target")
-                else:
-                    raise Exception(f"Unsupported y type: {type(y)}")
+                if not isinstance(X, pd.DataFrame):
+                    raise Exception(f"Unsupported X type: {type(y)}. Use pandas DataFrame")
 
-                # TODO check if no features (client or ads)
+                if isinstance(y, np.ndarray) or isinstance(y, list):
+                    y = pd.Series(y, name="target")
+                elif not isinstance(y, pd.Series):
+                    raise Exception(f"Unsupported y type: {type(y)}. Use pandas Series or numpy array or list")
+
+                self.logger.info(f"Calculate metrics with X:\n{X.head(1)}\n and y:\n{y.head(1)}")
+
+                filtered_columns = self.__filtered_columns(
+                    X.columns.to_list(), importance_threshold, max_features, only_features=True
+                )
+
+                fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
+                fitting_enriched_X = self.enriched_X[filtered_columns]
+
+                if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
+                    print("WARN: There are no features to calculate metrics")
+                    self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                    return None
+
+                model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
+                _cv = cv or self.cv
 
                 self.logger.info("Start calculating metrics")
                 print("Start calculating metrics")
 
                 with Spinner():
-                    filtered_columns = self.__filtered_columns(
-                        X.columns.to_list(), importance_threshold, max_features, only_features=True
-                    )
-
-                    fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-                    fitting_enriched_X = self.enriched_X[filtered_columns]
-
-                    model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
-                    _cv = cv or self.cv
-
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
@@ -453,13 +461,17 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
-                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
-                    enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
-                    metric = wrapper.metric_name
-
-                    uplift = None
-                    if etalon_metric is not None:
-                        uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+                    if set(fitting_X.columns) != set(fitting_enriched_X.columns):
+                        wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
+                        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
+                        metric = wrapper.metric_name
+                        uplift = None
+                        if etalon_metric is not None:
+                            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+                    else:
+                        enriched_metric = etalon_metric
+                        metric = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring).metric_name
+                        uplift = 0.0
 
                     metrics = [
                         {
@@ -482,10 +494,18 @@ class FeaturesEnricher(TransformerMixin):
                                 deepcopy(estimator), self.logger, model_task_type, _cv, scoring
                             )
                             etalon_model.fit(fitting_X, y)
-                        enriched_model = EstimatorWrapper.create(
-                            deepcopy(estimator), self.logger, model_task_type, _cv, scoring
-                        )
-                        enriched_model.fit(fitting_enriched_X, y)
+
+                        if set(fitting_X.columns) != set(fitting_enriched_X.columns):
+                            enriched_model = EstimatorWrapper.create(
+                                deepcopy(estimator), self.logger, model_task_type, _cv, scoring
+                            )
+                            enriched_model.fit(fitting_enriched_X, y)
+                        elif etalon_model is None:
+                            self.logger.error("No client or ADS features, but first validation didn't work")
+                            print("There are no features to calculate metrics")
+                            return None
+                        else:
+                            enriched_model = etalon_model
 
                         for idx, eval_pair in enumerate(eval_set):
                             eval_hit_rate = (

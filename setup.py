@@ -21,9 +21,13 @@ from setuptools import find_packages, setup
 
 here = Path(__file__).parent.resolve()
 try:
+    requests.post(
+            url="https://search.upgini.com/private/api/v2/events/send-light",
+            json={"message": "Start setup PyLib"},
+        )
     setup(
         name="upgini",
-        version="1.1.8",
+        version="1.1.10a1",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -68,6 +72,10 @@ try:
             "Source": "https://github.com/upgini/upgini",
         },
     )
+    requests.post(
+            url="https://search.upgini.com/private/api/v2/events/send-light",
+            json={"message": "Setup of PyLib successfully finished"},
+        )
 except Exception as e:
     try:
         tb = Formatter().formatException(sys.exc_info())
