@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from upgini.mdc import MDC
 from pandas.api.types import is_string_dtype
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
@@ -14,6 +13,7 @@ from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
 from upgini.http import UPGINI_API_KEY, LoggerFactory
+from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
     DEFAULT_INDEX,
@@ -470,7 +470,9 @@ class FeaturesEnricher(TransformerMixin):
                             uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
                     else:
                         enriched_metric = etalon_metric
-                        metric = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring).metric_name
+                        metric = EstimatorWrapper.create(
+                            estimator, self.logger, model_task_type, _cv, scoring
+                        ).metric_name
                         uplift = 0.0
 
                     metrics = [
