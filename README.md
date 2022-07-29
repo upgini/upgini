@@ -49,10 +49,16 @@ We want radically simplify features search and delivery to make external data a 
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for all supervised ML tasks on tabular data:  
-|||
-|--|--|
-| ☑️ [binary classification](https://en.wikipedia.org/wiki/Binary_classification)|☑️ [regression](https://en.wikipedia.org/wiki/Regression_analysis)|
-|☑️ [multiclass classification](https://en.wikipedia.org/wiki/Multiclass_classification) |☑️ [time series prediction](https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting)|
+<table>
+  <tr>
+    <td><a href="https://en.wikipedia.org/wiki/Binary_classification">☑️ binary classification</a></td>
+    <td><a href="https://en.wikipedia.org/wiki/Multiclass_classification">☑️ multiclass classification</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://en.wikipedia.org/wiki/Regression_analysis">☑️ regression</a></td>
+    <td><a href="https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting">☑️ time series prediction</a></td>
+  </tr>
+</table>
 
 ## 🌎 Connected data sources and coverage 
 [Two types of data sources](https://upgini.com/#data_sources) with pre-computed features - Public data and Community shared data:
