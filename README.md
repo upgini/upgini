@@ -34,21 +34,21 @@ We want radically simplify features search and delivery to make external data a 
 
 <table>
   <tr>
-    <td> 1. date / datetime </td>
-    <td> 4. phone number </td>
+    <td> date / datetime </td>
+    <td> phone number </td>
   </tr>
   <tr>
-    <td> 2. postal / ZIP code </td>
-    <td> 5. hashed email / HEM </td>
+    <td> postal / ZIP code </td>
+    <td> hashed email / HEM </td>
   </tr>
   <tr>
-    <td> 3. country </td>
-    <td> 6. IP-address </td>
+    <td> country </td>
+    <td> IP-address </td>
   </tr>
 </table>
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
-⭐️ Support for all supervised ML tasks on tabular data:  
+⭐️ Support for most common supervised ML tasks on tabular data:  
 <table>
   <tr>
     <td><a href="https://en.wikipedia.org/wiki/Binary_classification">☑️ binary classification</a></td>
@@ -64,20 +64,20 @@ We want radically simplify features search and delivery to make external data a 
 [Two types of data sources](https://upgini.com/#data_sources) with pre-computed features - Public data and Community shared data:
 - **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
 - **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
-#### 📊 Data coverage and statistics
+#### 📊 Data coverage, statistics and updates
 Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|Sign in required
-|--|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |22|No
-|International holidays & events, workweek calendar| 232 |22|No
-|Consumer Confidence index| 44 |22|No
-|World economic indicators|191 |41|No
-|Markets data|-|17|No
-|World demographic data by postal/ZIP code|90|-|No
-|Public social media profile data for email & phone|104|-|Yes
-|World mobile network coverage by postal/ZIP code|167|-|No
-|Geolocation profile for phone & IPv4 & email|239|-|Yes
-|World house prices by postal/ZIP code|44|-|No
+|Data scource|Countries|History, years|Update|API Key required
+|--|--|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |22|Monthly|No
+|International holidays & events, Workweek calendar| 232 |22|Monthly|No
+|Consumer Confidence index| 44 |22|Monthly|No
+|World economic indicators|191 |41|Monthly|No
+|Markets data|-|17|Monthly|No
+|World mobile network coverage by postal/ZIP code|167|-|Monthly|No
+|World demographic data by postal/ZIP code|90|-|Annual|No
+|World house prices by postal/ZIP code|44|-|Annual|No
+|Public social media profile data for email & phone|104|-|Monthly|Yes
+|Geolocation profile for phone & IPv4 & email|239|-|Monthly|Yes
 |🔜 Email/WWW domain profile|-|-|-
 
 👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
@@ -549,7 +549,7 @@ enricher.transform(X)
 ```
 ### 🔑 Benefits of becoming a registered user
 
-[Register](https://profile.upgini.com) and get a free API token for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
+[Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
 600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses
 
 |Benefit|No Sign-up | Registered user |
