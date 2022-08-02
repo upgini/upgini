@@ -164,7 +164,7 @@ train_df = pd.read_csv("customer_churn_prediction_train.csv")
 X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 ```
-### 2. 🔦 Choose one or multiple columns as a search key
+### 2. 🔦 Choose one or multiple columns as a search keys
 *Search keys* columns will be used to match records from all potential external data sources / features 👓.   
 Define one or multiple columns as a search keys with `FeaturesEnricher` class initialization.  
 ```python
