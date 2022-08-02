@@ -497,3 +497,19 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
         "system_record_id": [1, 2, 3]
     })
     assert enricher.calculate_metrics(X, y) is None
+
+
+def test_handle_index_search_keys(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    tds = pd.DataFrame({
+        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
+        "feature": [1, 2, 3],
+    })
+    tds.set_index("date", inplace=True)
+    tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
+    print(handled)
+    assert 1 == 2
