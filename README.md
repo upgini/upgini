@@ -164,11 +164,17 @@ train_df = pd.read_csv("customer_churn_prediction_train.csv")
 X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 ```
-### 2. 🔦 Choose at least one column as a search key
-*Search keys* columns will be used to match records from all potential external data sources / features 👓. Define at least one search key with `FeaturesEnricher` class initialization.  
+### 2. 🔦 Choose one or multiple columns as a search key
+*Search keys* columns will be used to match records from all potential external data sources / features 👓.   
+Define one or multiple columns as a search keys with `FeaturesEnricher` class initialization.  
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE
+	})
 ```
 #### ✨ Search key types we support (more to come!)
 <table style="table-layout: fixed; text-align: left">
@@ -273,10 +279,15 @@ X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 
 # now we're going to create `FeaturesEnricher` class
-enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE
+	})
 
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
-# we send email notification, just register on upgini.com
+# we send email notification, just register on profile.upgini.com
 enricher.fit(X, y)
 ```
 
