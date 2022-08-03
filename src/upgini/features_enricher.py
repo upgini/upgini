@@ -593,7 +593,7 @@ class FeaturesEnricher(TransformerMixin):
 
             meaning_types = {col: key.value for col, key in self.search_keys.items()}
             search_keys = self.__using_search_keys()
-            feature_columns = [column for column in X.columns if column not in self.search_keys.keys()]
+            feature_columns = [column for column in df.columns if column not in self.search_keys.keys()]
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -757,7 +757,7 @@ class FeaturesEnricher(TransformerMixin):
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.search_keys.keys())
         meaning_types = {
             **{col: key.value for col, key in self.search_keys.items()},
-            **{str(c): FileColumnMeaningType.FEATURE for c in X.columns if c not in non_feature_columns},
+            **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
         }
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
         if eval_set is not None and len(eval_set) > 0:
@@ -815,8 +815,15 @@ class FeaturesEnricher(TransformerMixin):
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
-        if len(set(index_names).intersection(self.search_keys.keys())) > 0:
-            df = df.reset_index(drop=False)
+        index_search_keys = set(index_names).intersection(self.search_keys.keys())
+        if len(index_search_keys) > 0:
+            for index_name in index_search_keys:
+                if index_name not in df.columns:
+                    if df.index.names == [None]:
+                        df[index_name] = df.index
+                    else:
+                        df[index_name] = df.index.get_level_values(index_name)
+            df = df.reset_index(drop=True)
             if DEFAULT_INDEX in index_names:
                 df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
                 self.search_keys[RENAMED_INDEX] = self.search_keys[DEFAULT_INDEX]

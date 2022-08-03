@@ -27,7 +27,7 @@ try:
         )
     setup(
         name="upgini",
-        version="1.1.10a1",
+        version="1.1.12a1",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
