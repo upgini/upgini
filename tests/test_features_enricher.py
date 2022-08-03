@@ -9,6 +9,7 @@ from requests_mock.mocker import Mocker
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
 from upgini.search_task import SearchTask
+from pandas.testing import assert_frame_equal
 
 from .utils import (
     mock_default_requests,
@@ -511,5 +512,8 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
     handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
-    print(handled)
-    assert 1 == 2
+    expected = pd.DataFrame({
+        "feature": [1, 2, 3],
+        "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
+    })
+    assert_frame_equal(handled, expected)
