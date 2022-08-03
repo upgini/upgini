@@ -18,7 +18,7 @@ def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> M
     target_ratio = target_items / len(target)
     if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
         task = ModelTaskType.REGRESSION
-    elif target_items == 2:
+    elif target_items <= 2:
         if is_numeric_dtype(target):
             task = ModelTaskType.BINARY
         else:

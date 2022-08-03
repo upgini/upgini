@@ -34,21 +34,21 @@ We want radically simplify features search and delivery to make external data a 
 
 <table>
   <tr>
-    <td> 1. date / datetime </td>
-    <td> 4. phone number </td>
+    <td> date / datetime </td>
+    <td> phone number </td>
   </tr>
   <tr>
-    <td> 2. postal / ZIP code </td>
-    <td> 5. hashed email / HEM </td>
+    <td> postal / ZIP code </td>
+    <td> hashed email / HEM </td>
   </tr>
   <tr>
-    <td> 3. country </td>
-    <td> 6. IP-address </td>
+    <td> country </td>
+    <td> IP-address </td>
   </tr>
 </table>
 
 ⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
-⭐️ Support for all supervised ML tasks on tabular data:  
+⭐️ Support for most common supervised ML tasks on tabular data:  
 <table>
   <tr>
     <td><a href="https://en.wikipedia.org/wiki/Binary_classification">☑️ binary classification</a></td>
@@ -64,21 +64,21 @@ We want radically simplify features search and delivery to make external data a 
 [Two types of data sources](https://upgini.com/#data_sources) with pre-computed features - Public data and Community shared data:
 - **Public data** is available from the public sector, academic institutions, and other sources through open data portals  
 - **Community shared data** is a royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
-#### 📊 Data coverage and statistics
+#### 📊 Data coverage, statistics and updates
 Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|Sign in required
-|--|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |22|No
-|International holidays & events, workweek calendar| 232 |22|No
-|Consumer Confidence index| 44 |22|No
-|World economic indicators|191 |41|No
-|Markets data|-|17|No
-|World demographic data by postal/ZIP code|90|-|No
-|Public social media profile data for email & phone|104|-|Yes
-|World mobile network coverage by postal/ZIP code|167|-|No
-|Geolocation profile for phone & IPv4 & email|239|-|Yes
-|World house prices by postal/ZIP code|44|-|No
-|🔜 Email/WWW domain profile|-|-|-
+|Data scource|Countries|History, years|Update|Search keys|API Key required
+|--|--|--|--|--|--|
+|Historical weather & Weather forecast by postal/ZIP code| 68 |22|Monthly|date, country, postal/ZIP code|No
+|International holidays & events, Workweek calendar| 232 |22|Monthly|date, country|No
+|Consumer Confidence index| 44 |22|Monthly|date, country|No
+|World economic indicators|191 |41|Monthly|date, country|No
+|Markets data|-|17|Monthly|date, datetime|No
+|World mobile network coverage by postal/ZIP code|167|-|Monthly|country, postal/ZIP code|No
+|World demographic data by postal/ZIP code|90|-|Annual|date, country, postal/ZIP code|No
+|World house prices by postal/ZIP code|44|-|Annual|date, country, postal/ZIP code|No
+|Public social media profile data for email & phone|104|-|Monthly|email/HEM, phone num|Yes
+|Geolocation profile for phone & IPv4 & email|239|-|Monthly|date, email/HEM, phone num, IPv4|Yes
+|🔜 Email/WWW domain profile|-|-|-|-
 
 👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
 
@@ -164,11 +164,17 @@ train_df = pd.read_csv("customer_churn_prediction_train.csv")
 X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 ```
-### 2. 🔦 Choose at least one column as a search key
-*Search keys* columns will be used to match records from all potential external data sources / features 👓. Define at least one search key with `FeaturesEnricher` class initialization.  
+### 2. 🔦 Choose one or multiple columns as a search keys
+*Search keys* columns will be used to match records from all potential external data sources / features 👓.   
+Define one or multiple columns as a search keys with `FeaturesEnricher` class initialization.  
 ```python
 from upgini import FeaturesEnricher, SearchKey
-enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE
+	})
 ```
 #### ✨ Search key types we support (more to come!)
 <table style="table-layout: fixed; text-align: left">
@@ -229,7 +235,7 @@ enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchK
   </tr>
   <tr>
     <td> SearchKey.COUNTRY </td>
-    <td> <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes">Country code</a> </td>
+    <td> <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes">Country ISO-3166 code</a> </td>
     <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>GB </tt> <br/> <tt>US </tt> <br/> <tt>IN </tt> </td>
   </tr> 
@@ -273,10 +279,15 @@ X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 
 # now we're going to create `FeaturesEnricher` class
-enricher = FeaturesEnricher(search_keys={"subscription_activation_date": SearchKey.DATE})
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE
+	})
 
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
-# we send email notification, just register on upgini.com
+# we send email notification, just register on profile.upgini.com
 enricher.fit(X, y)
 ```
 
@@ -549,7 +560,7 @@ enricher.transform(X)
 ```
 ### 🔑 Benefits of becoming a registered user
 
-[Register](https://profile.upgini.com) and get a free API token for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
+[Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
 600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses
 
 |Benefit|No Sign-up | Registered user |

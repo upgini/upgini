@@ -49,7 +49,7 @@ class Dataset(pd.DataFrame):
     IMBALANCE_THESHOLD = 0.4
     MIN_TARGET_CLASS_COUNT = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
-    MIN_SUPPORTED_DATE_TS = 1114992000000  # 2005-05-02
+    MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 1100
 
     _metadata = [
@@ -358,6 +358,8 @@ class Dataset(pd.DataFrame):
                 msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
                 self.logger.warning(msg)
                 print("WARN: ", msg)
+                if len(self) == 0:
+                    raise Exception("There is empty train dataset after dropping old rows")
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
