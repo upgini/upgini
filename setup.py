@@ -2,7 +2,7 @@ import sys
 from logging import Formatter
 from pathlib import Path
 
-from urllib import request, parse
+from urllib import request
 
 from setuptools import find_packages, setup
 
