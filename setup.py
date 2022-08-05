@@ -2,7 +2,8 @@ import sys
 from logging import Formatter
 from pathlib import Path
 
-import requests
+from urllib import request
+
 from setuptools import find_packages, setup
 
 # To build:
@@ -19,15 +20,26 @@ from setuptools import find_packages, setup
 # python setup.py sdist upload
 # python setup.py bdist_wheel upload
 
+
+def send_log(msg: str):
+    try:
+        url = "https://search.upgini.com/private/api/v2/events/send-light"
+
+        data = ('{"message": "' + msg + '"}').encode()
+
+        req = request.Request(url, data=data)
+        req.add_header("Content-Type", "application/json")
+        request.urlopen(req)
+    except Exception:
+        pass
+
+
 here = Path(__file__).parent.resolve()
 try:
-    requests.post(
-            url="https://search.upgini.com/private/api/v2/events/send-light",
-            json={"message": "Start setup PyLib"},
-        )
+    send_log("Start setup PyLib")
     setup(
         name="upgini",
-        version="1.1.12",
+        version="1.1.13",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -72,17 +84,11 @@ try:
             "Source": "https://github.com/upgini/upgini",
         },
     )
-    requests.post(
-            url="https://search.upgini.com/private/api/v2/events/send-light",
-            json={"message": "Setup of PyLib successfully finished"},
-        )
+    send_log("Setup of PyLib successfully finished")
 except Exception as e:
     try:
         tb = Formatter().formatException(sys.exc_info())
-        requests.post(
-            url="https://search.upgini.com/private/api/v2/events/send-light",
-            json={"message": f"Failed to setup PyLib: {e}\n{tb}"},
-        )
+        send_log(f"Failed to setup PyLib: {e}\n{tb}")
     except Exception:
         pass
     raise e
