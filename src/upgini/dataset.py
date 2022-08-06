@@ -51,6 +51,7 @@ class Dataset(pd.DataFrame):
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 1100
+    MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
 
     _metadata = [
         "dataset_name",
@@ -918,9 +919,7 @@ class Dataset(pd.DataFrame):
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
-                parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
-                self.logger.info(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
+                parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
@@ -965,9 +964,7 @@ class Dataset(pd.DataFrame):
             )
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
-                parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
-                self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
-                self.logger.info(f"Size of uploading file: {Path(parquet_file_path).stat().st_size}")
+                parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     trace_id,
@@ -990,3 +987,12 @@ class Dataset(pd.DataFrame):
         )
 
         return search_task.poll_result(trace_id, quiet=silent_mode)
+
+    def prepare_uploading_file(self, base_path: str) -> str:
+        parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
+        self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
+        uploading_file_size = Path(parquet_file_path).stat().st_size
+        self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
+        if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
+            raise Exception("Dataset size is too big. Please try to reduce rows or columns count")
+        return parquet_file_path
