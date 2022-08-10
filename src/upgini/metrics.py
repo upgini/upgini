@@ -155,17 +155,18 @@ class CatBoostWrapper(EstimatorWrapper):
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        cat_features_idx, cat_features = _get_cat_features(X)
+        cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
-        unique_cat_features_idx = []
-        for idx, name in zip(cat_features_idx, cat_features):
+        unique_cat_features = []
+        for name in cat_features:
             # Remove constant categorical features
             if X[name].nunique() > 1:
-                unique_cat_features_idx.append(idx)
+                unique_cat_features.append(name)
             else:
                 X = X.drop(columns=name)
+        cat_features_idx = [X.columns.get_loc(c) for c in unique_cat_features]
 
-        params.update({"cat_features": unique_cat_features_idx})
+        params.update({"cat_features": cat_features_idx})
         return X, y, params
 
 
@@ -182,7 +183,7 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        _, cat_features = _get_cat_features(X)
+        cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
@@ -203,7 +204,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        _, cat_features = _get_cat_features(X)
+        cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in cat_features]
         X[num_features] = X[num_features].fillna(-999)
         X[cat_features] = X[cat_features].astype(str).fillna("")
@@ -250,9 +251,8 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
     return scoring, metric_name, multiplier
 
 
-def _get_cat_features(X: pd.DataFrame) -> Tuple[List[int], List[str]]:
-    idices_to_names = {i: c for i, c in enumerate(X.columns) if not is_numeric_dtype(X[c])}
-    return (list(idices_to_names.keys()), list(idices_to_names.values()))
+def _get_cat_features(X: pd.DataFrame) -> List[str]:
+    return [c for c in X.columns if not is_numeric_dtype(X[c])]
 
 
 def _ext_root_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutput="uniform_average"):
