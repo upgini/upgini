@@ -340,11 +340,18 @@ class _RestClient:
         api_path = self.VALIDATION_SEARCH_URI_FMT_V2.format(initial_search_task_id)
 
         def open_and_send():
+            md5_hash = hashlib.md5()
+            with open(file_path, "rb") as file:
+                content = file.read()
+                md5_hash.update(content)
+                digest = md5_hash.hexdigest()
+                metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+
             with open(file_path, "rb") as file:
                 files = {
-                    "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
+                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True).encode(), "application/json"),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
-                    "file": (metadata.name, file, "application/octet-stream"),
+                    "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
