@@ -127,6 +127,7 @@ class FileMetadata(BaseModel):
     hierarchicalSubgroupKeys: Optional[List[str]]
     taskType: Optional[ModelTaskType]
     rowsCount: Optional[int]
+    checksumMD5: Optional[str]
 
 
 class FeaturesFilter(BaseModel):
