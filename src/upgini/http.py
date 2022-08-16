@@ -278,7 +278,8 @@ class _RestClient:
 
             with open(file_path, "rb") as file:
                 files = {
-                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True).encode(), "application/json"),
+                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True)
+                                 .encode(), "application/json"),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
@@ -349,7 +350,8 @@ class _RestClient:
 
             with open(file_path, "rb") as file:
                 files = {
-                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True).encode(), "application/json"),
+                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True)
+                                 .encode(), "application/json"),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
