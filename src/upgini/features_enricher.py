@@ -703,18 +703,26 @@ class FeaturesEnricher(TransformerMixin):
 
         if isinstance(y, pd.Series):
             y_array = y.values
-        else:
+        elif isinstance(y, np.ndarray):
             y_array = y
+        else:
+            y_array = np.array(y)
+
+        if len(np.unique(y_array)) < 2:
+            raise ValueError("y is a constant, please check your training dataset")
 
         if X.shape[0] != len(y_array):
             raise ValueError("X and y should be the same size")
+
+        if len(set(X.columns)) != len(X.columns):
+            raise ValueError("X contains duplicating columns names, please check your training dataset")
 
         self.__prepare_search_keys(X)
 
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        self.logger.info(f"First dataset row:\n{df.head(1)}")
+        self.logger.info(f"First 10 rows of the dataset:\n{df.head(10)}")
 
         df = self.__handle_index_search_keys(df)
 
