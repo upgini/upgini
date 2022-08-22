@@ -23,8 +23,10 @@ from pandas.core.dtypes.common import is_period_dtype
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.metadata import (
+    COUNTRY,
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
+    SYSTEM_COLUMNS,
     DataType,
     FeaturesFilter,
     FileColumnMeaningType,
@@ -47,7 +49,7 @@ class Dataset(pd.DataFrame):
     FIT_SAMPLE_ROWS = 100_000
     FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
     IMBALANCE_THESHOLD = 0.4
-    MIN_TARGET_CLASS_COUNT = 100
+    MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 1100
@@ -174,10 +176,10 @@ class Dataset(pd.DataFrame):
             if len(column) == 0:
                 raise ValueError("Some of column names are empty. Add names and try again, please")
             new_column = str(column).lower()
-            if ord(new_column[0]) not in range(ord("a"), ord("z")):
+            if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
                 new_column = "a" + new_column
             for idx, c in enumerate(new_column):
-                if ord(c) not in range(ord("a"), ord("z")) and ord(c) not in range(ord("0"), ord("9")):
+                if ord(c) not in range(ord("a"), ord("z") + 1) and ord(c) not in range(ord("0"), ord("9") + 1):
                     new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
             self.rename(columns={column: new_column}, inplace=True)
             self.meaning_types = {
@@ -220,10 +222,11 @@ class Dataset(pd.DataFrame):
             # unique_columns.remove(SYSTEM_RECORD_ID)
             self.drop_duplicates(subset=unique_columns, inplace=True)
             nrows_after_tgt_dedup = len(self)
-            share_tgt_dedup = 100 * (1 - nrows_after_tgt_dedup / nrows_after_full_dedup)
+            num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
+            share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
                 msg = (
-                    f"{share_tgt_dedup:.5f}% of rows in X are duplicates with different y values. "
+                    f"{share_tgt_dedup:.4f}% of rows ({num_dup_rows}) in X are duplicates with different y values. "
                     "Please check X dataframe"
                 )
                 self.logger.error(msg)
@@ -354,7 +357,7 @@ class Dataset(pd.DataFrame):
             old_subset = self[self[date_column] < self.MIN_SUPPORTED_DATE_TS]
             if len(old_subset) > 0:
                 self.logger.info(f"df before dropping old rows: {self.shape}")
-                self.drop(index=old_subset.index, inplace=True)
+                self.drop(index=old_subset.index, inplace=True)  # type: ignore
                 self.logger.info(f"df after dropping old rows: {self.shape}")
                 msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
                 self.logger.warning(msg)
@@ -467,11 +470,11 @@ class Dataset(pd.DataFrame):
                     min_class_count = current_class_count
                     min_class_value = v
 
-            if min_class_count < self.MIN_TARGET_CLASS_COUNT:
+            if min_class_count < self.MIN_TARGET_CLASS_ROWS:
                 msg = (
                     f"The rarest class `{min_class_value}` occurs {min_class_count}. "
                     "The minimum number of observations for each class in a train dataset must be "
-                    f"grater than {self.MIN_TARGET_CLASS_COUNT}. Please, correct your data and try again"
+                    f"grater than {self.MIN_TARGET_CLASS_ROWS}. Please, correct your data and try again"
                 )
                 self.logger.error(msg)
                 raise ValidationError(msg)
@@ -568,7 +571,7 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = f"Columns {removed_features} has value with frequency more than 99% " "and has been droped from X"
+            msg = f"Columns {removed_features} has value with frequency more than 99% and has been droped from X"
             print(msg)
             self.logger.warning(msg)
 
@@ -617,16 +620,17 @@ class Dataset(pd.DataFrame):
             if target is None:
                 raise ValidationError("Target column is absent in meaning_types")
 
-            if self.task_type != ModelTaskType.MULTICLASS:
-                target_value = self.__target_value()
-                target_items = target_value.nunique()
-                if target_items == 1:
-                    raise ValidationError("Target contains only one distinct value")
-                elif target_items == 0:
-                    raise ValidationError("Target contains only NaN or incorrect values.")
+            target_value = self.__target_value()
+            target_items = target_value.nunique()
+            if target_items == 1:
+                raise ValidationError("Target contains only one distinct value")
+            elif target_items == 0:
+                raise ValidationError("Target contains only NaN or incorrect values.")
 
+            if self.task_type != ModelTaskType.MULTICLASS:
                 self[target] = self[target].apply(pd.to_numeric, errors="coerce")
-        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
+
+        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group if key != COUNTRY]
         mandatory_columns = [date_millis, target, score]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
@@ -677,7 +681,7 @@ class Dataset(pd.DataFrame):
         self.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
 
         drop_idx = self[self["is_valid"] != 1].index  # type: ignore
-        self.drop(drop_idx, inplace=True)
+        self.drop(index=drop_idx, inplace=True)  # type: ignore
         self.drop(columns=["is_valid"], inplace=True)
 
         if not silent_mode:
@@ -721,7 +725,7 @@ class Dataset(pd.DataFrame):
 
         for column in self.meaning_types:
             if column not in self.columns:
-                raise ValueError(f"Meaning column {column} doesn't exist in dataframe columns: {self.columns}")
+                raise ValueError(f"Meaning column `{column}` doesn't exist in dataframe columns: {self.columns}")
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
             raise ValueError("Target column is not presented in meaning types. Specify it, please")
 
@@ -732,16 +736,17 @@ class Dataset(pd.DataFrame):
         for keys_group in self.search_keys:
             for key in keys_group:
                 if key not in self.columns:
-                    raise ValueError(f"Search key {key} doesn't exist in dataframe columns: {self.columns}")
+                    showing_columns = set(self.columns) - SYSTEM_COLUMNS
+                    raise ValueError(f"Search key `{key}` doesn't exist in dataframe columns: {showing_columns}")
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")
 
-        self.__rename_columns()
+        self.__validate_search_keys()
 
         self.__validate_meaning_types(validate_target=validate_target)
 
-        self.__validate_search_keys()
+        self.__rename_columns()
 
         self.__drop_ignore_columns()
 
