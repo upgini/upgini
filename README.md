@@ -173,7 +173,10 @@ enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
     		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE
+    		"zip_code": SearchKey.POSTAL_CODE,
+    		"hashed_email": SearchKey.HEM,
+		"last_visit_ip_address": SearchKey.IP,
+		"registered_with_phone": SearchKey.PHONE
 	})
 ```
 #### ✨ Search key types we support (more to come!)
@@ -254,7 +257,10 @@ enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
     		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE
+    		"zip_code": SearchKey.POSTAL_CODE,
+    		"hashed_email": SearchKey.HEM,
+		"last_visit_ip_address": SearchKey.IP,
+		"registered_with_phone": SearchKey.PHONE
 	}, 
 	date_format="%Y-%d-%m"
 )
