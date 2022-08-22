@@ -1006,7 +1006,9 @@ class FeaturesEnricher(TransformerMixin):
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
                 if column_id >= x.shape[1]:
-                    raise ValueError(f"Index of search key `{column_id}` is not suitable for columns count: `{x.shape[1]}`")
+                    raise ValueError(
+                        f"Index of search key `{column_id}` is not suitable for columns count: `{x.shape[1]}`"
+                    )
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
             else:
@@ -1034,7 +1036,6 @@ class FeaturesEnricher(TransformerMixin):
                 "WARNING: You have started the search with the Date key only. "
                 "Try to add the Country and/or Postal Code keys to your dataset so that the search engine gets access "
                 "to the additional data sources. Get details on "
-                "https://github.com/upgini/upgini#2--choose-at-least-one-column-as-a-search-key"
                 "https://github.com/upgini/upgini#2--choose-one-or-multiple-columns-as-a-search-keys"
             )
             print(msg)
