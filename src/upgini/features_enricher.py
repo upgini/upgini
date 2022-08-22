@@ -1031,7 +1031,11 @@ class FeaturesEnricher(TransformerMixin):
         self.search_keys = valid_search_keys
 
         using_keys = self.__using_search_keys()
-        if len(using_keys.values()) == 1 and next(iter(using_keys.values())) == SearchKey.DATE:
+        if (
+            len(using_keys.values()) == 1
+            and self.country_code is None
+            and next(iter(using_keys.values())) == SearchKey.DATE
+        ):
             msg = (
                 "WARNING: You have started the search with the Date key only. "
                 "Try to add the Country and/or Postal Code keys to your dataset so that the search engine gets access "
