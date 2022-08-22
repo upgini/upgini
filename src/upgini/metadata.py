@@ -5,9 +5,11 @@ from pydantic import BaseModel
 
 SYSTEM_RECORD_ID = "system_record_id"
 EVAL_SET_INDEX = "eval_set_index"
+TARGET = "target"
 COUNTRY = "country_iso_code"
 RENAMED_INDEX = "index_col"
 DEFAULT_INDEX = "index"
+SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
 
 
 class FileColumnMeaningType(Enum):

@@ -430,7 +430,9 @@ class FeaturesEnricher(TransformerMixin):
                 elif not isinstance(y, pd.Series):
                     raise Exception(f"Unsupported y type: {type(y)}. Use pandas Series or numpy array or list")
 
-                self.logger.info(f"Calculate metrics with X:\n{X.head(1)}\n and y:\n{y.head(1)}")
+                Xy = X.copy()
+                Xy["target"] = y
+                self.__log_debug_information(Xy)
 
                 filtered_columns = self.__filtered_columns(
                     X.columns.to_list(), importance_threshold, max_features, only_features=True
@@ -580,11 +582,14 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.error(msg)
                 raise TypeError(msg)
 
+            if len(set(X.columns)) != len(X.columns):
+                raise ValueError("X contains duplicating columns names, please check your dataset")
+
             self.__prepare_search_keys(X)
 
             df = X.copy()
 
-            self.logger.info(f"First dataset row:\n{df.head(1)}")
+            self.__log_debug_information(df)
 
             df = self.__handle_index_search_keys(df)
 
@@ -722,7 +727,7 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
 
-        self.logger.info(f"First 10 rows of the dataset:\n{df.head(10)}")
+        self.__log_debug_information(df)
 
         df = self.__handle_index_search_keys(df)
 
@@ -821,6 +826,10 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.enriched_X[filtered_columns]
 
+    def __log_debug_information(self, df: pd.DataFrame):
+        self.logger.info(f"Used search keys: {self.search_keys}")
+        self.logger.info(f"First 10 rows of the dataset:\n{df.head(10)}")
+
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
         index_search_keys = set(index_names).intersection(self.search_keys.keys())
@@ -876,7 +885,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise Exception(msg)
 
     def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
-        if self.country_code is not None and SearchKey.COUNTRY not in self.search_keys.values():
+        if self.country_code and SearchKey.COUNTRY not in self.search_keys.values():
             self.logger.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
@@ -991,22 +1000,24 @@ class FeaturesEnricher(TransformerMixin):
         for column_id, meaning_type in self.search_keys.items():
             column_name = None
             if isinstance(column_id, str):
+                if column_id not in x.columns:
+                    raise ValueError(f"Search key `{column_id}` not found in dataset columns: {x.columns.to_list()}")
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
+                if column_id >= x.shape[1]:
+                    raise ValueError(f"Index of search key `{column_id}` is not suitable for columns count: `{x.shape[1]}`")
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
             else:
-                msg = f"Unsupported type of key in search_keys: {type(column_id)}."
-                self.logger.error(msg)
-                raise ValueError(msg)
+                raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = (
                     "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time. "
                     "Define only one"
                 )
-                self.logger.error(msg)
+                # self.logger.error(msg)
                 raise ValueError(msg)
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
@@ -1016,6 +1027,17 @@ class FeaturesEnricher(TransformerMixin):
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
 
         self.search_keys = valid_search_keys
+
+        using_keys = self.__using_search_keys()
+        if len(using_keys.values()) == 1 and next(iter(using_keys.values())) == SearchKey.DATE:
+            msg = (
+                "WARNING: You have started the search with the Date key only. "
+                "Try to add the Country and/or Postal Code keys to your dataset so that the search engine gets access "
+                "to the additional data sources. Get details on "
+                "https://github.com/upgini/upgini#2--choose-at-least-one-column-as-a-search-key"
+                "https://github.com/upgini/upgini#2--choose-one-or-multiple-columns-as-a-search-keys"
+            )
+            print(msg)
 
     def __show_metrics(
         self,
