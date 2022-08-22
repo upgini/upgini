@@ -251,7 +251,11 @@ For the meaning types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with d
 ```python
 from upgini import FeaturesEnricher, SearchKey
 enricher = FeaturesEnricher(
-	search_keys={"subscription_activation_date": SearchKey.DATE}, 
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE
+	}, 
 	date_format="%Y-%d-%m"
 )
 ```
