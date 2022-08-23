@@ -448,12 +448,12 @@ class FeaturesEnricher(TransformerMixin):
 
                 model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
 
-                # shuffle metrics in default cv if date/datetime keys are not presented
+                # shuffle Kfold for case when date/datetime keys are not presented
                 key_types = self.search_keys.values()
                 shuffle = True
                 if SearchKey.DATE in key_types or SearchKey.DATETIME in key_types:
                     shuffle = False
-                
+
                 _cv = cv or self.cv
 
                 self.logger.info("Start calculating metrics")
@@ -465,14 +465,14 @@ class FeaturesEnricher(TransformerMixin):
                     etalon_metric = None
                     if fitting_X.shape[1] > 0:
                         etalon_metric = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle
+                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         ).cross_val_predict(fitting_X, y)
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
                         wrapper = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle
+                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
                         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                         metric = wrapper.metric_name
@@ -482,7 +482,7 @@ class FeaturesEnricher(TransformerMixin):
                     else:
                         enriched_metric = etalon_metric
                         metric = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle
+                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         ).metric_name
                         uplift = 0.0
 
@@ -504,13 +504,25 @@ class FeaturesEnricher(TransformerMixin):
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
                             etalon_model = EstimatorWrapper.create(
-                                deepcopy(estimator), self.logger, model_task_type, _cv, scoring, shuffle
+                                deepcopy(estimator),
+                                self.logger,
+                                model_task_type,
+                                _cv,
+                                scoring,
+                                shuffle,
+                                self.random_state,
                             )
                             etalon_model.fit(fitting_X, y)
 
                         if set(fitting_X.columns) != set(fitting_enriched_X.columns):
                             enriched_model = EstimatorWrapper.create(
-                                deepcopy(estimator), self.logger, model_task_type, _cv, scoring, shuffle
+                                deepcopy(estimator),
+                                self.logger,
+                                model_task_type,
+                                _cv,
+                                scoring,
+                                shuffle,
+                                self.random_state,
                             )
                             enriched_model.fit(fitting_enriched_X, y)
                         elif etalon_model is None:
