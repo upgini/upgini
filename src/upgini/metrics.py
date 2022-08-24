@@ -30,7 +30,7 @@ CATBOOST_PARAMS = {
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": 42,
-    "allow_writing_files": False
+    "allow_writing_files": False,
 }
 
 N_FOLDS = 5
@@ -86,7 +86,9 @@ class EstimatorWrapper:
         return self.scorer(self.estimator, X, y) * self.multiplier
 
     @staticmethod
-    def _create_cv(cv: Union[BaseCrossValidator, CVType, None], target_type: ModelTaskType) -> BaseCrossValidator:
+    def _create_cv(
+        cv: Union[BaseCrossValidator, CVType, None], target_type: ModelTaskType, shuffle: bool, random_state: int
+    ) -> BaseCrossValidator:
         if isinstance(cv, BaseCrossValidator):
             return cv
 
@@ -95,9 +97,15 @@ class EstimatorWrapper:
         elif cv == CVType.blocked_time_series:
             return BlockedTimeSeriesSplit(n_splits=N_FOLDS, test_size=BLOCKED_TS_TEST_SIZE)
         elif target_type == ModelTaskType.REGRESSION:
-            return KFold(n_splits=N_FOLDS)
+            if shuffle:
+                return KFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
+            else:
+                return KFold(n_splits=N_FOLDS, shuffle=False)
         else:
-            return StratifiedKFold(n_splits=N_FOLDS)
+            if shuffle:
+                return StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
+            else:
+                return StratifiedKFold(n_splits=N_FOLDS, shuffle=False)
 
     @staticmethod
     def create(
@@ -106,9 +114,11 @@ class EstimatorWrapper:
         target_type: ModelTaskType,
         cv: Union[BaseCrossValidator, CVType, None],
         scoring: Union[Callable, str, None] = None,
+        shuffle: bool = False,
+        random_state: int = 42,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
-        cv = EstimatorWrapper._create_cv(cv, target_type)
+        cv = EstimatorWrapper._create_cv(cv, target_type, shuffle, random_state)
         kwargs = {"scorer": scorer, "metric_name": metric_name, "multiplier": multiplier, "cv": cv}
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
@@ -124,6 +134,7 @@ class EstimatorWrapper:
             else:
                 try:
                     from lightgbm import LGBMClassifier, LGBMRegressor  # type: ignore
+
                     if isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
                         estimator = LightGBMWrapper(**kwargs)
                     else:
