@@ -12,8 +12,7 @@
 
 [![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
 [![Python version](https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-380/)
-[![PyPI Latest Release](https://img.shields.io/badge/pypi-v0.10.0-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
-[![stability-release-candidate](https://img.shields.io/badge/stability-pre--release-br?logo=circleci&logoColor=white)](https://pypi.org/project/upgini/)
+[![PyPI Latest Release](https://img.shields.io/badge/pypi-v1.1.xx-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
 [![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
 [![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://4mlg.short.gy/join-upgini-community)
@@ -68,7 +67,7 @@ We want radically simplify features search and delivery to make external data a 
 Total: **239 countries** and **up to 41 years** of history
 |Data scource|Countries|History, years|Update|Search keys|API Key required
 |--|--|--|--|--|--|
-|Historical weather & Weather forecast by postal/ZIP code| 68 |22|Monthly|date, country, postal/ZIP code|No
+|Historical weather & Weather normals by postal/ZIP code| 68 |22|Monthly|date, country, postal/ZIP code|No
 |International holidays & events, Workweek calendar| 232 |22|Monthly|date, country|No
 |Consumer Confidence index| 44 |22|Monthly|date, country|No
 |World economic indicators|191 |41|Monthly|date, country|No
