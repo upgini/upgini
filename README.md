@@ -619,7 +619,7 @@ Please try to create bug reports that are:
 
 ## 🧩 Contributing
 We are a **very** small team and this is a part-time project for us, thus most probably we won't be able:
- - implement smooth integration with most common low-code ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
+ - implement smooth integration with most common low-code ML/Auto ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
  - implement all possible data verification and normalization capabilities for different types of search keys (we just started with current 6 types)
 
 And we need some help from community)
@@ -633,7 +633,6 @@ Some convenient ways to start contributing are:
 ## 🔗 Useful links
 - [Quick start guide as a template notebook](#1-quick-start-guide-use-as-a-template)
 - [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
-- [Project on PyPI](https://pypi.org/project/upgini)
 - [More perks for registered users](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
