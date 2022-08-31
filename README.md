@@ -82,6 +82,9 @@ Total: **239 countries** and **up to 41 years** of history
 
 👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
 
+❓**Know other useful data sources for machine learning?** [Let us know and we'll add it for free](https://forms.gle/pH99gb5hPxBEfNdR7).  
+
+
 ## 🏁 Quick start and guides
 
 ### 1. Quick start guide (use as a template)
