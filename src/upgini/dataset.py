@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 import tempfile
 import time
 from hashlib import sha256
@@ -9,7 +10,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from upgini.sampler.random_under_sampler import RandomUnderSampler
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import (
@@ -25,8 +25,8 @@ from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
-    SYSTEM_RECORD_ID,
     SYSTEM_COLUMNS,
+    SYSTEM_RECORD_ID,
     DataType,
     FeaturesFilter,
     FileColumnMeaningType,
@@ -39,6 +39,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import phone_to_int
+from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 
 
@@ -54,6 +55,7 @@ class Dataset(pd.DataFrame):
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 1100
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
+    EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
 
     _metadata = [
         "dataset_name",
@@ -290,8 +292,11 @@ class Dataset(pd.DataFrame):
     def __email_to_hem(email: str) -> Optional[str]:
         if email is None or not isinstance(email, str) or email == "":
             return None
-        else:
-            return sha256(email.lower().encode("utf-8")).hexdigest()
+
+        if not Dataset.EMAIL_REGEX.match(email):
+            return None
+
+        return sha256(email.lower().encode("utf-8")).hexdigest()
 
     def __hash_email(self):
         """Add column with HEM if email presented in search keys"""
@@ -586,10 +591,7 @@ class Dataset(pd.DataFrame):
                 self.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
         if removed_features:
-            msg = (
-                f"Columns {removed_features} has high cardinality (>90% unique values) "
-                "and has been droped from X"
-            )
+            msg = f"Columns {removed_features} has high cardinality (>90% unique values) " "and has been droped from X"
             print(msg)
             self.logger.warning(msg)
 
