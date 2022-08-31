@@ -10,14 +10,18 @@
     <a href="https://4mlg.short.gy/join-upgini-community">Slack Community</a> |
     <a href="https://forms.gle/pH99gb5hPxBEfNdR7"><strong>Propose new Data source</strong></a>
  </p>
+<p align=center>
+<a href="/LICENSE"><img alt="BSD-3 license" src="https://img.shields.io/badge/license-BSD--3%20Clause-green"></a>
+<a href="https://www.python.org/downloads/release/python-380/"><img alt="Python 3.8" src="https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white"></a>
+<a href="https://pypi.org/project/upgini/"><img alt="PyPI" src="https://img.shields.io/pypi/v/upgini?label=Release"></a>
+<a href="https://pypistats.org/packages/upgini"><img alt="Downloads from pypistats" src="https://pepy.tech/badge/upgini"></a>
+<a href="https://4mlg.short.gy/join-upgini-community"><img alt="Upgini slack community" src="https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"></a>
+</p>
 
-[![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
-[![Python version](https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-380/)
-[![PyPI Latest Release](https://img.shields.io/badge/pypi-v1.1.xx-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
+<!-- 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
-[![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
-[![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://4mlg.short.gy/join-upgini-community)
-<!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
+
+[![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
 **Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time on external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
