@@ -28,13 +28,13 @@ def test_search_keys_validation(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
-    with pytest.raises(Exception, match="Date and datetime search keys are presented simultaniously"):
+    with pytest.raises(Exception, match="DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."):
         FeaturesEnricher(
             search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
             endpoint=url,
         )
 
-    with pytest.raises(Exception, match="COUNTRY search key should be provided if POSTAL_CODE is presented"):
+    with pytest.raises(Exception, match="COUNTRY search key must be provided if POSTAL_CODE is present."):
         FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url)
 
 
