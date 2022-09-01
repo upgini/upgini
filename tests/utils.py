@@ -133,8 +133,13 @@ def mock_get_metadata(requests_mock: Mocker, url: str, search_task_id: str):
 
 
 def mock_get_features_meta(
-    requests_mock: Mocker, url: str, ads_search_task_id: str, ads_features: List[dict], etalon_features: List[dict] = []
+    requests_mock: Mocker,
+    url: str,
+    ads_search_task_id: str,
+    ads_features: List[dict],
+    etalon_features: Optional[List[dict]] = None,
 ):
+    etalon_features = etalon_features or []
     requests_mock.get(
         url + "/public/api/v2/search/features/" + ads_search_task_id,
         json={
