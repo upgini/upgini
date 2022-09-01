@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import random
@@ -8,7 +9,7 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
-import hashlib
+
 import requests
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
@@ -278,8 +279,11 @@ class _RestClient:
 
             with open(file_path, "rb") as file:
                 files = {
-                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True)
-                                 .encode(), "application/json"),
+                    "metadata": (
+                        "metadata.json",
+                        metadata_with_md5.json(exclude_none=True).encode(),
+                        "application/json",
+                    ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
@@ -350,8 +354,11 @@ class _RestClient:
 
             with open(file_path, "rb") as file:
                 files = {
-                    "metadata": ("metadata.json", metadata_with_md5.json(exclude_none=True)
-                                 .encode(), "application/json"),
+                    "metadata": (
+                        "metadata.json",
+                        metadata_with_md5.json(exclude_none=True).encode(),
+                        "application/json",
+                    ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
@@ -464,7 +471,7 @@ class _RestClient:
                     result_format="text",
                     silent=True,
                 ),
-                need_connection_retry=False
+                need_connection_retry=False,
             )
         except Exception:
             self.send_log_event_unauth(log_event)
@@ -531,8 +538,14 @@ class _RestClient:
             return response.text
 
     def _send_post_file_req_v2(
-        self, api_path, files, data=None, trace_id: Optional[str] = None, additional_headers: Dict[str, str] = {}
+        self,
+        api_path,
+        files,
+        data=None,
+        trace_id: Optional[str] = None,
+        additional_headers: Optional[Dict[str, str]] = None,
     ):
+        additional_headers = additional_headers or {}
         response = requests.post(
             url=urljoin(self._service_endpoint, api_path),
             data=data,
@@ -547,8 +560,11 @@ class _RestClient:
 
     @staticmethod
     def _get_base_headers(
-        content_type: Optional[str] = None, trace_id: Optional[str] = None, additional_headers: Dict[str, str] = {}
+        content_type: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        additional_headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, str]:
+        additional_headers = additional_headers or {}
         headers = {
             _RestClient.USER_AGENT_HEADER_NAME: _RestClient.USER_AGENT_HEADER_VALUE,
         }
@@ -564,9 +580,9 @@ class _RestClient:
         self,
         content_type: Optional[str] = None,
         trace_id: Optional[str] = None,
-        additional_headers: Dict[str, str] = {},
+        additional_headers: Optional[Dict[str, str]] = None,
     ):
-        headers = self._get_base_headers(content_type, trace_id, additional_headers)
+        headers = self._get_base_headers(content_type, trace_id, additional_headers or {})
         headers[self.ACCESS_TOKEN_HEADER_NAME] = "Bearer " + self._get_access_token()
 
         return headers

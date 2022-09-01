@@ -86,7 +86,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
 
-    with pytest.raises(Exception, match="Fit wasn't completed successfully"):
+    with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
@@ -252,7 +252,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
 
-    with pytest.raises(Exception, match="Fit wasn't completed successfully"):
+    with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
@@ -427,7 +427,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
 
-    with pytest.raises(Exception, match="Fit wasn't completed successfully"):
+    with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
 
     enriched_X = enricher.fit_transform(X, y, eval_set)

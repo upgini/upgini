@@ -1,15 +1,15 @@
-from datetime import date
 import os
+from datetime import date
 from typing import Any, Dict, Optional
 
 import pandas as pd
 import pytest
+from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import RuntimeParameters
 from upgini.search_task import SearchTask
-from pandas.testing import assert_frame_equal
 
 from .utils import (
     mock_default_requests,
@@ -28,13 +28,15 @@ def test_search_keys_validation(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
-    with pytest.raises(Exception, match="Date and datetime search keys are presented simultaniously"):
+    with pytest.raises(
+        Exception, match="DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
+    ):
         FeaturesEnricher(
             search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
             endpoint=url,
         )
 
-    with pytest.raises(Exception, match="COUNTRY search key should be provided if POSTAL_CODE is presented"):
+    with pytest.raises(Exception, match="COUNTRY search key must be provided if POSTAL_CODE is present."):
         FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url)
 
 
@@ -479,10 +481,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
 
-    tds = pd.DataFrame({
-        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
-        "target": [0, 1, 0]
-    })
+    tds = pd.DataFrame({"date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)], "target": [0, 1, 0]})
     X = tds[["date"]]
     y = tds.target
 
@@ -494,9 +493,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     search_task.initial_max_hit_rate = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame({
-        "system_record_id": [1, 2, 3]
-    })
+    enricher.enriched_X = pd.DataFrame({"system_record_id": [1, 2, 3]})
     assert enricher.calculate_metrics(X, y) is None
 
 
@@ -504,16 +501,15 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
 
-    tds = pd.DataFrame({
-        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
-        "feature": [1, 2, 3],
-    })
+    tds = pd.DataFrame(
+        {
+            "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
+            "feature": [1, 2, 3],
+        }
+    )
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
     handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
-    expected = pd.DataFrame({
-        "feature": [1, 2, 3],
-        "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
-    })
+    expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
