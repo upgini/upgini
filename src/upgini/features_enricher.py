@@ -1,5 +1,6 @@
 import itertools
 import os
+import time
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -87,6 +88,7 @@ class FeaturesEnricher(TransformerMixin):
     ):
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         validate_version(self.logger)
+
         self.search_keys = search_keys
         self.country_code = country_code
         self.__validate_search_keys(search_keys, api_key, search_id)
@@ -105,6 +107,7 @@ class FeaturesEnricher(TransformerMixin):
             trace_id = str(uuid.uuid4())
             with MDC(trace_id=trace_id):
                 try:
+                    self.logger.info(f"FeaturesEnricher created from existing search: {search_id}")
                     self._search_task = search_task.poll_result(trace_id, quiet=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
@@ -184,6 +187,7 @@ class FeaturesEnricher(TransformerMixin):
             If None, the estimator's score method is used.
         """
         trace_id = str(uuid.uuid4())
+        start_time = time.time()
         with MDC(trace_id=trace_id):
             self.logger.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
             if eval_set:
@@ -211,6 +215,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.exception("Failed inner fit")
                 raise e
             finally:
+                self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
                 if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
@@ -273,6 +278,7 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         trace_id = str(uuid.uuid4())
+        start_time = time.time()
         with MDC(trace_id=trace_id):
             self.logger.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
             if eval_set:
@@ -299,6 +305,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.exception("Failed in inner_fit")
                 raise e
             finally:
+                self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
                 if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
@@ -344,6 +351,7 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         trace_id = str(uuid.uuid4())
+        start_time = time.time()
         with MDC(trace_id=trace_id):
             self.logger.info(f"Start transform. X shape: {X.shape}")
             try:
@@ -355,6 +363,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.exception("Failed to inner transform")
                 raise e
             finally:
+                self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
                 if self.country_added and COUNTRY in self.search_keys.keys():
                     del self.search_keys[COUNTRY]
                 if self.index_renamed and RENAMED_INDEX in self.search_keys.keys():
@@ -415,6 +424,7 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         trace_id = trace_id or str(uuid.uuid4())
+        start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
                 if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
@@ -570,6 +580,8 @@ class FeaturesEnricher(TransformerMixin):
             except Exception as e:
                 self.logger.exception("Failed to calculate metrics")
                 raise e
+            finally:
+                self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of the fitted enricher. Not available before a successful fit."""
@@ -851,7 +863,16 @@ class FeaturesEnricher(TransformerMixin):
         return self.enriched_X[filtered_columns]
 
     def __log_debug_information(self, df: pd.DataFrame):
-        self.logger.info(f"Used search keys: {self.search_keys}")
+        self.logger.info(f"Search keys: {self.search_keys}")
+        self.logger.info(f"Country code: {self.country_code}")
+        self.logger.info(f"Model task type: {self.model_task_type}")
+        resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+        self.logger.info(f"Api key presented?: {resolved_api_key is not None and resolved_api_key != ''}")
+        self.logger.info(f"Endpoint: {self.endpoint}")
+        self.logger.info(f"Runtime parameters: {self.runtime_parameters}")
+        self.logger.info(f"Date format: {self.date_format}")
+        self.logger.info(f"CV: {self.cv}")
+        self.logger.info(f"Random state: {self.random_state}")
         self.logger.info(f"First 10 rows of the dataset:\n{df.head(10)}")
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
