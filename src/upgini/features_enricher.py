@@ -1068,6 +1068,16 @@ class FeaturesEnricher(TransformerMixin):
             )
             print(msg)
 
+        maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
+        if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0:
+            date_column = next(iter(maybe_date))
+            if x[date_column].nunique() > 0.9 * len(x):
+                msg = (
+                    "WARNING: Looks like you have a time series training dataset. "
+                    "We recommend option “cv=CVType.time_series” for the best results"
+                )
+                print(msg)
+
     def __show_metrics(
         self,
         X: pd.DataFrame,

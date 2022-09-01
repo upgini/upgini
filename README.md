@@ -10,14 +10,18 @@
     <a href="https://4mlg.short.gy/join-upgini-community">Slack Community</a> |
     <a href="https://forms.gle/pH99gb5hPxBEfNdR7"><strong>Propose new Data source</strong></a>
  </p>
+<p align=center>
+<a href="/LICENSE"><img alt="BSD-3 license" src="https://img.shields.io/badge/license-BSD--3%20Clause-green"></a>
+<a href="https://www.python.org/downloads/release/python-380/"><img alt="Python 3.8" src="https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white"></a>
+<a href="https://pypi.org/project/upgini/"><img alt="PyPI" src="https://img.shields.io/pypi/v/upgini?label=Release"></a>
+<a href="https://pypistats.org/packages/upgini"><img alt="Downloads from pypistats" src="https://pepy.tech/badge/upgini"></a>
+<a href="https://4mlg.short.gy/join-upgini-community"><img alt="Upgini slack community" src="https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"></a>
+</p>
 
-[![license](https://img.shields.io/badge/license-BSD--3%20Clause-green)](/LICENSE)
-[![Python version](https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-380/)
-[![PyPI Latest Release](https://img.shields.io/badge/pypi-v1.1.xx-blue?logo=pypi&logoColor=white)](https://pypi.org/project/upgini/)
+<!-- 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?logo=python&logoColor=white)](https://github.com/psf/black)
-[![Downloads](https://pepy.tech/badge/upgini)](https://pepy.tech/project/upgini)
-[![Slack Upgini](https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack)](https://4mlg.short.gy/join-upgini-community)
-<!-- [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
+
+[![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
 **Upgini** is a simple feature search & enrichment library in Python. With Upgini, you spend less time on external data search and feature engineering, which will be done for you automatically. Just use your labeled dataset to initiate search through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Only the relevant features that improve prediction power of your ML model are returned.  
@@ -81,6 +85,9 @@ Total: **239 countries** and **up to 41 years** of history
 |🔜 Email/WWW domain profile|-|-|-|-
 
 👉 More details on [datasets and features here](https://upgini.com/#data_sources)  
+
+❓**Know other useful data sources for machine learning?** [Let us know and we'll add it for free](https://forms.gle/pH99gb5hPxBEfNdR7).  
+
 
 ## 🏁 Quick start and guides
 
@@ -612,7 +619,7 @@ Please try to create bug reports that are:
 
 ## 🧩 Contributing
 We are a **very** small team and this is a part-time project for us, thus most probably we won't be able:
- - implement smooth integration with most common low-code ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
+ - implement smooth integration with most common low-code ML/Auto ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
  - implement all possible data verification and normalization capabilities for different types of search keys (we just started with current 6 types)
 
 And we need some help from community)
@@ -626,7 +633,6 @@ Some convenient ways to start contributing are:
 ## 🔗 Useful links
 - [Quick start guide as a template notebook](#1-quick-start-guide-use-as-a-template)
 - [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
-- [Project on PyPI](https://pypi.org/project/upgini)
 - [More perks for registered users](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
