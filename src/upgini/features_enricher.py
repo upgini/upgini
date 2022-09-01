@@ -44,34 +44,29 @@ class FeaturesEnricher(TransformerMixin):
         Each of this columns will be used as a search key to find features.
 
     country_code: str, optional (default=None)
-        ISO-3166 COUNTRY code of country for all rows in dataset.
+        If defined, set this ISO-3166 country code for all rows in the dataset.
 
     model_task_type: ModelTaskType, optional (default=None)
-        If defined, used as type of training model, else autdefined type will be used
+        Type of training model. If not specified, the type will be autodetected.
 
     api_key: str, optional (default=None)
         Token to authorize search requests. You can get it on https://profile.upgini.com/.
-        If not specified then read the value from the environment variable UPGINI_API_KEY.
+        If not specified, the value will be read from the environment variable UPGINI_API_KEY.
 
     endpoint: str, optional (default=None)
         URL of Upgini API where search requests are submitted.
-        If not specified then used the default value.
-        Please don't overwrite it if you are unsure.
+        If not specified, use the default value. Don't overwrite it if you are unsure.
 
     search_id: str, optional (default=None)
-        Identifier of fitted enricher.
-        If not specified transform could be called only after fit or fit_transform call
-
-    runtime_parameters: dict of str->str, optional (default None).
-        Not for public use. Ignore it. It's a way to argument requests with extra parameters.
-        Used to trigger experimental features at backend. Used by backend team.
+        Identifier of a previously fitted enricher to continue using it without refitting.
+        If not specified, you must fit the enricher before calling transform.
 
     date_format: str, optional (default=None)
-        Format for date column with string type. For example: %Y-%m-%d
+        Format of dates if they are represented by strings. For example: %Y-%m-%d.
 
     cv: CVType, optional (default=None)
-        Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series
-        Default cross validation is K-Fold for regressions and Stratified-K-Fold for classifications
+        Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series.
+        Default cross validation is k-fold for regressions and stratified k-fold for classifications.
     """
 
     TARGET_NAME = "target"
@@ -105,8 +100,8 @@ class FeaturesEnricher(TransformerMixin):
                 endpoint=self.endpoint,
                 api_key=self.api_key,
             )
-            print("Checking existing search")
 
+            print("Retrieving the specified search...")
             trace_id = str(uuid.uuid4())
             with MDC(trace_id=trace_id):
                 try:
@@ -115,10 +110,11 @@ class FeaturesEnricher(TransformerMixin):
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
                     self.__prepare_feature_importances(trace_id, x_columns)
                     # TODO validate search_keys with search_keys from file_metadata
-                    print("Search found. Now you can use transform")
-                    self.logger.info(f"FeaturesEnricher successfully initialized with searchTaskId: {search_id}")
+                    print("Search found. Now you can use transform.")
+                    self.logger.info(f"Successfully initialized with search_id: {search_id}")
                 except Exception as e:
-                    self.logger.exception("Failed to check existing search")
+                    print("Failed to retrieve the specified search.")
+                    self.logger.exception(f"Failed to find search_id: {search_id}")
                     raise e
 
         self.runtime_parameters = runtime_parameters
@@ -155,39 +151,37 @@ class FeaturesEnricher(TransformerMixin):
     ):
         """Fit to data.
 
-        Fits transformer to `X` and `y` with optional parameters `fit_params`.
+        Fits transformer to `X` and `y`.
 
         Parameters
         ----------
-        X : pandas dataframe of shape (n_samples, n_features)
+        X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
 
-        y :  array-like of shape (n_samples,) default=None
+        y: array-like of shape (n_samples,)
             Target values.
 
-        eval_set : List[tuple], optional (default=None)
-            List of pairs like (X, y) for validation
+        eval_set: List[tuple], optional (default=None)
+            List of pairs (X, y) for validation.
 
         keep_input: bool, optional (default=False)
             If True, copy original input columns to the output dataframe.
 
         importance_threshold: float, optional (default=None)
-            Minimum importance shap value for selected features. By default minimum importance is 0.0
+            Minimum SHAP value to select a feature. Default value is 0.0.
 
         max_features: int, optional (default=None)
-            Maximum count of selected most important features. By default it is unlimited
+            Maximum number of most important features to select. If None, the number is unlimited.
 
-        calculate_metrics : bool (default=False)
-            Calculate and show metrics
+        calculate_metrics: bool (default=False)
+            Whether to calculate and show metrics.
 
-        estimator : optional (default=None)
-            Custom estimator for metrics calculation. It should be sklearn-compatible
+        estimator: sklearn-compatible estimator, optional (default=None)
+            Custom estimator for metrics calculation.
 
-        scoring: string, callable or None, optional, default: None
+        scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
-
-
         """
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
@@ -239,44 +233,43 @@ class FeaturesEnricher(TransformerMixin):
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
 
-        Fits transformer to `X` and `y` with optional parameters `fit_params`
-        and returns a transformed version of `X`.
-        If keep_input is True, then all input columns are present in output dataframe.
+        Fits transformer to `X` and `y` and returns a transformed version of `X`.
+        If keep_input is True, then all input columns are copied to the output dataframe.
 
         Parameters
         ----------
-        X : pandas dataframe of shape (n_samples, n_features)
+        X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
 
-        y :  array-like of shape (n_samples,) default=None
+        y: array-like of shape (n_samples,)
             Target values.
 
-        eval_set : List[tuple], optional (default=None)
-            List of pairs like (X, y) for validation
+        eval_set: List[tuple], optional (default=None)
+            List of pairs (X, y) for validation.
 
         keep_input: bool, optional (default=False)
             If True, copy original input columns to the output dataframe.
 
         importance_threshold: float, optional (default=None)
-            Minimum importance shap value for selected features. By default minimum importance is 0.0
+            Minimum SHAP value to select a feature. Default value is 0.0.
 
         max_features: int, optional (default=None)
-            Maximum count of selected most important features. By default it is unlimited
+            Maximum number of most important features to select. If None, the number is unlimited.
 
-        calculate_metrics : bool (default=False)
-            Calculate and show metrics
+        calculate_metrics: bool (default=False)
+            Whether to calculate and show metrics.
 
-        scoring: string, callable or None, optional, default: None
+        estimator: sklearn-compatible estimator, optional (default=None)
+            Custom estimator for metrics calculation.
+
+        scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
 
-        estimator : optional (default=None)
-            Custom estimator for metrics calculation. It should be sklearn-compatible
-
         Returns
         -------
-        X_new : pandas dataframe of shape (n_samples, n_features_new)
-            Transformed dataframe, enriched with important features.
+        X_new: pandas.DataFrame of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with valuable features.
         """
 
         trace_id = str(uuid.uuid4())
@@ -328,26 +321,26 @@ class FeaturesEnricher(TransformerMixin):
         """Transform `X`.
 
         Returns a transformed version of `X`.
-        If keep_input is True, then all input columns are present in output dataframe.
+        If keep_input is True, then all input columns are copied to the output dataframe.
 
         Parameters
         ----------
-        X : pandas dataframe of shape (n_samples, n_features)
+        X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
 
         keep_input: bool, optional (default=False)
             If True, copy original input columns to the output dataframe.
 
         importance_threshold: float, optional (default=None)
-            Minimum importance shap value for selected features. By default minimum importance is 0.0
+            Minimum SHAP value to select a feature. Default value is 0.0.
 
         max_features: int, optional (default=None)
-            Maximum count of selected most important features. By default it is unlimited
+            Maximum number of most important features to select. If None, the number is unlimited.
 
         Returns
         -------
-        X_new : pandas dataframe of shape (n_samples, n_features_new)
-            Transformed dataframe, enriched with important features.
+        X_new: pandas.DataFrame of shape (n_samples, n_features_new)
+            Transformed dataframe, enriched with valuable features.
         """
 
         trace_id = str(uuid.uuid4())
@@ -388,47 +381,54 @@ class FeaturesEnricher(TransformerMixin):
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
 
-        X : pandas dataframe of shape (n_samples, n_features)
-            Input samples same as on the fit.
+        Parameters
+        ----------
+        X: pandas.DataFrame of shape (n_samples, n_features)
+            The same input samples that have been used for fit.
 
-        y :  array-like of shape (n_samples,) default=None
-            Target values same as on the fit.
+        y: array-like of shape (n_samples,)
+            The same target values that have been used for fit.
 
-        eval_set : List[tuple], optional (default=None)
-            List of pairs like (X, y) for validation same as on the fit
+        eval_set: List[tuple], optional (default=None)
+            The same list of validation pairs (X, y) that have been used for fit.
 
-        scoring: string, callable or None, optional, default: None
+        scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
 
-        cv : BaseCrossValidator, optional (default=None)
-            Custom cross validator for metric calculation on train segment
+        cv: sklearn.model_selection.BaseCrossValidator, optional (default=None)
+            Custom cross validator to calculate metric on train.
 
-        estimator : sklearn-compatible estimator, optional (default=None)
-            Custom estimator for metrics calculation. If not passed then CatBoost will be used
+        estimator: sklearn-compatible estimator, optional (default=None)
+            Custom estimator for metrics calculation. If not passed then CatBoost will be used.
 
         importance_threshold: float, optional (default=None)
-            Minimum importance shap value for selected features. By default minimum importance is 0.0
+            Minimum SHAP value to select a feature. Default value is 0.0.
 
         max_features: int, optional (default=None)
-            Maximum count of selected most important features. By default it is unlimited
+            Maximum number of most important features to select. If None, the number is unlimited.
+
+        Returns
+        -------
+        metrics: pandas.DataFrame
+            Dataframe with metrics calculated on train and validation datasets.
         """
 
         trace_id = trace_id or str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
                 if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
-                    raise Exception("Fit wasn't completed successfully")
+                    raise Exception("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
-                    raise Exception("Metrics calculation unavailable after restart. Please run fit again")
+                    raise Exception("Metrics calculation isn't possible after restart. Please, fit the enricher again.")
 
                 if not isinstance(X, pd.DataFrame):
-                    raise Exception(f"Unsupported X type: {type(y)}. Use pandas DataFrame")
+                    raise Exception(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
 
                 if isinstance(y, np.ndarray) or isinstance(y, list):
                     y = pd.Series(y, name="target")
                 elif not isinstance(y, pd.Series):
-                    raise Exception(f"Unsupported y type: {type(y)}. Use pandas Series or numpy array or list")
+                    raise Exception(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
 
                 Xy = X.copy()
                 Xy["target"] = y
@@ -442,7 +442,7 @@ class FeaturesEnricher(TransformerMixin):
                 fitting_enriched_X = self.enriched_X[filtered_columns]
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    print("WARN: There are no features to calculate metrics")
+                    print("WARN: No features to calculate metrics.")
                     self.logger.warning("No client or relevant ADS features found to calculate metrics")
                     return None
 
@@ -457,7 +457,7 @@ class FeaturesEnricher(TransformerMixin):
                 _cv = cv or self.cv
 
                 self.logger.info("Start calculating metrics")
-                print("Start calculating metrics")
+                print("Calculating metrics...")
 
                 with Spinner():
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -527,7 +527,7 @@ class FeaturesEnricher(TransformerMixin):
                             enriched_model.fit(fitting_enriched_X, y)
                         elif etalon_model is None:
                             self.logger.error("No client or ADS features, but first validation didn't work")
-                            print("There are no features to calculate metrics")
+                            print("WARN: No features to calculate metrics.")
                             return None
                         else:
                             enriched_model = etalon_model
@@ -565,20 +565,20 @@ class FeaturesEnricher(TransformerMixin):
                                     "uplift": eval_uplift,
                                 }
                             )
-                    self.logger.info("Calculate metrics finished successfully")
+                    self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except Exception as e:
                 self.logger.exception("Failed to calculate metrics")
                 raise e
 
     def get_search_id(self) -> Optional[str]:
-        """Returns search_id of fitted enricher. It's present only after fit completed"""
+        """Returns search_id of the fitted enricher. Not available before a successful fit."""
         return self._search_task.search_task_id if self._search_task else None
 
     def get_features_info(self) -> pd.DataFrame:
-        """Returns pandas dataframe with importances for each feature"""
+        """Returns pandas.DataFrame with SHAP values and other info for each feature."""
         if self._search_task is None or self._search_task.summary is None:
-            msg = "Run fit or pass search_id before get features info."
+            msg = "Fit the enricher or pass search_id before calling get_features_info."
             self.logger.warning(msg)
             raise NotFittedError(msg)
 
@@ -595,16 +595,16 @@ class FeaturesEnricher(TransformerMixin):
     ) -> pd.DataFrame:
         with MDC(trace_id=trace_id):
             if self._search_task is None:
-                msg = "`fit` or `fit_transform` should be called before `transform`."
+                msg = "Fit the enricher or pass search_id before calling transform."
                 self.logger.error(msg)
                 raise NotFittedError(msg)
             if not isinstance(X, pd.DataFrame):
-                msg = f"Only pandas.DataFrame supported for X, but {type(X)} was passed."
+                msg = f"Unsupported type of X: {type(X)}. Use pandas.DataFrame."
                 self.logger.error(msg)
                 raise TypeError(msg)
 
             if len(set(X.columns)) != len(X.columns):
-                raise ValueError("X contains duplicating columns names, please check your dataset")
+                raise ValueError("X contains duplicated columns names. Please, rename or drop them.")
 
             self.__prepare_search_keys(X)
 
@@ -653,7 +653,7 @@ class FeaturesEnricher(TransformerMixin):
             )
 
             if not silent_mode:
-                print("Executing transform step")
+                print("Collecting selected features...")
                 with Spinner():
                     result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
             else:
@@ -669,31 +669,33 @@ class FeaturesEnricher(TransformerMixin):
         if len(search_keys) == 0:
             if search_id:
                 self.logger.error(f"search_id {search_id} provided without search_keys")
-                raise ValueError("To transform with search_id please set search_keys to the value used for fitting.")
+                raise ValueError(
+                    "When search_id is passed, search_keys must be set to the same value that have been used for fit."
+                )
             else:
                 self.logger.error("search_keys not provided")
-                raise ValueError("Key columns should be marked up by search_keys.")
+                raise ValueError("At least one column must be provided in search_keys.")
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
-            msg = "Date and datetime search keys are presented simultaniously. Select only one of them"
+            msg = "DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
             self.logger.error(msg)
             raise Exception(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
-            msg = "Email and HEM search keys are presented simultaniously. Select only one of them"
+            msg = "EMAIL and HEM search keys cannot be used simultaneously. Choose one to keep."
             self.logger.error(msg)
             raise Exception(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
-            msg = "COUNTRY search key should be provided if POSTAL_CODE is presented"
+            msg = "COUNTRY search key must be provided if POSTAL_CODE is present."
             self.logger.error(msg)
             raise Exception(msg)
 
         for key_type in SearchKey.__members__.values():
-            if key_type != SearchKey.CUSTOM_KEY and len(list(filter(lambda x: x == key_type, key_types))) > 1:
-                msg = f"Search key {key_type} presented multiple times"
+            if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
+                msg = f"Search key {key_type} is presented multiple times."
                 self.logger.error(msg)
                 raise Exception(msg)
 
@@ -702,8 +704,9 @@ class FeaturesEnricher(TransformerMixin):
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
             msg = (
-                "Only person-level search keys provided."
-                "To run without registration use DATE, COUNTRY and POSTAL_CODE keys"
+                "No API key found and all search keys are registration-only. "
+                "Please, use DATE, COUNTRY and POSTAL_CODE keys for free searches without registration. "
+                "Or provide API key either directly or via environment variable UPGINI_API_KEY."
             )
             self.logger.error(msg + f" Provided search keys: {key_types}")
             raise Exception(msg)
