@@ -269,7 +269,7 @@ class _RestClient:
         api_path = self.INITIAL_SEARCH_URI_FMT_V2
 
         def open_and_send():
-            md5_hash = hashlib.md5()
+            sha256_hash = hashlib.sha256()
             with open(file_path, "rb") as file:
                 content = file.read()
                 md5_hash.update(content)
@@ -341,7 +341,7 @@ class _RestClient:
         api_path = self.VALIDATION_SEARCH_URI_FMT_V2.format(initial_search_task_id)
 
         def open_and_send():
-            md5_hash = hashlib.md5()
+            sha256_hash = hashlib.sha256()
             with open(file_path, "rb") as file:
                 content = file.read()
                 md5_hash.update(content)
