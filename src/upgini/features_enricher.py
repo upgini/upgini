@@ -30,7 +30,11 @@ from upgini.metadata import (
 from upgini.metrics import EstimatorWrapper
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
+from upgini.utils.country_utils import CountrySearchKeyDetector
+from upgini.utils.email_utils import EmailSearchKeyDetector
 from upgini.utils.format import Format
+from upgini.utils.phone_utils import PhoneSearchKeyDetector
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
 from upgini.version_validator import validate_version
 
@@ -85,6 +89,7 @@ class FeaturesEnricher(TransformerMixin):
         date_format: Optional[str] = None,
         random_state: int = 42,
         cv: Optional[CVType] = None,
+        detect_missing_search_keys: bool = True,
     ):
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         validate_version(self.logger)
@@ -123,6 +128,7 @@ class FeaturesEnricher(TransformerMixin):
         self.runtime_parameters = runtime_parameters
         self.date_format = date_format
         self.random_state = random_state
+        self.detect_missing_search_keys = detect_missing_search_keys
         self.cv = cv
         if cv is not None:
             if self.runtime_parameters is None:
@@ -1073,6 +1079,9 @@ class FeaturesEnricher(TransformerMixin):
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
 
+        if self.detect_missing_search_keys:
+            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys)
+
         self.search_keys = valid_search_keys
 
         using_keys = self.__using_search_keys()
@@ -1197,40 +1206,47 @@ class FeaturesEnricher(TransformerMixin):
             importance_threshold, max_features
         )
 
-    def __check_quality(self, no_data_found: bool):
-        if no_data_found or self.__is_quality_by_metrics_low():
-            try:
-                from IPython.display import HTML, display  # type: ignore
+    def __detect_missing_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:
+        sample = df.head(100)
 
-                display(
-                    HTML(
-                        "<h9>Oops, looks like we're not able to find data which gives a strong uplift for your ML "
-                        "algorithm.<br>If you have ANY data which you might consider as royalty and "
-                        "license-free and potentially valuable for supervised ML applications,<br> we shall be "
-                        "happy to give you free individual access in exchange for sharing this data with "
-                        "community.<br>Just upload your data sample right from Jupyter. We will check your data "
-                        "sharing proposal and get back to you ASAP."
-                    )
+        if SearchKey.POSTAL_CODE not in search_keys.keys():
+            maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
+            if maybe_key is not None:
+                search_keys[maybe_key] = SearchKey.POSTAL_CODE
+                msg = (
+                    f"Postal codes detected in column {maybe_key} and it will be used as search key. "
+                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
                 )
-                display(
-                    HTML(
-                        "<a href='https://github.com/upgini/upgini/blob/main/README.md"
-                        "#share-license-free-data-with-community' "
-                        "target='_blank'>How to upload your data sample from Jupyter</a>"
-                    )
+                print(msg)
+
+        if SearchKey.EMAIL not in search_keys.keys():
+            maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
+            if maybe_key is not None:
+                search_keys[maybe_key] = SearchKey.EMAIL
+                msg = (
+                    f"Emails detected in column {maybe_key} and it will be used as search key. "
+                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
                 )
-            except ImportError:
-                print("Oops, looks like we're not able to find data which gives a strong uplift for your ML algorithm.")
-                print(
-                    "If you have ANY data which you might consider as royalty and license-free and potentially "
-                    "valuable for supervised ML applications,"
+                print(msg)
+
+        if SearchKey.COUNTRY not in search_keys.keys() and self.country_code is None:
+            maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
+            if maybe_key is not None:
+                search_keys[maybe_key] = SearchKey.COUNTRY
+                msg = (
+                    f"Country detected in column {maybe_key} and it will be used as search key. "
+                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
                 )
-                print(
-                    "we shall be happy to give you free individual access in exchange for sharing this data with "
-                    "community."
+                print(msg)
+
+        if SearchKey.PHONE not in search_keys.keys():
+            maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
+            if maybe_key is not None:
+                search_keys[maybe_key] = SearchKey.PHONE
+                msg = (
+                    f"Phone numbers detected in column {maybe_key} and it will be used as search key. "
+                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
                 )
-                print(
-                    "Just upload your data sample right from Jupyter. We will check your data sharing proposal and "
-                    "get back to you ASAP."
-                )
-                print("https://github.com/upgini/upgini/blob/main/README.md#share-license-free-data-with-community")
+                print(msg)
+
+        return search_keys
