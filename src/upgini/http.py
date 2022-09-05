@@ -240,7 +240,7 @@ class _RestClient:
             if e.status_code == 429 and try_number == 0:
                 time.sleep(random.randint(1, 10))
                 return self._with_unauth_retry(request, 1)
-            elif e.status_code == 400 and "MD5Exception".lower() in e.message.lower() and try_number < 3:
+            elif e.status_code == 400 and "SHA256Exception".lower() in e.message.lower() and try_number < 3:
                 print(f"File upload error, going to retry. {e.message}")
                 return self._with_unauth_retry(request, try_number + 1)
             else:
@@ -273,19 +273,19 @@ class _RestClient:
             sha256_hash = hashlib.sha256()
             with open(file_path, "rb") as file:
                 content = file.read()
-                md5_hash.update(content)
-                digest = md5_hash.hexdigest()
-                metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+                sha256_hash.update(content)
+                digest = sha256_hash.hexdigest()
+                metadata_with_sha256 = metadata.copy(update={"checksumSHA256": digest})
 
             with open(file_path, "rb") as file:
                 files = {
                     "metadata": (
                         "metadata.json",
-                        metadata_with_md5.json(exclude_none=True).encode(),
+                        metadata_with_sha256.json(exclude_none=True).encode(),
                         "application/json",
                     ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
-                    "file": (metadata_with_md5.name, file, "application/octet-stream"),
+                    "file": (metadata_with_sha256.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
@@ -348,19 +348,19 @@ class _RestClient:
             sha256_hash = hashlib.sha256()
             with open(file_path, "rb") as file:
                 content = file.read()
-                md5_hash.update(content)
-                digest = md5_hash.hexdigest()
-                metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+                sha256_hash.update(content)
+                digest = sha256_hash.hexdigest()
+                metadata_with_sha256 = metadata.copy(update={"checksumSHA256": digest})
 
             with open(file_path, "rb") as file:
                 files = {
                     "metadata": (
                         "metadata.json",
-                        metadata_with_md5.json(exclude_none=True).encode(),
+                        metadata_with_sha256.json(exclude_none=True).encode(),
                         "application/json",
                     ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
-                    "file": (metadata_with_md5.name, file, "application/octet-stream"),
+                    "file": (metadata_with_sha256.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
