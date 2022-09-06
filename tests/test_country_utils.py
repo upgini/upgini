@@ -23,3 +23,16 @@ def test_is_country_column_by_name():
     df = pd.DataFrame({"country": ["not country"] * 10})
 
     assert detector.get_search_key_column(df) == "country"
+
+
+def test_country_to_iso_code_convertion():
+    df = pd.DataFrame({
+        "country": ["Austria", "England", "Poland", "", "Unknown"]
+    })
+
+    expected_df = df.copy()
+    expected_df["country"] = ["AT", "GB", "PL", "", "Unknown"]
+
+    df_with_code = CountrySearchKeyDetector.convert_country_to_iso_code(df, "country")
+
+    assert expected_df.equals(df_with_code)

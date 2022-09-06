@@ -941,6 +941,11 @@ class FeaturesEnricher(TransformerMixin):
             df[COUNTRY] = self.country_code
             self.search_keys[COUNTRY] = SearchKey.COUNTRY
             self.country_added = True
+
+        if SearchKey.COUNTRY in self.search_keys.values():
+            country_column = list(self.search_keys.keys())[list(self.search_keys.values()).index(SearchKey.COUNTRY)]
+            df = CountrySearchKeyDetector.convert_country_to_iso_code(df, country_column)
+
         return df
 
     def __enrich(
@@ -1213,6 +1218,7 @@ class FeaturesEnricher(TransformerMixin):
             maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
+                self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_key}")
                 msg = (
                     f"Postal codes detected in column {maybe_key} and it will be used as search key. "
                     "If you want to turn off automatic detection function: "
@@ -1225,6 +1231,7 @@ class FeaturesEnricher(TransformerMixin):
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.EMAIL
+                self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
                 msg = (
                     f"Emails detected in column {maybe_key} and it will be used as search key. "
                     "If you want to turn off automatic detection function: "
@@ -1237,6 +1244,7 @@ class FeaturesEnricher(TransformerMixin):
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.COUNTRY
+                self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
                 msg = (
                     f"Country detected in column {maybe_key} and it will be used as search key. "
                     "If you want to turn off automatic detection function: "
@@ -1249,6 +1257,7 @@ class FeaturesEnricher(TransformerMixin):
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.PHONE
+                self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
                 msg = (
                     f"Phone numbers detected in column {maybe_key} and it will be used as search key. "
                     "If you want to turn off automatic detection function: "
