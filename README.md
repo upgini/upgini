@@ -575,6 +575,20 @@ enricher = FeaturesEnricher(
 
 enricher.transform(X)
 ```
+
+### ✅ Optional: turn off autodetection of search keys
+Upgini has turn on autodetection of search keys option by default.
+To turn off please launch with `detect_missing_search_keys=False` in constructor:
+
+```python
+enricher = FeaturesEnricher(
+   search_keys={"date": SearchKey.DATE},
+   detect_missing_search_keys=False,
+)
+
+enricher.fit(X, y)
+```
+
 ### 🔑 Benefits of becoming a registered user
 
 [Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features on phone numbers, hashed emails, and IP addresses:  
