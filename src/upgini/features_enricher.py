@@ -1215,7 +1215,9 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
                 msg = (
                     f"Postal codes detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
+                    "If you want to turn off automatic detection function: "
+                    "https://github.com/upgini/upgini/blob/main/README.md"
+                    "#-optional-turn-off-autodetection-of-search-keys"
                 )
                 print(msg)
 
@@ -1225,7 +1227,9 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.EMAIL
                 msg = (
                     f"Emails detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
+                    "If you want to turn off automatic detection function: "
+                    "https://github.com/upgini/upgini/blob/main/README.md"
+                    "#-optional-turn-off-autodetection-of-search-keys"
                 )
                 print(msg)
 
@@ -1235,7 +1239,9 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.COUNTRY
                 msg = (
                     f"Country detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
+                    "If you want to turn off automatic detection function: "
+                    "https://github.com/upgini/upgini/blob/main/README.md"
+                    "#-optional-turn-off-autodetection-of-search-keys"
                 )
                 print(msg)
 
@@ -1245,7 +1251,9 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.PHONE
                 msg = (
                     f"Phone numbers detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: https://github.com/upgini/upgini"
+                    "If you want to turn off automatic detection function: "
+                    "https://github.com/upgini/upgini/blob/main/README.md"
+                    "#-optional-turn-off-autodetection-of-search-keys"
                 )
                 print(msg)
 
