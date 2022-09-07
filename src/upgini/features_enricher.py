@@ -1214,7 +1214,7 @@ class FeaturesEnricher(TransformerMixin):
     def __detect_missing_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:
         sample = df.head(100)
 
-        if SearchKey.POSTAL_CODE not in search_keys.keys():
+        if SearchKey.POSTAL_CODE not in search_keys.values():
             maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
@@ -1227,7 +1227,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
-        if SearchKey.EMAIL not in search_keys.keys():
+        if SearchKey.EMAIL not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.EMAIL
@@ -1240,7 +1240,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
-        if SearchKey.COUNTRY not in search_keys.keys() and self.country_code is None:
+        if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.COUNTRY
@@ -1253,7 +1253,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
-        if SearchKey.PHONE not in search_keys.keys():
+        if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.PHONE
