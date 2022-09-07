@@ -1227,7 +1227,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
-        if SearchKey.EMAIL not in search_keys.values():
+        if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.EMAIL

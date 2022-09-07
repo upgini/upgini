@@ -301,18 +301,23 @@ class Dataset(pd.DataFrame):
     def __hash_email(self):
         """Add column with HEM if email presented in search keys"""
         email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
+        hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
         if email is not None and email in self.columns:
             # self.logger.info("Hashing email")
-            generated_hem_name = "generated_hem"
-            self[generated_hem_name] = self[email].apply(self.__email_to_hem)
-            self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
+            if hem is None:
+                generated_hem_name = "generated_hem"
+                self[generated_hem_name] = self[email].apply(self.__email_to_hem)
+                self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
+                self.etalon_def_checked[FileColumnMeaningType.HEM.value] = generated_hem_name
+
+                self.search_keys = [
+                    tuple(key if key != email else generated_hem_name for key in search_group)
+                    for search_group in self.search_keys_checked
+                ]
+
             self.meaning_types_checked.pop(email)
-            self.etalon_def_checked[FileColumnMeaningType.HEM.value] = generated_hem_name
             del self.etalon_def_checked[FileColumnMeaningType.EMAIL.value]
-            self.search_keys = [
-                tuple(key if key != email else generated_hem_name for key in search_group)
-                for search_group in self.search_keys_checked
-            ]
+
             self["email_domain"] = self[email].str.split("@").str[1]
             self.drop(columns=email, inplace=True)
 
