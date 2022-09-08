@@ -91,12 +91,13 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
     ):
+        api_key = api_key or os.environ.get(UPGINI_API_KEY)
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         validate_version(self.logger)
 
         self.search_keys = search_keys
         self.country_code = country_code
-        self.__validate_search_keys(search_keys, api_key, search_id)
+        self.__validate_search_keys(search_keys, search_id)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self.api_key = api_key
@@ -681,9 +682,7 @@ class FeaturesEnricher(TransformerMixin):
 
             return result[filtered_columns]
 
-    def __validate_search_keys(
-        self, search_keys: Dict[str, SearchKey], api_key: Optional[str], search_id: Optional[str]
-    ):
+    def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
                 self.logger.error(f"search_id {search_id} provided without search_keys")
@@ -717,10 +716,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.error(msg)
                 raise Exception(msg)
 
-        api_key = api_key or os.environ.get(UPGINI_API_KEY)
-        is_registered = api_key is not None and api_key != ""
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
-        if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
+        if not self.__is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
             msg = (
                 "No API key found and all search keys are registration-only. "
                 "Please, use DATE, COUNTRY and POSTAL_CODE keys for free searches without registration. "
@@ -728,6 +725,10 @@ class FeaturesEnricher(TransformerMixin):
             )
             self.logger.error(msg + f" Provided search keys: {key_types}")
             raise Exception(msg)
+
+    @property
+    def __is_registered(self) -> bool:
+        return self.api_key is not None and self.api_key != ""
 
     def __inner_fit(
         self,
@@ -1227,19 +1228,6 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
-        if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
-            maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None:
-                search_keys[maybe_key] = SearchKey.EMAIL
-                self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
-                msg = (
-                    f"Emails detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: "
-                    "https://github.com/upgini/upgini/blob/main/README.md"
-                    "#-optional-turn-off-autodetection-of-search-keys"
-                )
-                print(msg)
-
         if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
@@ -1253,11 +1241,34 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
+        if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
+            maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
+            if maybe_key is not None:
+                if self.__is_registered:
+                    search_keys[maybe_key] = SearchKey.EMAIL
+                    self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
+                else:
+                    self.logger.info(
+                        f"Autodetected search key EMAIL in column {maybe_key}. But not used because not registered user"
+                    )
+                msg = (
+                    f"Emails detected in column {maybe_key} and it will be used as search key. "
+                    "If you want to turn off automatic detection function: "
+                    "https://github.com/upgini/upgini/blob/main/README.md"
+                    "#-optional-turn-off-autodetection-of-search-keys"
+                )
+                print(msg)
+
         if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
-                search_keys[maybe_key] = SearchKey.PHONE
-                self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
+                if self.__is_registered:
+                    search_keys[maybe_key] = SearchKey.PHONE
+                    self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
+                else:
+                    self.logger.info(
+                        f"Autodetected search key PHONE in column {maybe_key}. But not used because not registered user"
+                    )
                 msg = (
                     f"Phone numbers detected in column {maybe_key} and it will be used as search key. "
                     "If you want to turn off automatic detection function: "
