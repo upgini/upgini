@@ -91,8 +91,8 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
     ):
-        api_key = api_key or os.environ.get(UPGINI_API_KEY)
-        self.logger = LoggerFactory().get_logger(endpoint, api_key)
+        self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
         validate_version(self.logger)
 
         self.search_keys = search_keys
@@ -100,7 +100,6 @@ class FeaturesEnricher(TransformerMixin):
         self.__validate_search_keys(search_keys, search_id)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
-        self.api_key = api_key
         self._search_task: Optional[SearchTask] = None
         if search_id:
             search_task = SearchTask(
