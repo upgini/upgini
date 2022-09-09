@@ -436,7 +436,7 @@ class FeaturesEnricher(TransformerMixin):
                 if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
                     raise Exception("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
-                    raise Exception("Metrics calculation isn't possible after restart. Please, fit the enricher again.")
+                    raise Exception("Metrics calculation isn't possible after restart. Please fit the enricher again.")
 
                 if not isinstance(X, pd.DataFrame):
                     raise Exception(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
@@ -622,7 +622,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise TypeError(msg)
 
             if len(set(X.columns)) != len(X.columns):
-                raise ValueError("X contains duplicated columns names. Please, rename or drop them.")
+                raise ValueError("X contains duplicate column names. Please rename or drop them.")
 
             self.__prepare_search_keys(X)
 
@@ -722,9 +722,9 @@ class FeaturesEnricher(TransformerMixin):
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         if not is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
             msg = (
-                "No API key found and all search keys are registration-only. "
-                "Please, use DATE, COUNTRY and POSTAL_CODE keys for free searches without registration. "
-                "Or provide API key either directly or via environment variable UPGINI_API_KEY."
+                "No API key found and all search keys require registration. "
+                "You can use DATE, COUNTRY and POSTAL_CODE keys for free search without registration. "
+                "Or provide the API key either directly or via the environment variable UPGINI_API_KEY."
             )
             self.logger.error(msg + f" Provided search keys: {key_types}")
             raise Exception(msg)
@@ -744,9 +744,9 @@ class FeaturesEnricher(TransformerMixin):
     ) -> pd.DataFrame:
         self.enriched_X = None
         if not isinstance(X, pd.DataFrame):
-            raise TypeError(f"Only pandas.DataFrame supported for X, but {type(X)} was passed.")
+            raise TypeError(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
-            raise TypeError(f"Only pandas.Series or numpy.ndarray or list supported for y, but {type(y)} was passed.")
+            raise TypeError(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
 
         if isinstance(y, pd.Series):
             y_array = y.values
@@ -756,13 +756,13 @@ class FeaturesEnricher(TransformerMixin):
             y_array = np.array(y)
 
         if len(np.unique(y_array)) < 2:
-            raise ValueError("y is a constant, please check your training dataset")
+            raise ValueError("y is a constant. Finding relevant features requires a non-constant y.")
 
         if X.shape[0] != len(y_array):
-            raise ValueError("X and y should be the same size")
+            raise ValueError(f"X and y contain different number of samples: {X.shape[0]}, {len(y_array)}.")
 
         if len(set(X.columns)) != len(X.columns):
-            raise ValueError("X contains duplicating columns names, please check your training dataset")
+            raise ValueError("X contains duplicate column names. Please rename or drop them.")
 
         self.__prepare_search_keys(X)
 
@@ -782,25 +782,23 @@ class FeaturesEnricher(TransformerMixin):
             for idx, eval_pair in enumerate(eval_set):
                 if len(eval_pair) != 2:
                     raise TypeError(
-                        f"Invalid size of eval_set pair: {len(eval_pair)}. "
-                        "It should contain tuples of 2 elements: X and y."
+                        f"eval_set contains a tuple of size {len(eval_pair)}. It should contain only pairs of X and y."
                     )
                 eval_X = eval_pair[0]
                 eval_y = eval_pair[1]
                 if not isinstance(eval_X, pd.DataFrame):
                     raise TypeError(
-                        f"Only pandas.DataFrame supported for X in eval_set, but {type(eval_X)} was passed."
+                        f"Unsupported type of X in eval_set: {type(X)}. Use pandas.DataFrame."
                     )
                 if eval_X.columns.to_list() != X.columns.to_list():
-                    raise Exception("Eval set columns differ to X columns")
+                    raise Exception("The columns in eval_set are different from the columns in X.")
                 if (
                     not isinstance(eval_y, pd.Series)
                     and not isinstance(eval_y, np.ndarray)
                     and not isinstance(eval_y, list)
                 ):
                     raise TypeError(
-                        "pandas.Series or numpy.ndarray or list supported for y in eval_set, "
-                        f"but {type(eval_y)} was passed."
+                        f"Unsupported type of y in eval_set: {type(y)}. Use pandas.Series, numpy.ndarray or list."
                     )
                 eval_df: pd.DataFrame = eval_X.copy()  # type: ignore
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
@@ -929,8 +927,8 @@ class FeaturesEnricher(TransformerMixin):
             if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(df[column]):
                 if self.date_format is None or len(self.date_format) == 0:
                     msg = (
-                        f"Date column `{column}` has string type, but constructor argument `date_format` is empty.\n"
-                        "Please, convert column to datetime type or pass date format implicitly"
+                        f"Date column `{column}` is of string type, but date_format is not specified. "
+                        "Please convert column to datetime type or pass date_format."
                     )
                     self.logger.error(msg)
                     raise Exception(msg)
@@ -990,7 +988,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
-            raise NotFittedError("`fit` or `fit_transform` should be called before `transform`.")
+            raise NotFittedError("Fit the enricher or pass search_id before calling transform.")
         importances = self._search_task.initial_features(trace_id)
 
         def feature_metadata_by_name(name: str):
@@ -1057,13 +1055,13 @@ class FeaturesEnricher(TransformerMixin):
             column_name = None
             if isinstance(column_id, str):
                 if column_id not in x.columns:
-                    raise ValueError(f"Search key `{column_id}` not found in dataset columns: {x.columns.to_list()}")
+                    raise ValueError(f"Key `{column_id}` in search_keys was not found in X: {list(x.columns)}.")
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
                 if column_id >= x.shape[1]:
                     raise ValueError(
-                        f"Index of search key `{column_id}` is not suitable for columns count: `{x.shape[1]}`"
+                        f"Index {column_id} in search_keys is out of bounds for {x.shape[1]} columns of X."
                     )
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
@@ -1072,14 +1070,13 @@ class FeaturesEnricher(TransformerMixin):
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = (
-                    "SearchKey.COUNTRY cannot be used together with a iso_code property at the same time. "
-                    "Define only one"
+                    "SearchKey.COUNTRY and iso_code cannot be used simultaneously."
                 )
                 # self.logger.error(msg)
                 raise ValueError(msg)
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
-                msg = f"Search key {meaning_type} not available without registration. It will be ignored"
+                msg = f"Search key {meaning_type} cannot be used without API key. It will be ignored."
                 self.logger.warning(msg)
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
@@ -1096,8 +1093,8 @@ class FeaturesEnricher(TransformerMixin):
             and next(iter(using_keys.values())) == SearchKey.DATE
         ):
             msg = (
-                "WARNING: You have started the search with the Date key only. "
-                "Try to add the Country and/or Postal Code keys to your dataset so that the search engine gets access "
+                "WARNING: You have started the search with the DATE key only. "
+                "Try to add the COUNTRY and/or POSTAL_CODE keys to your dataset so that the search engine gets access "
                 "to the additional data sources. Get details on "
                 "https://github.com/upgini/upgini#2--choose-one-or-multiple-columns-as-a-search-keys"
             )
@@ -1108,8 +1105,8 @@ class FeaturesEnricher(TransformerMixin):
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * len(x):
                 msg = (
-                    "WARNING: Looks like you have a time series training dataset. "
-                    "We recommend option “cv=CVType.time_series” for the best results"
+                    "WARNING: Looks like your training dataset is a time series. "
+                    "We recommend to set `cv=CVType.time_series` for the best results."
                 )
                 print(msg)
 
@@ -1148,7 +1145,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
-        msg = f"\n{len(self.feature_names_)} relevant feature(s) found with the search keys: {list(search_keys)}"
+        msg = f"\n{len(self.feature_names_)} relevant feature(s) found with the search keys: {list(search_keys)}."
 
         try:
             from IPython.display import display
@@ -1186,14 +1183,14 @@ class FeaturesEnricher(TransformerMixin):
             return float(importance_threshold) if importance_threshold is not None else 0.0
         except ValueError:
             self.logger.exception(f"Invalid importance_threshold provided: {importance_threshold}")
-            raise ValueError("importance_threshold should be float")
+            raise ValueError("importance_threshold must be float.")
 
     def __validate_max_features(self, max_features: Optional[int]) -> int:
         try:
             return int(max_features) if max_features is not None else 400
         except ValueError:
             self.logger.exception(f"Invalid max_features provided: {max_features}")
-            raise ValueError("max_features should be int")
+            raise ValueError("max_features must be int.")
 
     def __filtered_columns(
         self,
@@ -1220,8 +1217,8 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
                 self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_key}")
                 msg = (
-                    f"Postal codes detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: "
+                    f"Postal codes detected in column `{maybe_key}`. It will be used as a search key. "
+                    "Read how to turn off the automatic detection of search keys: "
                     "https://github.com/upgini/upgini/blob/main/README.md"
                     "#-optional-turn-off-autodetection-of-search-keys"
                 )
@@ -1233,8 +1230,8 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.EMAIL
                 self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
                 msg = (
-                    f"Emails detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: "
+                    f"Emails detected in column `{maybe_key}`. It will be used as a search key. "
+                    "Read how to turn off the automatic detection of search keys: "
                     "https://github.com/upgini/upgini/blob/main/README.md"
                     "#-optional-turn-off-autodetection-of-search-keys"
                 )
@@ -1246,8 +1243,8 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.COUNTRY
                 self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
                 msg = (
-                    f"Country detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: "
+                    f"Country detected in column `{maybe_key}`. It will be used as a search key. "
+                    "Read how to turn off the automatic detection of search keys: "
                     "https://github.com/upgini/upgini/blob/main/README.md"
                     "#-optional-turn-off-autodetection-of-search-keys"
                 )
@@ -1259,8 +1256,8 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[maybe_key] = SearchKey.PHONE
                 self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
                 msg = (
-                    f"Phone numbers detected in column {maybe_key} and it will be used as search key. "
-                    "If you want to turn off automatic detection function: "
+                    f"Phone numbers detected in column `{maybe_key}`. It will be used as a search key. "
+                    "Read how to turn off the automatic detection of search keys: "
                     "https://github.com/upgini/upgini/blob/main/README.md"
                     "#-optional-turn-off-autodetection-of-search-keys"
                 )
