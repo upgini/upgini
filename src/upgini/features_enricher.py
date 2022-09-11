@@ -775,6 +775,8 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__check_string_dates(df)
 
+        df = self.__correct_target(df)
+
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
         if eval_set is not None and len(eval_set) > 0:
@@ -932,6 +934,24 @@ class FeaturesEnricher(TransformerMixin):
                     )
                     self.logger.error(msg)
                     raise Exception(msg)
+
+    def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
+        target = df[self.TARGET_NAME]
+        if is_string_dtype(target):
+            maybe_numeric_target = pd.to_numeric(target, errors="coerce")
+            # If less than 5% is non numeric then leave this rows with NaN target and later it will be dropped
+            if maybe_numeric_target.isna().sum() <= len(df) * 0.05:
+                self.logger.info("Target column has less than 5% non numeric values. Change non numeric values to NaN")
+                df[self.TARGET_NAME] = maybe_numeric_target
+            else:
+                # Suppose that target is multiclass and mark rows with unique target with NaN for later dropping
+                self.logger.info("Target has more than 5% non numeric values. Change unique values to NaN")
+                vc = target.value_counts()
+                uniq_values = vc[vc == 1].index.to_list()
+                for uniq_val in uniq_values:
+                    df[self.TARGET_NAME] = np.where(df[self.TARGET_NAME] == uniq_val, np.nan, df[self.TARGET_NAME])
+
+        return df
 
     def __add_country_code(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.country_code and SearchKey.COUNTRY not in self.search_keys.values():
