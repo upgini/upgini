@@ -2,6 +2,7 @@ import os
 from datetime import date
 from typing import Any, Dict, Optional
 
+import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
@@ -512,4 +513,45 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
     handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
+    assert_frame_equal(handled, expected)
+
+
+def test_correct_target_regression(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    tds = pd.DataFrame(
+        {
+            "date": [date(2020, 1, 1)] * 20,
+            "target": [str(i) for i in range(1, 20)] + ["non_numeric_value"],
+        }
+    )
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    handled = enricher._FeaturesEnricher__correct_target(tds)
+    expected = pd.DataFrame({
+            "date": [date(2020, 1, 1)] * 20,
+            "target": [float(i) for i in range(1, 20)] + [np.nan]
+        }
+    )
+    assert_frame_equal(handled, expected)
+
+
+def test_correct_target_multiclass(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    tds = pd.DataFrame(
+        {
+            "date": [date(2020, 1, 1)] * 10,
+            "target": ["1", "2", "1", "2", "3", "single non numeric", "5", "6", "non numeric", "non numeric"],
+        }
+    )
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    handled = enricher._FeaturesEnricher__correct_target(tds)
+    print(handled)
+    expected = pd.DataFrame({
+            "date": [date(2020, 1, 1)] * 10,
+            "target": ["1", "2", "1", "2", np.nan, np.nan, np.nan, np.nan, "non numeric", "non numeric"]
+        }
+    )
     assert_frame_equal(handled, expected)
