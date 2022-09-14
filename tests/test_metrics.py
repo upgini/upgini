@@ -1,7 +1,7 @@
 import os
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 from catboost import CatBoostClassifier
 from requests_mock.mocker import Mocker
@@ -18,9 +18,9 @@ from .utils import (
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
-    mock_validation_raw_features,
 )
 
 FIXTURE_DIR = os.path.join(
@@ -84,7 +84,9 @@ def test_default_metric_binary(requests_mock: Mocker):
     eval_X_2 = eval_2[["phone", "feature1"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
-    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+    )
 
     with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
@@ -169,7 +171,11 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", cv=CVType.blocked_time_series
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        cv=CVType.blocked_time_series,
+        logs_enabled=False,
     )
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
@@ -250,7 +256,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     eval_X_2 = eval_2[["phone", "feature1"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
-    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+    )
 
     with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
@@ -339,6 +347,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
         api_key="fake_api_key",
+        logs_enabled=False,
     )
 
     with pytest.raises(Exception, match="Fit wasn't completed successfully"):
@@ -425,7 +434,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     eval_X_2 = eval_2[["phone", "feature1"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
-    enricher = FeaturesEnricher(search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key")
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+    )
 
     with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
         enricher.calculate_metrics(X, y)
