@@ -1,6 +1,7 @@
 import itertools
 import os
 import time
+import logging
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -90,9 +91,15 @@ class FeaturesEnricher(TransformerMixin):
         random_state: int = 42,
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
+        logs_enabled: bool = True,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
-        self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
+        if logs_enabled:
+            self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
+        else:
+            self.logger = logging.getLogger()
+            self.logger.setLevel("FATAL")
+
         validate_version(self.logger)
 
         self.search_keys = search_keys
@@ -659,6 +666,7 @@ class FeaturesEnricher(TransformerMixin):
                 endpoint=self.endpoint,  # type: ignore
                 api_key=self.api_key,  # type: ignore
                 date_format=self.date_format,  # type: ignore
+                logger=self.logger,
             )
             dataset.meaning_types = meaning_types
             dataset.search_keys = combined_search_keys
@@ -835,6 +843,7 @@ class FeaturesEnricher(TransformerMixin):
             api_key=self.api_key,  # type: ignore
             date_format=self.date_format,  # type: ignore
             random_state=self.random_state,  # type: ignore
+            logger=self.logger,
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = combined_search_keys

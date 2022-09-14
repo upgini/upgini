@@ -35,10 +35,11 @@ def test_search_keys_validation(requests_mock: Mocker):
         FeaturesEnricher(
             search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
             endpoint=url,
+            logs_enabled=False,
         )
 
     with pytest.raises(Exception, match="COUNTRY search key must be provided if POSTAL_CODE is present."):
-        FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url)
+        FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url, logs_enabled=False)
 
 
 def test_features_enricher(requests_mock: Mocker):
@@ -107,6 +108,7 @@ def test_features_enricher(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
+        logs_enabled=False,
     )
 
     enriched_train_features = enricher.fit_transform(
@@ -213,6 +215,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         endpoint=url,
         api_key="fake_api_key",
         runtime_parameters=RuntimeParameters(properties={"runtimeProperty1": "runtimeValue1"}),
+        logs_enabled=False,
     )
     assert enricher.runtime_parameters is not None
 
@@ -273,7 +276,9 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
 
     with pytest.raises(Exception):
-        FeaturesEnricher(search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL}, endpoint=url)
+        FeaturesEnricher(
+            search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL}, endpoint=url, logs_enabled=False
+        )
 
 
 def test_filter_by_importance(requests_mock: Mocker):
@@ -325,6 +330,7 @@ def test_filter_by_importance(requests_mock: Mocker):
         date_format="%Y-%m-%d",
         endpoint=url,
         api_key="fake_api_key",
+        logs_enabled=False,
     )
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
@@ -426,6 +432,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
         date_format="%Y-%m-%d",
         endpoint=url,
         api_key="fake_api_key",
+        logs_enabled=False,
     )
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
@@ -492,7 +499,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
         return {"value": 1.0}
 
     search_task.initial_max_hit_rate = initial_max_hit_rate
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._search_task = search_task
     enricher.enriched_X = pd.DataFrame({"system_record_id": [1, 2, 3]})
     assert enricher.calculate_metrics(X, y) is None
@@ -510,7 +517,7 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     )
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
@@ -526,13 +533,9 @@ def test_correct_target_regression(requests_mock: Mocker):
             "target": [str(i) for i in range(1, 20)] + ["non_numeric_value"],
         }
     )
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     handled = enricher._FeaturesEnricher__correct_target(tds)
-    expected = pd.DataFrame({
-            "date": [date(2020, 1, 1)] * 20,
-            "target": [float(i) for i in range(1, 20)] + [np.nan]
-        }
-    )
+    expected = pd.DataFrame({"date": [date(2020, 1, 1)] * 20, "target": [float(i) for i in range(1, 20)] + [np.nan]})
     assert_frame_equal(handled, expected)
 
 
@@ -546,12 +549,13 @@ def test_correct_target_multiclass(requests_mock: Mocker):
             "target": ["1", "2", "1", "2", "3", "single non numeric", "5", "6", "non numeric", "non numeric"],
         }
     )
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     handled = enricher._FeaturesEnricher__correct_target(tds)
     print(handled)
-    expected = pd.DataFrame({
+    expected = pd.DataFrame(
+        {
             "date": [date(2020, 1, 1)] * 10,
-            "target": ["1", "2", "1", "2", np.nan, np.nan, np.nan, np.nan, "non numeric", "non numeric"]
+            "target": ["1", "2", "1", "2", np.nan, np.nan, np.nan, np.nan, "non numeric", "non numeric"],
         }
     )
     assert_frame_equal(handled, expected)

@@ -1,4 +1,5 @@
 import csv
+import logging
 import os
 import re
 import tempfile
@@ -21,7 +22,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
@@ -90,6 +91,7 @@ class Dataset(pd.DataFrame):
         random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
         **kwargs,
     ):
         if df is not None:
@@ -127,7 +129,11 @@ class Dataset(pd.DataFrame):
         self.random_state = random_state
         self.columns_renaming: Dict[str, str] = {}
         self.sampled: bool = False
-        self.logger = LoggerFactory().get_logger(endpoint, api_key)
+        if logger is not None:
+            self.logger = logger
+        else:
+            self.logger = logging.getLogger()
+            self.logger.setLevel("FATAL")
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
