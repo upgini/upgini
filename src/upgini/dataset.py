@@ -22,7 +22,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
     COUNTRY,
     EVAL_SET_INDEX,
