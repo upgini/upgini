@@ -55,7 +55,7 @@ def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKe
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         parquet_file_path = f"{tmp_dir}/{name}.parquet"
-        df.to_parquet(path=parquet_file_path, index=True, compression="gzip")
+        df.to_parquet(path=parquet_file_path, index=True, compression="gzip", engine="fastparquet")
         logging.debug(f"Size of prepared uploading file: {Path(parquet_file_path).stat().st_size}")
         response = get_rest_client().upload_user_ads(parquet_file_path, metadata)
         logging.debug(f"Upload response: {response}")
