@@ -1008,7 +1008,7 @@ class Dataset(pd.DataFrame):
 
     def prepare_uploading_file(self, base_path: str) -> str:
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
-        self.to_parquet(path=parquet_file_path, index=False, compression="gzip")
+        self.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
