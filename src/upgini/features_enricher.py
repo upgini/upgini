@@ -1,7 +1,7 @@
 import itertools
+import logging
 import os
 import time
-import logging
 import uuid
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -384,6 +384,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.search_keys["index"] = index_key
                     del self.search_keys[RENAMED_INDEX]
 
+            if self.country_added and COUNTRY in result.columns:
+                result = result.drop(columns=COUNTRY)
+
             if keep_input:
                 return result
             else:
@@ -497,6 +500,7 @@ class FeaturesEnricher(TransformerMixin):
                         wrapper = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
+                        print("Fitting enriched X:", fitting_enriched_X)
                         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                         metric = wrapper.metric_name
                         uplift = None
@@ -685,7 +689,8 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
 
-            filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
+            input_columns = [c for c in X.columns if c in result.columns]
+            filtered_columns = self.__filtered_columns(input_columns, importance_threshold, max_features)
 
             return result[filtered_columns]
 
@@ -797,9 +802,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_X = eval_pair[0]
                 eval_y = eval_pair[1]
                 if not isinstance(eval_X, pd.DataFrame):
-                    raise TypeError(
-                        f"Unsupported type of X in eval_set: {type(X)}. Use pandas.DataFrame."
-                    )
+                    raise TypeError(f"Unsupported type of X in eval_set: {type(X)}. Use pandas.DataFrame.")
                 if eval_X.columns.to_list() != X.columns.to_list():
                     raise Exception("The columns in eval_set are different from the columns in X.")
                 if (
@@ -990,6 +993,15 @@ class FeaturesEnricher(TransformerMixin):
             else result_features
         )
         df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
+
+        dup_features = [c for c in df_without_target.columns if c in result_features.columns and c != SYSTEM_RECORD_ID]
+        if len(dup_features) > 0:
+            self.logger.error(f"X contain columns with same name as returned from backend: {dup_features}")
+            raise Exception(
+                "Columns set for transform method should be the same as for fit method, please check input dataframe. "
+                f"These columns are different: {dup_features}"
+            )
+
         result = pd.merge(
             df_without_target,
             result_features,
@@ -1098,9 +1110,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
-                msg = (
-                    "SearchKey.COUNTRY and iso_code cannot be used simultaneously."
-                )
+                msg = "SearchKey.COUNTRY and iso_code cannot be used simultaneously."
                 # self.logger.error(msg)
                 raise ValueError(msg)
 
@@ -1233,8 +1243,13 @@ class FeaturesEnricher(TransformerMixin):
 
         exclude_columns = list(self.search_keys.keys()) if only_features else []
 
-        return [col for col in x_columns if col not in exclude_columns] + self.__filtered_importance_names(
-            importance_threshold, max_features
+        return sorted(
+            list(
+                set(
+                    [col for col in x_columns if col not in exclude_columns]
+                    + self.__filtered_importance_names(importance_threshold, max_features)
+                )
+            )
         )
 
     def __detect_missing_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:

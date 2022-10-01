@@ -4,7 +4,6 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, get_scorer, make_scorer
@@ -76,6 +75,9 @@ class EstimatorWrapper:
 
     def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
         X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
+
+        if X.shape[1] == 0:
+            return None
 
         metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 
@@ -244,6 +246,9 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             multiplier = -1
         elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
             scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
+            multiplier = -1
+        elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
+            scoring = get_scorer("neg_root_mean_squared_error")
             multiplier = -1
         elif scoring in SCORERS.keys():
             scoring = get_scorer(scoring)
