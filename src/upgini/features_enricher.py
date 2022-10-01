@@ -500,6 +500,7 @@ class FeaturesEnricher(TransformerMixin):
                         wrapper = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
+                        print("Fitting enriched X:", fitting_enriched_X)
                         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                         metric = wrapper.metric_name
                         uplift = None
@@ -1242,10 +1243,12 @@ class FeaturesEnricher(TransformerMixin):
 
         exclude_columns = list(self.search_keys.keys()) if only_features else []
 
-        return list(
-            set(
-                [col for col in x_columns if col not in exclude_columns]
-                + self.__filtered_importance_names(importance_threshold, max_features)
+        return sorted(
+            list(
+                set(
+                    [col for col in x_columns if col not in exclude_columns]
+                    + self.__filtered_importance_names(importance_threshold, max_features)
+                )
             )
         )
 
