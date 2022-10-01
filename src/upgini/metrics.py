@@ -77,7 +77,10 @@ class EstimatorWrapper:
     def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
         X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
 
-        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
+        if X.shape[1] == 0:
+            return None
+
+        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params, error_score="raise")
 
         return np.mean(metrics_by_fold) * self.multiplier
 
@@ -244,6 +247,9 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             multiplier = -1
         elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
             scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
+            multiplier = -1
+        elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
+            scoring = get_scorer("neg_root_mean_squared_error")
             multiplier = -1
         elif scoring in SCORERS.keys():
             scoring = get_scorer(scoring)

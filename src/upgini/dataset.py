@@ -214,6 +214,8 @@ class Dataset(pd.DataFrame):
         """Clean DataSet from full duplicates."""
         # self.logger.info("Clean full duplicates")
         nrows = len(self)
+        if nrows == 0:
+            return
         # Remove absolute duplicates (exclude system_record_id)
         unique_columns = self.columns.tolist()
         unique_columns.remove(SYSTEM_RECORD_ID)
@@ -700,7 +702,7 @@ class Dataset(pd.DataFrame):
         if not silent_mode:
             df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
             df_stats.reset_index(inplace=True)
-            df_stats.columns = ["Column name", "Status", "Description"]
+            df_stats.columns = ["Column name", "Status", "Description"]  # type: ignore
             try:
                 import html
 
