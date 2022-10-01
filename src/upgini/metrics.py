@@ -4,7 +4,6 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, get_scorer, make_scorer
@@ -80,7 +79,7 @@ class EstimatorWrapper:
         if X.shape[1] == 0:
             return None
 
-        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params, error_score="raise")
+        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
 
         return np.mean(metrics_by_fold) * self.multiplier
 
