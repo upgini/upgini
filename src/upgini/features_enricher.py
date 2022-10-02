@@ -500,7 +500,6 @@ class FeaturesEnricher(TransformerMixin):
                         wrapper = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
-                        print("Fitting enriched X:", fitting_enriched_X)
                         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                         metric = wrapper.metric_name
                         uplift = None
@@ -910,6 +909,10 @@ class FeaturesEnricher(TransformerMixin):
                 del self.search_keys[DEFAULT_INDEX]
                 self.index_renamed = True
         else:
+            if DEFAULT_INDEX in df.columns:
+                print(f"Column name `{DEFAULT_INDEX}` is reserved and will be renamed to `{RENAMED_INDEX}`")
+                df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
+                self.index_renamed = True
             df = df.reset_index(drop=True)
         return df
 
