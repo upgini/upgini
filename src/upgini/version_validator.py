@@ -1,6 +1,7 @@
 import json
 
 import requests
+import threading
 
 try:
     from packaging.version import parse
@@ -29,12 +30,16 @@ def get_version(package, url_pattern=URL_PATTERN):
 
 
 def validate_version(logger: logging.Logger):
-    try:
-        current_version = parse(__version__)
-        latest_version = get_version("upgini")
-        if current_version < latest_version:  # type: ignore
-            msg = f"You use {current_version} version, but latest is {latest_version}"
-            logger.warning(msg)
-            print("WARNING: " + msg)
-    except Exception:
-        logger.exception("Failed to validate version")
+    def task():
+        try:
+            current_version = parse(__version__)
+            latest_version = get_version("upgini")
+            if current_version < latest_version:  # type: ignore
+                msg = f"You use {current_version} version, but latest is {latest_version}"
+                logger.warning(msg)
+                print("WARNING: " + msg)
+        except Exception:
+            logger.exception("Failed to validate version")
+
+    thread = threading.Thread(target=task)
+    thread.start()
