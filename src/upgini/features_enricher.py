@@ -1138,7 +1138,7 @@ class FeaturesEnricher(TransformerMixin):
                 "WARNING: You have started the search with the DATE key only. "
                 "Try to add the COUNTRY and/or POSTAL_CODE keys to your dataset so that the search engine gets access "
                 "to the additional data sources. Get details on "
-                "https://github.com/upgini/upgini#2--choose-one-or-multiple-columns-as-a-search-keys"
+                "https://github.com/upgini/upgini#readme"
             )
             print(msg)
 
@@ -1266,8 +1266,7 @@ class FeaturesEnricher(TransformerMixin):
                 msg = (
                     f"Postal codes detected in column `{maybe_key}`. It will be used as a search key. "
                     "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini/blob/main/README.md"
-                    "#-optional-turn-off-autodetection-of-search-keys"
+                    "https://github.com/upgini/upgini#readme"
                 )
                 print(msg)
 
@@ -1279,8 +1278,7 @@ class FeaturesEnricher(TransformerMixin):
                 msg = (
                     f"Countries detected in column `{maybe_key}`. It will be used as a search key. "
                     "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini/blob/main/README.md"
-                    "#-optional-turn-off-autodetection-of-search-keys"
+                    "https://github.com/upgini/upgini#readme"
                 )
                 print(msg)
 
@@ -1297,8 +1295,7 @@ class FeaturesEnricher(TransformerMixin):
                 msg = (
                     f"Emails detected in column `{maybe_key}`. It will be used as a search key. "
                     "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini/blob/main/README.md"
-                    "#-optional-turn-off-autodetection-of-search-keys"
+                    "https://github.com/upgini/upgini#readme"
                 )
                 print(msg)
 
@@ -1315,8 +1312,7 @@ class FeaturesEnricher(TransformerMixin):
                 msg = (
                     f"Phone numbers detected in column `{maybe_key}`. It will be used as a search key. "
                     "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini/blob/main/README.md"
-                    "#-optional-turn-off-autodetection-of-search-keys"
+                    "https://github.com/upgini/upgini#readme"
                 )
                 print(msg)
 
