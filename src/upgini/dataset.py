@@ -359,12 +359,17 @@ class Dataset(pd.DataFrame):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
         if postal_code is not None and postal_code in self.columns:
             # self.logger.info("Normalize postal code")
+
+            if is_float_dtype(self[postal_code]):
+                self[postal_code] = self[postal_code].astype("Int64").astype(str)
+
             self[postal_code] = (
                 self[postal_code]
                 .astype(str)
                 .str.upper()
-                .str.replace(r"[^0-9A-Z]", "", regex=True)
-                .str.replace(r"^0+\B", "", regex=True)
+                .replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
+                .replace(r"^0+\B", "", regex=True)  # remove leading zeros
+                .replace("NA", "")
             )
 
     def __remove_old_dates(self):
