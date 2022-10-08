@@ -1,6 +1,6 @@
-from upgini.utils.country_utils import CountrySearchKeyDetector
 import pandas as pd
 
+from upgini.utils.country_utils import CountrySearchKeyDetector
 
 detector = CountrySearchKeyDetector()
 
@@ -26,12 +26,21 @@ def test_is_country_column_by_name():
 
 
 def test_country_to_iso_code_convertion():
-    df = pd.DataFrame({
-        "country": ["Austria", "England", "Poland", "", "Unknown"]
-    })
+    df = pd.DataFrame(
+        {
+            "country": [
+                "Austria",
+                "England",
+                "Poland",
+                "United Kingdom of Great Britain and Northern Ireland",
+                "",
+                "Unknown",
+            ]
+        }
+    )
 
     expected_df = df.copy()
-    expected_df["country"] = ["AT", "GB", "PL", "", "Unknown"]
+    expected_df["country"] = ["AT", "GB", "PL", "GB", "", ""]
 
     df_with_code = CountrySearchKeyDetector.convert_country_to_iso_code(df, "country")
 
