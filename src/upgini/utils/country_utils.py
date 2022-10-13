@@ -21,7 +21,9 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
         if df[country_column].isin(CountrySearchKeyDetector.COUNTRIES.values()).all():
             return df
 
-        df[country_column] = df[country_column].astype(str).str.upper().map(CountrySearchKeyDetector.COUNTRIES).fillna("")
+        df[country_column] = (
+            df[country_column].astype(str).str.upper().map(CountrySearchKeyDetector.COUNTRIES).fillna("")
+        )
 
         return df
 
