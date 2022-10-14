@@ -254,8 +254,8 @@ class _RestClient:
             response = requests.get("https://api.github.com/repos/upgini/upgini/contents/error_status.txt")
             if response.status_code == requests.codes.ok:
                 js = response.json()
-                content = base64.decodebytes(js["content"].encode()).decode()
-                if not content and not content.isspace():
+                content = base64.b64decode(js["content"]).decode('utf-8')
+                if len(content) > 0 and not content.isspace():
                     print(content)
         except Exception:
             pass
