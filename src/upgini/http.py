@@ -196,7 +196,8 @@ class _RestClient:
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
-        self._access_token: Optional[str] = None  # self._refresh_access_token()
+        self._access_token = self._refresh_access_token()
+        # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
 
     def _refresh_access_token(self) -> str:
