@@ -493,13 +493,13 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     X = tds[["date"]]
     y = tds.target
 
-    search_task = SearchTask("")
+    search_task = SearchTask("", endpoint=url)
 
     def initial_max_hit_rate() -> Optional[Dict[str, Any]]:
         return {"value": 1.0}
 
     search_task.initial_max_hit_rate = initial_max_hit_rate
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     enricher._search_task = search_task
     enricher.enriched_X = pd.DataFrame({"system_record_id": [1, 2, 3]})
     assert enricher.calculate_metrics(X, y) is None
