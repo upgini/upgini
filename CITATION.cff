@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Post"
+  given-names: "Roman"
+  orcid: "https://orcid.org/0000-0001-8622-247X"
+- family-names: "Toro"
+  given-names: "Nik"
+title: "Upgini - automated data search & enrichment"
+url: "https://github.com/upgini/upgini"
+date-released: 2022-07-01
