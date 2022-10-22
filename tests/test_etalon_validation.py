@@ -9,6 +9,7 @@ import pytest
 from upgini import Dataset, FileColumnMeaningType
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
+from upgini.utils.features_validator import FeaturesValidator
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -184,8 +185,8 @@ def test_constant_and_empty_validation():
         "a": FileColumnMeaningType.FEATURE,
         "b": FileColumnMeaningType.FEATURE,
     }
-    dataset._Dataset__remove_empty_and_constant_features()
-    assert list(dataset.columns) == ["phone"]
+    features_to_drop = FeaturesValidator().validate(df, ["a", "b"])
+    assert features_to_drop == ["a", "b"]
 
 
 def test_imbalanced_target():

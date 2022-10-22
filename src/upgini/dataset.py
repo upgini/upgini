@@ -581,38 +581,6 @@ class Dataset(pd.DataFrame):
             print(msg)
             self.logger.warning(msg)
 
-    def __remove_empty_and_constant_features(self):
-        # self.logger.info("Remove almost constant and almost empty columns")
-        removed_features = []
-        for f in self.__features():
-            value_counts = self[f].value_counts(dropna=False, normalize=True)
-            # most_frequent_value = value_counts.index[0]
-            most_frequent_percent = value_counts.iloc[0]
-            if most_frequent_percent >= 0.99:
-                removed_features.append(f)
-                self.drop(columns=f, inplace=True)
-                del self.meaning_types_checked[f]
-
-        if removed_features:
-            msg = f"Columns {removed_features} has value with frequency more than 99% and has been droped from X"
-            print(msg)
-            self.logger.warning(msg)
-
-    def __remove_high_cardinality_features(self):
-        # self.logger.info("Remove columns with high cardinality")
-
-        count = len(self)
-        removed_features = []
-        for f in self.__features():
-            if (is_string_dtype(self[f]) or is_integer_dtype(self[f])) and self[f].nunique() / count >= 0.9:
-                removed_features.append(f)
-                self.drop(columns=f, inplace=True)
-                del self.meaning_types_checked[f]
-        if removed_features:
-            msg = f"Columns {removed_features} has high cardinality (>90% unique values) " "and has been droped from X"
-            print(msg)
-            self.logger.warning(msg)
-
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
             msg = f"Maximum count of features is {self.MAX_FEATURES_COUNT}"
@@ -771,10 +739,6 @@ class Dataset(pd.DataFrame):
         self.__drop_ignore_columns()
 
         self.__remove_dates_from_features()
-
-        self.__remove_empty_and_constant_features()
-
-        self.__remove_high_cardinality_features()
 
         self.__validate_features_count()
 

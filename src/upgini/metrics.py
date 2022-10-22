@@ -171,6 +171,7 @@ class CatBoostWrapper(EstimatorWrapper):
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
         unique_cat_features = []
+        # TODO try to remove this condition because now we remove constant features earlier
         for name in cat_features:
             # Remove constant categorical features
             if X[name].nunique() > 1:
