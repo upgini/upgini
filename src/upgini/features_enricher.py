@@ -15,6 +15,7 @@ from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
 from upgini.http import UPGINI_API_KEY, LoggerFactory
+from upgini.errors import ValidationError
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -149,7 +150,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.feature_importances_ = []
         self.enriched_X: Optional[pd.DataFrame] = None
-        self.enriched_eval_set: Optional[pd.DataFrame] = None
+        self.enriched_eval_sets: Dict[int, pd.DataFrame] = dict()
         self.country_added = False
         self.index_renamed = False
 
@@ -525,7 +526,7 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-                    if eval_set is not None and self.enriched_eval_set is not None:
+                    if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
                         # Fit models
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
@@ -568,7 +569,7 @@ class FeaturesEnricher(TransformerMixin):
                             eval_X = eval_X.drop(
                                 columns=[col for col in self.search_keys.keys() if col in eval_X.columns]
                             )
-                            enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
+                            enriched_eval_X = self.enriched_eval_sets[idx + 1]
                             enriched_eval_X = enriched_eval_X[filtered_columns]
                             eval_y = eval_pair[1]
 
@@ -684,9 +685,9 @@ class FeaturesEnricher(TransformerMixin):
             if not silent_mode:
                 print("Collecting selected features...")
                 with Spinner():
-                    result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
+                    result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index, {})
             else:
-                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
+                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index, {})
 
             input_columns = [c for c in X.columns if c in result.columns]
             filtered_columns = self.__filtered_columns(input_columns, importance_threshold, max_features)
@@ -791,6 +792,7 @@ class FeaturesEnricher(TransformerMixin):
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
+        eval_X_index = dict()
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
             for idx, eval_pair in enumerate(eval_set):
@@ -816,6 +818,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
+                eval_X_index[idx + 1] = eval_X.index
 
         df = self.__add_country_code(df)
 
@@ -865,8 +868,8 @@ class FeaturesEnricher(TransformerMixin):
         self.__show_selected_features()
 
         try:
-            self.enriched_X, self.enriched_eval_set = self.__enrich(
-                df, self._search_task.get_all_initial_raw_features(trace_id), X.index
+            self.enriched_X, self.enriched_eval_sets = self.__enrich(
+                df, self._search_task.get_all_initial_raw_features(trace_id), X.index, eval_X_index
             )
         except Exception as e:
             self.logger.exception("Failed to download features")
@@ -909,11 +912,7 @@ class FeaturesEnricher(TransformerMixin):
                 del self.search_keys[DEFAULT_INDEX]
                 self.index_renamed = True
         else:
-            if DEFAULT_INDEX in df.columns:
-                print(f"Column name `{DEFAULT_INDEX}` is reserved and will be renamed to `{RENAMED_INDEX}`")
-                df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
-                self.index_renamed = True
-            df = df.reset_index(drop=True)
+            raise ValidationError("Delete or rename the column with the name 'index' please. This system name cannot be used in the enricher")
         return df
 
     def __using_search_keys(self) -> Dict[str, SearchKey]:
@@ -986,7 +985,8 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
         original_index: pd.Index,
-    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        original_eval_set_index: Dict[int, pd.Index],
+    ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError("Search engine crashed on this request.")
@@ -1014,21 +1014,26 @@ class FeaturesEnricher(TransformerMixin):
             # suffixes=("_ads", "")
         )
 
+        result_eval_sets = dict()
         if EVAL_SET_INDEX in result.columns:
             result_train = result[result[EVAL_SET_INDEX] == 0]
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
+            for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
+                result_eval = result_eval_set[result_eval_set[EVAL_SET_INDEX] == eval_set_index]
+                if eval_set_index in original_eval_set_index.keys():
+                    result_eval.index = original_eval_set_index[eval_set_index]
+                result_eval_sets[eval_set_index] = result_eval
             result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
-            result_eval_set = None
 
         result_train.index = original_index
         if SYSTEM_RECORD_ID in result.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
-            if result_eval_set is not None:
-                result_eval_set = result_eval_set.drop(columns=SYSTEM_RECORD_ID)
+            for eval_set_index in result_eval_sets.keys():
+                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(columns=SYSTEM_RECORD_ID)
 
-        return result_train, result_eval_set
+        return result_train, result_eval_sets
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:

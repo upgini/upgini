@@ -43,7 +43,7 @@ def test_search_keys_validation(requests_mock: Mocker):
 
 
 def test_features_enricher(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
+    # pd.set_option("mode.chained_assignment", "raise")
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -96,9 +96,9 @@ def test_features_enricher(requests_mock: Mocker):
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
-    eval1_df = df[10000:11000]
+    eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"]
+    eval1_target = eval1_df["target"].reset_index(drop=True)
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
     eval2_target = eval2_df["target"]
@@ -138,8 +138,8 @@ def test_features_enricher(requests_mock: Mocker):
                 "enriched roc_auc": 0.4926257640349131,
                 "uplift": -0.007374235965086906,
             },
-            {"match_rate": 100.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
-            {"match_rate": 99.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
+            {"match_rate": 100.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5238261064479588, "uplift": 0.023826106447958795},
+            {"match_rate": 99.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5215969319946838, "uplift": 0.02159693199468382},
         ],
         index=["train", "eval 1", "eval 2"],
     )

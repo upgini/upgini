@@ -95,8 +95,9 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     print(metrics_df)
@@ -183,8 +184,9 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
     print(metrics_df)
@@ -269,8 +271,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="roc_auc")
@@ -360,8 +363,9 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     from lightgbm import LGBMClassifier  # type: ignore
 
@@ -449,8 +453,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     estimator = RandomForestClassifier(random_state=42)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="rmse")
