@@ -479,7 +479,7 @@ class FeaturesEnricher(TransformerMixin):
                 fitting_X = X.drop(
                     columns=[col for col in (self.search_keys.keys()) if col in X.columns] + features_to_drop
                 )
-                fitting_enriched_X = self.enriched_X[filtered_columns]
+                fitting_enriched_X = self.enriched_X[filtered_columns].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                     print("WARN: No features to calculate metrics.")
@@ -1040,10 +1040,10 @@ class FeaturesEnricher(TransformerMixin):
 
         result_eval_sets = dict()
         if EVAL_SET_INDEX in result.columns:
-            result_train = result[result[EVAL_SET_INDEX] == 0]
+            result_train = result.loc[result[EVAL_SET_INDEX] == 0].copy()
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
             for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
-                result_eval = result_eval_set[result_eval_set[EVAL_SET_INDEX] == eval_set_index]
+                result_eval = result.loc[result[EVAL_SET_INDEX] == eval_set_index].copy()
                 if eval_set_index in original_eval_set_index.keys():
                     result_eval.index = original_eval_set_index[eval_set_index]
                 result_eval_sets[eval_set_index] = result_eval
