@@ -70,7 +70,7 @@ def test_features_enricher(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
+        etalon_features=[],
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -96,9 +96,9 @@ def test_features_enricher(requests_mock: Mocker):
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
-    eval1_df = df[10000:11000]
+    eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"]
+    eval1_target = eval1_df["target"].reset_index(drop=True)
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
     eval2_target = eval2_df["target"]
@@ -134,12 +134,22 @@ def test_features_enricher(requests_mock: Mocker):
         [
             {
                 "match_rate": 99.9,
-                "baseline roc_auc": 0.5,
-                "enriched roc_auc": 0.4926257640349131,
-                "uplift": -0.007374235965086906,
+                "baseline roc_auc": None,
+                "enriched roc_auc": 0.4906517107908262,
+                "uplift": 0.4906517107908262,
             },
-            {"match_rate": 100.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
-            {"match_rate": 99.0, "baseline roc_auc": 0.5, "enriched roc_auc": 0.5, "uplift": 0.0},
+            {
+                "match_rate": 100.0,
+                "baseline roc_auc": None,
+                "enriched roc_auc": 0.5183564089324384,
+                "uplift": 0.5183564089324384,
+            },
+            {
+                "match_rate": 99.0,
+                "baseline roc_auc": None,
+                "enriched roc_auc": 0.5231821748250629,
+                "uplift": 0.5231821748250629,
+            },
         ],
         index=["train", "eval 1", "eval 2"],
     )
@@ -163,7 +173,7 @@ def test_features_enricher(requests_mock: Mocker):
     assert first_feature_info["shap_value"] == 10.1
     second_feature_info = enricher.features_info.iloc[1]
     assert second_feature_info["feature_name"] == "SystemRecordId_473310000"
-    assert second_feature_info["shap_value"] == 1.0
+    assert second_feature_info["shap_value"] == 0.0
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
@@ -309,7 +319,7 @@ def test_filter_by_importance(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 0.3, "matchedInPercent": 100.0}],
+        etalon_features=[],
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -351,9 +361,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics(train_features, train_target, eval_set, importance_threshold=0.8)
 
-    assert metrics.loc["train", "baseline roc_auc"] == 0.5
-    assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
-    assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
+    assert metrics is None
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -453,9 +461,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics(train_features, train_target, eval_set, max_features=0)
 
-    assert metrics.loc["train", "baseline roc_auc"] == 0.5
-    assert metrics.loc["eval 1", "baseline roc_auc"] == 0.5
-    assert metrics.loc["eval 2", "baseline roc_auc"] == 0.5
+    assert metrics is None
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -518,7 +524,7 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
-    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)
+    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)  # type: ignore
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
 
@@ -534,7 +540,7 @@ def test_correct_target_regression(requests_mock: Mocker):
         }
     )
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
-    handled = enricher._FeaturesEnricher__correct_target(tds)
+    handled = enricher._FeaturesEnricher__correct_target(tds)  # type: ignore
     expected = pd.DataFrame({"date": [date(2020, 1, 1)] * 20, "target": [float(i) for i in range(1, 20)] + [np.nan]})
     assert_frame_equal(handled, expected)
 
@@ -550,7 +556,7 @@ def test_correct_target_multiclass(requests_mock: Mocker):
         }
     )
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
-    handled = enricher._FeaturesEnricher__correct_target(tds)
+    handled = enricher._FeaturesEnricher__correct_target(tds)  # type: ignore
     print(handled)
     expected = pd.DataFrame(
         {

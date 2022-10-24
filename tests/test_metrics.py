@@ -95,10 +95,12 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
+    assert metrics_df is not None
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
 
@@ -183,10 +185,12 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
+    assert metrics_df is not None
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
     assert metrics_df.loc["train", "baseline RMSLE"] == approx(0.479534)
@@ -269,11 +273,13 @@ def test_catboost_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="roc_auc")
+    assert metrics_df is not None
     print(metrics_df)
 
     assert metrics_df.loc["train", "match_rate"] == 99.0
@@ -360,13 +366,15 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     from lightgbm import LGBMClassifier  # type: ignore
 
     estimator = LGBMClassifier(random_seed=42)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
+    assert metrics_df is not None
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
     assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.476230)  # Investigate same values
@@ -449,11 +457,13 @@ def test_rf_metric_rmse(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert enricher.enriched_eval_set is not None
-    assert len(enricher.enriched_eval_set) == 500
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
 
     estimator = RandomForestClassifier(random_state=42)
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="rmse")
+    assert metrics_df is not None
     print(metrics_df)
     baseline_metric = "baseline rmse"
     enriched_metric = "enriched rmse"

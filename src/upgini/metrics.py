@@ -45,7 +45,7 @@ class EstimatorWrapper:
         self.cv = cv
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs):
-        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
+        X, y, fit_params = self._prepare_to_fit(X, y)
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -74,7 +74,7 @@ class EstimatorWrapper:
         return X, y, {}
 
     def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
-        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
+        X, y, fit_params = self._prepare_to_fit(X, y)
 
         if X.shape[1] == 0:
             return None
@@ -171,6 +171,7 @@ class CatBoostWrapper(EstimatorWrapper):
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
         unique_cat_features = []
+        # TODO try to remove this condition because now we remove constant features earlier
         for name in cat_features:
             # Remove constant categorical features
             if X[name].nunique() > 1:

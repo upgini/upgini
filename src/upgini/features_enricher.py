@@ -14,6 +14,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
+from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory
 from upgini.mdc import MDC
 from upgini.metadata import (
@@ -33,6 +34,7 @@ from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.email_utils import EmailSearchKeyDetector
+from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
@@ -149,7 +151,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.feature_importances_ = []
         self.enriched_X: Optional[pd.DataFrame] = None
-        self.enriched_eval_set: Optional[pd.DataFrame] = None
+        self.enriched_eval_sets: Dict[int, pd.DataFrame] = dict()
         self.country_added = False
         self.index_renamed = False
 
@@ -456,16 +458,28 @@ class FeaturesEnricher(TransformerMixin):
                 elif not isinstance(y, pd.Series):
                     raise Exception(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
 
+                # TODO check that X and y are the same as on the fit
+
                 Xy = X.copy()
                 Xy["target"] = y
                 self.__log_debug_information(Xy)
 
+                features_columns = [c for c in X.columns if c not in self.search_keys.keys()]
+
+                features_to_drop = FeaturesValidator(self.logger).validate(X, features_columns)
+
                 filtered_columns = self.__filtered_columns(
-                    X.columns.to_list(), importance_threshold, max_features, only_features=True
+                    X.columns.to_list(),
+                    importance_threshold,
+                    max_features,
+                    only_features=True,
+                    features_to_drop=features_to_drop,
                 )
 
-                fitting_X = X.drop(columns=[col for col in self.search_keys.keys() if col in X.columns])
-                fitting_enriched_X = self.enriched_X[filtered_columns]
+                fitting_X = X.drop(
+                    columns=[col for col in (self.search_keys.keys()) if col in X.columns] + features_to_drop
+                )
+                fitting_enriched_X = self.enriched_X[filtered_columns].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                     print("WARN: No features to calculate metrics.")
@@ -502,9 +516,10 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
                         metric = wrapper.metric_name
-                        uplift = None
                         if etalon_metric is not None:
                             uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+                        else:
+                            uplift = enriched_metric
                     else:
                         enriched_metric = etalon_metric
                         metric = EstimatorWrapper.create(
@@ -525,7 +540,9 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-                    if eval_set is not None and self.enriched_eval_set is not None:
+                    if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
+                        # TODO check that eval_set is the same as on the fit
+
                         # Fit models
                         etalon_model = None
                         if fitting_X.shape[1] > 0:
@@ -567,9 +584,10 @@ class FeaturesEnricher(TransformerMixin):
                             eval_X = eval_pair[0]
                             eval_X = eval_X.drop(
                                 columns=[col for col in self.search_keys.keys() if col in eval_X.columns]
+                                + features_to_drop
                             )
-                            enriched_eval_X = self.enriched_eval_set[self.enriched_eval_set[EVAL_SET_INDEX] == idx + 1]
-                            enriched_eval_X = enriched_eval_X[filtered_columns]
+                            enriched_eval_X = self.enriched_eval_sets[idx + 1]
+                            enriched_eval_X = enriched_eval_X[filtered_columns].copy()
                             eval_y = eval_pair[1]
 
                             etalon_eval_metric = None
@@ -578,9 +596,10 @@ class FeaturesEnricher(TransformerMixin):
 
                             enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
 
-                            eval_uplift = None
                             if etalon_eval_metric is not None:
                                 eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+                            else:
+                                eval_uplift = enriched_eval_metric
 
                             metrics.append(
                                 {
@@ -684,9 +703,11 @@ class FeaturesEnricher(TransformerMixin):
             if not silent_mode:
                 print("Collecting selected features...")
                 with Spinner():
-                    result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
+                    result, _ = self.__enrich(
+                        df, validation_task.get_all_validation_raw_features(trace_id), X.index, {}
+                    )
             else:
-                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index)
+                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index, {})
 
             input_columns = [c for c in X.columns if c in result.columns]
             filtered_columns = self.__filtered_columns(input_columns, importance_threshold, max_features)
@@ -753,7 +774,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
-    ) -> pd.DataFrame:
+    ):
         self.enriched_X = None
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
@@ -791,6 +812,7 @@ class FeaturesEnricher(TransformerMixin):
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
+        eval_X_index = dict()
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
             for idx, eval_pair in enumerate(eval_set):
@@ -816,10 +838,17 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df[self.TARGET_NAME] = pd.Series(eval_y)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df], ignore_index=True)
+                eval_X_index[idx + 1] = eval_X.index
 
         df = self.__add_country_code(df)
 
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.search_keys.keys())
+
+        features_columns = [c for c in df.columns if c not in non_feature_columns]
+
+        features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns)
+        df = df.drop(columns=features_to_drop)
+
         meaning_types = {
             **{col: key.value for col, key in self.search_keys.items()},
             **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
@@ -865,8 +894,8 @@ class FeaturesEnricher(TransformerMixin):
         self.__show_selected_features()
 
         try:
-            self.enriched_X, self.enriched_eval_set = self.__enrich(
-                df, self._search_task.get_all_initial_raw_features(trace_id), X.index
+            self.enriched_X, self.enriched_eval_sets = self.__enrich(
+                df, self._search_task.get_all_initial_raw_features(trace_id), X.index, eval_X_index
             )
         except Exception as e:
             self.logger.exception("Failed to download features")
@@ -874,10 +903,6 @@ class FeaturesEnricher(TransformerMixin):
 
         if calculate_metrics:
             self.__show_metrics(X, y, eval_set, scoring, estimator, importance_threshold, max_features, trace_id)
-
-        filtered_columns = self.__filtered_columns(X.columns.to_list(), importance_threshold, max_features)
-
-        return self.enriched_X[filtered_columns]
 
     def __log_debug_information(self, df: pd.DataFrame):
         self.logger.info(f"Search keys: {self.search_keys}")
@@ -908,12 +933,11 @@ class FeaturesEnricher(TransformerMixin):
                 self.search_keys[RENAMED_INDEX] = self.search_keys[DEFAULT_INDEX]
                 del self.search_keys[DEFAULT_INDEX]
                 self.index_renamed = True
-        else:
-            if DEFAULT_INDEX in df.columns:
-                print(f"Column name `{DEFAULT_INDEX}` is reserved and will be renamed to `{RENAMED_INDEX}`")
-                df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
-                self.index_renamed = True
-            df = df.reset_index(drop=True)
+        elif DEFAULT_INDEX in df.columns:
+            raise ValidationError(
+                "Delete or rename the column with the name 'index' please. "
+                "This system name cannot be used in the enricher"
+            )
         return df
 
     def __using_search_keys(self) -> Dict[str, SearchKey]:
@@ -986,7 +1010,8 @@ class FeaturesEnricher(TransformerMixin):
         df: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
         original_index: pd.Index,
-    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        original_eval_set_index: Dict[int, pd.Index],
+    ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError("Search engine crashed on this request.")
@@ -1014,21 +1039,26 @@ class FeaturesEnricher(TransformerMixin):
             # suffixes=("_ads", "")
         )
 
+        result_eval_sets = dict()
         if EVAL_SET_INDEX in result.columns:
-            result_train = result[result[EVAL_SET_INDEX] == 0]
+            result_train = result.loc[result[EVAL_SET_INDEX] == 0].copy()
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
+            for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
+                result_eval = result.loc[result[EVAL_SET_INDEX] == eval_set_index].copy()
+                if eval_set_index in original_eval_set_index.keys():
+                    result_eval.index = original_eval_set_index[eval_set_index]
+                result_eval_sets[eval_set_index] = result_eval
             result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
-            result_eval_set = None
 
         result_train.index = original_index
         if SYSTEM_RECORD_ID in result.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
-            if result_eval_set is not None:
-                result_eval_set = result_eval_set.drop(columns=SYSTEM_RECORD_ID)
+            for eval_set_index in result_eval_sets.keys():
+                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(columns=SYSTEM_RECORD_ID)
 
-        return result_train, result_eval_set
+        return result_train, result_eval_sets
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
@@ -1240,11 +1270,14 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float],
         max_features: Optional[int],
         only_features: bool = False,
+        features_to_drop: Optional[List[str]] = None,
     ) -> List[str]:
         importance_threshold = self.__validate_importance_threshold(importance_threshold)
         max_features = self.__validate_max_features(max_features)
 
         exclude_columns = list(self.search_keys.keys()) if only_features else []
+        if features_to_drop:
+            exclude_columns += features_to_drop
 
         return sorted(
             list(
