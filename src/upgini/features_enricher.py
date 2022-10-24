@@ -587,7 +587,7 @@ class FeaturesEnricher(TransformerMixin):
                                 + features_to_drop
                             )
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
-                            enriched_eval_X = enriched_eval_X[filtered_columns]
+                            enriched_eval_X = enriched_eval_X[filtered_columns].copy()
                             eval_y = eval_pair[1]
 
                             etalon_eval_metric = None
@@ -935,7 +935,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.index_renamed = True
         elif DEFAULT_INDEX in df.columns:
             raise ValidationError(
-                "Delete or rename the column with the name 'index' please. This system name cannot be used in the enricher"
+                "Delete or rename the column with the name 'index' please. "
+                "This system name cannot be used in the enricher"
             )
         return df
 

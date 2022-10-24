@@ -45,7 +45,7 @@ class EstimatorWrapper:
         self.cv = cv
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs):
-        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
+        X, y, fit_params = self._prepare_to_fit(X, y)
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -74,7 +74,7 @@ class EstimatorWrapper:
         return X, y, {}
 
     def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
-        X, y, fit_params = self._prepare_to_fit(X.copy(), y.copy())
+        X, y, fit_params = self._prepare_to_fit(X, y)
 
         if X.shape[1] == 0:
             return None
