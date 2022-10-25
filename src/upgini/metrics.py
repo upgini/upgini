@@ -67,7 +67,7 @@ class EstimatorWrapper:
             raise Exception(msg)
 
         joined = pd.concat([joined, y.to_frame(name=y.name)], axis=1)
-        # joined[y.name] = y.to_frame(name=y.name)
+        joined = joined.reset_index(drop=True)
         joined = joined[joined[y.name].notna()]
         X = joined.drop(columns=y.name)
         y = joined[y.name]  # type: ignore
