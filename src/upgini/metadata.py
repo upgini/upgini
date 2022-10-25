@@ -9,6 +9,7 @@ TARGET = "target"
 COUNTRY = "country_iso_code"
 RENAMED_INDEX = "index_col"
 DEFAULT_INDEX = "index"
+ORIGINAL_INDEX = "original_index"
 SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
 
 
