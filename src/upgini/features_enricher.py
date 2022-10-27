@@ -231,6 +231,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info("Fit finished successfully")
             except ValidationError as e:
                 self.logger.exception("Failed inner fit with validation error")
+                self._dump_python_libs()
                 raise e
             except Exception as e:
                 self.logger.exception("Failed inner fit")
@@ -325,6 +326,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info("Fit_transform finished successfully")
             except ValidationError as e:
                 self.logger.exception("Failed in inner_fit with validation error")
+                self._dump_python_libs()
                 raise e
             except Exception as e:
                 self.logger.exception("Failed in inner_fit")
@@ -387,6 +389,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info("Transform finished successfully")
             except ValidationError as e:
                 self.logger.exception("Failed to inner transform with validation error")
+                self._dump_python_libs()
                 raise e
             except Exception as e:
                 self.logger.exception("Failed to inner transform")
@@ -638,6 +641,7 @@ class FeaturesEnricher(TransformerMixin):
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except ValidationError as e:
                 self.logger.exception("Failed to calculate metrics with validation error")
+                self._dump_python_libs()
                 raise e
             except Exception as e:
                 self.logger.exception("Failed to calculate metrics")
