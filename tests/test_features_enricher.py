@@ -144,7 +144,7 @@ def test_features_enricher(requests_mock: Mocker):
             },
             {
                 "match_rate": 99.0,
-                "enriched roc_auc": 0.5231821748250629,
+                "enriched roc_auc": 0.5,
             },
         ],
         index=["train", "eval 1", "eval 2"],
@@ -504,7 +504,10 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     search_task.initial_max_hit_rate = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame({"system_record_id": [1, 2, 3]})
+    enricher.enriched_X = pd.DataFrame({
+        "system_record_id": [1, 2, 3],
+        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]
+    })
     assert enricher.calculate_metrics(X, y) is None
 
 

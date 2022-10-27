@@ -376,7 +376,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     from lightgbm import LGBMClassifier  # type: ignore
 
     estimator = LGBMClassifier(random_seed=42)
-    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator)
+    metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="mean_absolute_error")
     assert metrics_df is not None
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0

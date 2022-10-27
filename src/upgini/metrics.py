@@ -53,7 +53,9 @@ class EstimatorWrapper:
     def predict(self, **kwargs):
         return self.estimator.predict(**kwargs)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+    def _prepare_to_fit(
+        self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray, list]
+    ) -> Tuple[pd.DataFrame, pd.Series, dict]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
@@ -83,7 +85,7 @@ class EstimatorWrapper:
 
         return np.mean(metrics_by_fold) * self.multiplier
 
-    def calculate_metric(self, X: pd.DataFrame, y) -> float:
+    def calculate_metric(self, X: pd.DataFrame, y: np.ndarray) -> float:
         X, y, _ = self._prepare_to_fit(X, y)
         return self.scorer(self.estimator, X, y) * self.multiplier
 
