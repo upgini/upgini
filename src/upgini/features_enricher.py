@@ -1,6 +1,7 @@
 import itertools
 import logging
 import os
+import subprocess
 import time
 import uuid
 from copy import deepcopy
@@ -233,6 +234,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise e
             except Exception as e:
                 self.logger.exception("Failed inner fit")
+                self._dump_python_libs()
                 raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -326,6 +328,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise e
             except Exception as e:
                 self.logger.exception("Failed in inner_fit")
+                self._dump_python_libs()
                 raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -387,6 +390,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise e
             except Exception as e:
                 self.logger.exception("Failed to inner transform")
+                self._dump_python_libs()
                 raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
@@ -637,6 +641,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise e
             except Exception as e:
                 self.logger.exception("Failed to calculate metrics")
+                self._dump_python_libs()
                 raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
@@ -1442,3 +1447,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
         return search_keys
+
+    def _dump_python_libs(self):
+        result = subprocess.run(['pip', 'freeze'], stdout=subprocess.PIPE)
+        libs = result.stdout.decode('utf-8')
+        self.logger.warn(f"User python libs versions: {libs}")
