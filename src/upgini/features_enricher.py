@@ -1187,6 +1187,17 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 print(msg)
 
+        if len(using_keys) == 1:
+            for k, v in using_keys.items():
+                if x[k].nunique() == 1:
+                    msg = (
+                        f"WARNING: Constant value detected for the {v} search key in the X dataframe: {x.loc[0, k]}.\n"
+                        "That search key will add same constant features for different values from y. "
+                        "Please add extra search keys with non constant values, like postal code, date, phone number, "
+                        "hashed email or IP address."
+                    )
+                    print(msg)
+
     def __show_metrics(
         self,
         X: pd.DataFrame,
