@@ -85,8 +85,8 @@ We want radically simplify features search and delivery to make external data a 
 |World mobile network coverage by postal/ZIP code|167|-|Monthly|country, postal/ZIP code|No
 |World demographic data by postal/ZIP code|90|-|Annual|date, country, postal/ZIP code|No
 |World house prices by postal/ZIP code|44|-|Annual|date, country, postal/ZIP code|No
-|Public social media profile data for email & phone|104|-|Monthly|email/HEM, phone num|Yes
-|Geolocation profile for phone & IPv4 & email|239|-|Monthly|date, email/HEM, phone num, IPv4|Yes
+|Public social media profile data for email & phone|104|-|Monthly|email/HEM, phone |Yes
+|Geolocation profile for phone & IPv4 & email|239|-|Monthly|date, email/HEM, phone, IPv4|Yes
 |🔜 Email/WWW domain profile|-|-|-|-
 
 ❓**Know other useful data sources for machine learning?** [Give us a hint and we'll add it for free](https://forms.gle/pH99gb5hPxBEfNdR7).  
