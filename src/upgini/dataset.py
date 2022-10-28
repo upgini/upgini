@@ -39,7 +39,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchCustomization,
 )
-from upgini.normalizer.phone_normalizer import phone_to_int
+from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 
@@ -553,10 +553,10 @@ class Dataset(pd.DataFrame):
         """Convert phone/msisdn to int"""
         # self.logger.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
+        country_column = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY)
         if msisdn_column is not None and msisdn_column in self.columns:
-            # self.logger.info(f"going to apply phone_to_int for column {msisdn_column}")
-            phone_to_int(self, msisdn_column)
-            self[msisdn_column] = self[msisdn_column].astype("Int64")
+            normalizer = PhoneNormalizer(self, msisdn_column, country_column)
+            self[msisdn_column] = normalizer.normalize()
 
     def __features(self):
         return [
