@@ -282,9 +282,12 @@ class Dataset(pd.DataFrame):
         if date is not None and date in self.columns:
             # self.logger.info("Transform date column to millis")
             if is_string_dtype(self[date]):
-                self[date] = (
-                    pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
-                )
+                try:
+                    self[date] = (
+                        pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
+                    )
+                except ValueError as e:
+                    raise ValidationError(e)
             elif is_datetime(self[date]):
                 self[date] = self[date].dt.floor("D").view(np.int64) // 1_000_000
             elif is_period_dtype(self[date]):

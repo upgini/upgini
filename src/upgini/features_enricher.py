@@ -4,7 +4,6 @@ import os
 import subprocess
 import time
 import uuid
-from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -113,6 +112,7 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
+        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -150,7 +150,6 @@ class FeaturesEnricher(TransformerMixin):
             self.runtime_parameters.properties["cv_type"] = cv.name
 
         self.passed_features: List[str] = []
-        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
         self.feature_names_ = []
         self.feature_importances_ = []
         self.enriched_X: Optional[pd.DataFrame] = None
@@ -480,8 +479,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 self.__log_debug_information(X, y, eval_set)
 
-                X_sorted, y_sorted = self._sort_by_date_for_kfold(X, y_array)
-                enriched_X_sorted, enriched_y_sorted = self._sort_by_date_for_kfold(self.enriched_X, y_array)
+                X_sampled, y_sampled = self._sample_X_and_y(X, y_array)
+                X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled)
+                enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled)
 
                 client_features = [c for c in X.columns if c not in self.search_keys.keys()]
 
@@ -520,18 +520,21 @@ class FeaturesEnricher(TransformerMixin):
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
+                    baseline_estimator = None
                     if fitting_X.shape[1] > 0:
-                        etalon_metric = EstimatorWrapper.create(
+                        baseline_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
-                        ).cross_val_predict(fitting_X, y_sorted)
+                        )
+                        etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
+                    enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                        wrapper = EstimatorWrapper.create(
+                        enriched_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
-                        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
                             uplift = (enriched_metric - etalon_metric) * multiplier
                         else:
@@ -558,37 +561,6 @@ class FeaturesEnricher(TransformerMixin):
                     if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
                         # TODO check that eval_set is the same as on the fit
 
-                        # Fit models
-                        etalon_model = None
-                        enriched_model = None
-                        if fitting_X.shape[1] > 0:
-                            etalon_model = EstimatorWrapper.create(
-                                deepcopy(estimator),
-                                self.logger,
-                                model_task_type,
-                                _cv,
-                                scoring,
-                                shuffle,
-                                self.random_state,
-                            )
-                            etalon_model.fit(fitting_X, y_sorted)
-
-                        if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                            enriched_model = EstimatorWrapper.create(
-                                deepcopy(estimator),
-                                self.logger,
-                                model_task_type,
-                                _cv,
-                                scoring,
-                                shuffle,
-                                self.random_state,
-                            )
-                            enriched_model.fit(fitting_enriched_X, enriched_y_sorted)
-                        elif etalon_model is None:
-                            self.logger.error("No client or ADS features, but first validation didn't work")
-                            print("WARN: No features to calculate metrics.")
-                            return None
-
                         for idx, eval_pair in enumerate(eval_set):
                             eval_hit_rate = (
                                 max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
@@ -597,24 +569,24 @@ class FeaturesEnricher(TransformerMixin):
                             )
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
-                            eval_X_sorted, eval_y_sorted = self._sort_by_date_for_kfold(eval_X, eval_y_array)
+                            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X, eval_y_array)
 
                             eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
-                            enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date_for_kfold(
+                            enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date(
                                 enriched_eval_X, eval_y_array
                             )
                             enriched_eval_X_sorted = (
                                 enriched_eval_X_sorted[filtered_client_features + filtered_enriched_features].copy()
                             )
 
-                            if etalon_model is not None:
-                                etalon_eval_metric = etalon_model.calculate_metric(eval_X_sorted, eval_y_sorted)
+                            if baseline_estimator is not None:
+                                etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
                             else:
                                 etalon_eval_metric = None
 
-                            if enriched_model is not None:
-                                enriched_eval_metric = enriched_model.calculate_metric(
+                            if enriched_estimator is not None:
+                                enriched_eval_metric = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_y_sorted
                                 )
                             else:
@@ -897,7 +869,11 @@ class FeaturesEnricher(TransformerMixin):
 
         try:
             self.enriched_X, self.enriched_eval_sets = self.__enrich(
-                df_with_original_index, self._search_task.get_all_initial_raw_features(trace_id), X, eval_X_by_id
+                df_with_original_index,
+                self._search_task.get_all_initial_raw_features(trace_id),
+                X,
+                eval_X_by_id,
+                "inner"
             )
         except Exception as e:
             self.logger.exception("Failed to download features")
@@ -968,8 +944,14 @@ class FeaturesEnricher(TransformerMixin):
 
         return eval_X, eval_y_array
 
-    def _sort_by_date_for_kfold(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
-        if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
+    def _sample_X_and_y(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
+        Xy = X.copy()
+        Xy[TARGET] = y
+        Xy = pd.merge(Xy, self.enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
+        return Xy[X.columns].copy(), Xy[TARGET].values
+
+    def _sort_by_date(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
+        if self.__is_date_key_present():
             date_column = [
                 col
                 for col, t in self.search_keys.items()
@@ -1105,6 +1087,7 @@ class FeaturesEnricher(TransformerMixin):
         result_features: Optional[pd.DataFrame],
         X: pd.DataFrame,
         eval_set_by_id: Dict[int, pd.DataFrame],
+        join_type: str = "left"
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
@@ -1128,8 +1111,7 @@ class FeaturesEnricher(TransformerMixin):
             result_features,
             left_on=SYSTEM_RECORD_ID,
             right_on=SYSTEM_RECORD_ID,
-            how="left",
-            # suffixes=("_ads", "")
+            how=join_type,
         )
 
         result_eval_sets = dict()
@@ -1161,7 +1143,8 @@ class FeaturesEnricher(TransformerMixin):
             left=X,
             right=result_train,
             left_index=True,
-            right_index=True
+            right_index=True,
+            how=join_type
         )
         if SYSTEM_RECORD_ID in result.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)

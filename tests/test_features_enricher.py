@@ -136,15 +136,15 @@ def test_features_enricher(requests_mock: Mocker):
         [
             {
                 "match_rate": 99.9,
-                "enriched roc_auc": 0.49542763692787195,
+                "enriched roc_auc": 0.4912950110858979,
             },
             {
                 "match_rate": 100.0,
-                "enriched roc_auc": 0.5183564089324384,
+                "enriched roc_auc": 0.5150045430711161,
             },
             {
                 "match_rate": 99.0,
-                "enriched roc_auc": 0.5,
+                "enriched roc_auc": 0.5352320219051736,
             },
         ],
         index=["train", "eval 1", "eval 2"],
