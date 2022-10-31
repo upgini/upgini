@@ -6,7 +6,7 @@ import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import SCORERS, get_scorer, make_scorer
+from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
@@ -17,7 +17,7 @@ from sklearn.model_selection import (
     KFold,
     StratifiedKFold,
     TimeSeriesSplit,
-    cross_val_score,
+    cross_validate,
 )
 
 from upgini.metadata import CVType, ModelTaskType
@@ -37,12 +37,22 @@ BLOCKED_TS_TEST_SIZE = 0.2
 
 
 class EstimatorWrapper:
-    def __init__(self, estimator, scorer: Callable, metric_name: str, multiplier: int, cv: BaseCrossValidator):
+    def __init__(
+        self,
+        estimator,
+        scorer: Callable,
+        metric_name: str,
+        multiplier: int,
+        cv: BaseCrossValidator,
+        target_type: ModelTaskType
+    ):
         self.estimator = estimator
         self.scorer = scorer
         self.metric_name = metric_name
         self.multiplier = multiplier
         self.cv = cv
+        self.target_type = target_type
+        self.cv_estimators = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs):
         X, y, fit_params = self._prepare_to_fit(X, y)
@@ -53,7 +63,9 @@ class EstimatorWrapper:
     def predict(self, **kwargs):
         return self.estimator.predict(**kwargs)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+    def _prepare_to_fit(
+        self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray, list]
+    ) -> Tuple[pd.DataFrame, pd.Series, dict]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
@@ -67,7 +79,7 @@ class EstimatorWrapper:
             raise Exception(msg)
 
         joined = pd.concat([joined, y.to_frame(name=y.name)], axis=1)
-        # joined[y.name] = y.to_frame(name=y.name)
+        joined = joined.reset_index(drop=True)
         joined = joined[joined[y.name].notna()]
         X = joined.drop(columns=y.name)
         y = joined[y.name]  # type: ignore
@@ -79,13 +91,29 @@ class EstimatorWrapper:
         if X.shape[1] == 0:
             return None
 
-        metrics_by_fold = cross_val_score(self.estimator, X, y, cv=self.cv, scoring=self.scorer, fit_params=fit_params)
+        scorer = check_scoring(self.estimator, scoring=self.scorer)
+
+        cv_results = cross_validate(
+            estimator=self.estimator,
+            X=X,
+            y=y,
+            scoring={"score": scorer},
+            cv=self.cv,
+            fit_params=fit_params,
+            return_estimator=True
+        )
+        metrics_by_fold = cv_results["test_score"]
+        self.cv_estimators = cv_results["estimator"]
 
         return np.mean(metrics_by_fold) * self.multiplier
 
-    def calculate_metric(self, X: pd.DataFrame, y) -> float:
+    def calculate_metric(self, X: pd.DataFrame, y: np.ndarray) -> float:
         X, y, _ = self._prepare_to_fit(X, y)
-        return self.scorer(self.estimator, X, y) * self.multiplier
+        metrics = []
+        for est in self.cv_estimators:
+            metrics.append(self.scorer(est, X, y))
+
+        return np.mean(metrics) * self.multiplier
 
     @staticmethod
     def _create_cv(
@@ -121,7 +149,13 @@ class EstimatorWrapper:
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         cv = EstimatorWrapper._create_cv(cv, target_type, shuffle, random_state)
-        kwargs = {"scorer": scorer, "metric_name": metric_name, "multiplier": multiplier, "cv": cv}
+        kwargs = {
+            "scorer": scorer,
+            "metric_name": metric_name,
+            "multiplier": multiplier,
+            "cv": cv,
+            "target_type": target_type
+        }
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
                 estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
@@ -163,8 +197,9 @@ class CatBoostWrapper(EstimatorWrapper):
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
+        target_type: ModelTaskType,
     ):
-        super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
+        super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
@@ -192,8 +227,9 @@ class LightGBMWrapper(EstimatorWrapper):
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
+        target_type: ModelTaskType,
     ):
-        super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
+        super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
@@ -213,8 +249,9 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
+        target_type: ModelTaskType,
     ):
-        super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv)
+        super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)

@@ -160,20 +160,20 @@ class Dataset(pd.DataFrame):
 
     def __validate_min_rows_count(self):
         if self.shape[0] < self.MIN_ROWS_COUNT:
-            raise ValueError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows")
+            raise ValidationError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows")
 
     def __validate_max_row_count(self):
         api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
         is_registered = api_key is not None and api_key != ""
         if is_registered:
             if len(self) > self.MAX_ROWS_REGISTERED:
-                raise ValueError(
+                raise ValidationError(
                     f"Total X + eval_set rows count limit is {self.MAX_ROWS_REGISTERED}. "
                     "Please sample X and eval_set"
                 )
         else:
             if len(self) > self.MAX_ROWS_UNREGISTERED:
-                raise ValueError(
+                raise ValidationError(
                     f"For unregistered users total rows count limit for X + eval_set is {self.MAX_ROWS_UNREGISTERED}. "
                     "Please register to increase the limit"
                 )
@@ -182,7 +182,7 @@ class Dataset(pd.DataFrame):
         # self.logger.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
-                raise ValueError("Some of column names are empty. Add names and try again, please")
+                raise ValidationError("Some of column names are empty. Add names and try again, please")
             new_column = str(column).lower()
             if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
                 new_column = "a" + new_column
@@ -205,7 +205,7 @@ class Dataset(pd.DataFrame):
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
                 if max_length > 400:
-                    raise ValueError(
+                    raise ValidationError(
                         f"Columns {col} are too long: {max_length} characters. "
                         "Remove this columns or trim length to 50 characters"
                     )
@@ -240,7 +240,7 @@ class Dataset(pd.DataFrame):
                     "Please check X dataframe"
                 )
                 self.logger.error(msg)
-                raise ValueError(msg)
+                raise ValidationError(msg)
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
@@ -282,9 +282,12 @@ class Dataset(pd.DataFrame):
         if date is not None and date in self.columns:
             # self.logger.info("Transform date column to millis")
             if is_string_dtype(self[date]):
-                self[date] = (
-                    pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
-                )
+                try:
+                    self[date] = (
+                        pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
+                    )
+                except ValueError as e:
+                    raise ValidationError(e)
             elif is_datetime(self[date]):
                 self[date] = self[date].dt.floor("D").view(np.int64) // 1_000_000
             elif is_period_dtype(self[date]):
@@ -292,7 +295,7 @@ class Dataset(pd.DataFrame):
             elif is_numeric_dtype(self[date]):
                 msg = f"Unsupported type of date column {date}. Convert to datetime please."
                 self.logger.error(msg)
-                raise Exception(msg)
+                raise ValidationError(msg)
 
             self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
 
@@ -386,7 +389,7 @@ class Dataset(pd.DataFrame):
                 self.logger.warning(msg)
                 print("WARN: ", msg)
                 if len(self) == 0:
-                    raise Exception("There is empty train dataset after dropping old rows")
+                    raise ValidationError("There is empty train dataset after dropping old rows")
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
@@ -585,7 +588,7 @@ class Dataset(pd.DataFrame):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
             msg = f"Maximum count of features is {self.MAX_FEATURES_COUNT}"
             self.logger.error(msg)
-            raise Exception(msg)
+            raise ValidationError(msg)
 
     def __convert_features_types(self):
         # self.logger.info("Convert features to supported data types")
@@ -725,7 +728,7 @@ class Dataset(pd.DataFrame):
             for key in keys_group:
                 if key not in self.columns:
                     showing_columns = set(self.columns) - SYSTEM_COLUMNS
-                    raise ValueError(f"Search key `{key}` doesn't exist in dataframe columns: {showing_columns}")
+                    raise ValidationError(f"Search key `{key}` doesn't exist in dataframe columns: {showing_columns}")
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")
@@ -833,7 +836,7 @@ class Dataset(pd.DataFrame):
         else:
             msg = f"Unsupported data type of column {column_name}: {pandas_data_type}"
             self.logger.error(msg)
-            raise Exception(msg)
+            raise ValidationError(msg)
 
     def __construct_search_customization(
         self,
@@ -860,7 +863,7 @@ class Dataset(pd.DataFrame):
                 for key in filter_features
                 if key not in {"min_importance", "max_psi", "max_count", "selected_features"}
             ]:
-                raise ValueError(
+                raise ValidationError(
                     "Unknown field in filter_features. "
                     "Should be {'min_importance', 'max_psi', 'max_count', 'selected_features'}."
                 )
@@ -983,5 +986,5 @@ class Dataset(pd.DataFrame):
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
-            raise Exception("Dataset size is too big. Please try to reduce rows or columns count")
+            raise ValidationError("Dataset size is too big. Please try to reduce rows or columns count")
         return parquet_file_path

@@ -4,7 +4,6 @@ import os
 import subprocess
 import time
 import uuid
-from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -22,8 +21,10 @@ from upgini.metadata import (
     COUNTRY,
     DEFAULT_INDEX,
     EVAL_SET_INDEX,
+    ORIGINAL_INDEX,
     RENAMED_INDEX,
     SYSTEM_RECORD_ID,
+    TARGET,
     CVType,
     FileColumnMeaningType,
     ModelTaskType,
@@ -111,6 +112,7 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
+        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -148,7 +150,6 @@ class FeaturesEnricher(TransformerMixin):
             self.runtime_parameters.properties["cv_type"] = cv.name
 
         self.passed_features: List[str] = []
-        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
         self.feature_names_ = []
         self.feature_importances_ = []
         self.enriched_X: Optional[pd.DataFrame] = None
@@ -227,6 +228,10 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit finished successfully")
+            except ValidationError as e:
+                self.logger.exception("Failed inner fit with validation error")
+                self._dump_python_libs()
+                raise e
             except Exception as e:
                 self.logger.exception("Failed inner fit")
                 self._dump_python_libs()
@@ -318,6 +323,10 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit_transform finished successfully")
+            except ValidationError as e:
+                self.logger.exception("Failed in inner_fit with validation error")
+                self._dump_python_libs()
+                raise e
             except Exception as e:
                 self.logger.exception("Failed in inner_fit")
                 self._dump_python_libs()
@@ -377,6 +386,10 @@ class FeaturesEnricher(TransformerMixin):
                     trace_id, X, importance_threshold=importance_threshold, max_features=max_features
                 )
                 self.logger.info("Transform finished successfully")
+            except ValidationError as e:
+                self.logger.exception("Failed to inner transform with validation error")
+                self._dump_python_libs()
+                raise e
             except Exception as e:
                 self.logger.exception("Failed to inner transform")
                 self._dump_python_libs()
@@ -450,40 +463,37 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             try:
                 if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
-                    raise Exception("Fit the enricher before calling calculate_metrics.")
+                    raise ValidationError("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
-                    raise Exception("Metrics calculation isn't possible after restart. Please fit the enricher again.")
+                    raise ValidationError(
+                        "Metrics calculation isn't possible after restart. Please fit the enricher again."
+                    )
 
-                if not isinstance(X, pd.DataFrame):
-                    raise Exception(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
-
-                if isinstance(y, np.ndarray) or isinstance(y, list):
-                    y = pd.Series(y, name="target")
-                elif not isinstance(y, pd.Series):
-                    raise Exception(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
+                self._validate_X(X)
+                y_array = self._validate_y(X, y)
 
                 # TODO check that X and y are the same as on the fit
 
-                Xy = X.copy()
-                Xy["target"] = y
-                self.__log_debug_information(Xy)
+                self.logger.info("Start calculating metrics")
+                print("Calculating metrics...")
 
-                features_columns = [c for c in X.columns if c not in self.search_keys.keys()]
+                self.__log_debug_information(X, y, eval_set)
 
-                features_to_drop = FeaturesValidator(self.logger).validate(X, features_columns)
+                X_sampled, y_sampled = self._sample_X_and_y(X, y_array)
+                X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled)
+                enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled)
 
-                filtered_columns = self.__filtered_columns(
-                    X.columns.to_list(),
+                client_features = [c for c in X.columns if c not in self.search_keys.keys()]
+
+                filtered_client_features = self.__filtered_client_features(client_features)
+
+                filtered_enriched_features = self.__filtered_enriched_features(
                     importance_threshold,
                     max_features,
-                    only_features=True,
-                    features_to_drop=features_to_drop,
                 )
 
-                fitting_X = X.drop(
-                    columns=[col for col in (self.search_keys.keys()) if col in X.columns] + features_to_drop
-                )
-                fitting_enriched_X = self.enriched_X[filtered_columns].copy()
+                fitting_X = X_sorted[filtered_client_features].copy()
+                fitting_enriched_X = enriched_X_sorted[filtered_client_features + filtered_enriched_features].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                     print("WARN: No features to calculate metrics.")
@@ -500,46 +510,50 @@ class FeaturesEnricher(TransformerMixin):
 
                 _cv = cv or self.cv
 
-                self.logger.info("Start calculating metrics")
-                print("Calculating metrics...")
+                wrapper = EstimatorWrapper.create(
+                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
+                        )
+                metric = wrapper.metric_name
+                multiplier = wrapper.multiplier
 
                 with Spinner():
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
+                    baseline_estimator = None
                     if fitting_X.shape[1] > 0:
-                        etalon_metric = EstimatorWrapper.create(
+                        baseline_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
-                        ).cross_val_predict(fitting_X, y)
+                        )
+                        etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
+                    enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                        wrapper = EstimatorWrapper.create(
+                        enriched_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
-                        enriched_metric = wrapper.cross_val_predict(fitting_enriched_X, y)
-                        metric = wrapper.metric_name
+                        enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
-                            uplift = (enriched_metric - etalon_metric) * wrapper.multiplier
+                            uplift = (enriched_metric - etalon_metric) * multiplier
                         else:
-                            uplift = enriched_metric
+                            uplift = None
                     else:
-                        enriched_metric = etalon_metric
-                        metric = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
-                        ).metric_name
-                        uplift = 0.0
+                        enriched_metric = None
+                        uplift = None
 
-                    metrics = [
-                        {
+                    train_metrics = {
                             "segment": "train",
-                            "match_rate": self._search_task.initial_max_hit_rate()["value"],  # type: ignore
-                            f"baseline {metric}": etalon_metric,
-                            f"enriched {metric}": enriched_metric,
-                            "uplift": uplift,
+                            "match_rate": self._search_task.initial_max_hit_rate()["value"]
                         }
-                    ]
+                    if etalon_metric is not None:
+                        train_metrics[f"baseline {metric}"] = etalon_metric
+                    if enriched_metric is not None:
+                        train_metrics[f"enriched {metric}"] = enriched_metric
+                    if uplift is not None:
+                        train_metrics["uplift"] = uplift
+                    metrics = [train_metrics]
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
@@ -547,75 +561,60 @@ class FeaturesEnricher(TransformerMixin):
                     if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
                         # TODO check that eval_set is the same as on the fit
 
-                        # Fit models
-                        etalon_model = None
-                        if fitting_X.shape[1] > 0:
-                            etalon_model = EstimatorWrapper.create(
-                                deepcopy(estimator),
-                                self.logger,
-                                model_task_type,
-                                _cv,
-                                scoring,
-                                shuffle,
-                                self.random_state,
-                            )
-                            etalon_model.fit(fitting_X, y)
-
-                        if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                            enriched_model = EstimatorWrapper.create(
-                                deepcopy(estimator),
-                                self.logger,
-                                model_task_type,
-                                _cv,
-                                scoring,
-                                shuffle,
-                                self.random_state,
-                            )
-                            enriched_model.fit(fitting_enriched_X, y)
-                        elif etalon_model is None:
-                            self.logger.error("No client or ADS features, but first validation didn't work")
-                            print("WARN: No features to calculate metrics.")
-                            return None
-                        else:
-                            enriched_model = etalon_model
-
                         for idx, eval_pair in enumerate(eval_set):
                             eval_hit_rate = (
                                 max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
                                 if max_initial_eval_set_metrics
                                 else None
                             )
-                            eval_X = eval_pair[0]
-                            eval_X = eval_X.drop(
-                                columns=[col for col in self.search_keys.keys() if col in eval_X.columns]
-                                + features_to_drop
-                            )
+
+                            eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
+                            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X, eval_y_array)
+
+                            eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
-                            enriched_eval_X = enriched_eval_X[filtered_columns].copy()
-                            eval_y = eval_pair[1]
+                            enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date(
+                                enriched_eval_X, eval_y_array
+                            )
+                            enriched_eval_X_sorted = (
+                                enriched_eval_X_sorted[filtered_client_features + filtered_enriched_features].copy()
+                            )
 
-                            etalon_eval_metric = None
-                            if etalon_model is not None:
-                                etalon_eval_metric = etalon_model.calculate_metric(eval_X, eval_y)
-
-                            enriched_eval_metric = enriched_model.calculate_metric(enriched_eval_X, eval_y)
-
-                            if etalon_eval_metric is not None:
-                                eval_uplift = (enriched_eval_metric - etalon_eval_metric) * enriched_model.multiplier
+                            if baseline_estimator is not None:
+                                etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
                             else:
-                                eval_uplift = enriched_eval_metric
+                                etalon_eval_metric = None
 
-                            metrics.append(
-                                {
+                            if enriched_estimator is not None:
+                                enriched_eval_metric = enriched_estimator.calculate_metric(
+                                    enriched_eval_X_sorted, enriched_y_sorted
+                                )
+                            else:
+                                enriched_eval_metric = None
+
+                            if etalon_eval_metric is not None and enriched_eval_metric is not None:
+                                eval_uplift = (enriched_eval_metric - etalon_eval_metric) * multiplier
+                            else:
+                                eval_uplift = None
+
+                            eval_metrics = {
                                     "segment": f"eval {idx + 1}",
                                     "match_rate": eval_hit_rate,
-                                    f"baseline {metric}": etalon_eval_metric,
-                                    f"enriched {metric}": enriched_eval_metric,
-                                    "uplift": eval_uplift,
                                 }
-                            )
+                            if etalon_eval_metric is not None:
+                                eval_metrics[f"baseline {metric}"] = etalon_eval_metric
+                            if enriched_eval_metric is not None:
+                                eval_metrics[f"enriched {metric}"] = enriched_eval_metric
+                            if eval_uplift is not None:
+                                eval_metrics["uplift"] = eval_uplift
+
+                            metrics.append(eval_metrics)
                     self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+            except ValidationError as e:
+                self.logger.exception("Failed to calculate metrics with validation error")
+                self._dump_python_libs()
+                raise e
             except Exception as e:
                 self.logger.exception("Failed to calculate metrics")
                 self._dump_python_libs()
@@ -648,21 +647,14 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             if self._search_task is None:
                 msg = "Fit the enricher or pass search_id before calling transform."
-                self.logger.error(msg)
                 raise NotFittedError(msg)
-            if not isinstance(X, pd.DataFrame):
-                msg = f"Unsupported type of X: {type(X)}. Use pandas.DataFrame."
-                self.logger.error(msg)
-                raise TypeError(msg)
+            self._validate_X(X)
 
-            if len(set(X.columns)) != len(X.columns):
-                raise ValueError("X contains duplicate column names. Please rename or drop them.")
+            self.__log_debug_information(X)
 
             self.__prepare_search_keys(X)
 
             df = X.copy()
-
-            self.__log_debug_information(df)
 
             df = self.__handle_index_search_keys(df)
 
@@ -675,6 +667,11 @@ class FeaturesEnricher(TransformerMixin):
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+            df = df.reset_index()
+            df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
+            system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX]
+            df_with_original_index = df[system_columns_with_original_index].copy()
+            df = df.drop(columns=ORIGINAL_INDEX)
 
             combined_search_keys = []
             for L in range(1, len(search_keys.keys()) + 1):
@@ -709,15 +706,16 @@ class FeaturesEnricher(TransformerMixin):
                 print("Collecting selected features...")
                 with Spinner():
                     result, _ = self.__enrich(
-                        df, validation_task.get_all_validation_raw_features(trace_id), X.index, {}
+                        df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), X, {}
                     )
             else:
-                result, _ = self.__enrich(df, validation_task.get_all_validation_raw_features(trace_id), X.index, {})
+                result, _ = self.__enrich(
+                    df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), X, {}
+                )
 
-            input_columns = [c for c in X.columns if c in result.columns]
-            filtered_columns = self.__filtered_columns(input_columns, importance_threshold, max_features)
+            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
 
-            return result[filtered_columns]
+            return result[X.columns.tolist() + filtered_columns]  # TODO check it twice
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -781,33 +779,15 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int],
     ):
         self.enriched_X = None
-        if not isinstance(X, pd.DataFrame):
-            raise TypeError(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
-        if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
-            raise TypeError(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
+        self._validate_X(X)
+        y_array = self._validate_y(X, y)
 
-        if isinstance(y, pd.Series):
-            y_array = y.values
-        elif isinstance(y, np.ndarray):
-            y_array = y
-        else:
-            y_array = np.array(y)
-
-        if len(np.unique(y_array)) < 2:
-            raise ValueError("y is a constant. Finding relevant features requires a non-constant y.")
-
-        if X.shape[0] != len(y_array):
-            raise ValueError(f"X and y contain different number of samples: {X.shape[0]}, {len(y_array)}.")
-
-        if len(set(X.columns)) != len(X.columns):
-            raise ValueError("X contains duplicate column names. Please rename or drop them.")
+        self.__log_debug_information(X, y, eval_set)
 
         self.__prepare_search_keys(X)
 
         df: pd.DataFrame = X.copy()  # type: ignore
         df[self.TARGET_NAME] = y_array
-
-        self.__log_debug_information(df)
 
         df = self.__handle_index_search_keys(df)
 
@@ -817,33 +797,16 @@ class FeaturesEnricher(TransformerMixin):
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
-        eval_X_index = dict()
+        eval_X_by_id = dict()
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
             for idx, eval_pair in enumerate(eval_set):
-                if len(eval_pair) != 2:
-                    raise TypeError(
-                        f"eval_set contains a tuple of size {len(eval_pair)}. It should contain only pairs of X and y."
-                    )
-                eval_X = eval_pair[0]
-                eval_y = eval_pair[1]
-                if not isinstance(eval_X, pd.DataFrame):
-                    raise TypeError(f"Unsupported type of X in eval_set: {type(X)}. Use pandas.DataFrame.")
-                if eval_X.columns.to_list() != X.columns.to_list():
-                    raise Exception("The columns in eval_set are different from the columns in X.")
-                if (
-                    not isinstance(eval_y, pd.Series)
-                    and not isinstance(eval_y, np.ndarray)
-                    and not isinstance(eval_y, list)
-                ):
-                    raise TypeError(
-                        f"Unsupported type of y in eval_set: {type(y)}. Use pandas.Series, numpy.ndarray or list."
-                    )
-                eval_df: pd.DataFrame = eval_X.copy()  # type: ignore
-                eval_df[self.TARGET_NAME] = pd.Series(eval_y)
+                eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
+                eval_df: pd.DataFrame = eval_X.copy()
+                eval_df[self.TARGET_NAME] = eval_y_array
                 eval_df[EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df], ignore_index=True)
-                eval_X_index[idx + 1] = eval_X.index
+                df = pd.concat([df, eval_df])
+                eval_X_by_id[idx + 1] = eval_X
 
         df = self.__add_country_code(df)
 
@@ -865,6 +828,12 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.__using_search_keys()
 
         df = self.__add_fit_system_record_id(df, meaning_types)
+
+        system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX]
+        if EVAL_SET_INDEX in df.columns:
+            system_columns_with_original_index.append(EVAL_SET_INDEX)
+        df_with_original_index = df[system_columns_with_original_index].copy()
+        df = df.drop(columns=ORIGINAL_INDEX)
 
         combined_search_keys = []
         for L in range(1, len(search_keys.keys()) + 1):
@@ -900,7 +869,11 @@ class FeaturesEnricher(TransformerMixin):
 
         try:
             self.enriched_X, self.enriched_eval_sets = self.__enrich(
-                df, self._search_task.get_all_initial_raw_features(trace_id), X.index, eval_X_index
+                df_with_original_index,
+                self._search_task.get_all_initial_raw_features(trace_id),
+                X,
+                eval_X_by_id,
+                "inner"
             )
         except Exception as e:
             self.logger.exception("Failed to download features")
@@ -909,7 +882,95 @@ class FeaturesEnricher(TransformerMixin):
         if calculate_metrics:
             self.__show_metrics(X, y, eval_set, scoring, estimator, importance_threshold, max_features, trace_id)
 
-    def __log_debug_information(self, df: pd.DataFrame):
+    def _validate_X(self, X):
+        if not isinstance(X, pd.DataFrame):
+            raise ValidationError(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
+        if len(set(X.columns)) != len(X.columns):
+            raise ValidationError("X contains duplicate column names. Please rename or drop them.")
+
+    def _validate_y(self, X: pd.DataFrame, y) -> np.ndarray:
+        if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
+            raise ValidationError(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
+
+        if isinstance(y, pd.Series):
+            y_array = y.values
+        elif isinstance(y, np.ndarray):
+            y_array = y
+        else:
+            y_array = np.array(y)
+
+        if len(np.unique(y_array)) < 2:
+            raise ValidationError("y is a constant. Finding relevant features requires a non-constant y.")
+
+        if X.shape[0] != len(y_array):
+            raise ValidationError(f"X and y contain different number of samples: {X.shape[0]}, {len(y_array)}.")
+
+        return y_array
+
+    def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, np.ndarray]:
+        if len(eval_pair) != 2:
+            raise ValidationError(
+                f"eval_set contains a tuple of size {len(eval_pair)}. It should contain only pairs of X and y."
+            )
+        eval_X = eval_pair[0]
+        eval_y = eval_pair[1]
+        if not isinstance(eval_X, pd.DataFrame):
+            raise ValidationError(f"Unsupported type of X in eval_set: {type(eval_X)}. Use pandas.DataFrame.")
+        if eval_X.columns.to_list() != X.columns.to_list():
+            raise ValidationError("The columns in eval_set are different from the columns in X.")
+        if (
+            not isinstance(eval_y, pd.Series)
+            and not isinstance(eval_y, np.ndarray)
+            and not isinstance(eval_y, list)
+        ):
+            raise ValidationError(
+                f"Unsupported type of y in eval_set: {type(eval_y)}. Use pandas.Series, numpy.ndarray or list."
+            )
+
+        if isinstance(eval_y, pd.Series):
+            eval_y_array = eval_y.values
+        elif isinstance(eval_y, np.ndarray):
+            eval_y_array = eval_y
+        else:
+            eval_y_array = np.array(eval_y)
+
+        if len(np.unique(eval_y_array)) < 2:
+            raise ValidationError("y in eval_set is a constant. Finding relevant features requires a non-constant y.")
+
+        if eval_X.shape[0] != len(eval_y_array):
+            raise ValidationError(
+                f"X and y in eval_set contain different number of samples: {eval_X.shape[0]}, {len(eval_y_array)}."
+            )
+
+        return eval_X, eval_y_array
+
+    def _sample_X_and_y(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
+        Xy = X.copy()
+        Xy[TARGET] = y
+        Xy = pd.merge(Xy, self.enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
+        return Xy[X.columns].copy(), Xy[TARGET].values
+
+    def _sort_by_date(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
+        if self.__is_date_key_present():
+            date_column = [
+                col
+                for col, t in self.search_keys.items()
+                if t in [SearchKey.DATE, SearchKey.DATETIME]
+            ]
+            Xy = X.copy()
+            Xy[TARGET] = y
+            Xy = Xy.sort_values(by=date_column, kind="mergesort").reset_index(drop=True)
+            X = Xy.drop(columns=TARGET)
+            y = Xy[TARGET].values
+
+        return X, y
+
+    def __log_debug_information(
+        self,
+        X: pd.DataFrame,
+        y: Union[pd.Series, np.ndarray, list, None] = None,
+        eval_set: Optional[List[tuple]] = None,
+    ):
         self.logger.info(f"Search keys: {self.search_keys}")
         self.logger.info(f"Country code: {self.country_code}")
         self.logger.info(f"Model task type: {self.model_task_type}")
@@ -920,7 +981,14 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Date format: {self.date_format}")
         self.logger.info(f"CV: {self.cv}")
         self.logger.info(f"Random state: {self.random_state}")
-        self.logger.info(f"First 10 rows of the dataset:\n{df.head(10)}")
+        self.logger.info(f"First 10 rows of the X:\n{X.head(10)}")
+        if y is not None:
+            self.logger.info(f"First 10 rows of the y:\n{y.head(10)}")
+        if eval_set is not None:
+            for idx, eval_pair in enumerate(eval_set):
+                eval_X, eval_y = eval_pair
+                self.logger.info(f"First 10 rows of the eval_X_{idx}:\n{eval_X.head(10)}")
+                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y.head(10)}")
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
@@ -954,14 +1022,17 @@ class FeaturesEnricher(TransformerMixin):
     def __add_fit_system_record_id(
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]
     ) -> pd.DataFrame:
+        df = df.reset_index()
+        df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
+
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
                 col
                 for col, t in meaning_types.items()
                 if t in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
             ]
-            df.sort_values(by=date_column, kind="mergesort")
-            pass
+            df = df.sort_values(by=date_column, kind="mergesort")
+
         df = df.reset_index(drop=True)
         df = df.reset_index()
         df = df.rename(columns={DEFAULT_INDEX: SYSTEM_RECORD_ID})
@@ -977,7 +1048,7 @@ class FeaturesEnricher(TransformerMixin):
                         "Please convert column to datetime type or pass date_format."
                     )
                     self.logger.error(msg)
-                    raise Exception(msg)
+                    raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
         target = df[self.TARGET_NAME]
@@ -1012,10 +1083,11 @@ class FeaturesEnricher(TransformerMixin):
 
     def __enrich(
         self,
-        df: pd.DataFrame,
+        df_with_original_index: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
-        original_index: pd.Index,
-        original_eval_set_index: Dict[int, pd.Index],
+        X: pd.DataFrame,
+        eval_set_by_id: Dict[int, pd.DataFrame],
+        join_type: str = "left"
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
@@ -1025,23 +1097,21 @@ class FeaturesEnricher(TransformerMixin):
             if EVAL_SET_INDEX in result_features.columns
             else result_features
         )
-        df_without_target = df.drop(columns=self.TARGET_NAME) if self.TARGET_NAME in df.columns else df
 
-        dup_features = [c for c in df_without_target.columns if c in result_features.columns and c != SYSTEM_RECORD_ID]
+        dup_features = [c for c in X.columns if c in result_features.columns]
         if len(dup_features) > 0:
             self.logger.error(f"X contain columns with same name as returned from backend: {dup_features}")
-            raise Exception(
+            raise ValidationError(
                 "Columns set for transform method should be the same as for fit method, please check input dataframe. "
                 f"These columns are different: {dup_features}"
             )
 
         result = pd.merge(
-            df_without_target,
+            df_with_original_index,
             result_features,
             left_on=SYSTEM_RECORD_ID,
             right_on=SYSTEM_RECORD_ID,
-            how="left",
-            # suffixes=("_ads", "")
+            how=join_type,
         )
 
         result_eval_sets = dict()
@@ -1050,14 +1120,32 @@ class FeaturesEnricher(TransformerMixin):
             result_eval_set = result[result[EVAL_SET_INDEX] != 0]
             for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
                 result_eval = result.loc[result[EVAL_SET_INDEX] == eval_set_index].copy()
-                if eval_set_index in original_eval_set_index.keys():
-                    result_eval.index = original_eval_set_index[eval_set_index]
+                if eval_set_index in eval_set_by_id.keys():
+                    eval_X = eval_set_by_id[eval_set_index]
+                    result_eval = result_eval.set_index(ORIGINAL_INDEX)
+                    result_eval = pd.merge(
+                        left=eval_X,
+                        right=result_eval,
+                        left_index=True,
+                        right_index=True
+                    )
+                else:
+                    raise RuntimeError(
+                        f"Eval_set index {eval_set_index} from enriched result not found in original eval_set"
+                        )
                 result_eval_sets[eval_set_index] = result_eval
             result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
 
-        result_train.index = original_index
+        result_train = result_train.set_index(ORIGINAL_INDEX)
+        result_train = pd.merge(
+            left=X,
+            right=result_train,
+            left_index=True,
+            right_index=True,
+            how=join_type
+        )
         if SYSTEM_RECORD_ID in result.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
             for eval_set_index in result_eval_sets.keys():
@@ -1104,6 +1192,12 @@ class FeaturesEnricher(TransformerMixin):
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
 
+    def __filtered_client_features(self, client_features: List[str]) -> List[str]:
+        return self.features_info.loc[
+            self.features_info["feature_name"].isin(client_features) & self.features_info["shap_value"] > 0,
+            "feature_name"
+        ].values.tolist()
+
     def __filtered_importance_names(
         self, importance_threshold: Optional[float], max_features: Optional[int]
     ) -> List[str]:
@@ -1134,23 +1228,22 @@ class FeaturesEnricher(TransformerMixin):
             column_name = None
             if isinstance(column_id, str):
                 if column_id not in x.columns:
-                    raise ValueError(f"Key `{column_id}` in search_keys was not found in X: {list(x.columns)}.")
+                    raise ValidationError(f"Key `{column_id}` in search_keys was not found in X: {list(x.columns)}.")
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
                 if column_id >= x.shape[1]:
-                    raise ValueError(
+                    raise ValidationError(
                         f"Index {column_id} in search_keys is out of bounds for {x.shape[1]} columns of X."
                     )
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
             else:
-                raise ValueError(f"Unsupported type of key in search_keys: {type(column_id)}.")
+                raise ValidationError(f"Unsupported type of key in search_keys: {type(column_id)}.")
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = "SearchKey.COUNTRY and iso_code cannot be used simultaneously."
-                # self.logger.error(msg)
-                raise ValueError(msg)
+                raise ValidationError(msg)
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
                 msg = f"Search key {meaning_type} cannot be used without API key. It will be ignored."
@@ -1271,38 +1364,24 @@ class FeaturesEnricher(TransformerMixin):
             return float(importance_threshold) if importance_threshold is not None else 0.0
         except ValueError:
             self.logger.exception(f"Invalid importance_threshold provided: {importance_threshold}")
-            raise ValueError("importance_threshold must be float.")
+            raise ValidationError("importance_threshold must be float.")
 
     def __validate_max_features(self, max_features: Optional[int]) -> int:
         try:
             return int(max_features) if max_features is not None else 400
         except ValueError:
             self.logger.exception(f"Invalid max_features provided: {max_features}")
-            raise ValueError("max_features must be int.")
+            raise ValidationError("max_features must be int.")
 
-    def __filtered_columns(
+    def __filtered_enriched_features(
         self,
-        x_columns: List[str],
         importance_threshold: Optional[float],
         max_features: Optional[int],
-        only_features: bool = False,
-        features_to_drop: Optional[List[str]] = None,
     ) -> List[str]:
         importance_threshold = self.__validate_importance_threshold(importance_threshold)
         max_features = self.__validate_max_features(max_features)
 
-        exclude_columns = list(self.search_keys.keys()) if only_features else []
-        if features_to_drop:
-            exclude_columns += features_to_drop
-
-        return sorted(
-            list(
-                set(
-                    [col for col in x_columns if col not in exclude_columns]
-                    + self.__filtered_importance_names(importance_threshold, max_features)
-                )
-            )
-        )
+        return self.__filtered_importance_names(importance_threshold, max_features)
 
     def __detect_missing_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:
         sample = df.head(100)

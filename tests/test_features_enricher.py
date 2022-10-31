@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import RuntimeParameters
+from upgini.metadata import RuntimeParameters, CVType
 from upgini.search_task import SearchTask
 
 from .utils import (
@@ -44,6 +44,7 @@ def test_search_keys_validation(requests_mock: Mocker):
 
 def test_features_enricher(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option('display.max_columns', 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -108,6 +109,7 @@ def test_features_enricher(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
+        cv=CVType.time_series,
         logs_enabled=False,
     )
 
@@ -134,21 +136,15 @@ def test_features_enricher(requests_mock: Mocker):
         [
             {
                 "match_rate": 99.9,
-                "baseline roc_auc": None,
-                "enriched roc_auc": 0.4906517107908262,
-                "uplift": 0.4906517107908262,
+                "enriched roc_auc": 0.4912950110858979,
             },
             {
                 "match_rate": 100.0,
-                "baseline roc_auc": None,
-                "enriched roc_auc": 0.5183564089324384,
-                "uplift": 0.5183564089324384,
+                "enriched roc_auc": 0.5150045430711161,
             },
             {
                 "match_rate": 99.0,
-                "baseline roc_auc": None,
-                "enriched roc_auc": 0.5231821748250629,
-                "uplift": 0.5231821748250629,
+                "enriched roc_auc": 0.5352320219051736,
             },
         ],
         index=["train", "eval 1", "eval 2"],
@@ -419,7 +415,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 0.3, "matchedInPercent": 100.0}],
+        etalon_features=[],
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -460,6 +456,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
     # ]
 
     metrics = enricher.calculate_metrics(train_features, train_target, eval_set, max_features=0)
+    print(metrics)
 
     assert metrics is None
 
@@ -507,7 +504,10 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     search_task.initial_max_hit_rate = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame({"system_record_id": [1, 2, 3]})
+    enricher.enriched_X = pd.DataFrame({
+        "system_record_id": [1, 2, 3],
+        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]
+    })
     assert enricher.calculate_metrics(X, y) is None
 
 
@@ -565,3 +565,93 @@ def test_correct_target_multiclass(requests_mock: Mocker):
         }
     )
     assert_frame_equal(handled, expected)
+
+
+def test_correct_order_of_enriched_X(requests_mock: Mocker):
+    pd.set_option('display.max_columns', 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df = df.sample(frac=1).reset_index(drop=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    print("Train features")
+    print(train_features)
+    train_target = train_df["target"]
+    eval1_df = df[10000:10100].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[10100:10200].reset_index(drop=True)
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"].reset_index(drop=True)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+    )
+
+    print("Enriched X")
+    print(enricher.enriched_X)
+
+    assert_frame_equal(train_features, enricher.enriched_X[train_features.columns])
+
+    enriched_eval1 = enricher.enriched_eval_sets[1]
+    assert_frame_equal(eval1_features, enriched_eval1[eval1_features.columns])
+
+    enriched_eval2 = enricher.enriched_eval_sets[2]
+    assert_frame_equal(eval2_features, enriched_eval2[eval2_features.columns])
