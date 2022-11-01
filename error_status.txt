@@ -1,3 +1,1 @@
-We are currently experiencing issues with Data sources,
-some users may be affected and see failed search requests.
-Expected fix time - 1 hour (03:40 PCT)
+
