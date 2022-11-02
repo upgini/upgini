@@ -228,13 +228,13 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit finished successfully")
-            except ValidationError as e:
-                self.logger.exception("Failed inner fit with validation error")
-                self._dump_python_libs()
-                raise e
             except Exception as e:
-                self.logger.exception("Failed inner fit")
+                error_message = "Failed on inner fit" + (
+                    " with validation error" if isinstance(e, ValidationError) else ""
+                )
+                self.logger.exception(error_message)
                 self._dump_python_libs()
+                self.__display_slack_community_link()
                 raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -323,13 +323,13 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit_transform finished successfully")
-            except ValidationError as e:
-                self.logger.exception("Failed in inner_fit with validation error")
-                self._dump_python_libs()
-                raise e
             except Exception as e:
-                self.logger.exception("Failed in inner_fit")
+                error_message = "Failed on inner fit" + (
+                    " with validation error" if isinstance(e, ValidationError) else ""
+                )
+                self.logger.exception(error_message)
                 self._dump_python_libs()
+                self.__display_slack_community_link()
                 raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -386,13 +386,13 @@ class FeaturesEnricher(TransformerMixin):
                     trace_id, X, importance_threshold=importance_threshold, max_features=max_features
                 )
                 self.logger.info("Transform finished successfully")
-            except ValidationError as e:
-                self.logger.exception("Failed to inner transform with validation error")
-                self._dump_python_libs()
-                raise e
             except Exception as e:
-                self.logger.exception("Failed to inner transform")
+                error_message = "Failed on inner transform" + (
+                    " with validation error" if isinstance(e, ValidationError) else ""
+                )
+                self.logger.exception(error_message)
                 self._dump_python_libs()
+                self.__display_slack_community_link()
                 raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
@@ -511,8 +511,8 @@ class FeaturesEnricher(TransformerMixin):
                 _cv = cv or self.cv
 
                 wrapper = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
-                        )
+                    estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
+                )
                 metric = wrapper.metric_name
                 multiplier = wrapper.multiplier
 
@@ -544,9 +544,9 @@ class FeaturesEnricher(TransformerMixin):
                         uplift = None
 
                     train_metrics = {
-                            "segment": "train",
-                            "match_rate": self._search_task.initial_max_hit_rate()["value"]
-                        }
+                        "segment": "train",
+                        "match_rate": self._search_task.initial_max_hit_rate()["value"],
+                    }
                     if etalon_metric is not None:
                         train_metrics[f"baseline {metric}"] = etalon_metric
                     if enriched_metric is not None:
@@ -576,9 +576,9 @@ class FeaturesEnricher(TransformerMixin):
                             enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date(
                                 enriched_eval_X, eval_y_array
                             )
-                            enriched_eval_X_sorted = (
-                                enriched_eval_X_sorted[filtered_client_features + filtered_enriched_features].copy()
-                            )
+                            enriched_eval_X_sorted = enriched_eval_X_sorted[
+                                filtered_client_features + filtered_enriched_features
+                            ].copy()
 
                             if baseline_estimator is not None:
                                 etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
@@ -598,9 +598,9 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_uplift = None
 
                             eval_metrics = {
-                                    "segment": f"eval {idx + 1}",
-                                    "match_rate": eval_hit_rate,
-                                }
+                                "segment": f"eval {idx + 1}",
+                                "match_rate": eval_hit_rate,
+                            }
                             if etalon_eval_metric is not None:
                                 eval_metrics[f"baseline {metric}"] = etalon_eval_metric
                             if enriched_eval_metric is not None:
@@ -873,7 +873,7 @@ class FeaturesEnricher(TransformerMixin):
                 self._search_task.get_all_initial_raw_features(trace_id),
                 X,
                 eval_X_by_id,
-                "inner"
+                "inner",
             )
         except Exception as e:
             self.logger.exception("Failed to download features")
@@ -918,11 +918,7 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(f"Unsupported type of X in eval_set: {type(eval_X)}. Use pandas.DataFrame.")
         if eval_X.columns.to_list() != X.columns.to_list():
             raise ValidationError("The columns in eval_set are different from the columns in X.")
-        if (
-            not isinstance(eval_y, pd.Series)
-            and not isinstance(eval_y, np.ndarray)
-            and not isinstance(eval_y, list)
-        ):
+        if not isinstance(eval_y, pd.Series) and not isinstance(eval_y, np.ndarray) and not isinstance(eval_y, list):
             raise ValidationError(
                 f"Unsupported type of y in eval_set: {type(eval_y)}. Use pandas.Series, numpy.ndarray or list."
             )
@@ -952,11 +948,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _sort_by_date(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
         if self.__is_date_key_present():
-            date_column = [
-                col
-                for col, t in self.search_keys.items()
-                if t in [SearchKey.DATE, SearchKey.DATETIME]
-            ]
+            date_column = [col for col, t in self.search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
             Xy = X.copy()
             Xy[TARGET] = y
             Xy = Xy.sort_values(by=date_column, kind="mergesort").reset_index(drop=True)
@@ -1087,7 +1079,7 @@ class FeaturesEnricher(TransformerMixin):
         result_features: Optional[pd.DataFrame],
         X: pd.DataFrame,
         eval_set_by_id: Dict[int, pd.DataFrame],
-        join_type: str = "left"
+        join_type: str = "left",
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
@@ -1123,29 +1115,18 @@ class FeaturesEnricher(TransformerMixin):
                 if eval_set_index in eval_set_by_id.keys():
                     eval_X = eval_set_by_id[eval_set_index]
                     result_eval = result_eval.set_index(ORIGINAL_INDEX)
-                    result_eval = pd.merge(
-                        left=eval_X,
-                        right=result_eval,
-                        left_index=True,
-                        right_index=True
-                    )
+                    result_eval = pd.merge(left=eval_X, right=result_eval, left_index=True, right_index=True)
                 else:
                     raise RuntimeError(
                         f"Eval_set index {eval_set_index} from enriched result not found in original eval_set"
-                        )
+                    )
                 result_eval_sets[eval_set_index] = result_eval
             result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
             result_train = result
 
         result_train = result_train.set_index(ORIGINAL_INDEX)
-        result_train = pd.merge(
-            left=X,
-            right=result_train,
-            left_index=True,
-            right_index=True,
-            how=join_type
-        )
+        result_train = pd.merge(left=X, right=result_train, left_index=True, right_index=True, how=join_type)
         if SYSTEM_RECORD_ID in result.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
             for eval_set_index in result_eval_sets.keys():
@@ -1195,7 +1176,7 @@ class FeaturesEnricher(TransformerMixin):
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[
             self.features_info["feature_name"].isin(client_features) & self.features_info["shap_value"] > 0,
-            "feature_name"
+            "feature_name",
         ].values.tolist()
 
     def __filtered_importance_names(
@@ -1447,6 +1428,26 @@ class FeaturesEnricher(TransformerMixin):
         return search_keys
 
     def _dump_python_libs(self):
-        result = subprocess.run(['pip', 'freeze'], stdout=subprocess.PIPE)
-        libs = result.stdout.decode('utf-8')
+        result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
+        libs = result.stdout.decode("utf-8")
         self.logger.warn(f"User python libs versions: {libs}")
+
+    def __display_slack_community_link(self):
+        slack_community_link = "https://4mlg.short.gy/join-upgini-community"
+        link_text = (
+            "WARNING: It looks like you've run into some kind of error. Find qualified help in the Upgini community"
+        )
+        badge = "https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"
+        try:
+            from IPython.display import HTML, display
+
+            _ = get_ipython()
+            display(
+                HTML(
+                    f"""<p>{link_text}</p><a href='{slack_community_link}'>
+                    <img alt='Upgini slack community' src='{badge}'></a>
+                    """
+                )
+            )
+        except (ImportError, NameError):
+            print(f"{link_text} at {slack_community_link}")
