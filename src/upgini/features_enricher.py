@@ -479,7 +479,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 self.__log_debug_information(X, y, eval_set)
 
-                X_sampled, y_sampled = self._sample_X_and_y(X, y_array)
+                X_sampled, y_sampled = self._sample_X_and_y(X, y_array, self.enriched_X)
                 X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled)
                 enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled)
 
@@ -569,12 +569,16 @@ class FeaturesEnricher(TransformerMixin):
                             )
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
-                            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X, eval_y_array)
-
-                            eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
+
+                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
+                                eval_X, eval_y_array, enriched_eval_X
+                            )
+                            eval_X_sorted, eval_y_sorted = self._sort_by_date(sampled_eval_X, sampled_eval_y)
+                            eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
+
                             enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date(
-                                enriched_eval_X, eval_y_array
+                                enriched_eval_X, sampled_eval_y
                             )
                             enriched_eval_X_sorted = (
                                 enriched_eval_X_sorted[filtered_client_features + filtered_enriched_features].copy()
@@ -944,10 +948,12 @@ class FeaturesEnricher(TransformerMixin):
 
         return eval_X, eval_y_array
 
-    def _sample_X_and_y(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
+    def _sample_X_and_y(
+        self, X: pd.DataFrame, y: np.ndarray, enriched_X: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, np.ndarray]:
         Xy = X.copy()
         Xy[TARGET] = y
-        Xy = pd.merge(Xy, self.enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
+        Xy = pd.merge(Xy, enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
         return Xy[X.columns].copy(), Xy[TARGET].values
 
     def _sort_by_date(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray]:
