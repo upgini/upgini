@@ -77,6 +77,9 @@ class FeaturesEnricher(TransformerMixin):
     cv: CVType, optional (default=None)
         Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series.
         Default cross validation is k-fold for regressions and stratified k-fold for classifications.
+
+    shared_datasets: list of str, optional (default=None)
+        List of private shared dataset ids for custom search
     """
 
     TARGET_NAME = "target"
@@ -90,6 +93,7 @@ class FeaturesEnricher(TransformerMixin):
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
+        shared_datasets: Optional[List[str]] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
         random_state: int = 42,
@@ -148,6 +152,12 @@ class FeaturesEnricher(TransformerMixin):
             if self.runtime_parameters.properties is None:
                 self.runtime_parameters.properties = {}
             self.runtime_parameters.properties["cv_type"] = cv.name
+        if shared_datasets is not None:
+            if self.runtime_parameters is None:
+                self.runtime_parameters = RuntimeParameters()
+            if self.runtime_parameters.properties is None:
+                self.runtime_parameters.properties = {}
+            self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
 
         self.passed_features: List[str] = []
         self.feature_names_ = []
@@ -865,6 +875,7 @@ class FeaturesEnricher(TransformerMixin):
             trace_id,
             extract_features=True,
             runtime_parameters=self.runtime_parameters,
+            shared_datasets=self.shared_datasets,
         )
 
         self.__prepare_feature_importances(trace_id, list(X.columns))
@@ -1447,7 +1458,7 @@ class FeaturesEnricher(TransformerMixin):
         try:
             from IPython.display import HTML, display
 
-            _ = get_ipython()
+            _ = get_ipython()  # type: ignore
             display(
                 HTML(
                     f"""<p>{link_text}</p><a href='{slack_community_link}'>
