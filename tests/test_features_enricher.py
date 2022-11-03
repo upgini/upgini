@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import RuntimeParameters, CVType
+from upgini.metadata import CVType, RuntimeParameters
 from upgini.search_task import SearchTask
 
 from .utils import (
@@ -133,31 +133,19 @@ def test_features_enricher(requests_mock: Mocker):
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
     expected_metrics = pd.DataFrame(
-        [
-            {
-                "match_rate": 99.9,
-                "enriched roc_auc": 0.4912950110858979,
-            },
-            {
-                "match_rate": 100.0,
-                "enriched roc_auc": 0.5150045430711161,
-            },
-            {
-                "match_rate": 99.0,
-                "enriched roc_auc": 0.5352320219051736,
-            },
-        ],
-        index=["train", "eval 1", "eval 2"],
-    )
+        {
+            "segment": ["train", "eval 1", "eval 2"],
+            "match_rate": [99.9, 100.0, 99.0],
+            "enriched roc_auc": [0.492054, 0.514097, 0.539166],
+        }
+    ).set_index("segment").rename_axis("")
     print("Expected metrics: ")
     print(expected_metrics)
     print("Actual metrics: ")
     print(metrics)
 
     assert metrics is not None
-    for segment in expected_metrics.index:
-        for col in expected_metrics.columns:
-            assert metrics.loc[segment, col] == expected_metrics.loc[segment, col]
+    assert_frame_equal(expected_metrics, metrics)
 
     print(enricher.features_info)
 

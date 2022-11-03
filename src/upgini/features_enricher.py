@@ -422,6 +422,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
+        silent: bool = False,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
 
@@ -615,13 +616,14 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
                     self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
-            except ValidationError as e:
-                self.logger.exception("Failed to calculate metrics with validation error")
-                self._dump_python_libs()
-                raise e
             except Exception as e:
-                self.logger.exception("Failed to calculate metrics")
+                error_message = "Failed to calculate metrics" + (
+                    " with validation error" if isinstance(e, ValidationError) else ""
+                )
+                self.logger.exception(error_message)
                 self._dump_python_libs()
+                if not silent:
+                    self.__display_slack_community_link()
                 raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
@@ -1298,6 +1300,7 @@ class FeaturesEnricher(TransformerMixin):
             importance_threshold=importance_threshold,
             max_features=max_features,
             trace_id=trace_id,
+            silent=True,
         )
         if metrics is not None:
             msg = "\nQuality metrics"
