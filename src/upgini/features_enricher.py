@@ -875,7 +875,6 @@ class FeaturesEnricher(TransformerMixin):
             trace_id,
             extract_features=True,
             runtime_parameters=self.runtime_parameters,
-            shared_datasets=self.shared_datasets,
         )
 
         self.__prepare_feature_importances(trace_id, list(X.columns))
