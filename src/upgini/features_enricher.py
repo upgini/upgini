@@ -957,7 +957,7 @@ class FeaturesEnricher(TransformerMixin):
             date_column = [col for col, t in self.search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
             Xy = X.copy()
             Xy[TARGET] = y
-            Xy = Xy.sort_values(by=date_column, kind="mergesort").reset_index(drop=True)
+            Xy = Xy.sort_values(by=date_column).reset_index(drop=True)
             X = Xy.drop(columns=TARGET)
             y = Xy[TARGET].values
 
@@ -1029,7 +1029,7 @@ class FeaturesEnricher(TransformerMixin):
                 for col, t in meaning_types.items()
                 if t in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
             ]
-            df = df.sort_values(by=date_column, kind="mergesort")
+            df = df.sort_values(by=date_column)
 
         df = df.reset_index(drop=True)
         df = df.reset_index()
