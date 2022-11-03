@@ -128,7 +128,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame({
         "segment": ["train", "eval 1"],
         "match_rate": [100.0, 100.0],
-        "baseline roc_auc": [0.740270, 0.718936]
+        "baseline roc_auc": [0.739391, 0.717750]
     }).set_index("segment").rename_axis("")
 
     assert_frame_equal(expected_metrics, metrics)

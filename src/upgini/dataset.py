@@ -556,7 +556,7 @@ class Dataset(pd.DataFrame):
         """Convert phone/msisdn to int"""
         # self.logger.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
-        country_column = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY)
+        country_column = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
         if msisdn_column is not None and msisdn_column in self.columns:
             normalizer = PhoneNormalizer(self, msisdn_column, country_column)
             self[msisdn_column] = normalizer.normalize()
