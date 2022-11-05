@@ -649,14 +649,14 @@ class Dataset(pd.DataFrame):
             elif 0 < valid_share < 1:
                 valid_status = "Some invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )

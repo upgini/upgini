@@ -577,13 +577,14 @@ class FeaturesEnricher(TransformerMixin):
                             )
                         # TODO check that eval_set is the same as on the fit
 
-                        idx = 0
-                        for eval_pair in eval_set:
-                            eval_hit_rate = (
-                                max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
-                                if max_initial_eval_set_metrics
-                                else None
-                            )
+                        def get_hit_rate(eval_set_index: int) -> Optional[float]:
+                            if max_initial_eval_set_metrics:
+                                for metric in max_initial_eval_set_metrics:
+                                    if metric["eval_set_index"] == eval_set_index:
+                                        return metric["hit_rate"] * 100.0
+
+                        for idx, eval_pair in enumerate(eval_set):
+                            eval_hit_rate = get_hit_rate(idx + 1)
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
@@ -630,7 +631,7 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_metrics["uplift"] = eval_uplift
 
                             metrics.append(eval_metrics)
-                            idx += 1
+
                     self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except Exception as e:
