@@ -569,10 +569,16 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-                    if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
+                    if eval_set is not None:
+                        if len(self.enriched_eval_sets) != len(eval_set):
+                            raise ValidationError(
+                                "Count of eval_set datasets on fit and on calculation metrics differs: "
+                                f"fit: {len(self.enriched_eval_sets)}, calculation metrics: {len(eval_set)}"
+                            )
                         # TODO check that eval_set is the same as on the fit
 
-                        for idx, eval_pair in enumerate(eval_set):
+                        idx = 0
+                        for eval_pair in eval_set:
                             eval_hit_rate = (
                                 max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
                                 if max_initial_eval_set_metrics
@@ -624,6 +630,7 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_metrics["uplift"] = eval_uplift
 
                             metrics.append(eval_metrics)
+                            idx += 1
                     self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except Exception as e:
