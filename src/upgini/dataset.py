@@ -24,7 +24,6 @@ from pandas.core.dtypes.common import is_period_dtype
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
-    COUNTRY,
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
@@ -602,11 +601,7 @@ class Dataset(pd.DataFrame):
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
         # self.logger.info("validating etalon")
-        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
-        score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
         if validate_target:
             if target is None:
                 raise ValidationError("Target column is absent in meaning_types")
@@ -621,8 +616,8 @@ class Dataset(pd.DataFrame):
             if self.task_type != ModelTaskType.MULTICLASS:
                 self[target] = self[target].apply(pd.to_numeric, errors="coerce")
 
-        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group if key != COUNTRY]
-        mandatory_columns = [date_millis, target, score]
+        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
+        mandatory_columns = [target]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
@@ -649,14 +644,14 @@ class Dataset(pd.DataFrame):
             elif 0 < valid_share < 1:
                 valid_status = "Some invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )
             else:
                 valid_status = "All invalid"
                 valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation "
+                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
                     f"{optional_drop_message}"
                     f"Some examples of invalid values: {invalid_values}"
                 )

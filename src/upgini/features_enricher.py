@@ -569,15 +569,22 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
-                    if eval_set is not None and len(self.enriched_eval_sets) == len(eval_set):
+                    if eval_set is not None:
+                        if len(self.enriched_eval_sets) != len(eval_set):
+                            raise ValidationError(
+                                "Count of eval_set datasets on fit and on calculation metrics differs: "
+                                f"fit: {len(self.enriched_eval_sets)}, calculation metrics: {len(eval_set)}"
+                            )
                         # TODO check that eval_set is the same as on the fit
 
+                        def get_hit_rate(eval_set_index: int) -> Optional[float]:
+                            if max_initial_eval_set_metrics:
+                                for metric in max_initial_eval_set_metrics:
+                                    if metric["eval_set_index"] == eval_set_index:
+                                        return metric["hit_rate"] * 100.0
+
                         for idx, eval_pair in enumerate(eval_set):
-                            eval_hit_rate = (
-                                max_initial_eval_set_metrics[idx]["hit_rate"] * 100.0
-                                if max_initial_eval_set_metrics
-                                else None
-                            )
+                            eval_hit_rate = get_hit_rate(idx + 1)
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
@@ -624,6 +631,7 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_metrics["uplift"] = eval_uplift
 
                             metrics.append(eval_metrics)
+
                     self.logger.info("Metrics calculation finished successfully")
                     return pd.DataFrame(metrics).set_index("segment").rename_axis("")
             except Exception as e:
@@ -993,12 +1001,13 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Random state: {self.random_state}")
         self.logger.info(f"First 10 rows of the X:\n{X.head(10)}")
         if y is not None:
-            self.logger.info(f"First 10 rows of the y:\n{y.head(10)}")
+            self.logger.info(f"First 10 rows of the y:\n{y[:10]}")
         if eval_set is not None:
             for idx, eval_pair in enumerate(eval_set):
-                eval_X, eval_y = eval_pair
+                eval_X: pd.DataFrame = eval_pair[0]
+                eval_y = eval_pair[1]
                 self.logger.info(f"First 10 rows of the eval_X_{idx}:\n{eval_X.head(10)}")
-                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y.head(10)}")
+                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y[:10]}")
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
@@ -1454,7 +1463,7 @@ class FeaturesEnricher(TransformerMixin):
     def __display_slack_community_link(self):
         slack_community_link = "https://4mlg.short.gy/join-upgini-community"
         link_text = (
-            "WARNING: It looks like you've run into some kind of error. Find qualified help in the Upgini community"
+            "WARNING: Looks like you've run into some kind of error. For help write us in the Upgini community"
         )
         badge = "https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"
         try:
