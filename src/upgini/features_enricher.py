@@ -993,12 +993,13 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Random state: {self.random_state}")
         self.logger.info(f"First 10 rows of the X:\n{X.head(10)}")
         if y is not None:
-            self.logger.info(f"First 10 rows of the y:\n{y.head(10)}")
+            self.logger.info(f"First 10 rows of the y:\n{y[:10]}")
         if eval_set is not None:
             for idx, eval_pair in enumerate(eval_set):
-                eval_X, eval_y = eval_pair
+                eval_X: pd.DataFrame = eval_pair[0]
+                eval_y = eval_pair[1]
                 self.logger.info(f"First 10 rows of the eval_X_{idx}:\n{eval_X.head(10)}")
-                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y.head(10)}")
+                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y[:10]}")
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
@@ -1454,7 +1455,7 @@ class FeaturesEnricher(TransformerMixin):
     def __display_slack_community_link(self):
         slack_community_link = "https://4mlg.short.gy/join-upgini-community"
         link_text = (
-            "WARNING: It looks like you've run into some kind of error. Find qualified help in the Upgini community"
+            "WARNING: Looks like you've run into some kind of error. For help write us in the Upgini community"
         )
         badge = "https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"
         try:

@@ -602,11 +602,11 @@ class Dataset(pd.DataFrame):
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
         # self.logger.info("validating etalon")
-        date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
+        # date_millis = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
+        #     FileColumnMeaningType.DATETIME.value
+        # )
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
-        score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
+        # score = self.etalon_def_checked.get(FileColumnMeaningType.SCORE.value)
         if validate_target:
             if target is None:
                 raise ValidationError("Target column is absent in meaning_types")
@@ -621,8 +621,8 @@ class Dataset(pd.DataFrame):
             if self.task_type != ModelTaskType.MULTICLASS:
                 self[target] = self[target].apply(pd.to_numeric, errors="coerce")
 
-        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group if key != COUNTRY]
-        mandatory_columns = [date_millis, target, score]
+        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]  # if key != COUNTRY]
+        mandatory_columns = [target]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
