@@ -249,7 +249,7 @@ enricher = FeaturesEnricher(
   </tr>
   <tr>
     <td> SearchKey.COUNTRY </td>
-    <td> <a href="https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes">Country ISO-3166 code</a>, Country name </td>
+    <td> <a href="https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2">Country ISO-3166 code</a>, Country name </td>
     <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>GB </tt> <br/> <tt>US </tt> <br/> <tt>IN </tt> </td>
   </tr> 
