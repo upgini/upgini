@@ -322,15 +322,7 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y)
 ```
 
-That's all). We've fitted `FeaturesEnricher`. In the same way any pandas dataframe can be enriched with features from search results. Use `transform` method, and let magic to do the rest 🪄
-
-```python
-# load dataset for enrichment
-test_x = pd.read_csv("test.csv")
-# enrich it!
-enriched_test_features = enricher.transform(test_x)
-enriched_test_features.head()
-```
+That's all). We've fitted `FeaturesEnricher`. 
 ### 5. 📈 Evaluate feature importances (SHAP values) from the search result
 
 `FeaturesEnricher` class has two properties for feature importances, which will be filled after fit - `feature_names_` and `feature_importances_`:  
@@ -341,8 +333,44 @@ Method `get_features_info()` returns pandas dataframe with features and full sta
 ```python
 enricher.get_features_info()
 ```
-
 Get more details about `FeaturesEnricher` at runtime using docstrings via `help(FeaturesEnricher)` or `help(FeaturesEnricher.fit)`.
+
+### 6. 🏭 Enrich Production ML pipeline with relevent external features
+`FeaturesEnricher` is a Scikit-learn compatible estimator, so any pandas dataframe can be enriched with external features from a search result (after `fit` ).   
+Use `transform` method of `FeaturesEnricher` , and let magic to do the rest 🪄
+```python
+# load dataset for enrichment
+test_x = pd.read_csv("test.csv")
+# enrich it!
+enriched_test_features = enricher.transform(test_x)
+```
+ #### 6.1 Reuse completed search for enrichment without 'fit' run
+
+`FeaturesEnricher` can be initiated with a `search_id` parameter from completed search after fit method call.   
+Just use `enricher.get_search_id()` or copy search id string from the `fit()` output.  
+Search keys and features in X should be the same as for `fit()`
+```python
+enricher = FeaturesEnricher(
+  search_keys={"date": SearchKey.DATE},
+  search_id = "abcdef00-0000-0000-0000-999999999999"
+)
+enricher.transform(X)
+```
+#### 6.2 Enrichment with an updated external data sources and features
+For most of the ML cases, training step requires labeled dataset with a historical observations from the past. But for production step you'll need an updated and actual data sources and features for the present time, to calculate a prediction.  
+`FeaturesEnricher`, when initiated with set of search keys which includes `SearchKey.DATE`, will match records from all potential external data sources **exactly on a the specific date/datetime** based on `SearchKey.DATE`. To avoid enrichment with features "form the future" for the `fit` step.   
+And then, for `transform` in a production ML pipeline, you'll get enrichment with relevant features, actual for the present date.  
+
+⚠️ Initiate `FeaturesEnricher` with `SearchKey.DATE` search key in a key set to get actual features for production and avoid features from the future for the training:
+```python
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"country": SearchKey.COUNTRY,
+    		"zip_code": SearchKey.POSTAL_CODE,
+	},
+) 
+```
 
 ## 💻 How it works?
 
@@ -586,20 +614,6 @@ enricher = FeaturesEnricher(
 	search_keys={"subscription_activation_date": SearchKey.DATE}
 )
 enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
-```
-
- ### Reuse completed search for enrichment
-
-`FeaturesEnricher` can be initiated with a `search_id` parameter from completed search after fit method call. Just use `enricher.get_search_id()` or copy search id string from the `fit()` output.  
-Search keys and features in X should be the same as for `fit()`
-
-```python
-enricher = FeaturesEnricher(
-  search_keys={"date": SearchKey.DATE},
-  search_id = "abcdef00-0000-0000-0000-999999999999"
-)
-
-enricher.transform(X)
 ```
 ### Turn off autodetection for search key columns
 Upgini has autodetection of search keys on by default.
