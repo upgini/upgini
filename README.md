@@ -77,7 +77,7 @@ We want radically simplify features search and delivery to make external data a 
 #### 📊 Total: **239 countries** and **up to 41 years** of history
 |Data scource|Countries|History, years|Update|Search keys|API Key required
 |--|--|--|--|--|--|
-|Historical weather & Weather normals by postal/ZIP code| 68 |22|Monthly|date, country, postal/ZIP code|No
+|Historical weather & Climate normals by postal/ZIP code| 68 |22|Monthly|date, country, postal/ZIP code|No
 |International holidays & events, Workweek calendar| 232 |22|Monthly|date, country|No
 |Consumer Confidence index| 44 |22|Monthly|date, country|No
 |World economic indicators|191 |41|Monthly|date, country|No
