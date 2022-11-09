@@ -491,6 +491,9 @@ class FeaturesEnricher(TransformerMixin):
                 self.__log_debug_information(X, y, eval_set)
 
                 X_sampled, y_sampled = self._sample_X_and_y(X, y_array, self.enriched_X)
+                self.logger.info(f"Shape of enriched_X: {self.enriched_X.shape}")
+                self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
+                self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
                 X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled)
                 enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled)
 
@@ -592,6 +595,9 @@ class FeaturesEnricher(TransformerMixin):
                             sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
                                 eval_X, eval_y_array, enriched_eval_X
                             )
+                            self.logger.info(f"Shape of enriched_eval_X: {enriched_eval_X.shape}")
+                            self.logger.info(f"Shape of eval_X_{idx} after sampling: {sampled_eval_X.shape}")
+                            self.logger.info(f"Shape of eval_y_{idx} after sampling: {len(sampled_eval_y)}")
                             eval_X_sorted, eval_y_sorted = self._sort_by_date(sampled_eval_X, sampled_eval_y)
                             eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
 
@@ -1000,15 +1006,15 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Date format: {self.date_format}")
         self.logger.info(f"CV: {self.cv}")
         self.logger.info(f"Random state: {self.random_state}")
-        self.logger.info(f"First 10 rows of the X:\n{X.head(10)}")
+        self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{X.head(10)}")
         if y is not None:
-            self.logger.info(f"First 10 rows of the y:\n{y[:10]}")
+            self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{y[:10]}")
         if eval_set is not None:
             for idx, eval_pair in enumerate(eval_set):
                 eval_X: pd.DataFrame = eval_pair[0]
                 eval_y = eval_pair[1]
-                self.logger.info(f"First 10 rows of the eval_X_{idx}:\n{eval_X.head(10)}")
-                self.logger.info(f"First 10 rows of the eval_y_{idx}:\n{eval_y[:10]}")
+                self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
+                self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{eval_y[:10]}")
 
     def __handle_index_search_keys(self, df: pd.DataFrame) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
