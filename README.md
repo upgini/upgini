@@ -335,7 +335,7 @@ enricher.get_features_info()
 ```
 Get more details about `FeaturesEnricher` at runtime using docstrings via `help(FeaturesEnricher)` or `help(FeaturesEnricher.fit)`.
 
-### 6. 🏭 Enrich Production ML pipeline with relevent external features
+### 6. 🏭 Enrich Production ML pipeline with relevant external features
 `FeaturesEnricher` is a Scikit-learn compatible estimator, so any pandas dataframe can be enriched with external features from a search result (after `fit` ).   
 Use `transform` method of `FeaturesEnricher` , and let magic to do the rest 🪄
 ```python
