@@ -24,8 +24,11 @@ from upgini.metadata import CVType, ModelTaskType
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 CATBOOST_PARAMS = {
-    "iterations": 300,
-    "early_stopping_rounds": 100,
+    "iterations": 250,
+    "learning_rate": 0.05,
+    "min_child_samples": 10,
+    "max_depth": 5,
+    "early_stopping_rounds": 20,
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": 42,

@@ -238,7 +238,7 @@ class Dataset(pd.DataFrame):
                     f"{share_tgt_dedup:.4f}% of rows ({num_dup_rows}) in X are duplicates with different y values. "
                     "Please check X dataframe"
                 )
-                self.logger.error(msg)
+                self.logger.warn(msg)
                 raise ValidationError(msg)
 
     def __convert_bools(self):
@@ -293,7 +293,7 @@ class Dataset(pd.DataFrame):
                 self[date] = pd.to_datetime(self[date].astype("string")).dt.floor("D").view(np.int64) // 1_000_000
             elif is_numeric_dtype(self[date]):
                 msg = f"Unsupported type of date column {date}. Convert to datetime please."
-                self.logger.error(msg)
+                self.logger.warn(msg)
                 raise ValidationError(msg)
 
             self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
@@ -426,7 +426,7 @@ class Dataset(pd.DataFrame):
             target_classes_count = target.nunique()
             if target_classes_count != 2:
                 msg = f"Binary task type should contain only 2 target values, but {target_classes_count} presented"
-                self.logger.error(msg)
+                self.logger.warn(msg)
                 raise ValidationError(msg)
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string_dtype(target):
@@ -485,7 +485,7 @@ class Dataset(pd.DataFrame):
                     f"The number of target classes {target_classes_count} exceeds the allowed threshold: "
                     f"{self.MAX_MULTICLASS_CLASS_COUNT}. Please, correct your data and try again"
                 )
-                self.logger.error(msg)
+                self.logger.warn(msg)
                 raise ValidationError(msg)
 
             unique_target = target.unique()
@@ -501,7 +501,7 @@ class Dataset(pd.DataFrame):
                     "The minimum number of observations for each class in a train dataset must be "
                     f"grater than {self.MIN_TARGET_CLASS_ROWS}. Please, correct your data and try again"
                 )
-                self.logger.error(msg)
+                self.logger.warn(msg)
                 raise ValidationError(msg)
 
             min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
@@ -586,7 +586,7 @@ class Dataset(pd.DataFrame):
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
             msg = f"Maximum count of features is {self.MAX_FEATURES_COUNT}"
-            self.logger.error(msg)
+            self.logger.warn(msg)
             raise ValidationError(msg)
 
     def __convert_features_types(self):
@@ -830,7 +830,7 @@ class Dataset(pd.DataFrame):
             return DataType.STRING
         else:
             msg = f"Unsupported data type of column {column_name}: {pandas_data_type}"
-            self.logger.error(msg)
+            self.logger.warn(msg)
             raise ValidationError(msg)
 
     def __construct_search_customization(
