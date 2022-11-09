@@ -136,7 +136,127 @@ def test_features_enricher(requests_mock: Mocker):
         {
             "segment": ["train", "eval 1", "eval 2"],
             "match_rate": [99.9, 100.0, 99.0],
-            "enriched roc_auc": [0.492054, 0.514097, 0.539166],
+            "enriched roc_auc": [0.492362, 0.508219, 0.531009],
+        }
+    ).set_index("segment").rename_axis("")
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 2
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info["feature_name"] == "feature"
+    assert first_feature_info["shap_value"] == 10.1
+    second_feature_info = enricher.features_info.iloc[1]
+    assert second_feature_info["feature_name"] == "SystemRecordId_473310000"
+    assert second_feature_info["shap_value"] == 0.0
+
+
+def test_features_enricher_with_named_index(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option('display.max_columns', 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.index.name = "custom_index_name"
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.index.name == "custom_index_name"
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
+
+    metrics = enricher.calculate_metrics(
+        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
+    )
+    expected_metrics = pd.DataFrame(
+        {
+            "segment": ["train", "eval 1", "eval 2"],
+            "match_rate": [99.9, 100.0, 99.0],
+            "enriched roc_auc": [0.492362, 0.508219, 0.531009],
         }
     ).set_index("segment").rename_axis("")
     print("Expected metrics: ")

@@ -691,8 +691,9 @@ class FeaturesEnricher(TransformerMixin):
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+            index_name = df.index.name or DEFAULT_INDEX
             df = df.reset_index()
-            df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
+            df = df.rename(columns={index_name: ORIGINAL_INDEX})
             system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX]
             df_with_original_index = df[system_columns_with_original_index].copy()
             df = df.drop(columns=ORIGINAL_INDEX)
@@ -744,36 +745,36 @@ class FeaturesEnricher(TransformerMixin):
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
-                self.logger.error(f"search_id {search_id} provided without search_keys")
-                raise ValueError(
+                self.logger.warn(f"search_id {search_id} provided without search_keys")
+                raise ValidationError(
                     "When search_id is passed, search_keys must be set to the same value that have been used for fit."
                 )
             else:
-                self.logger.error("search_keys not provided")
-                raise ValueError("At least one column must be provided in search_keys.")
+                self.logger.warn("search_keys not provided")
+                raise ValidationError("At least one column must be provided in search_keys.")
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
             msg = "DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.error(msg)
-            raise Exception(msg)
+            self.logger.warn(msg)
+            raise ValidationError(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
             msg = "EMAIL and HEM search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.error(msg)
-            raise Exception(msg)
+            self.logger.warn(msg)
+            raise ValidationError(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key must be provided if POSTAL_CODE is present."
-            self.logger.error(msg)
-            raise Exception(msg)
+            self.logger.warn(msg)
+            raise ValidationError(msg)
 
         for key_type in SearchKey.__members__.values():
             if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
                 msg = f"Search key {key_type} is presented multiple times."
-                self.logger.error(msg)
-                raise Exception(msg)
+                self.logger.warn(msg)
+                raise ValidationError(msg)
 
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         if not self.__is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
@@ -782,8 +783,8 @@ class FeaturesEnricher(TransformerMixin):
                 "You can use DATE, COUNTRY and POSTAL_CODE keys for free search without registration. "
                 "Or provide the API key either directly or via the environment variable UPGINI_API_KEY."
             )
-            self.logger.error(msg + f" Provided search keys: {key_types}")
-            raise Exception(msg)
+            self.logger.warn(msg + f" Provided search keys: {key_types}")
+            raise ValidationError(msg)
 
     @property
     def __is_registered(self) -> bool:
@@ -1041,8 +1042,9 @@ class FeaturesEnricher(TransformerMixin):
     def __add_fit_system_record_id(
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType]
     ) -> pd.DataFrame:
+        index_name = df.index.name or DEFAULT_INDEX
         df = df.reset_index()
-        df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
+        df = df.rename(columns={index_name: ORIGINAL_INDEX})
 
         if (self.cv is None or self.cv == CVType.k_fold) and self.__is_date_key_present():
             date_column = [
@@ -1066,7 +1068,7 @@ class FeaturesEnricher(TransformerMixin):
                         f"Date column `{column}` is of string type, but date_format is not specified. "
                         "Please convert column to datetime type or pass date_format."
                     )
-                    self.logger.error(msg)
+                    self.logger.warn(msg)
                     raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -1119,7 +1121,7 @@ class FeaturesEnricher(TransformerMixin):
 
         dup_features = [c for c in X.columns if c in result_features.columns]
         if len(dup_features) > 0:
-            self.logger.error(f"X contain columns with same name as returned from backend: {dup_features}")
+            self.logger.warn(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(
                 "Columns set for transform method should be the same as for fit method, please check input dataframe. "
                 f"These columns are different: {dup_features}"

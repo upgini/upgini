@@ -128,7 +128,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame({
         "segment": ["train", "eval 1"],
         "match_rate": [100.0, 100.0],
-        "baseline roc_auc": [0.739391, 0.717750]
+        "baseline roc_auc": [0.743380, 0.721769]
     }).set_index("segment").rename_axis("")
 
     assert_frame_equal(expected_metrics, metrics)
@@ -213,9 +213,9 @@ def test_default_metric_binary(requests_mock: Mocker):
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
 
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.498719)
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.492757)
-    assert metrics_df.loc["train", "uplift"] == approx(-0.005962)
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.49976)
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.503121)
+    assert metrics_df.loc["train", "uplift"] == approx(0.003361)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
     assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.5)
@@ -302,9 +302,9 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     assert metrics_df is not None
     print(metrics_df)
     assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline RMSLE"] == approx(0.479534)
-    assert metrics_df.loc["train", "enriched RMSLE"] == approx(0.471668)
-    assert metrics_df.loc["train", "uplift"] == approx(0.007867)
+    assert metrics_df.loc["train", "baseline RMSLE"] == approx(0.487154)
+    assert metrics_df.loc["train", "enriched RMSLE"] == approx(0.478443)
+    assert metrics_df.loc["train", "uplift"] == approx(0.008710)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
     assert metrics_df.loc["eval 1", "baseline RMSLE"] == approx(0.475431)
