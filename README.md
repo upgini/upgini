@@ -351,10 +351,11 @@ Just use `enricher.get_search_id()` or copy search id string from the `fit()` ou
 Search keys and features in X should be the same as for `fit()`
 ```python
 enricher = FeaturesEnricher(
+  #same set of a search keys as for the fit step
   search_keys={"date": SearchKey.DATE},
   search_id = "abcdef00-0000-0000-0000-999999999999"
 )
-enricher.transform(X)
+enriched_prod_dataframe=enricher.transform(input_dataframe)
 ```
 #### 6.2 Enrichment with an updated external data sources and features
 For most of the ML cases, training step requires labeled dataset with a historical observations from the past. But for production step you'll need an updated and actual data sources and features for the present time, to calculate a prediction.  
