@@ -6,7 +6,7 @@ from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 class CountrySearchKeyDetector(BaseSearchKeyDetector):
     def _is_search_key_by_name(self, column_name: str) -> bool:
-        return "country" in column_name.lower()
+        return "country" in str(column_name).lower()
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
         if not is_string_dtype(column):
