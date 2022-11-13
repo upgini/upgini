@@ -476,7 +476,7 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
-                if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
+                if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
                     raise ValidationError("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
                     raise ValidationError(
@@ -562,7 +562,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     train_metrics = {
                         "segment": "train",
-                        "match_rate": self._search_task.initial_max_hit_rate()["value"],
+                        "match_rate": self._search_task.initial_max_hit_rate_v2(),
                     }
                     if etalon_metric is not None:
                         train_metrics[f"baseline {metric}"] = etalon_metric
@@ -574,7 +574,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
-                    max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+                    max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
                     if eval_set is not None:
                         if len(self.enriched_eval_sets) != len(eval_set):
                             raise ValidationError(
@@ -583,14 +583,8 @@ class FeaturesEnricher(TransformerMixin):
                             )
                         # TODO check that eval_set is the same as on the fit
 
-                        def get_hit_rate(eval_set_index: int) -> Optional[float]:
-                            if max_initial_eval_set_metrics:
-                                for metric in max_initial_eval_set_metrics:
-                                    if metric["eval_set_index"] == eval_set_index:
-                                        return metric["hit_rate"] * 100.0
-
                         for idx, eval_pair in enumerate(eval_set):
-                            eval_hit_rate = get_hit_rate(idx + 1)
+                            eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
@@ -1178,7 +1172,6 @@ class FeaturesEnricher(TransformerMixin):
         features_meta = self._search_task.get_all_features_metadata_v2()
         if features_meta is None:
             raise Exception("Internal error. There is no features metadata")
-        # importances = self._search_task.initial_features(trace_id)
 
         def feature_metadata_by_name(name: str) -> FeaturesMetadataV2:
             for f in features_meta:
@@ -1219,7 +1212,7 @@ class FeaturesEnricher(TransformerMixin):
                         "source": "",
                         "feature name": x_column,
                         "shap value": 0.0,
-                        "coverage %": None,
+                        "coverage %": np.nan,
                         "type": "",
                         "feature type": "",
                     }
@@ -1376,28 +1369,6 @@ class FeaturesEnricher(TransformerMixin):
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
-
-    def __is_quality_by_metrics_low(self) -> bool:
-        if self._search_task is None:
-            return False
-        if len(self.passed_features) > 0 and self._search_task.task_type is not None:
-            max_uplift = self._search_task.initial_max_uplift()
-            if self._search_task.task_type == ModelTaskType.BINARY:
-                threshold = 0.002
-            elif self._search_task.task_type == ModelTaskType.MULTICLASS:
-                threshold = 3.0
-            elif self._search_task.task_type == ModelTaskType.REGRESSION:
-                threshold = 0.0
-            else:
-                return False
-            if max_uplift is not None and max_uplift["value"] < threshold:
-                return True
-        elif self._search_task.task_type is not None:
-            max_auc = self._search_task.initial_max_auc()
-            if self._search_task.task_type == ModelTaskType.BINARY and max_auc is not None:
-                if max_auc["value"] < 0.55:
-                    return True
-        return False
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:

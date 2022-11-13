@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import (
-    CVType, RuntimeParameters, ProviderTaskMetadataV2, FeaturesMetadataV2
+    CVType, RuntimeParameters, ProviderTaskMetadataV2, FeaturesMetadataV2, HitRateMetrics, ModelEvalSet
 )
 from upgini.search_task import SearchTask
 
@@ -86,7 +86,35 @@ def test_features_enricher(requests_mock: Mocker):
                 type="NUMERIC",
                 source="ads",
                 hit_rate=99.0,
-                shap_value=10.1)]
+                shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
         )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -217,7 +245,35 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
                 type="NUMERIC",
                 source="ads",
                 hit_rate=99.0,
-                shap_value=10.1)]
+                shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
         )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -363,6 +419,34 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
                     hit_rate=100.0,
                     shap_value=1.0
                 )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
             ]
         )
     )
@@ -492,7 +576,35 @@ def test_filter_by_importance(requests_mock: Mocker):
                 type="NUMERIC",
                 source="ads",
                 hit_rate=99.0,
-                shap_value=0.7)]
+                shap_value=0.7)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
         )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -605,7 +717,35 @@ def test_filter_by_max_features(requests_mock: Mocker):
                 type="NUMERIC",
                 source="ads",
                 hit_rate=99.0,
-                shap_value=0.7)]
+                shap_value=0.7)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
         )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -689,10 +829,10 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
 
     search_task = SearchTask("", endpoint=url)
 
-    def initial_max_hit_rate() -> Optional[Dict[str, Any]]:
-        return {"value": 1.0}
+    def initial_max_hit_rate() -> Optional[float]:
+        return 1.0
 
-    search_task.initial_max_hit_rate = initial_max_hit_rate
+    search_task.initial_max_hit_rate_v2 = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     enricher._search_task = search_task
     enricher.enriched_X = pd.DataFrame({

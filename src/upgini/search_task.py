@@ -281,6 +281,10 @@ class SearchTask:
         else:
             return None
 
+    def initial_max_hit_rate_v2(self) -> Optional[float]:
+        if self.provider_metadata_v2 is not None:
+            return max([meta.hit_rate_metrics.hit_rate_percent for meta in self.provider_metadata_v2])
+
     def _initial_min_hit_rate(self) -> float:
         provider_summaries = self._check_finished_initial_search()
         min_hit_rate = None
@@ -513,6 +517,17 @@ class SearchTask:
                 return [eval.dict(exclude_none=True) for eval in eval_set_metrics]
 
         return None
+
+    def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:
+        if self.provider_metadata_v2 is not None:
+            hit_rate_dict = {}
+            for provider_meta in self.provider_metadata_v2:
+                for eval_metrics in provider_meta.eval_set_metrics:
+                    eval_idx = eval_metrics.eval_set_index
+                    new_hit_rate = eval_metrics.hit_rate_metrics.hit_rate_percent
+                    if eval_idx not in hit_rate_dict.keys() or new_hit_rate > hit_rate_dict[eval_idx]:
+                        hit_rate_dict[eval_idx] = new_hit_rate
+            return hit_rate_dict
 
     def validation_max_auc(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_validation_search()

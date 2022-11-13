@@ -9,7 +9,7 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import CVType, FeaturesMetadataV2, ProviderTaskMetadataV2
+from upgini.metadata import CVType, FeaturesMetadataV2, ProviderTaskMetadataV2, HitRateMetrics, ModelEvalSet
 
 from .utils import (
     mock_default_requests,
@@ -106,10 +106,28 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="score",
-                    type="NUMERIC",
+                    type="numeric",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.368092,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=10000,
+                hit_rate=1.0,
+                hit_rate_percent=100.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
                 ),
             ]
         )
@@ -192,6 +210,34 @@ def test_default_metric_binary(requests_mock: Mocker):
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
                 ),
             ]
         )
@@ -310,6 +356,34 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
             ]
         )
     )
@@ -421,6 +495,34 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
                 ),
             ]
         )
@@ -535,6 +637,34 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
                 ),
             ]
         )
@@ -651,6 +781,34 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
                 ),
             ]
         )
