@@ -26,6 +26,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
+    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -1172,11 +1173,14 @@ class FeaturesEnricher(TransformerMixin):
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
             raise NotFittedError("Fit the enricher or pass search_id before calling transform.")
-        importances = self._search_task.initial_features(trace_id)
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception("Internal error. There is no features metadata")
+        # importances = self._search_task.initial_features(trace_id)
 
-        def feature_metadata_by_name(name: str):
-            for f in importances:
-                if f["feature_name"] == name:
+        def feature_metadata_by_name(name: str) -> FeaturesMetadataV2:
+            for f in features_meta:
+                if f.name == name:
                     return f
 
         self.feature_names_ = []
@@ -1185,23 +1189,33 @@ class FeaturesEnricher(TransformerMixin):
 
         service_columns = [SYSTEM_RECORD_ID, EVAL_SET_INDEX, self.TARGET_NAME]
 
-        importances.sort(key=lambda m: -m["shap_value"])
-        for feature_metadata in importances:
-            if feature_metadata["feature_name"] not in x_columns:
-                self.feature_names_.append(feature_metadata["feature_name"])
-                self.feature_importances_.append(feature_metadata["shap_value"])
-            features_info.append(feature_metadata)
+        features_meta.sort(key=lambda m: -m.shap_value)
+        for feature_meta in features_meta:
+            if feature_meta.name not in x_columns:
+                self.feature_names_.append(feature_meta.name)
+                self.feature_importances_.append(feature_meta.shap_value)
+            features_info.append({
+                "provider": feature_meta.data_provider or "",
+                "source": feature_meta.data_source or "",
+                "feature_name": feature_meta.name,
+                "shap_value": feature_meta.shap_value,
+                "coverage %": feature_meta.hit_rate,
+                "feature_type": feature_meta.commercial_schema or "",
+            })
 
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):
                 continue
-            feature_metadata = feature_metadata_by_name(x_column)
-            if feature_metadata is None:
+            feature_meta = feature_metadata_by_name(x_column)
+            if feature_meta is None:
                 features_info.append(
                     {
+                        "provider": "",
+                        "source": "",
                         "feature_name": x_column,
                         "shap_value": 0.0,
-                        "coverage %": None,  # TODO fill from X
+                        "coverage %": None,
+                        "feature_type": "",
                     }
                 )
 

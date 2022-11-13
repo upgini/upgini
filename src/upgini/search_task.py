@@ -7,12 +7,19 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from upgini import dataset
-from upgini.http import LoggerFactory, ProviderTaskSummary, SearchTaskSummary, get_rest_client
+from upgini.http import (
+    LoggerFactory,
+    ProviderTaskSummary,
+    SearchTaskSummary,
+    get_rest_client,
+)
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
     FileMetadata,
     ModelTaskType,
     RuntimeParameters,
+    ProviderTaskMetadataV2,
+    FeaturesMetadataV2,
 )
 from upgini.spinner import Spinner
 
@@ -43,6 +50,7 @@ class SearchTask:
         self.endpoint = endpoint
         self.api_key = api_key
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
+        self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
 
     def poll_result(self, trace_id: str, quiet: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
@@ -102,7 +110,26 @@ class SearchTask:
                 self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
                 raise RuntimeError("All search tasks in the request have failed: " + ",".join(error_messages) + ".")
 
+        if self.summary.status == "COMPLETED":
+            self.provider_metadata_v2 = []
+            for provider_summary in self.summary.initial_important_providers:
+                if provider_summary.status == "COMPLETED":
+                    self.provider_metadata_v2.append(
+                        get_rest_client(self.endpoint, self.api_key)
+                        .get_provider_search_metadata_v3(provider_summary.ads_search_task_id, trace_id)
+                    )
+
         return self
+
+    def get_all_features_metadata_v2(self) -> Optional[List[FeaturesMetadataV2]]:
+        if self.provider_metadata_v2 is None:
+            return None
+
+        features_meta = []
+        for meta in self.provider_metadata_v2:
+            features_meta.extend(meta.features)
+
+        return features_meta
 
     @staticmethod
     def _get_provider_summaries(summary: SearchTaskSummary) -> List[ProviderTaskSummary]:
