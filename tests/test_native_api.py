@@ -4,7 +4,8 @@ import pandas as pd
 
 from upgini import Dataset, FileColumnMeaningType
 from upgini.http import UPGINI_API_KEY, UPGINI_URL
-from upgini.metadata import ModelTaskType
+from upgini.metadata import ModelTaskType, ProviderTaskMetadataV2, FeaturesMetadataV2
+from .utils import mock_get_task_metadata_v2
 
 
 def test_initial_and_validation_search(requests_mock):
@@ -80,6 +81,19 @@ def test_initial_and_validation_search(requests_mock):
             ],
             "createdAt": 1633302145414,
         },
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        "432",
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=10.1)]
+        )
     )
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")

@@ -141,7 +141,9 @@ class FeaturesMetadataV2(BaseModel):
     shap_value: float
     commercial_schema: Optional[str]
     data_provider: Optional[str]
+    data_provider_link: Optional[str]
     data_source: Optional[str]
+    data_source_link: Optional[str]
 
 
 class HitRateMetrics(BaseModel):

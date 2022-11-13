@@ -9,12 +9,15 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import CVType, RuntimeParameters
+from upgini.metadata import (
+    CVType, RuntimeParameters, ProviderTaskMetadataV2, FeaturesMetadataV2
+)
 from upgini.search_task import SearchTask
 
 from .utils import (
     mock_default_requests,
     mock_get_features_meta,
+    mock_get_task_metadata_v2,
     mock_get_metadata,
     mock_initial_search,
     mock_initial_summary,
@@ -72,6 +75,19 @@ def test_features_enricher(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=10.1)]
+        )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -153,11 +169,11 @@ def test_features_enricher(requests_mock: Mocker):
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature_name"] == "feature"
-    assert first_feature_info["shap_value"] == 10.1
+    assert first_feature_info["feature name"] == "feature"
+    assert first_feature_info["shap value"] == 10.1
     second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature_name"] == "SystemRecordId_473310000"
-    assert second_feature_info["shap_value"] == 0.0
+    assert second_feature_info["feature name"] == "SystemRecordId_473310000"
+    assert second_feature_info["shap value"] == 0.0
 
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
@@ -190,6 +206,19 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=10.1)]
+        )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -273,11 +302,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature_name"] == "feature"
-    assert first_feature_info["shap_value"] == 10.1
+    assert first_feature_info["feature name"] == "feature"
+    assert first_feature_info["shap value"] == 10.1
     second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature_name"] == "SystemRecordId_473310000"
-    assert second_feature_info["shap_value"] == 0.0
+    assert second_feature_info["feature name"] == "SystemRecordId_473310000"
+    assert second_feature_info["shap value"] == 0.0
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
@@ -308,6 +337,34 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="feature",
+                    type="NUMERIC",
+                    source="ads",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                    commercial_schema="Paid",
+                    data_provider="Upgini",
+                    data_provider_link="https://upgini.com",
+                    data_source="Community shared",
+                    data_source_link="https://upgini.com"
+                ),
+                FeaturesMetadataV2(
+                    name="SystemRecordId_473310000",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=1.0
+                )
+            ]
+        )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -425,6 +482,19 @@ def test_filter_by_importance(requests_mock: Mocker):
         ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[],
     )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=0.7)]
+        )
+    )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -524,6 +594,19 @@ def test_filter_by_max_features(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=0.7)]
+        )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -704,6 +787,19 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(
+                name="feature",
+                type="NUMERIC",
+                source="ads",
+                hit_rate=99.0,
+                shap_value=10.1)]
+        )
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 

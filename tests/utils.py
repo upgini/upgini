@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from requests_mock import Mocker
 
+from upgini.metadata import ProviderTaskMetadataV2
+
 
 def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.get("https://ident.me", content="1.1.1.1".encode())
@@ -146,6 +148,13 @@ def mock_get_features_meta(
             "providerFeatures": ads_features,
             "etalonFeatures": etalon_features,
         },
+    )
+
+
+def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_id: str, meta: ProviderTaskMetadataV2):
+    requests_mock.get(
+        url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id,
+        json=meta.dict()
     )
 
 

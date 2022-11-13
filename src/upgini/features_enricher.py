@@ -117,7 +117,9 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
-        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+        self.features_info: pd.DataFrame = pd.DataFrame(
+            columns=["provider", "source", "feature name", "shap value", "coverage %", "type", "feature type"]
+        )
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -752,35 +754,35 @@ class FeaturesEnricher(TransformerMixin):
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
-                self.logger.warn(f"search_id {search_id} provided without search_keys")
+                self.logger.warning(f"search_id {search_id} provided without search_keys")
                 raise ValidationError(
                     "When search_id is passed, search_keys must be set to the same value that have been used for fit."
                 )
             else:
-                self.logger.warn("search_keys not provided")
+                self.logger.warning("search_keys not provided")
                 raise ValidationError("At least one column must be provided in search_keys.")
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
             msg = "DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
             msg = "EMAIL and HEM search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key must be provided if POSTAL_CODE is present."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         for key_type in SearchKey.__members__.values():
             if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
                 msg = f"Search key {key_type} is presented multiple times."
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
 
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
@@ -790,7 +792,7 @@ class FeaturesEnricher(TransformerMixin):
                 "You can use DATE, COUNTRY and POSTAL_CODE keys for free search without registration. "
                 "Or provide the API key either directly or via the environment variable UPGINI_API_KEY."
             )
-            self.logger.warn(msg + f" Provided search keys: {key_types}")
+            self.logger.warning(msg + f" Provided search keys: {key_types}")
             raise ValidationError(msg)
 
     @property
@@ -1075,7 +1077,7 @@ class FeaturesEnricher(TransformerMixin):
                         f"Date column `{column}` is of string type, but date_format is not specified. "
                         "Please convert column to datetime type or pass date_format."
                     )
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                     raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -1128,7 +1130,7 @@ class FeaturesEnricher(TransformerMixin):
 
         dup_features = [c for c in X.columns if c in result_features.columns]
         if len(dup_features) > 0:
-            self.logger.warn(f"X contain columns with same name as returned from backend: {dup_features}")
+            self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(
                 "Columns set for transform method should be the same as for fit method, please check input dataframe. "
                 f"These columns are different: {dup_features}"
@@ -1195,12 +1197,15 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(feature_meta.shap_value)
             features_info.append({
-                "provider": feature_meta.data_provider or "",
-                "source": feature_meta.data_source or "",
-                "feature_name": feature_meta.name,
-                "shap_value": feature_meta.shap_value,
+                "provider": f"""<a href="{feature_meta.data_provider_link}">{feature_meta.data_provider}</a>"""
+                if feature_meta.data_provider else "",
+                "source": f"""<a href="{feature_meta.data_source_link}">{feature_meta.data_source}</a>"""
+                if feature_meta.data_source else "",
+                "feature name": feature_meta.name,
+                "shap value": feature_meta.shap_value,
                 "coverage %": feature_meta.hit_rate,
-                "feature_type": feature_meta.commercial_schema or "",
+                "type": feature_meta.type,
+                "feature type": feature_meta.commercial_schema or "",
             })
 
         for x_column in x_columns:
@@ -1212,10 +1217,11 @@ class FeaturesEnricher(TransformerMixin):
                     {
                         "provider": "",
                         "source": "",
-                        "feature_name": x_column,
-                        "shap_value": 0.0,
+                        "feature name": x_column,
+                        "shap value": 0.0,
                         "coverage %": None,
-                        "feature_type": "",
+                        "type": "",
+                        "feature type": "",
                     }
                 )
 
@@ -1224,8 +1230,8 @@ class FeaturesEnricher(TransformerMixin):
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[
-            self.features_info["feature_name"].isin(client_features) & self.features_info["shap_value"] > 0,
-            "feature_name",
+            self.features_info["feature name"].isin(client_features) & self.features_info["shap value"] > 0,
+            "feature name",
         ].values.tolist()
 
     def __filtered_importance_names(
@@ -1348,10 +1354,11 @@ class FeaturesEnricher(TransformerMixin):
 
             try:
                 from IPython.display import display
+                _ = get_ipython()  # type: ignore
 
                 print(Format.GREEN + Format.BOLD + msg + Format.END)
                 display(metrics)
-            except ImportError:
+            except (ImportError, NameError):
                 print(msg)
                 print(metrics)
 
@@ -1362,9 +1369,11 @@ class FeaturesEnricher(TransformerMixin):
         try:
             from IPython.display import display
 
+            _ = get_ipython()  # type: ignore
+
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display(self.features_info.head(60))
-        except ImportError:
+            display(self.features_info.style.head(60))
+        except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
 
@@ -1480,7 +1489,7 @@ class FeaturesEnricher(TransformerMixin):
     def _dump_python_libs(self):
         result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
         libs = result.stdout.decode("utf-8")
-        self.logger.warn(f"User python libs versions: {libs}")
+        self.logger.warning(f"User python libs versions: {libs}")
 
     def __display_slack_community_link(self):
         slack_community_link = "https://4mlg.short.gy/join-upgini-community"

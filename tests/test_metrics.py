@@ -9,12 +9,13 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import CVType
+from upgini.metadata import CVType, FeaturesMetadataV2, ProviderTaskMetadataV2
 
 from .utils import (
     mock_default_requests,
     mock_get_features_meta,
     mock_get_metadata,
+    mock_get_task_metadata_v2,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
@@ -97,6 +98,22 @@ def test_real_case_metric_binary(requests_mock: Mocker):
         ads_features=[],
         etalon_features=[{"name": "score", "importance": 0.368092, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="score",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.368092,
+                ),
+            ]
+        )
+    )
     # path_to_mock_features = os.path.join(BASE_DIR, "features.parquet")
     # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -155,6 +172,29 @@ def test_default_metric_binary(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ]
+        )
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -250,6 +290,29 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
     )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ]
+        )
+    )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -338,6 +401,29 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ]
+        )
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -429,6 +515,29 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ]
+        )
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -522,6 +631,29 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         ads_search_task_id,
         ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
         etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ]
+        )
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)

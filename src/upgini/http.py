@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 import os
@@ -11,7 +12,6 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
-import base64
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
@@ -21,8 +21,8 @@ from upgini.metadata import (
     FileColumnMeaningType,
     FileMetadata,
     FileMetrics,
-    SearchCustomization,
     ProviderTaskMetadataV2,
+    SearchCustomization,
 )
 from upgini.utils.track_info import get_track_metrics
 
