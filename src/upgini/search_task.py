@@ -522,11 +522,12 @@ class SearchTask:
         if self.provider_metadata_v2 is not None:
             hit_rate_dict = {}
             for provider_meta in self.provider_metadata_v2:
-                for eval_metrics in provider_meta.eval_set_metrics:
-                    eval_idx = eval_metrics.eval_set_index
-                    new_hit_rate = eval_metrics.hit_rate_metrics.hit_rate_percent
-                    if eval_idx not in hit_rate_dict.keys() or new_hit_rate > hit_rate_dict[eval_idx]:
-                        hit_rate_dict[eval_idx] = new_hit_rate
+                if provider_meta.eval_set_metrics is not None:
+                    for eval_metrics in provider_meta.eval_set_metrics:
+                        eval_idx = eval_metrics.eval_set_index
+                        new_hit_rate = eval_metrics.hit_rate_metrics.hit_rate_percent
+                        if eval_idx not in hit_rate_dict.keys() or new_hit_rate > hit_rate_dict[eval_idx]:
+                            hit_rate_dict[eval_idx] = new_hit_rate
             return hit_rate_dict
 
     def validation_max_auc(self) -> Optional[Dict[str, Any]]:
