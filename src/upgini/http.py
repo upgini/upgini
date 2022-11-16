@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 import os
@@ -11,7 +12,6 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
-import base64
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
@@ -21,6 +21,7 @@ from upgini.metadata import (
     FileColumnMeaningType,
     FileMetadata,
     FileMetrics,
+    ProviderTaskMetadataV2,
     SearchCustomization,
 )
 from upgini.utils.track_info import get_track_metrics
@@ -178,6 +179,7 @@ class _RestClient:
     SEARCH_SCORES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}/file"
     SEARCH_FEATURES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/rawfeatures/{0}/file"
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
+    SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -473,6 +475,11 @@ class _RestClient:
         api_path = self.SEARCH_FILE_METADATA_URI_FMT_V2.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return FileMetadata.parse_obj(response)
+
+    def get_provider_search_metadata_v3(self, provider_search_task_id: str, trace_id: str) -> ProviderTaskMetadataV2:
+        api_path = self.SEARCH_TASK_METADATA_FMT_V3.format(provider_search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return ProviderTaskMetadataV2.parse_obj(response)
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI

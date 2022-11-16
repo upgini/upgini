@@ -26,6 +26,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
+    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -116,7 +117,9 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
-        self.features_info: pd.DataFrame = pd.DataFrame(columns=["feature_name", "shap_value", "match_percent"])
+        self.features_info: pd.DataFrame = pd.DataFrame(
+            columns=["provider", "source", "feature name", "shap value", "coverage %", "type", "feature type"]
+        )
         if search_id:
             search_task = SearchTask(
                 search_id,
@@ -473,7 +476,7 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
-                if self._search_task is None or self._search_task.initial_max_hit_rate() is None:
+                if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
                     raise ValidationError("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
                     raise ValidationError(
@@ -559,7 +562,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     train_metrics = {
                         "segment": "train",
-                        "match_rate": self._search_task.initial_max_hit_rate()["value"],
+                        "match_rate": self._search_task.initial_max_hit_rate_v2(),
                     }
                     if etalon_metric is not None:
                         train_metrics[f"baseline {metric}"] = etalon_metric
@@ -571,7 +574,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
-                    max_initial_eval_set_metrics = self._search_task.get_max_initial_eval_set_metrics()
+                    max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
                     if eval_set is not None:
                         if len(self.enriched_eval_sets) != len(eval_set):
                             raise ValidationError(
@@ -580,14 +583,8 @@ class FeaturesEnricher(TransformerMixin):
                             )
                         # TODO check that eval_set is the same as on the fit
 
-                        def get_hit_rate(eval_set_index: int) -> Optional[float]:
-                            if max_initial_eval_set_metrics:
-                                for metric in max_initial_eval_set_metrics:
-                                    if metric["eval_set_index"] == eval_set_index:
-                                        return metric["hit_rate"] * 100.0
-
                         for idx, eval_pair in enumerate(eval_set):
-                            eval_hit_rate = get_hit_rate(idx + 1)
+                            eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
@@ -751,35 +748,35 @@ class FeaturesEnricher(TransformerMixin):
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
             if search_id:
-                self.logger.warn(f"search_id {search_id} provided without search_keys")
+                self.logger.warning(f"search_id {search_id} provided without search_keys")
                 raise ValidationError(
                     "When search_id is passed, search_keys must be set to the same value that have been used for fit."
                 )
             else:
-                self.logger.warn("search_keys not provided")
+                self.logger.warning("search_keys not provided")
                 raise ValidationError("At least one column must be provided in search_keys.")
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
             msg = "DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
             msg = "EMAIL and HEM search keys cannot be used simultaneously. Choose one to keep."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
             msg = "COUNTRY search key must be provided if POSTAL_CODE is present."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         for key_type in SearchKey.__members__.values():
             if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
                 msg = f"Search key {key_type} is presented multiple times."
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
 
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
@@ -789,7 +786,7 @@ class FeaturesEnricher(TransformerMixin):
                 "You can use DATE, COUNTRY and POSTAL_CODE keys for free search without registration. "
                 "Or provide the API key either directly or via the environment variable UPGINI_API_KEY."
             )
-            self.logger.warn(msg + f" Provided search keys: {key_types}")
+            self.logger.warning(msg + f" Provided search keys: {key_types}")
             raise ValidationError(msg)
 
     @property
@@ -1074,7 +1071,7 @@ class FeaturesEnricher(TransformerMixin):
                         f"Date column `{column}` is of string type, but date_format is not specified. "
                         "Please convert column to datetime type or pass date_format."
                     )
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                     raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -1127,7 +1124,7 @@ class FeaturesEnricher(TransformerMixin):
 
         dup_features = [c for c in X.columns if c in result_features.columns]
         if len(dup_features) > 0:
-            self.logger.warn(f"X contain columns with same name as returned from backend: {dup_features}")
+            self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(
                 "Columns set for transform method should be the same as for fit method, please check input dataframe. "
                 f"These columns are different: {dup_features}"
@@ -1172,11 +1169,13 @@ class FeaturesEnricher(TransformerMixin):
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
             raise NotFittedError("Fit the enricher or pass search_id before calling transform.")
-        importances = self._search_task.initial_features(trace_id)
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception("Internal error. There is no features metadata")
 
-        def feature_metadata_by_name(name: str):
-            for f in importances:
-                if f["feature_name"] == name:
+        def feature_metadata_by_name(name: str) -> FeaturesMetadataV2:
+            for f in features_meta:
+                if f.name == name:
                     return f
 
         self.feature_names_ = []
@@ -1185,23 +1184,37 @@ class FeaturesEnricher(TransformerMixin):
 
         service_columns = [SYSTEM_RECORD_ID, EVAL_SET_INDEX, self.TARGET_NAME]
 
-        importances.sort(key=lambda m: -m["shap_value"])
-        for feature_metadata in importances:
-            if feature_metadata["feature_name"] not in x_columns:
-                self.feature_names_.append(feature_metadata["feature_name"])
-                self.feature_importances_.append(feature_metadata["shap_value"])
-            features_info.append(feature_metadata)
+        features_meta.sort(key=lambda m: -m.shap_value)
+        for feature_meta in features_meta:
+            if feature_meta.name not in x_columns:
+                self.feature_names_.append(feature_meta.name)
+                self.feature_importances_.append(feature_meta.shap_value)
+            features_info.append({
+                "provider": f"""<a href="{feature_meta.data_provider_link}">{feature_meta.data_provider}</a>"""
+                if feature_meta.data_provider else "",
+                "source": f"""<a href="{feature_meta.data_source_link}">{feature_meta.data_source}</a>"""
+                if feature_meta.data_source else "",
+                "feature name": feature_meta.name,
+                "shap value": feature_meta.shap_value,
+                "coverage %": feature_meta.hit_rate,
+                "type": feature_meta.type,
+                "feature type": feature_meta.commercial_schema or "",
+            })
 
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):
                 continue
-            feature_metadata = feature_metadata_by_name(x_column)
-            if feature_metadata is None:
+            feature_meta = feature_metadata_by_name(x_column)
+            if feature_meta is None:
                 features_info.append(
                     {
-                        "feature_name": x_column,
-                        "shap_value": 0.0,
-                        "coverage %": None,  # TODO fill from X
+                        "provider": "",
+                        "source": "",
+                        "feature name": x_column,
+                        "shap value": 0.0,
+                        "coverage %": np.nan,
+                        "type": "",
+                        "feature type": "",
                     }
                 )
 
@@ -1210,8 +1223,8 @@ class FeaturesEnricher(TransformerMixin):
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[
-            self.features_info["feature_name"].isin(client_features) & self.features_info["shap_value"] > 0,
-            "feature_name",
+            self.features_info["feature name"].isin(client_features) & self.features_info["shap value"] > 0,
+            "feature name",
         ].values.tolist()
 
     def __filtered_importance_names(
@@ -1334,10 +1347,11 @@ class FeaturesEnricher(TransformerMixin):
 
             try:
                 from IPython.display import display
+                _ = get_ipython()  # type: ignore
 
                 print(Format.GREEN + Format.BOLD + msg + Format.END)
                 display(metrics)
-            except ImportError:
+            except (ImportError, NameError):
                 print(msg)
                 print(metrics)
 
@@ -1348,33 +1362,13 @@ class FeaturesEnricher(TransformerMixin):
         try:
             from IPython.display import display
 
+            _ = get_ipython()  # type: ignore
+
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display(self.features_info.head(60))
-        except ImportError:
+            display(self.features_info.head(60).style)
+        except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
-
-    def __is_quality_by_metrics_low(self) -> bool:
-        if self._search_task is None:
-            return False
-        if len(self.passed_features) > 0 and self._search_task.task_type is not None:
-            max_uplift = self._search_task.initial_max_uplift()
-            if self._search_task.task_type == ModelTaskType.BINARY:
-                threshold = 0.002
-            elif self._search_task.task_type == ModelTaskType.MULTICLASS:
-                threshold = 3.0
-            elif self._search_task.task_type == ModelTaskType.REGRESSION:
-                threshold = 0.0
-            else:
-                return False
-            if max_uplift is not None and max_uplift["value"] < threshold:
-                return True
-        elif self._search_task.task_type is not None:
-            max_auc = self._search_task.initial_max_auc()
-            if self._search_task.task_type == ModelTaskType.BINARY and max_auc is not None:
-                if max_auc["value"] < 0.55:
-                    return True
-        return False
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
@@ -1466,7 +1460,7 @@ class FeaturesEnricher(TransformerMixin):
     def _dump_python_libs(self):
         result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
         libs = result.stdout.decode("utf-8")
-        self.logger.warn(f"User python libs versions: {libs}")
+        self.logger.warning(f"User python libs versions: {libs}")
 
     def __display_slack_community_link(self):
         slack_community_link = "https://4mlg.short.gy/join-upgini-community"

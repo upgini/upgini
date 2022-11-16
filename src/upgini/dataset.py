@@ -679,6 +679,8 @@ class Dataset(pd.DataFrame):
 
                 from IPython.display import HTML, display  # type: ignore
 
+                _ = get_ipython()  # type: ignore
+
                 def map_color(text):
                     colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
                     return (
@@ -697,7 +699,7 @@ class Dataset(pd.DataFrame):
                     + "</table>"
                 )
                 display(HTML(html_stats))
-            except ImportError:
+            except (ImportError, NameError):
                 print(df_stats)
 
     def __validate_meaning_types(self, validate_target: bool):

@@ -133,6 +133,39 @@ class FileMetadata(BaseModel):
     checksumMD5: Optional[str]
 
 
+class FeaturesMetadataV2(BaseModel):
+    name: str
+    type: str
+    source: str
+    hit_rate: float
+    shap_value: float
+    commercial_schema: Optional[str]
+    data_provider: Optional[str]
+    data_provider_link: Optional[str]
+    data_source: Optional[str]
+    data_source_link: Optional[str]
+
+
+class HitRateMetrics(BaseModel):
+    etalon_row_count: int
+    max_hit_count: int
+    join_flags_count: Dict[str, int] = {}
+    hit_rate: float
+    hit_rate_percent: float
+
+
+class ModelEvalSet(BaseModel):
+    eval_set_index: int
+    hit_rate: float
+    hit_rate_metrics: HitRateMetrics
+
+
+class ProviderTaskMetadataV2(BaseModel):
+    features: List[FeaturesMetadataV2]
+    hit_rate_metrics: Optional[HitRateMetrics]
+    eval_set_metrics: Optional[List[ModelEvalSet]]
+
+
 class FeaturesFilter(BaseModel):
     minImportance: Optional[float]
     maxPSI: Optional[float]

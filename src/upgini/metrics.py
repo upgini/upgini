@@ -22,6 +22,7 @@ from sklearn.model_selection import (
 
 from upgini.metadata import CVType, ModelTaskType
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
+from upgini.errors import ValidationError
 
 CATBOOST_PARAMS = {
     "iterations": 250,
@@ -297,7 +298,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             scoring = get_scorer("neg_" + scoring)
             multiplier = -1
         else:
-            raise ValueError(
+            raise ValidationError(
                 f"{scoring} is not a valid scoring value. " f"Use {sorted(SCORERS.keys())} " "to get valid options."
             )
     elif hasattr(scoring, "__name__"):
@@ -380,7 +381,7 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     check_consistent_length(y_true, y_pred, sample_weight)
 
     if (y_true < 0).any():
-        raise ValueError("Mean Squared Logarithmic Error cannot be used when " "targets contain negative values.")
+        raise ValidationError("Mean Squared Logarithmic Error cannot be used when " "targets contain negative values.")
 
     return mean_squared_error(
         log1p(y_true),
