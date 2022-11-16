@@ -1293,9 +1293,9 @@ class FeaturesEnricher(TransformerMixin):
         ):
             msg = (
                 "WARNING: You have started the search with the DATE key only. "
-                "Try to add the COUNTRY and/or POSTAL_CODE keys to your dataset so that the search engine gets access "
-                "to the additional data sources. Get details on "
-                "https://github.com/upgini/upgini#readme"
+                "Try to add the COUNTRY and/or POSTAL_CODE and/or PHONE NUMBER and/or EMAIL/HEM and/or IP address "
+                "keys to your dataset so that the search engine gets access to the additional data sources. "
+                "Get details on https://github.com/upgini/upgini#readme"
             )
             print(msg)
 
