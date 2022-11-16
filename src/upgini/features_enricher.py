@@ -1365,7 +1365,7 @@ class FeaturesEnricher(TransformerMixin):
             _ = get_ipython()  # type: ignore
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display(self.features_info.head(60).style)
+            display(self.features_info.head(60).style.hide_index())
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
