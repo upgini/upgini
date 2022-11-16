@@ -1189,10 +1189,14 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_importances_.append(feature_meta.shap_value)
             features_info.append(
                 {
-                    "provider": f"""<a href="{feature_meta.data_provider_link}">{feature_meta.data_provider}</a>"""
+                    "provider": f"<a href='{feature_meta.data_provider_link}' "
+                                "target='_blank' rel='noopener noreferrer'>"
+                                f"{feature_meta.data_provider}</a>"
                     if feature_meta.data_provider
                     else "",
-                    "source": f"""<a href="{feature_meta.data_source_link}">{feature_meta.data_source}</a>"""
+                    "source":   f"<a href='{feature_meta.data_source_link}' "
+                                "target='_blank' rel='noopener noreferrer'>"
+                                f"{feature_meta.data_source}</a>"
                     if feature_meta.data_source
                     else "",
                     "feature name": feature_meta.name,
