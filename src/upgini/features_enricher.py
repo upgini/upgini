@@ -1475,7 +1475,7 @@ class FeaturesEnricher(TransformerMixin):
             _ = get_ipython()  # type: ignore
             display(
                 HTML(
-                    f"""<p>{link_text}</p><a href='{slack_community_link}' target='_blank'>
+                    f"""<p>{link_text}</p><a href='{slack_community_link}' target='_blank' rel='noopener noreferrer'>
                     <img alt='Upgini slack community' src='{badge}'></a>
                     """
                 )
