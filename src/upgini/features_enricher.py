@@ -589,9 +589,7 @@ class FeaturesEnricher(TransformerMixin):
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
 
-                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
-                                eval_X, eval_y_array, enriched_eval_X
-                            )
+                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(eval_X, eval_y_array, enriched_eval_X)
                             self.logger.info(f"Shape of enriched_eval_X: {enriched_eval_X.shape}")
                             self.logger.info(f"Shape of eval_X_{idx} after sampling: {sampled_eval_X.shape}")
                             self.logger.info(f"Shape of eval_y_{idx} after sampling: {len(sampled_eval_y)}")
@@ -1189,17 +1187,21 @@ class FeaturesEnricher(TransformerMixin):
             if feature_meta.name not in x_columns:
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(feature_meta.shap_value)
-            features_info.append({
-                "provider": f"""<a href="{feature_meta.data_provider_link}">{feature_meta.data_provider}</a>"""
-                if feature_meta.data_provider else "",
-                "source": f"""<a href="{feature_meta.data_source_link}">{feature_meta.data_source}</a>"""
-                if feature_meta.data_source else "",
-                "feature name": feature_meta.name,
-                "shap value": feature_meta.shap_value,
-                "coverage %": feature_meta.hit_rate,
-                "type": feature_meta.type,
-                "feature type": feature_meta.commercial_schema or "",
-            })
+            features_info.append(
+                {
+                    "provider": f"""<a href="{feature_meta.data_provider_link}">{feature_meta.data_provider}</a>"""
+                    if feature_meta.data_provider
+                    else "",
+                    "source": f"""<a href="{feature_meta.data_source_link}">{feature_meta.data_source}</a>"""
+                    if feature_meta.data_source
+                    else "",
+                    "feature name": feature_meta.name,
+                    "shap value": feature_meta.shap_value,
+                    "coverage %": feature_meta.hit_rate,
+                    "type": feature_meta.type,
+                    "feature type": feature_meta.commercial_schema or "",
+                }
+            )
 
         for x_column in x_columns:
             if x_column in (list(self.search_keys.keys()) + service_columns):
@@ -1347,6 +1349,7 @@ class FeaturesEnricher(TransformerMixin):
 
             try:
                 from IPython.display import display
+
                 _ = get_ipython()  # type: ignore
 
                 print(Format.GREEN + Format.BOLD + msg + Format.END)
@@ -1464,9 +1467,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __display_slack_community_link(self):
         slack_community_link = "https://4mlg.short.gy/join-upgini-community"
-        link_text = (
-            "WARNING: Looks like you've run into some kind of error. For help write us in the Upgini community"
-        )
+        link_text = "WARNING: Looks like you've run into some kind of error. For help write us in the Upgini community"
         badge = "https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"
         try:
             from IPython.display import HTML, display
@@ -1474,7 +1475,7 @@ class FeaturesEnricher(TransformerMixin):
             _ = get_ipython()  # type: ignore
             display(
                 HTML(
-                    f"""<p>{link_text}</p><a href='{slack_community_link}'>
+                    f"""<p>{link_text}</p><a href='{slack_community_link}' target='_blank'>
                     <img alt='Upgini slack community' src='{badge}'></a>
                     """
                 )
