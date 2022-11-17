@@ -213,6 +213,7 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
         "UNITED ARAB EMIRATES": "AE",
         "UNITED KINGDOM OF GREAT BRITAIN AND NORTHERN IRELAND": "GB",
         "UNITED STATES OF AMERICA": "US",
+        "UNITED STATES": "US",
         "USA": "US",
         "URUGUAY": "UY",
         "UZBEKISTAN": "UZ",

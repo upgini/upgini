@@ -117,7 +117,7 @@ def mock_get_metadata(requests_mock: Mocker, url: str, search_task_id: str):
                     "meaningType": "MSISDN",
                 },
                 {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
-                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
+                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
                 {
                     "index": 4,
                     "name": "system_record_id",
