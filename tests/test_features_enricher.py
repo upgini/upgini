@@ -195,13 +195,10 @@ def test_features_enricher(requests_mock: Mocker):
 
     assert enricher.feature_names_ == ["feature"]
     assert enricher.feature_importances_ == [10.1]
-    assert len(enricher.features_info) == 2
+    assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info["feature name"] == "feature"
     assert first_feature_info["shap value"] == 10.1
-    second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature name"] == "SystemRecordId_473310000"
-    assert second_feature_info["shap value"] == 0.0
 
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
@@ -356,13 +353,153 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
     assert enricher.feature_names_ == ["feature"]
     assert enricher.feature_importances_ == [10.1]
-    assert len(enricher.features_info) == 2
+    assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info["feature name"] == "feature"
     assert first_feature_info["shap value"] == 10.1
+
+
+def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option('display.max_columns', 1000)
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+    )
+    requests_mock.get(
+        url + f"/public/api/v2/search/{search_task_id}/metadata",
+        json={
+            "fileUploadId": "123",
+            "fileMetadataId": "123",
+            "name": "test",
+            "description": "",
+            "columns": [
+                {
+                    "index": 0,
+                    "name": "phone_num",
+                    "originalName": "phone_num",
+                    "dataType": "STRING",
+                    "meaningType": "MSISDN",
+                },
+                {
+                    "index": 1,
+                    "name": "cos_3_freq_w_sun_",
+                    "originalName": "cos(3,freq=W-SUN)",
+                    "dataType": "INT",
+                    "meaningType": "FEATURE",
+                },
+                {
+                    "index": 2,
+                    "name": "target",
+                    "originalName": "target",
+                    "dataType": "INT",
+                    "meaningType": "TARGET"
+                },
+                {
+                    "index": 3,
+                    "name": "system_record_id",
+                    "originalName": "system_record_id",
+                    "dataType": "INT",
+                    "meaningType": "SYSTEM_RECORD_ID",
+                },
+            ],
+            "searchKeys": [["phone_num"]],
+            "hierarchicalGroupKeys": [],
+            "hierarchicalSubgroupKeys": [],
+            "rowsCount": 5319,
+        },
+    )
+
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="f_feature123",
+                    type="numerical",
+                    source="ads",
+                    hit_rate=99.0,
+                    shap_value=0.9
+                ),
+                FeaturesMetadataV2(
+                    name="cos_3_freq_w_sun_",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=5319,
+                max_hit_count=5266,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            )
+        )
+    )
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_features.parquet"
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_tds.parquet")
+    df = pd.read_parquet(path)
+    train_features = df.drop(columns="target")
+    train_target = df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+    )
+
+    metrics = enricher.calculate_metrics(train_features, train_target)
+    expected_metrics = pd.DataFrame(
+        {
+            "segment": ["train"],
+            "match_rate": [99.0],
+            "baseline roc_auc": [0.504187],
+            "enriched roc_auc": [0.511054],
+            "uplift": [0.006867507128359374]
+        }
+    ).set_index("segment").rename_axis("")
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["f_feature123"]
+    assert enricher.feature_importances_ == [0.9]
+    assert len(enricher.features_info) == 2
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info["feature name"] == "f_feature123"
+    assert first_feature_info["shap value"] == 0.9
+    assert first_feature_info["coverage %"] == 99.0
     second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature name"] == "SystemRecordId_473310000"
-    assert second_feature_info["shap value"] == 0.0
+    assert second_feature_info["feature name"] == "cos(3,freq=W-SUN)"
+    assert second_feature_info["shap value"] == 0.1
+    assert second_feature_info["coverage %"] == 100.0
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):

@@ -26,7 +26,6 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
-    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -1171,32 +1170,29 @@ class FeaturesEnricher(TransformerMixin):
         if features_meta is None:
             raise Exception("Internal error. There is no features metadata")
 
-        def feature_metadata_by_name(name: str) -> FeaturesMetadataV2:
-            for f in features_meta:
-                if f.name == name:
-                    return f
+        original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
 
         self.feature_names_ = []
         self.feature_importances_ = []
         features_info = []
 
-        service_columns = [SYSTEM_RECORD_ID, EVAL_SET_INDEX, self.TARGET_NAME]
-
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
+            if feature_meta.name in original_names_dict.keys():
+                feature_meta.name = original_names_dict[feature_meta.name]
             if feature_meta.name not in x_columns:
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(feature_meta.shap_value)
             features_info.append(
                 {
                     "provider": f"<a href='{feature_meta.data_provider_link}' "
-                                "target='_blank' rel='noopener noreferrer'>"
-                                f"{feature_meta.data_provider}</a>"
+                    "target='_blank' rel='noopener noreferrer'>"
+                    f"{feature_meta.data_provider}</a>"
                     if feature_meta.data_provider
                     else "",
-                    "source":   f"<a href='{feature_meta.data_source_link}' "
-                                "target='_blank' rel='noopener noreferrer'>"
-                                f"{feature_meta.data_source}</a>"
+                    "source": f"<a href='{feature_meta.data_source_link}' "
+                    "target='_blank' rel='noopener noreferrer'>"
+                    f"{feature_meta.data_source}</a>"
                     if feature_meta.data_source
                     else "",
                     "feature name": feature_meta.name,
@@ -1206,23 +1202,6 @@ class FeaturesEnricher(TransformerMixin):
                     "feature type": feature_meta.commercial_schema or "",
                 }
             )
-
-        for x_column in x_columns:
-            if x_column in (list(self.search_keys.keys()) + service_columns):
-                continue
-            feature_meta = feature_metadata_by_name(x_column)
-            if feature_meta is None:
-                features_info.append(
-                    {
-                        "provider": "",
-                        "source": "",
-                        "feature name": x_column,
-                        "shap value": 0.0,
-                        "coverage %": np.nan,
-                        "type": "",
-                        "feature type": "",
-                    }
-                )
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
@@ -1285,6 +1264,15 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
+            else:
+                if x[column_name].isnull().all() or (
+                    is_string_dtype(x[column_name]) and (x[column_name].str.strip() == "").all()
+                ):
+                    msg = (
+                        f"Search key {column_name} is empty. "
+                        "Please fill values or remove this search key and try again."
+                    )
+                    raise ValidationError(msg)
 
         if self.detect_missing_search_keys:
             valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys)
