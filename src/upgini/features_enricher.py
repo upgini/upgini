@@ -1186,13 +1186,13 @@ class FeaturesEnricher(TransformerMixin):
             features_info.append(
                 {
                     "provider": f"<a href='{feature_meta.data_provider_link}' "
-                                "target='_blank' rel='noopener noreferrer'>"
-                                f"{feature_meta.data_provider}</a>"
+                    "target='_blank' rel='noopener noreferrer'>"
+                    f"{feature_meta.data_provider}</a>"
                     if feature_meta.data_provider
                     else "",
-                    "source":   f"<a href='{feature_meta.data_source_link}' "
-                                "target='_blank' rel='noopener noreferrer'>"
-                                f"{feature_meta.data_source}</a>"
+                    "source": f"<a href='{feature_meta.data_source_link}' "
+                    "target='_blank' rel='noopener noreferrer'>"
+                    f"{feature_meta.data_source}</a>"
                     if feature_meta.data_source
                     else "",
                     "feature name": feature_meta.name,
@@ -1265,7 +1265,10 @@ class FeaturesEnricher(TransformerMixin):
                 print("WARNING: " + msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
-                if x[column_name].isnull().all() or (x[column_name].str.strip() == "").all():
+                if (
+                    x[column_name].isnull().all()
+                    or (is_string_dtype(x[column_name]) and x[column_name].str.strip() == "").all()
+                ):
                     msg = (
                         f"Search key {column_name} is empty. "
                         "Please fill values or remove this search key and try again."
