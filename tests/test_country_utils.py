@@ -1,5 +1,7 @@
 import pandas as pd
 
+from pandas.testing import assert_frame_equal
+
 from upgini.utils.country_utils import CountrySearchKeyDetector
 
 detector = CountrySearchKeyDetector()
@@ -35,13 +37,15 @@ def test_country_to_iso_code_convertion():
                 "United Kingdom of Great Britain and Northern Ireland",
                 "",
                 "Unknown",
+                "US",
+                "United States",
             ]
         }
     )
 
     expected_df = df.copy()
-    expected_df["country"] = ["AT", "GB", "PL", "GB", "", ""]
+    expected_df["country"] = ["AT", "GB", "PL", "GB", "", "Unknown", "US", "US"]
 
     df_with_code = CountrySearchKeyDetector.convert_country_to_iso_code(df, "country")
 
-    assert expected_df.equals(df_with_code)
+    assert_frame_equal(expected_df, df_with_code)
