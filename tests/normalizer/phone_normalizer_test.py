@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -77,6 +78,45 @@ def test_phone_prefix_normalization():
                 "89262134598",
                 "123",
                 "abc",
+            ],
+            "country": [
+                "US",
+                "EG",
+                "DZ",
+                "CN",
+                "RU",
+                "GB",
+                "Unknown"
+            ],
+            "something_else": ["a", "b", "c", "d", "e", "f", "g"],
+        }
+    )
+    normalizer = PhoneNormalizer(df, "phone_num", "country")
+    df["phone_num"] = normalizer.normalize()
+
+    expected_df = pd.DataFrame(
+        data={
+            "phone_num": [11233219871, 20102030405, 21322345678, 861067645489, 89262134598, None, None],
+            "country": ["US", "EG", "DZ", "CN", "RU", "GB", "Unknown"],
+            "something_else": ["a", "b", "c", "d", "e", "f", "g"],
+        }
+    )
+    expected_df["phone_num"] = expected_df["phone_num"].astype("Int64")
+
+    assert_frame_equal(df, expected_df)
+
+
+def test_float_phone_prefix_normalization():
+    df = pd.DataFrame(
+        data={
+            "phone_num": [
+                1233219871.0,
+                102030405.0,
+                22345678.0,
+                861067645489.0,
+                89262134598.0,
+                123.0,
+                np.nan,
             ],
             "country": [
                 "US",
