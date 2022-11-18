@@ -58,7 +58,7 @@ class EstimatorWrapper:
         self.target_type = target_type
         self.cv_estimators = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs):
+    def fit(self, X: pd.DataFrame, y: np.ndarray, **kwargs):
         X, y, fit_params = self._prepare_to_fit(X, y)
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
@@ -68,28 +68,28 @@ class EstimatorWrapper:
         return self.estimator.predict(**kwargs)
 
     def _prepare_to_fit(
-        self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray, list]
-    ) -> Tuple[pd.DataFrame, pd.Series, dict]:
+        self, X: pd.DataFrame, y: np.ndarray
+    ) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
-        joined = X
         if isinstance(y, pd.Series):
             pass
         elif isinstance(y, np.ndarray) or isinstance(y, list):
+            X = X.reset_index(drop=True)
             y = pd.Series(y, name="target")
         else:
             msg = f"Unsupported type of y: {type(y)}"
             raise Exception(msg)
 
-        joined = pd.concat([joined, y.to_frame(name=y.name)], axis=1)
-        joined = joined.reset_index(drop=True)
+        joined = pd.concat([X, y.to_frame(name=y.name)], axis=1)
         joined = joined[joined[y.name].notna()]
+        joined = joined.reset_index(drop=True)
         X = joined.drop(columns=y.name)
-        y = joined[y.name]  # type: ignore
+        y = joined[y.name].values
         return X, y, {}
 
-    def cross_val_predict(self, X: pd.DataFrame, y: pd.Series):
+    def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray):
         X, y, fit_params = self._prepare_to_fit(X, y)
 
         if X.shape[1] == 0:
@@ -205,7 +205,7 @@ class CatBoostWrapper(EstimatorWrapper):
     ):
         super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
@@ -235,7 +235,7 @@ class LightGBMWrapper(EstimatorWrapper):
     ):
         super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype(str).fillna("")
@@ -257,7 +257,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
     ):
         super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in cat_features]

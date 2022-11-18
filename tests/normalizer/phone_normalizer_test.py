@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -106,17 +105,17 @@ def test_phone_prefix_normalization():
     assert_frame_equal(df, expected_df)
 
 
-def test_float_phone_prefix_normalization():
+def test_float_string_phone_prefix_normalization():
     df = pd.DataFrame(
         data={
             "phone_num": [
-                1233219871.0,
-                102030405.0,
-                22345678.0,
-                861067645489.0,
-                89262134598.0,
-                123.0,
-                np.nan,
+                "1233219871.0",
+                "102030405.0",
+                "22345678.0",
+                "861067645489.0",
+                "89262134598.0",
+                "123.0",
+                "",
             ],
             "country": [
                 "US",
