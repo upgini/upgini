@@ -304,14 +304,14 @@ def test_default_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["train", "uplift"] == approx(0.003361)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.5)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.5)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.485731)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.536471)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.050740)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.5)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.5)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.518168)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.506581)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.011586)
 
 
 def test_blocked_timeseries_rmsle(requests_mock: Mocker):
@@ -444,14 +444,14 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     assert metrics_df.loc["train", "uplift"] == approx(0.008710)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline RMSLE"] == approx(0.475431)
-    assert metrics_df.loc["eval 1", "enriched RMSLE"] == approx(0.484852)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(-0.009421)
+    assert metrics_df.loc["eval 1", "baseline RMSLE"] == approx(0.494446)
+    assert metrics_df.loc["eval 1", "enriched RMSLE"] == approx(0.486125)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.008321)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline RMSLE"] == approx(0.500405)
-    assert metrics_df.loc["eval 2", "enriched RMSLE"] == approx(0.493342)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.007062)
+    assert metrics_df.loc["eval 2", "baseline RMSLE"] == approx(0.494394)
+    assert metrics_df.loc["eval 2", "enriched RMSLE"] == approx(0.492213)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(0.002180)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -585,14 +585,14 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc["train", "uplift"] == approx(-0.007643)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.500000)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.500000)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.481991)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.542614)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.060623)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.500000)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.500000)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.496449)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.490556)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005893)
 
 
 @pytest.mark.skip()
@@ -872,14 +872,14 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     assert metrics_df.loc["train", "uplift"] == approx(0.003993)
 
     assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", baseline_metric] == approx(0.672309)
-    assert metrics_df.loc["eval 1", enriched_metric] == approx(0.672309)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 1", baseline_metric] == approx(0.716474)
+    assert metrics_df.loc["eval 1", enriched_metric] == approx(0.698250)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.018224)
 
     assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", baseline_metric] == approx(0.732120)
-    assert metrics_df.loc["eval 2", enriched_metric] == approx(0.732120)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
+    assert metrics_df.loc["eval 2", baseline_metric] == approx(0.683411)
+    assert metrics_df.loc["eval 2", enriched_metric] == approx(0.688650)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005239)
 
 
 def approx(value: float):

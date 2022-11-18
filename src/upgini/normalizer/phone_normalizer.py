@@ -76,6 +76,8 @@ class PhoneNormalizer:
     @staticmethod
     def phone_str_to_int_safe(value: str) -> Optional[int]:
         try:
+            if value.endswith(".0"):
+                value = value[:len(value) - 2]
             numeric_filter = filter(str.isdigit, value)
             numeric_string = "".join(numeric_filter)
             return PhoneNormalizer.validate_length(int(numeric_string))
