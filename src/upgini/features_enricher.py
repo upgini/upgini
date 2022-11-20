@@ -475,6 +475,8 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
+                self.logger.info("Start calculating metrics")
+
                 if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
                     raise ValidationError("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
@@ -482,13 +484,19 @@ class FeaturesEnricher(TransformerMixin):
                         "Metrics calculation isn't possible after restart. Please fit the enricher again."
                     )
 
+                if self._has_important_paid_features():
+                    print(
+                        "WARNING: Metrics calculated after enrichment with a free features only. "
+                        "To calculate metrics with a full set of relevant features, including commercial data sources, "
+                        "please contact support team:"
+                    )
+                    self.logger.warning("Metrics will be calculated on free features only")
+                    self.__display_slack_community_link()
+
                 self._validate_X(X)
                 y_array = self._validate_y(X, y)
 
                 # TODO check that X and y are the same as on the fit
-
-                self.logger.info("Start calculating metrics")
-                print("Calculating metrics...")
 
                 self.__log_debug_information(X, y, eval_set)
 
@@ -508,12 +516,22 @@ class FeaturesEnricher(TransformerMixin):
                     max_features,
                 )
 
+                existing_filtered_enriched_features = [
+                    c for c in filtered_enriched_features if c in enriched_X_sorted.columns
+                ]
+
                 fitting_X = X_sorted[filtered_client_features].copy()
-                fitting_enriched_X = enriched_X_sorted[filtered_client_features + filtered_enriched_features].copy()
+                fitting_enriched_X = enriched_X_sorted[
+                    filtered_client_features + existing_filtered_enriched_features
+                ].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    print("WARN: No features to calculate metrics.")
-                    self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                    if self._has_important_paid_features():
+                        print("WARN: No free features to calculate metrics.")
+                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
+                    else:
+                        print("WARN: No features to calculate metrics.")
+                        self.logger.warning("No client or relevant ADS features found to calculate metrics")
                     return None
 
                 model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
@@ -531,6 +549,8 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 metric = wrapper.metric_name
                 multiplier = wrapper.multiplier
+
+                print("Calculating metrics...")
 
                 with Spinner():
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -599,7 +619,7 @@ class FeaturesEnricher(TransformerMixin):
                                 enriched_eval_X, sampled_eval_y
                             )
                             enriched_eval_X_sorted = enriched_eval_X_sorted[
-                                filtered_client_features + filtered_enriched_features
+                                filtered_client_features + existing_filtered_enriched_features
                             ].copy()
 
                             if baseline_estimator is not None:
@@ -632,8 +652,9 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
-                    self.logger.info("Metrics calculation finished successfully")
-                    return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                    metrics_df = pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                    self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
+                    return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -740,7 +761,9 @@ class FeaturesEnricher(TransformerMixin):
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
 
-            return result[X.columns.tolist() + filtered_columns]  # TODO check it twice
+            existing_filtered_columns = [c for c in filtered_columns if c in result.columns]
+
+            return result[X.columns.tolist() + existing_filtered_columns]  # TODO check it twice
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -1350,6 +1373,9 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
                 print(metrics)
 
+    def _has_important_paid_features(self) -> bool:
+        return (self.features_info["feature type"] == "Paid").any()
+
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
         msg = f"\n{len(self.feature_names_)} relevant feature(s) found with the search keys: {list(search_keys)}."
@@ -1361,6 +1387,7 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info.head(60).style.hide_index())
+            self.logger.info(f"Features info:\n{self.features_info}")
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
