@@ -482,6 +482,14 @@ class FeaturesEnricher(TransformerMixin):
                         "Metrics calculation isn't possible after restart. Please fit the enricher again."
                     )
 
+                if self._has_important_paid_features():
+                    print(
+                        "WARNING: Metrics calculated after enrichment with a free features only. "
+                        "To calculate metrics with a full set of relevant features, including commercial data sources, "
+                        "please contact support team:"
+                    )
+                    self.__display_slack_community_link()
+
                 self._validate_X(X)
                 y_array = self._validate_y(X, y)
 
@@ -518,8 +526,12 @@ class FeaturesEnricher(TransformerMixin):
                 ].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    print("WARN: No features to calculate metrics.")
-                    self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                    if self._has_important_paid_features():
+                        print("WARN: No free features to calculate metrics.")
+                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
+                    else:
+                        print("WARN: No features to calculate metrics.")
+                        self.logger.warning("No client or relevant ADS features found to calculate metrics")
                     return None
 
                 model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
@@ -1357,14 +1369,6 @@ class FeaturesEnricher(TransformerMixin):
             except (ImportError, NameError):
                 print(msg)
                 print(metrics)
-            finally:
-                if self._has_important_paid_features():
-                    print(
-                        "Metrics calculated after enrichment with a free features only. "
-                        "To calculate metrics with a full set of relevant features, including commercial data sources, "
-                        "please contact support team:"
-                    )
-                    self.__display_slack_community_link()
 
     def _has_important_paid_features(self) -> bool:
         return (self.features_info.commercial_schema == "Paid").any()
