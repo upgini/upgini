@@ -475,6 +475,8 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
+                self.logger.info("Start calculating metrics")
+
                 if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
                     raise ValidationError("Fit the enricher before calling calculate_metrics.")
                 if self.enriched_X is None:
@@ -488,15 +490,13 @@ class FeaturesEnricher(TransformerMixin):
                         "To calculate metrics with a full set of relevant features, including commercial data sources, "
                         "please contact support team:"
                     )
+                    self.logger.warning("Metrics will be calculated on free features only")
                     self.__display_slack_community_link()
 
                 self._validate_X(X)
                 y_array = self._validate_y(X, y)
 
                 # TODO check that X and y are the same as on the fit
-
-                self.logger.info("Start calculating metrics")
-                print("Calculating metrics...")
 
                 self.__log_debug_information(X, y, eval_set)
 
@@ -549,6 +549,8 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 metric = wrapper.metric_name
                 multiplier = wrapper.multiplier
+
+                print("Calculating metrics...")
 
                 with Spinner():
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -650,8 +652,9 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
-                    self.logger.info("Metrics calculation finished successfully")
-                    return pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                    metrics_df = pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                    self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
+                    return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -1371,7 +1374,7 @@ class FeaturesEnricher(TransformerMixin):
                 print(metrics)
 
     def _has_important_paid_features(self) -> bool:
-        return (self.features_info.commercial_schema == "Paid").any()
+        return (self.features_info["feature type"] == "Paid").any()
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
@@ -1384,6 +1387,7 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info.head(60).style.hide_index())
+            self.logger.info(f"Features info:\n{self.features_info}")
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
