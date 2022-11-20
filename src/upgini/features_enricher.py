@@ -508,8 +508,14 @@ class FeaturesEnricher(TransformerMixin):
                     max_features,
                 )
 
+                existing_filtered_enriched_features = [
+                    c for c in filtered_enriched_features if c in enriched_X_sorted.columns
+                ]
+
                 fitting_X = X_sorted[filtered_client_features].copy()
-                fitting_enriched_X = enriched_X_sorted[filtered_client_features + filtered_enriched_features].copy()
+                fitting_enriched_X = enriched_X_sorted[
+                    filtered_client_features + existing_filtered_enriched_features
+                ].copy()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                     print("WARN: No features to calculate metrics.")
@@ -599,7 +605,7 @@ class FeaturesEnricher(TransformerMixin):
                                 enriched_eval_X, sampled_eval_y
                             )
                             enriched_eval_X_sorted = enriched_eval_X_sorted[
-                                filtered_client_features + filtered_enriched_features
+                                filtered_client_features + existing_filtered_enriched_features
                             ].copy()
 
                             if baseline_estimator is not None:
@@ -740,7 +746,9 @@ class FeaturesEnricher(TransformerMixin):
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
 
-            return result[X.columns.tolist() + filtered_columns]  # TODO check it twice
+            existing_filtered_columns = [c for c in filtered_columns if c in result.columns]
+
+            return result[X.columns.tolist() + existing_filtered_columns]  # TODO check it twice
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -1349,6 +1357,17 @@ class FeaturesEnricher(TransformerMixin):
             except (ImportError, NameError):
                 print(msg)
                 print(metrics)
+            finally:
+                if self._has_important_paid_features():
+                    print(
+                        "Metrics calculated after enrichment with a free features only. "
+                        "To calculate metrics with a full set of relevant features, including commercial data sources, "
+                        "please contact support team:"
+                    )
+                    self.__display_slack_community_link()
+
+    def _has_important_paid_features(self) -> bool:
+        return (self.features_info.commercial_schema == "Paid").any()
 
     def __show_selected_features(self):
         search_keys = self.__using_search_keys().keys()
