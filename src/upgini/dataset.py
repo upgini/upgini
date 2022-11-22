@@ -1,10 +1,8 @@
 import csv
 import logging
 import os
-import re
 import tempfile
 import time
-from hashlib import sha256
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -55,7 +53,6 @@ class Dataset(pd.DataFrame):
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 1100
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
-    EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
 
     _metadata = [
         "dataset_name",
@@ -86,7 +83,6 @@ class Dataset(pd.DataFrame):
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
         model_task_type: Optional[ModelTaskType] = None,
-        date_format: Optional[str] = None,
         random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -119,7 +115,6 @@ class Dataset(pd.DataFrame):
         self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
-        self.date_format = date_format
         self.initial_data = data.copy()
         self.file_upload_id: Optional[str] = None
         self.etalon_def: Optional[Dict[str, str]] = None
@@ -266,71 +261,6 @@ class Dataset(pd.DataFrame):
             if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
                 self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
 
-    def __to_millis(self):
-        """Parse date column and transform it to millis"""
-        date = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
-
-        def intToOpt(i: int) -> Optional[int]:
-            if i == -9223372036855:
-                return None
-            else:
-                return i
-
-        if date is not None and date in self.columns:
-            # self.logger.info("Transform date column to millis")
-            if is_string_dtype(self[date]):
-                try:
-                    self[date] = (
-                        pd.to_datetime(self[date], format=self.date_format).dt.floor("D").view(np.int64) // 1_000_000
-                    )
-                except ValueError as e:
-                    raise ValidationError(e)
-            elif is_datetime(self[date]):
-                self[date] = self[date].dt.floor("D").view(np.int64) // 1_000_000
-            elif is_period_dtype(self[date]):
-                self[date] = pd.to_datetime(self[date].astype("string")).dt.floor("D").view(np.int64) // 1_000_000
-            elif is_numeric_dtype(self[date]):
-                msg = f"Unsupported type of date column {date}. Convert to datetime please."
-                self.logger.warn(msg)
-                raise ValidationError(msg)
-
-            self[date] = self[date].apply(lambda x: intToOpt(x)).astype("Int64")
-
-    @staticmethod
-    def __email_to_hem(email: str) -> Optional[str]:
-        if email is None or not isinstance(email, str) or email == "":
-            return None
-
-        if not Dataset.EMAIL_REGEX.match(email):
-            return None
-
-        return sha256(email.lower().encode("utf-8")).hexdigest()
-
-    def __hash_email(self):
-        """Add column with HEM if email presented in search keys"""
-        email = self.etalon_def_checked.get(FileColumnMeaningType.EMAIL.value)
-        hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
-        if email is not None and email in self.columns:
-            # self.logger.info("Hashing email")
-            if hem is None:
-                generated_hem_name = "generated_hem"
-                self[generated_hem_name] = self[email].apply(self.__email_to_hem)
-                self.meaning_types_checked[generated_hem_name] = FileColumnMeaningType.HEM
-                self.etalon_def_checked[FileColumnMeaningType.HEM.value] = generated_hem_name
-
-                self.search_keys = [
-                    tuple(key if key != email else generated_hem_name for key in search_group)
-                    for search_group in self.search_keys_checked
-                ]
-
-            self.meaning_types_checked.pop(email)
-            del self.etalon_def_checked[FileColumnMeaningType.EMAIL.value]
-
-            self["email_domain"] = self[email].str.split("@").str[1]
-            self.drop(columns=email, inplace=True)
-
     @staticmethod
     def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
         try:
@@ -386,7 +316,7 @@ class Dataset(pd.DataFrame):
                 self.logger.info(f"df after dropping old rows: {self.shape}")
                 msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
                 self.logger.warning(msg)
-                print("WARN: ", msg)
+                print("WARNING: ", msg)
                 if len(self) == 0:
                     raise ValidationError("There is empty train dataset after dropping old rows")
 
@@ -744,19 +674,13 @@ class Dataset(pd.DataFrame):
 
         self.__validate_too_long_string_values()
 
-        self.__clean_duplicates()
-
         self.__convert_bools()
 
         self.__convert_float16()
 
         self.__correct_decimal_comma()
 
-        self.__to_millis()
-
         self.__remove_old_dates()
-
-        self.__hash_email()
 
         self.__convert_ip()
 
@@ -767,6 +691,8 @@ class Dataset(pd.DataFrame):
         self.__normalize_postal_code()
 
         self.__convert_features_types()
+
+        self.__clean_duplicates()
 
         self.__validate_dataset(validate_target, silent_mode)
 

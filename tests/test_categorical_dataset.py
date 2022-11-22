@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from upgini import Dataset, FileColumnMeaningType
+from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -28,6 +29,8 @@ def etalon_search_keys():
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
 def test_categorical_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
+    converter = DateTimeSearchKeyConverter("rep_date")
+    df = converter.convert(df)
     ds = Dataset(
         dataset_name="test Dataset",  # type: ignore
         description="test",  # type: ignore

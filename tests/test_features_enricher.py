@@ -991,8 +991,9 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     )
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
-    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)  # type: ignore
+    search_keys = {"date": SearchKey.DATE}
+    enricher = FeaturesEnricher(search_keys=search_keys, logs_enabled=False)
+    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds, search_keys)  # type: ignore
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
 
