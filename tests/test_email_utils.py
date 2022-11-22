@@ -59,6 +59,8 @@ def test_convertion_to_hem():
 
     assert_frame_equal(expected_df, df)
 
+    assert df["email_domain"].astype("string").isnull().sum() == 4
+
 
 def test_convertion_to_hem_with_existing_hem():
     df = pd.DataFrame(

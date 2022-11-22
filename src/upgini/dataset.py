@@ -258,8 +258,8 @@ class Dataset(pd.DataFrame):
         # sep="." will be casted to numeric automatically
         cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
         for col in cls_to_check:
-            if tmp[col].astype(str).str.match("^[0-9]+,[0-9]*$").any():
-                self[col] = self[col].astype(str).str.replace(",", ".").astype(np.float64)
+            if tmp[col].astype("string").str.match("^[0-9]+,[0-9]*$").any():
+                self[col] = self[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
     def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
@@ -281,7 +281,7 @@ class Dataset(pd.DataFrame):
             # self.logger.info("Normalize iso code column")
             self[iso_code] = (
                 self[iso_code]
-                .astype(str)
+                .astype("string")
                 .str.upper()
                 .str.replace(r"[^A-Z]", "", regex=True)
                 .str.replace("UK", "GB", regex=False)
@@ -293,11 +293,11 @@ class Dataset(pd.DataFrame):
             # self.logger.info("Normalize postal code")
 
             if is_float_dtype(self[postal_code]):
-                self[postal_code] = self[postal_code].astype("Int64").astype(str)
+                self[postal_code] = self[postal_code].astype("Int64").astype("string")
 
             self[postal_code] = (
                 self[postal_code]
-                .astype(str)
+                .astype("string")
                 .str.upper()
                 .replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
                 .replace(r"^0+\B", "", regex=True)  # remove leading zeros
@@ -524,9 +524,9 @@ class Dataset(pd.DataFrame):
 
         for f in self.__features():
             if self[f].dtype == object:
-                self[f] = self[f].astype(str)
+                self[f] = self[f].astype("string")
             elif not is_numeric_dtype(self[f].dtype):
-                self[f] = self[f].astype(str)
+                self[f] = self[f].astype("string")
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""

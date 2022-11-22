@@ -1345,7 +1345,7 @@ class FeaturesEnricher(TransformerMixin):
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
                 if x[column_name].isnull().all() or (
-                    is_string_dtype(x[column_name]) and (x[column_name].astype(str).str.strip() == "").all()
+                    is_string_dtype(x[column_name]) and (x[column_name].astype("string").str.strip() == "").all()
                 ):
                     msg = (
                         f"Search key {column_name} is empty. "

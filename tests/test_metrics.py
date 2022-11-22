@@ -265,7 +265,7 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df["feature_2_cat"] = np.random.randint(0, 10, len(df))
-    df["feature_2_cat"] = df["feature_2_cat"].astype(str).astype("category")
+    df["feature_2_cat"] = df["feature_2_cat"].astype("string").astype("category")
     df_train = df[0:500]
     X = df_train[["phone", "feature1"]]
     y = df_train["target"]

@@ -20,7 +20,7 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
 
         all_count = len(column)
         is_countries_count = len(
-            column.loc[column.astype(str).str.contains("@") & column.astype(str).str.contains(".", regex=False)]
+            column.loc[column.astype("string").str.contains("@") & column.astype("string").str.contains(".", regex=False)]
         )
         return is_countries_count / all_count > 0.1
 
