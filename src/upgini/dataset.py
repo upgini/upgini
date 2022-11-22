@@ -299,9 +299,8 @@ class Dataset(pd.DataFrame):
                 self[postal_code]
                 .astype("string")
                 .str.upper()
-                .replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
-                .replace(r"^0+\B", "", regex=True)  # remove leading zeros
-                .replace("NA", "")
+                .str.replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
+                .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
 
     def __remove_old_dates(self):
