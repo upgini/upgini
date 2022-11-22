@@ -55,6 +55,13 @@ class EmailSearchKeyConverter:
 
         return sha256(email.lower().encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _email_to_domain(email: str) -> Optional[str]:
+        if email is not None and type(email) == str and "@" in email:
+            domain_candidate = email.split("@")[1]
+            if len(domain_candidate) > 0:
+                return domain_candidate
+
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         if self.hem_column is None:
@@ -65,7 +72,7 @@ class EmailSearchKeyConverter:
         del self.search_keys[self.email_column]
 
         generated_domain = "email_domain"
-        df[generated_domain] = df[self.email_column].str.split("@").str[1]
+        df[generated_domain] = df[self.email_column].apply(self._email_to_domain)
         self.generated_features.append(generated_domain)
         df.drop(columns=self.email_column, inplace=True)
 
