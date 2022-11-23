@@ -40,7 +40,7 @@ def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKe
                 )
             meaning_type = search_keys[column_name].value
             if meaning_type == FileColumnMeaningType.MSISDN and not is_string_dtype(df[column_name]):
-                df[column_name] = df[column_name].values.astype(np.int64).astype(str)  # type: ignore
+                df[column_name] = df[column_name].values.astype(np.int64).astype("string")  # type: ignore
         else:
             meaning_type = FileColumnMeaningType.FEATURE
         columns.append(

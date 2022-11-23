@@ -991,8 +991,9 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     )
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
-    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds)  # type: ignore
+    search_keys = {"date": SearchKey.DATE}
+    enricher = FeaturesEnricher(search_keys=search_keys, logs_enabled=False)
+    handled = enricher._FeaturesEnricher__handle_index_search_keys(tds, search_keys)  # type: ignore
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
 
@@ -1136,3 +1137,228 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
 
     enriched_eval2 = enricher.enriched_eval_sets[2]
     assert_frame_equal(eval2_features, enriched_eval2[eval2_features.columns])
+
+
+def test_features_enricher_with_datetime(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option('display.max_columns', 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="feature",
+                    type="NUMERIC",
+                    source="ads",
+                    hit_rate=99.0,
+                    shap_value=10.1
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_sin_1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_sin_2",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_sin_24",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_sin_48",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_cos_1",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_cos_2",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_cos_24",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_time_cos_48",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9990,
+                hit_rate=0.999,
+                hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
+        )
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data_with_time.parquet")
+    df = pd.read_parquet(path)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+    )
+    assert enriched_train_features.shape == (10000, 12)
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 12)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 9
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info["feature name"] == "feature"
+    assert first_feature_info["shap value"] == 10.1
+    assert enricher.features_info.loc[1, "feature name"] == "datetime_time_sin_1"
+    assert enricher.features_info.loc[1, "shap value"] == 0.001
+    assert enricher.features_info.loc[2, "feature name"] == "datetime_time_sin_2"
+    assert enricher.features_info.loc[2, "shap value"] == 0.001
+    assert enricher.features_info.loc[3, "feature name"] == "datetime_time_sin_24"
+    assert enricher.features_info.loc[3, "shap value"] == 0.001
+    assert enricher.features_info.loc[4, "feature name"] == "datetime_time_sin_48"
+    assert enricher.features_info.loc[4, "shap value"] == 0.001
+    assert enricher.features_info.loc[5, "feature name"] == "datetime_time_cos_1"
+    assert enricher.features_info.loc[5, "shap value"] == 0.001
+    assert enricher.features_info.loc[6, "feature name"] == "datetime_time_cos_2"
+    assert enricher.features_info.loc[6, "shap value"] == 0.001
+    assert enricher.features_info.loc[7, "feature name"] == "datetime_time_cos_24"
+    assert enricher.features_info.loc[7, "shap value"] == 0.001
+    assert enricher.features_info.loc[8, "feature name"] == "datetime_time_cos_48"
+    assert enricher.features_info.loc[8, "shap value"] == 0.001
+
+    metrics = enricher.calculate_metrics(
+        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
+    )
+    expected_metrics = pd.DataFrame(
+        {
+            "segment": ["train", "eval 1", "eval 2"],
+            "match_rate": [99.9, 100.0, 99.0],
+            "baseline roc_auc": [0.497995, 0.495701, 0.455651],
+            "enriched roc_auc": [0.498973, 0.520476, 0.472655],
+            "uplift": [0.000978, 0.024776, 0.017004]
+        }
+    ).set_index("segment").rename_axis("")
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)

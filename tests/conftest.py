@@ -1,14 +1,13 @@
 import numpy as np
 import pandas as pd
 import pytest
-from datetime import date
 
 from upgini import Dataset, FileColumnMeaningType, FileMetrics
 
 
 @pytest.fixture
 def etalon():
-    d = date(2020, 1, 1)
+    d = 1577836800000
     data = pd.DataFrame(
         [
             [d, 33333333, 0, 0.5],
@@ -17,7 +16,7 @@ def etalon():
             [d, 55555555, None, 0.5],
             [d, 66666666, None, 0.5],
             [None, 77777777, 1, 0.5],
-            ["", 88888888, 1, 0.5],
+            [None, 88888888, 1, 0.5],
             [d, 99999999, np.Inf, 0.5],
             [d, 11111111, np.NaN, 0.5],
             [None, None, None, None],

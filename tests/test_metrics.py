@@ -265,7 +265,7 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df["feature_2_cat"] = np.random.randint(0, 10, len(df))
-    df["feature_2_cat"] = df["feature_2_cat"].astype(str).astype("category")
+    df["feature_2_cat"] = df["feature_2_cat"].astype("string").astype("category")
     df_train = df[0:500]
     X = df_train[["phone", "feature1"]]
     y = df_train["target"]
@@ -880,6 +880,156 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     assert metrics_df.loc["eval 2", baseline_metric] == approx(0.683411)
     assert metrics_df.loc["eval 2", enriched_metric] == approx(0.688650)
     assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005239)
+
+
+def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.0,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature_2_cat",
+                    type="categorical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.01
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000,
+                max_hit_count=9900,
+                hit_rate=0.99,
+                hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=1000,
+                        hit_rate=1.0,
+                        hit_rate_percent=100.0
+                    )
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000,
+                        max_hit_count=990,
+                        hit_rate=0.99,
+                        hit_rate_percent=99.0
+                    )
+                ),
+            ]
+        )
+    )
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
+
+    df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input_with_string_feature.parquet"))
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1", "feature_2_cat"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1", "feature_2_cat"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1", "feature_2_cat"]]
+    eval_y_2 = eval_2["target"]
+    eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False
+    )
+
+    # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
+    # enricher.calculate_metrics(X, y)
+
+    enriched_X = enricher.fit_transform(X, y, eval_set)
+
+    assert len(enriched_X) == len(X)
+
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
+
+    metrics_df = enricher.calculate_metrics(X, y, eval_set)
+    assert metrics_df is not None
+    print(metrics_df)
+    assert metrics_df.loc["train", "match_rate"] == 99.0
+
+    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.476150)
+    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.513125)
+    assert metrics_df.loc["train", "uplift"] == approx(0.036975)
+
+    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
+    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.474478)
+    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.555526)
+    assert metrics_df.loc["eval 1", "uplift"] == approx(0.081048)
+
+    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
+    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.485075)
+    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.506723)
+    assert metrics_df.loc["eval 2", "uplift"] == approx(0.021648)
 
 
 def approx(value: float):
