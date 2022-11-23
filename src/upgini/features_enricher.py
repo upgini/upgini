@@ -570,6 +570,9 @@ class FeaturesEnricher(TransformerMixin):
                     etalon_metric = None
                     baseline_estimator = None
                     if fitting_X.shape[1] > 0:
+                        self.logger.info(
+                            f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
+                        )
                         baseline_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
@@ -579,6 +582,9 @@ class FeaturesEnricher(TransformerMixin):
                     # and calculate final metric (and uplift)
                     enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
+                        self.logger.info(
+                            f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
+                        )
                         enriched_estimator = EstimatorWrapper.create(
                             estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
                         )
@@ -657,11 +663,19 @@ class FeaturesEnricher(TransformerMixin):
                             ].copy()
 
                             if baseline_estimator is not None:
+                                self.logger.info(
+                                    f"Calculate baseline {metric} on eval set {idx + 1} "
+                                    f"on client features: {eval_X_sorted.columns.to_list()}"
+                                )
                                 etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
                             else:
                                 etalon_eval_metric = None
 
                             if enriched_estimator is not None:
+                                self.logger.info(
+                                    f"Calculate enriched {metric} on eval set {idx + 1} "
+                                    f"on client features: {enriched_eval_X_sorted.columns.to_list()}"
+                                )
                                 enriched_eval_metric = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_y_sorted
                                 )
