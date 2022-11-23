@@ -45,7 +45,7 @@ class DateTimeSearchKeyConverter:
         seconds = "datetime_seconds"
         df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
 
-        if (df[seconds] != 0).any():
+        if (df[seconds] != 0).any():  # and df[seconds].nunique() != 1:
             self.logger.info("Time found in date search key. Add extra features based on time")
             seconds_in_day = 60 * 60 * 24
             orders = [1, 2, 24, 48]

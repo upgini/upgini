@@ -170,6 +170,7 @@ class FeaturesEnricher(TransformerMixin):
         self.enriched_X: Optional[pd.DataFrame] = None
         self.enriched_eval_sets: Dict[int, pd.DataFrame] = dict()
         self.country_added = False
+        self.fit_generated_features: List[str] = []
 
     def fit(
         self,
@@ -495,20 +496,23 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys = self.search_keys.copy()
                 search_keys = self.__prepare_search_keys(X, search_keys, silent_mode=True)
 
+                extended_X = X.copy()
                 generated_features = []
                 date_column = self.__get_date_column(search_keys)
                 if date_column is not None:
                     converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-                    X = converter.convert(X)
+                    extended_X = converter.convert(extended_X)
+
                     generated_features.extend(converter.generated_features)
                 email_column = self.__get_email_column(search_keys)
                 hem_column = self.__get_hem_column(search_keys)
                 if email_column:
                     converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
-                    X = converter.convert(X)
+                    extended_X = converter.convert(extended_X)
                     generated_features.extend(converter.generated_features)
+                generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
-                X_sampled, y_sampled = self._sample_X_and_y(X, y_array, self.enriched_X)
+                X_sampled, y_sampled = self._sample_X_and_y(extended_X, y_array, self.enriched_X)
                 self.logger.info(f"Shape of enriched_X: {self.enriched_X.shape}")
                 self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
                 self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
@@ -616,7 +620,27 @@ class FeaturesEnricher(TransformerMixin):
                             eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
 
-                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(eval_X, eval_y_array, enriched_eval_X)
+                            search_keys = self.search_keys.copy()
+                            search_keys = self.__prepare_search_keys(X, search_keys, silent_mode=True)
+
+                            extended_eval_X = eval_X.copy()
+                            generated_features = []
+                            date_column = self.__get_date_column(search_keys)
+                            if date_column is not None:
+                                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+                                extended_eval_X = converter.convert(extended_eval_X)
+                                generated_features.extend(converter.generated_features)
+                            email_column = self.__get_email_column(search_keys)
+                            hem_column = self.__get_hem_column(search_keys)
+                            if email_column:
+                                converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
+                                extended_eval_X = converter.convert(extended_eval_X)
+                                generated_features.extend(converter.generated_features)
+                            generated_features = [f for f in generated_features if f in self.fit_generated_features]
+
+                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
+                                extended_eval_X, eval_y_array, enriched_eval_X
+                            )
                             self.logger.info(f"Shape of enriched_eval_X: {enriched_eval_X.shape}")
                             self.logger.info(f"Shape of eval_X_{idx} after sampling: {sampled_eval_X.shape}")
                             self.logger.info(f"Shape of eval_y_{idx} after sampling: {len(sampled_eval_y)}")
@@ -729,6 +753,7 @@ class FeaturesEnricher(TransformerMixin):
                 converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
+            generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
             search_keys = self.__using_search_keys(search_keys)
@@ -883,18 +908,18 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, search_keys)
 
-        generated_features = []
+        self.fit_generated_features = []
         date_column = self.__get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             df = converter.convert(df)
-            generated_features.extend(converter.generated_features)
+            self.fit_generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(search_keys)
         hem_column = self.__get_hem_column(search_keys)
         if email_column:
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
             df = converter.convert(df)
-            generated_features.extend(converter.generated_features)
+            self.fit_generated_features.extend(converter.generated_features)
 
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(search_keys.keys())
 
@@ -902,6 +927,8 @@ class FeaturesEnricher(TransformerMixin):
 
         features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns)
         df = df.drop(columns=features_to_drop)
+
+        self.fit_generated_features = [f for f in self.fit_generated_features if f not in features_to_drop]
 
         meaning_types = {
             **{col: key.value for col, key in search_keys.items()},
@@ -915,7 +942,7 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_fit_system_record_id(df, meaning_types, search_keys)
 
-        system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX] + generated_features
+        system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX] + self.fit_generated_features
         if EVAL_SET_INDEX in df.columns:
             system_columns_with_original_index.append(EVAL_SET_INDEX)
         df_with_original_index = df[system_columns_with_original_index].copy()
@@ -949,7 +976,7 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        self.__prepare_feature_importances(trace_id, X.columns.to_list() + generated_features)
+        self.__prepare_feature_importances(trace_id, X.columns.to_list() + self.fit_generated_features)
 
         self.__show_selected_features(search_keys)
 
@@ -1003,7 +1030,7 @@ class FeaturesEnricher(TransformerMixin):
         if not isinstance(eval_X, pd.DataFrame):
             raise ValidationError(f"Unsupported type of X in eval_set: {type(eval_X)}. Use pandas.DataFrame.")
         if eval_X.columns.to_list() != X.columns.to_list():
-            raise ValidationError("The columns in eval_set are different from the columns in X.")
+            raise ValidationError("The columns in eval_set are differ from the columns in X.")
         if not isinstance(eval_y, pd.Series) and not isinstance(eval_y, np.ndarray) and not isinstance(eval_y, list):
             raise ValidationError(
                 f"Unsupported type of y in eval_set: {type(eval_y)}. Use pandas.Series, numpy.ndarray or list."
