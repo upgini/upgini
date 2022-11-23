@@ -5,6 +5,7 @@ import pytest
 
 from upgini import Dataset, FileColumnMeaningType
 from upgini.metadata import ModelTaskType
+from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -29,6 +30,8 @@ def etalon_search_keys():
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
 def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
+    converter = DateTimeSearchKeyConverter("rep_date")
+    df = converter.convert(df)
     ds = Dataset(
         dataset_name="test Dataset",  # type: ignore
         description="test",  # type: ignore
@@ -40,19 +43,3 @@ def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys)
     ds.validate()
     expected_valid_rows = 15555
     assert len(ds) == expected_valid_rows
-
-
-@pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv"))
-def test_binary_dataset_path(datafiles, etalon_definition, etalon_search_keys):
-    path = datafiles / "data.csv"
-    ds_path = Dataset(
-        dataset_name="test Dataset",  # type: ignore
-        description="test",  # type: ignore
-        path=path,  # type: ignore
-        meaning_types=etalon_definition,  # type: ignore
-        search_keys=etalon_search_keys,  # type: ignore
-        model_task_type=ModelTaskType.BINARY,  # type: ignore
-    )
-    ds_path.validate()
-    expected_valid_rows = 15555
-    assert len(ds_path) == expected_valid_rows

@@ -13,7 +13,7 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
             return False
 
         all_count = len(column)
-        is_countries_count = len(column[column.astype(str).str.upper().isin(self.COUNTRY_CODES)])
+        is_countries_count = len(column[column.astype("string").str.upper().isin(self.COUNTRY_CODES)])
         return is_countries_count / all_count > 0.1
 
     @staticmethod
@@ -22,7 +22,7 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
             return df
 
         df[country_column] = (
-            df[country_column].astype(str).str.upper()
+            df[country_column].astype("string").str.upper()
             .map(CountrySearchKeyDetector.COUNTRIES)
             .fillna(df[country_column])
         )
