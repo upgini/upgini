@@ -10,16 +10,21 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.metadata import (
-    CVType, RuntimeParameters, ProviderTaskMetadataV2, FeaturesMetadataV2, HitRateMetrics, ModelEvalSet
+    CVType,
+    FeaturesMetadataV2,
+    HitRateMetrics,
+    ModelEvalSet,
+    ProviderTaskMetadataV2,
+    RuntimeParameters,
 )
-from upgini.search_task import SearchTask
 from upgini.resource_bundle import bundle
+from upgini.search_task import SearchTask
 
 from .utils import (
     mock_default_requests,
     mock_get_features_meta,
-    mock_get_task_metadata_v2,
     mock_get_metadata,
+    mock_get_task_metadata_v2,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
@@ -44,22 +49,22 @@ def test_search_keys_validation(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
-    with pytest.raises(
-        Exception, match=bundle.get("date_and_datetime_simultanious")
-    ):
+    error_message = bundle.get("date_and_datetime_simultanious")
+    with pytest.raises(Exception, match=error_message):
         FeaturesEnricher(
             search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
             endpoint=url,
             logs_enabled=False,
         )
 
-    with pytest.raises(Exception, match=bundle.get("postal_code_without_country")):
+    error_message = bundle.get("postal_code_without_country")
+    with pytest.raises(Exception, match=error_message):
         FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url, logs_enabled=False)
 
 
 def test_features_enricher(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option('display.max_columns', 1000)
+    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -93,41 +98,27 @@ def test_features_enricher(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(
-                name="feature",
-                type="NUMERIC",
-                source="ads",
-                hit_rate=99.0,
-                shap_value=10.1)],
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -188,13 +179,17 @@ def test_features_enricher(requests_mock: Mocker):
     metrics = enricher.calculate_metrics(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
-    expected_metrics = pd.DataFrame(
-        {
-            "segment": [train_segment, eval_1_segment, eval_2_segment],
-            match_rate_header: [99.9, 100.0, 99.0],
-            enriched_rocauc: [0.492362, 0.508219, 0.531009],
-        }
-    ).set_index("segment").rename_axis("")
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                match_rate_header: [99.9, 100.0, 99.0],
+                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
     print("Expected metrics: ")
     print(expected_metrics)
     print("Actual metrics: ")
@@ -215,7 +210,7 @@ def test_features_enricher(requests_mock: Mocker):
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option('display.max_columns', 1000)
+    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -249,41 +244,27 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(
-                name="feature",
-                type="NUMERIC",
-                source="ads",
-                hit_rate=99.0,
-                shap_value=10.1)],
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -346,13 +327,17 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     metrics = enricher.calculate_metrics(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
-    expected_metrics = pd.DataFrame(
-        {
-            "segment": [train_segment, eval_1_segment, eval_2_segment],
-            match_rate_header: [99.9, 100.0, 99.0],
-            enriched_rocauc: [0.492362, 0.508219, 0.531009],
-        }
-    ).set_index("segment").rename_axis("")
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                match_rate_header: [99.9, 100.0, 99.0],
+                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
     print("Expected metrics: ")
     print(expected_metrics)
     print("Actual metrics: ")
@@ -373,7 +358,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option('display.max_columns', 1000)
+    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     mock_default_requests(requests_mock, url)
@@ -406,13 +391,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
                     "dataType": "INT",
                     "meaningType": "FEATURE",
                 },
-                {
-                    "index": 2,
-                    "name": "target",
-                    "originalName": "target",
-                    "dataType": "INT",
-                    "meaningType": "TARGET"
-                },
+                {"index": 2, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
                 {
                     "index": 3,
                     "name": "system_record_id",
@@ -434,28 +413,15 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         ads_search_task_id,
         ProviderTaskMetadataV2(
             features=[
+                FeaturesMetadataV2(name="f_feature123", type="numerical", source="ads", hit_rate=99.0, shap_value=0.9),
                 FeaturesMetadataV2(
-                    name="f_feature123",
-                    type="numerical",
-                    source="ads",
-                    hit_rate=99.0,
-                    shap_value=0.9
+                    name="cos_3_freq_w_sun_", type="numerical", source="etalon", hit_rate=100.0, shap_value=0.1
                 ),
-                FeaturesMetadataV2(
-                    name="cos_3_freq_w_sun_",
-                    type="numerical",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.1
-                )
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=5319,
-                max_hit_count=5266,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
-            )
-        )
+                etalon_row_count=5319, max_hit_count=5266, hit_rate=0.99, hit_rate_percent=99.0
+            ),
+        ),
     )
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_features.parquet"
@@ -482,15 +448,19 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     )
 
     metrics = enricher.calculate_metrics(train_features, train_target)
-    expected_metrics = pd.DataFrame(
-        {
-            "segment": [train_segment],
-            match_rate_header: [99.0],
-            baseline_rocauc: [0.504187],
-            enriched_rocauc: [0.511054],
-            uplift: [0.006867507128359374]
-        }
-    ).set_index("segment").rename_axis("")
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment],
+                match_rate_header: [99.0],
+                baseline_rocauc: [0.504187],
+                enriched_rocauc: [0.511054],
+                uplift: [0.006867507128359374],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
     print("Expected metrics: ")
     print(expected_metrics)
     print("Actual metrics: ")
@@ -559,45 +529,32 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
                     data_provider="Upgini",
                     data_provider_link="https://upgini.com",
                     data_source="Community shared",
-                    data_source_link="https://upgini.com"
+                    data_source_link="https://upgini.com",
                 ),
                 FeaturesMetadataV2(
-                    name="SystemRecordId_473310000",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=1.0
-                )
+                    name="SystemRecordId_473310000", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=1.0
+                ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -720,41 +677,27 @@ def test_filter_by_importance(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(
-                name="feature",
-                type="NUMERIC",
-                source="ads",
-                hit_rate=99.0,
-                shap_value=0.7)],
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7)],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -861,41 +804,27 @@ def test_filter_by_max_features(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(
-                name="feature",
-                type="NUMERIC",
-                source="ads",
-                hit_rate=99.0,
-                shap_value=0.7)],
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7)],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -984,10 +913,9 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     search_task.initial_max_hit_rate_v2 = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame({
-        "system_record_id": [1, 2, 3],
-        "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]
-    })
+    enricher.enriched_X = pd.DataFrame(
+        {"system_record_id": [1, 2, 3], "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]}
+    )
     assert enricher.calculate_metrics(X, y) is None
 
 
@@ -1049,7 +977,7 @@ def test_correct_target_multiclass(requests_mock: Mocker):
 
 
 def test_correct_order_of_enriched_X(requests_mock: Mocker):
-    pd.set_option('display.max_columns', 1000)
+    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -1083,13 +1011,8 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(
-                name="feature",
-                type="NUMERIC",
-                source="ads",
-                hit_rate=99.0,
-                shap_value=10.1)]
-        )
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)]
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1153,7 +1076,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
 
 def test_features_enricher_with_datetime(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option('display.max_columns', 1000)
+    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -1182,99 +1105,52 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         ads_search_task_id,
         ProviderTaskMetadataV2(
             features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
                 FeaturesMetadataV2(
-                    name="feature",
-                    type="NUMERIC",
-                    source="ads",
-                    hit_rate=99.0,
-                    shap_value=10.1
+                    name="datetime_time_sin_1", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_1",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_sin_2", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_2",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_sin_24", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_24",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_sin_48", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_48",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_cos_1", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_1",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_cos_2", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_2",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_cos_24", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_24",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
-                ),
-                FeaturesMetadataV2(
-                    name="datetime_time_cos_48",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.001
+                    name="datetime_time_cos_48", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9990,
-                hit_rate=0.999,
-                hit_rate_percent=99.9
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1358,15 +1234,19 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     metrics = enricher.calculate_metrics(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
-    expected_metrics = pd.DataFrame(
-        {
-            "segment": [train_segment, eval_1_segment, eval_2_segment],
-            match_rate_header: [99.9, 100.0, 99.0],
-            baseline_rocauc: [0.497995, 0.495701, 0.455651],
-            enriched_rocauc: [0.498973, 0.520476, 0.472655],
-            uplift: [0.000978, 0.024776, 0.017004]
-        }
-    ).set_index("segment").rename_axis("")
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.497995, 0.495701, 0.455651],
+                enriched_rocauc: [0.498973, 0.520476, 0.472655],
+                uplift: [0.000978, 0.024776, 0.017004],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
     print("Expected metrics: ")
     print(expected_metrics)
     print("Actual metrics: ")

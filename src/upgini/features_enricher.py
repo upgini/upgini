@@ -862,7 +862,7 @@ class FeaturesEnricher(TransformerMixin):
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
-            msg = bundle("date_and_datetime_simultanious")
+            msg = bundle.get("date_and_datetime_simultanious")
             self.logger.warning(msg)
             raise ValidationError(msg)
 
@@ -872,7 +872,7 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
-            msg = bundle("postal_code_without_country")
+            msg = bundle.get("postal_code_without_country")
             self.logger.warning(msg)
             raise ValidationError(msg)
 
