@@ -11,6 +11,7 @@ except ImportError:
 import logging
 
 from upgini.http import __version__
+from upgini.resource_bundle import bundle
 
 URL_PATTERN = "https://pypi.python.org/pypi/{package}/json"
 
@@ -35,9 +36,9 @@ def validate_version(logger: logging.Logger):
             current_version = parse(__version__)
             latest_version = get_version("upgini")
             if current_version < latest_version:  # type: ignore
-                msg = f"You use {current_version} version, but latest is {latest_version}"
+                msg = bundle.get("version_warning").format(current_version, latest_version)
                 logger.warning(msg)
-                print("WARNING: " + msg)
+                print(msg)
         except Exception:
             logger.exception("Failed to validate version")
 

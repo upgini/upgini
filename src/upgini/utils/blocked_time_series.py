@@ -3,6 +3,7 @@ import numbers
 from sklearn.utils import indexable
 from sklearn.utils.validation import _num_samples
 from sklearn.model_selection import BaseCrossValidator
+from upgini.resource_bundle import bundle
 
 
 class BlockedTimeSeriesSplit(BaseCrossValidator):
@@ -23,21 +24,14 @@ class BlockedTimeSeriesSplit(BaseCrossValidator):
 
     def __init__(self, n_splits: int = 5, test_size: float = 0.2):
         if not isinstance(n_splits, numbers.Integral):
-            raise ValueError(
-                "The number of folds must be of Integral type. "
-                "%s of type %s was passed." % (n_splits, type(n_splits))
-            )
+            raise ValueError(bundle.get("timeseries_invalid_split_type").format(n_splits, type(n_splits)))
         n_splits = int(n_splits)
 
         if n_splits <= 1:
-            raise ValueError(
-                "Cross-validation requires at least one"
-                " train/test split by setting n_splits=2 or more,"
-                " got n_splits={0}.".format(n_splits)
-            )
+            raise ValueError(bundle.get("timeseries_invalid_split_count").format(n_splits))
 
         if test_size <= 0 or test_size >= 1:
-            raise ValueError("test_size={0} should be a float in the (0, 1) range".format(test_size))
+            raise ValueError(bundle.get("timeseries_invalid_test_size_type").format(test_size))
 
         self.n_splits = n_splits
         self.test_size = test_size
@@ -91,12 +85,9 @@ class BlockedTimeSeriesSplit(BaseCrossValidator):
         fold_size = n_samples // self.n_splits
 
         if self.n_splits > n_samples:
-            raise ValueError(
-                "Cannot have number of splits={0} greater"
-                " than the number of samples={1}.".format(self.n_splits, n_samples)
-            )
+            raise ValueError(bundle.get("timeseries_splits_more_than_samples").format(self.n_splits, n_samples))
         if self.test_size * fold_size <= 1:
-            raise ValueError("Cannot have number of samples in test fold (test_size * n_samples / n_splits) <= 1")
+            raise ValueError(bundle.get("timeseries_invalid_test_size"))
 
         indices = np.arange(n_samples)
         for i in range(self.n_splits):

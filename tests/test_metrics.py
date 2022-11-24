@@ -9,7 +9,14 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.metadata import CVType, FeaturesMetadataV2, ProviderTaskMetadataV2, HitRateMetrics, ModelEvalSet
+from upgini.metadata import (
+    CVType,
+    FeaturesMetadataV2,
+    HitRateMetrics,
+    ModelEvalSet,
+    ProviderTaskMetadataV2,
+)
+from upgini.resource_bundle import bundle
 
 from .utils import (
     mock_default_requests,
@@ -28,6 +35,18 @@ FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     "test_data/enricher/",
 )
+
+train_segment = bundle.get("quality_metrics_train_segment")
+eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
+eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
+match_rate_header = bundle.get("quality_metrics_match_rate_header")
+baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
+enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
+baseline_rmse = bundle.get("quality_metrics_baseline_header").format("rmse")
+enriched_rmse = bundle.get("quality_metrics_enriched_header").format("rmse")
+baseline_RMSLE = bundle.get("quality_metrics_baseline_header").format("RMSLE")
+enriched_RMSLE = bundle.get("quality_metrics_enriched_header").format("RMSLE")
+uplift = bundle.get("quality_metrics_uplift_header")
 
 
 def test_real_case_metric_binary(requests_mock: Mocker):
@@ -68,15 +87,9 @@ def test_real_case_metric_binary(requests_mock: Mocker):
                     "name": "request_date",
                     "originalName": "request_date",
                     "dataType": "INT",
-                    "meaningType": "DATE"
+                    "meaningType": "DATE",
                 },
-                {
-                    "index": 2,
-                    "name": "target",
-                    "originalName": "target",
-                    "dataType": "INT",
-                    "meaningType": "DATE"
-                },
+                {"index": 2, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "DATE"},
                 {
                     "index": 3,
                     "name": "system_record_id",
@@ -113,24 +126,18 @@ def test_real_case_metric_binary(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=10000,
-                hit_rate=1.0,
-                hit_rate_percent=100.0
+                etalon_row_count=10000, max_hit_count=10000, hit_rate=1.0, hit_rate_percent=100.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     # path_to_mock_features = os.path.join(BASE_DIR, "features.parquet")
     # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -148,7 +155,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
         date_format="%Y-%m-%d",
         country_code="RU",
         search_id=search_task_id,
-        logs_enabled=False
+        logs_enabled=False,
     )
 
     enriched_X = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_x.parquet"))
@@ -160,11 +167,17 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     metrics = enricher.calculate_metrics(X, y, eval_set)
     print(metrics)
 
-    expected_metrics = pd.DataFrame({
-        "segment": ["train", "eval 1"],
-        "match_rate": [100.0, 100.0],
-        "baseline roc_auc": [0.743380, 0.721769]
-    }).set_index("segment").rename_axis("")
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment],
+                match_rate_header: [100.0, 100.0],
+                baseline_rocauc: [0.743380, 0.721769],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
 
     assert_frame_equal(expected_metrics, metrics)
 
@@ -213,34 +226,25 @@ def test_default_metric_binary(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -277,10 +281,7 @@ def test_default_metric_binary(requests_mock: Mocker):
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE},
-        endpoint=url,
-        api_key="fake_api_key",
-        logs_enabled=False
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
     # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
@@ -297,21 +298,21 @@ def test_default_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     assert metrics_df is not None
     print(metrics_df)
-    assert metrics_df.loc["train", "match_rate"] == 99.0
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
 
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.49976)
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.503121)
-    assert metrics_df.loc["train", "uplift"] == approx(0.003361)
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.49976)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.503121)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.003361)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.485731)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.536471)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.050740)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.485731)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.536471)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.050740)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.518168)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.506581)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.011586)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.518168)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.506581)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.011586)
 
 
 def test_blocked_timeseries_rmsle(requests_mock: Mocker):
@@ -358,34 +359,25 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -438,20 +430,20 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, scoring="RMSLE")
     assert metrics_df is not None
     print(metrics_df)
-    assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline RMSLE"] == approx(0.487154)
-    assert metrics_df.loc["train", "enriched RMSLE"] == approx(0.478443)
-    assert metrics_df.loc["train", "uplift"] == approx(0.008710)
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[train_segment, baseline_RMSLE] == approx(0.487154)
+    assert metrics_df.loc[train_segment, enriched_RMSLE] == approx(0.478443)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.008710)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline RMSLE"] == approx(0.494446)
-    assert metrics_df.loc["eval 1", "enriched RMSLE"] == approx(0.486125)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.008321)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_RMSLE] == approx(0.494446)
+    assert metrics_df.loc[eval_1_segment, enriched_RMSLE] == approx(0.486125)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.008321)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline RMSLE"] == approx(0.494394)
-    assert metrics_df.loc["eval 2", "enriched RMSLE"] == approx(0.492213)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.002180)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_RMSLE] == approx(0.494394)
+    assert metrics_df.loc[eval_2_segment, enriched_RMSLE] == approx(0.492213)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(0.002180)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -498,34 +490,25 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -579,20 +562,20 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert metrics_df is not None
     print(metrics_df)
 
-    assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.497839)
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.490196)
-    assert metrics_df.loc["train", "uplift"] == approx(-0.007643)
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.497839)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.490196)
+    assert metrics_df.loc[train_segment, uplift] == approx(-0.007643)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.481991)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.542614)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.060623)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.481991)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.542614)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.060623)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.496449)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.490556)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005893)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.496449)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.490556)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.005893)
 
 
 @pytest.mark.skip()
@@ -640,34 +623,25 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -724,20 +698,20 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="mean_absolute_error")
     assert metrics_df is not None
     print(metrics_df)
-    assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.476230)  # Investigate same values
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.476230)
-    assert metrics_df.loc["train", "uplift"] == approx(0.0)
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.476230)  # Investigate same values
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.476230)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.0)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.500872)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.500872)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.0)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.500872)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.500872)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.0)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.521455)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.521455)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.0)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.521455)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.521455)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(0.0)
 
 
 def test_rf_metric_rmse(requests_mock: Mocker):
@@ -784,34 +758,25 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -864,22 +829,20 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set, estimator=estimator, scoring="rmse")
     assert metrics_df is not None
     print(metrics_df)
-    baseline_metric = "baseline rmse"
-    enriched_metric = "enriched rmse"
-    assert metrics_df.loc["train", "match_rate"] == 99.0
-    assert metrics_df.loc["train", baseline_metric] == approx(0.706528)
-    assert metrics_df.loc["train", enriched_metric] == approx(0.702535)
-    assert metrics_df.loc["train", "uplift"] == approx(0.003993)
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[train_segment, baseline_rmse] == approx(0.706528)
+    assert metrics_df.loc[train_segment, enriched_rmse] == approx(0.702535)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.003993)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", baseline_metric] == approx(0.716474)
-    assert metrics_df.loc["eval 1", enriched_metric] == approx(0.698250)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.018224)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rmse] == approx(0.716474)
+    assert metrics_df.loc[eval_1_segment, enriched_rmse] == approx(0.698250)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.018224)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", baseline_metric] == approx(0.683411)
-    assert metrics_df.loc["eval 2", enriched_metric] == approx(0.688650)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(-0.005239)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rmse] == approx(0.683411)
+    assert metrics_df.loc[eval_2_segment, enriched_rmse] == approx(0.688650)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.005239)
 
 
 def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
@@ -925,42 +888,29 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat",
-                    type="categorical",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.01
-                )
+                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.01
+                ),
             ],
             hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000,
-                max_hit_count=9900,
-                hit_rate=0.99,
-                hit_rate_percent=99.0
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
             ),
             eval_set_metrics=[
                 ModelEvalSet(
                     eval_set_index=1,
                     hit_rate=1.0,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=1000,
-                        hit_rate=1.0,
-                        hit_rate_percent=100.0
-                    )
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
                 ),
                 ModelEvalSet(
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000,
-                        max_hit_count=990,
-                        hit_rate=0.99,
-                        hit_rate_percent=99.0
-                    )
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
                 ),
-            ]
-        )
+            ],
+        ),
     )
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -995,10 +945,7 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE},
-        endpoint=url,
-        api_key="fake_api_key",
-        logs_enabled=False
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
     # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
@@ -1015,21 +962,21 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     metrics_df = enricher.calculate_metrics(X, y, eval_set)
     assert metrics_df is not None
     print(metrics_df)
-    assert metrics_df.loc["train", "match_rate"] == 99.0
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
 
-    assert metrics_df.loc["train", "baseline roc_auc"] == approx(0.476150)
-    assert metrics_df.loc["train", "enriched roc_auc"] == approx(0.513125)
-    assert metrics_df.loc["train", "uplift"] == approx(0.036975)
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.476150)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.513125)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.036975)
 
-    assert metrics_df.loc["eval 1", "match_rate"] == 100.0
-    assert metrics_df.loc["eval 1", "baseline roc_auc"] == approx(0.474478)
-    assert metrics_df.loc["eval 1", "enriched roc_auc"] == approx(0.555526)
-    assert metrics_df.loc["eval 1", "uplift"] == approx(0.081048)
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.474478)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.555526)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.081048)
 
-    assert metrics_df.loc["eval 2", "match_rate"] == 99.0
-    assert metrics_df.loc["eval 2", "baseline roc_auc"] == approx(0.485075)
-    assert metrics_df.loc["eval 2", "enriched roc_auc"] == approx(0.506723)
-    assert metrics_df.loc["eval 2", "uplift"] == approx(0.021648)
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.485075)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.506723)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(0.021648)
 
 
 def approx(value: float):

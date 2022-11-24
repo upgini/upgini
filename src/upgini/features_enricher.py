@@ -13,6 +13,7 @@ from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
+from upgini.resource_bundle import bundle
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory
@@ -118,7 +119,15 @@ class FeaturesEnricher(TransformerMixin):
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = pd.DataFrame(
-            columns=["provider", "source", "feature name", "shap value", "coverage %", "type", "feature type"]
+            columns=[
+                bundle.get("features_info_provider"),
+                bundle.get("features_info_source"),
+                bundle.get("features_info_name"),
+                bundle.get("features_info_shap"),
+                bundle.get("features_info_hitrate"),
+                bundle.get("features_info_type"),
+                bundle.get("features_info_commercial_schema"),
+            ]
         )
         self.search_id = search_id
         if search_id:
@@ -128,7 +137,7 @@ class FeaturesEnricher(TransformerMixin):
                 api_key=self.api_key,
             )
 
-            print("Retrieving the specified search...")
+            print(bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
             with MDC(trace_id=trace_id):
                 try:
@@ -138,10 +147,10 @@ class FeaturesEnricher(TransformerMixin):
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
                     self.__prepare_feature_importances(trace_id, x_columns)
                     # TODO validate search_keys with search_keys from file_metadata
-                    print("Search found. Now you can use transform.")
+                    print(bundle.get("search_by_task_id_finish"))
                     self.logger.info(f"Successfully initialized with search_id: {search_id}")
                 except Exception as e:
-                    print("Failed to retrieve the specified search.")
+                    print(bundle.get("failed_search_by_task_id"))
                     self.logger.exception(f"Failed to find search_id: {search_id}")
                     raise e
 
@@ -471,18 +480,12 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info("Start calculating metrics")
 
                 if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
-                    raise ValidationError("Fit the enricher before calling calculate_metrics.")
+                    raise ValidationError(bundle.get("metrics_unfitted_enricher"))
                 if self.enriched_X is None:
-                    raise ValidationError(
-                        "Metrics calculation isn't possible after restart. Please fit the enricher again."
-                    )
+                    raise ValidationError(bundle.get("metrics_empty_enriched_features"))
 
                 if self._has_important_paid_features():
-                    print(
-                        "WARNING: Metrics calculated after enrichment with a free features only. "
-                        "To calculate metrics with a full set of relevant features, including commercial data sources, "
-                        "please contact support team:"
-                    )
+                    print(bundle.get("metrics_exclude_paid_features"))
                     self.logger.warning("Metrics will be calculated on free features only")
                     self.__display_slack_community_link()
 
@@ -539,10 +542,10 @@ class FeaturesEnricher(TransformerMixin):
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                     if self._has_important_paid_features():
-                        print("WARNING: No important free features to calculate metrics.")
+                        print(bundle.get("metrics_no_important_free_features"))
                         self.logger.warning("No client or free relevant ADS features found to calculate metrics")
                     else:
-                        print("WARNING: No important features to calculate metrics.")
+                        print(bundle.get("metrics_no_important_features"))
                         self.logger.warning("No client or relevant ADS features found to calculate metrics")
                     return None
 
@@ -562,7 +565,7 @@ class FeaturesEnricher(TransformerMixin):
                 metric = wrapper.metric_name
                 multiplier = wrapper.multiplier
 
-                print("Calculating metrics...")
+                print(bundle.get("metrics_start"))
 
                 with Spinner():
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
@@ -598,15 +601,23 @@ class FeaturesEnricher(TransformerMixin):
                         uplift = None
 
                     train_metrics = {
-                        "segment": "train",
-                        "match_rate": self._search_task.initial_max_hit_rate_v2(),
+                        bundle.get("quality_metrics_segment_header"): bundle.get(
+                            "quality_metrics_train_segment"
+                        ),
+                        bundle.get(
+                            "quality_metrics_match_rate_header"
+                        ): self._search_task.initial_max_hit_rate_v2(),
                     }
                     if etalon_metric is not None:
-                        train_metrics[f"baseline {metric}"] = etalon_metric
+                        train_metrics[
+                            bundle.get("quality_metrics_baseline_header").format(metric)
+                        ] = etalon_metric
                     if enriched_metric is not None:
-                        train_metrics[f"enriched {metric}"] = enriched_metric
+                        train_metrics[
+                            bundle.get("quality_metrics_enriched_header").format(metric)
+                        ] = enriched_metric
                     if uplift is not None:
-                        train_metrics["uplift"] = uplift
+                        train_metrics[bundle.get("quality_metrics_uplift_header")] = uplift
                     metrics = [train_metrics]
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
@@ -615,8 +626,9 @@ class FeaturesEnricher(TransformerMixin):
                     if eval_set is not None:
                         if len(self.enriched_eval_sets) != len(eval_set):
                             raise ValidationError(
-                                "Count of eval_set datasets on fit and on calculation metrics differs: "
-                                f"fit: {len(self.enriched_eval_sets)}, calculation metrics: {len(eval_set)}"
+                                bundle.get("metrics_eval_set_count_diff").format(
+                                    len(self.enriched_eval_sets), len(eval_set)
+                                )
                             )
                         # TODO check that eval_set is the same as on the fit
 
@@ -688,19 +700,29 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_uplift = None
 
                             eval_metrics = {
-                                "segment": f"eval {idx + 1}",
-                                "match_rate": eval_hit_rate,
+                                bundle.get("quality_metrics_segment_header"): bundle.get(
+                                    "quality_metrics_eval_segment"
+                                ).format(idx + 1),
+                                bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if etalon_eval_metric is not None:
-                                eval_metrics[f"baseline {metric}"] = etalon_eval_metric
+                                eval_metrics[
+                                    bundle.get("quality_metrics_baseline_header").format(metric)
+                                ] = etalon_eval_metric
                             if enriched_eval_metric is not None:
-                                eval_metrics[f"enriched {metric}"] = enriched_eval_metric
+                                eval_metrics[
+                                    bundle.get("quality_metrics_enriched_header").format(metric)
+                                ] = enriched_eval_metric
                             if eval_uplift is not None:
-                                eval_metrics["uplift"] = eval_uplift
+                                eval_metrics[bundle.get("quality_metrics_uplift_header")] = eval_uplift
 
                             metrics.append(eval_metrics)
 
-                    metrics_df = pd.DataFrame(metrics).set_index("segment").rename_axis("")
+                    metrics_df = (
+                        pd.DataFrame(metrics)
+                        .set_index(bundle.get("quality_metrics_segment_header"))
+                        .rename_axis("")
+                    )
                     self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
                     return metrics_df
             except Exception as e:
@@ -722,7 +744,7 @@ class FeaturesEnricher(TransformerMixin):
     def get_features_info(self) -> pd.DataFrame:
         """Returns pandas.DataFrame with SHAP values and other info for each feature."""
         if self._search_task is None or self._search_task.summary is None:
-            msg = "Fit the enricher or pass search_id before calling get_features_info."
+            msg = bundle.get("features_unfitted_enricher")
             self.logger.warning(msg)
             raise NotFittedError(msg)
 
@@ -739,8 +761,8 @@ class FeaturesEnricher(TransformerMixin):
     ) -> pd.DataFrame:
         with MDC(trace_id=trace_id):
             if self._search_task is None:
-                msg = "Fit the enricher or pass search_id before calling transform."
-                raise NotFittedError(msg)
+                raise NotFittedError(bundle.get("transform_unfitted_enricher"))
+
             self._validate_X(X)
 
             self.__log_debug_information(X)
@@ -812,7 +834,7 @@ class FeaturesEnricher(TransformerMixin):
             )
 
             if not silent_mode:
-                print("Collecting selected features...")
+                print(bundle.get("transform_start"))
                 with Spinner():
                     result, _ = self.__enrich(
                         df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), X, {}
@@ -832,43 +854,37 @@ class FeaturesEnricher(TransformerMixin):
         if len(search_keys) == 0:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
-                raise ValidationError(
-                    "When search_id is passed, search_keys must be set to the same value that have been used for fit."
-                )
+                raise ValidationError(bundle.get("search_key_differ_from_fit"))
             else:
                 self.logger.warning("search_keys not provided")
-                raise ValidationError("At least one column must be provided in search_keys.")
+                raise ValidationError(bundle.get("empty_search_keys"))
 
         key_types = search_keys.values()
 
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
-            msg = "DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
+            msg = bundle.get("date_and_datetime_simultanious")
             self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.EMAIL in key_types and SearchKey.HEM in key_types:
-            msg = "EMAIL and HEM search keys cannot be used simultaneously. Choose one to keep."
+            msg = bundle.get("email_and_hem_simultanious")
             self.logger.warning(msg)
             raise ValidationError(msg)
 
         if SearchKey.POSTAL_CODE in key_types and SearchKey.COUNTRY not in key_types and self.country_code is None:
-            msg = "COUNTRY search key must be provided if POSTAL_CODE is present."
+            msg = bundle.get("postal_code_without_country")
             self.logger.warning(msg)
             raise ValidationError(msg)
 
         for key_type in SearchKey.__members__.values():
             if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
-                msg = f"Search key {key_type} is presented multiple times."
+                msg = bundle.get("multiple_search_key").format(key_type)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
 
         non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         if not self.__is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
-            msg = (
-                "No API key found and all search keys require registration. "
-                "You can use DATE, COUNTRY and POSTAL_CODE keys for free search without registration. "
-                "Or provide the API key either directly or via the environment variable UPGINI_API_KEY."
-            )
+            msg = bundle.get("unregistered_only_personal_keys")
             self.logger.warning(msg + f" Provided search keys: {key_types}")
             raise ValidationError(msg)
 
@@ -1011,13 +1027,13 @@ class FeaturesEnricher(TransformerMixin):
 
     def _validate_X(self, X):
         if not isinstance(X, pd.DataFrame):
-            raise ValidationError(f"Unsupported type of X: {type(X)}. Use pandas.DataFrame.")
+            raise ValidationError(bundle.get("unsupported_x_type").format(type(X)))
         if len(set(X.columns)) != len(X.columns):
-            raise ValidationError("X contains duplicate column names. Please rename or drop them.")
+            raise ValidationError(bundle.get("x_contains_dup_columns"))
 
     def _validate_y(self, X: pd.DataFrame, y) -> np.ndarray:
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
-            raise ValidationError(f"Unsupported type of y: {type(y)}. Use pandas.Series, numpy.ndarray or list.")
+            raise ValidationError(bundle.get("unsupported_y_type").format(type(y)))
 
         if isinstance(y, pd.Series):
             y_array = y.values
@@ -1027,28 +1043,24 @@ class FeaturesEnricher(TransformerMixin):
             y_array = np.array(y)
 
         if len(np.unique(y_array)) < 2:
-            raise ValidationError("y is a constant. Finding relevant features requires a non-constant y.")
+            raise ValidationError(bundle.get("y_is_constant"))
 
         if X.shape[0] != len(y_array):
-            raise ValidationError(f"X and y contain different number of samples: {X.shape[0]}, {len(y_array)}.")
+            raise ValidationError(bundle.get("x_and_y_diff_size").format(X.shape[0], len(y_array)))
 
         return y_array
 
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, np.ndarray]:
         if len(eval_pair) != 2:
-            raise ValidationError(
-                f"eval_set contains a tuple of size {len(eval_pair)}. It should contain only pairs of X and y."
-            )
+            raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
         eval_X = eval_pair[0]
         eval_y = eval_pair[1]
         if not isinstance(eval_X, pd.DataFrame):
-            raise ValidationError(f"Unsupported type of X in eval_set: {type(eval_X)}. Use pandas.DataFrame.")
+            raise ValidationError(bundle.get("unsupported_x_type_eval_set").format(type(eval_X)))
         if eval_X.columns.to_list() != X.columns.to_list():
-            raise ValidationError("The columns in eval_set are differ from the columns in X.")
+            raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
         if not isinstance(eval_y, pd.Series) and not isinstance(eval_y, np.ndarray) and not isinstance(eval_y, list):
-            raise ValidationError(
-                f"Unsupported type of y in eval_set: {type(eval_y)}. Use pandas.Series, numpy.ndarray or list."
-            )
+            raise ValidationError(bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
         if isinstance(eval_y, pd.Series):
             eval_y_array = eval_y.values
@@ -1058,11 +1070,11 @@ class FeaturesEnricher(TransformerMixin):
             eval_y_array = np.array(eval_y)
 
         if len(np.unique(eval_y_array)) < 2:
-            raise ValidationError("y in eval_set is a constant. Finding relevant features requires a non-constant y.")
+            raise ValidationError(bundle.get("y_is_constant_eval_set"))
 
         if eval_X.shape[0] != len(eval_y_array):
             raise ValidationError(
-                f"X and y in eval_set contain different number of samples: {eval_X.shape[0]}, {len(eval_y_array)}."
+                bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y_array))
             )
 
         return eval_X, eval_y_array
@@ -1132,10 +1144,7 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys[RENAMED_INDEX] = search_keys[DEFAULT_INDEX]
                 del search_keys[DEFAULT_INDEX]
         elif DEFAULT_INDEX in df.columns:
-            raise ValidationError(
-                "Delete or rename the column with the name 'index' please. "
-                "This system name cannot be used in the enricher"
-            )
+            raise ValidationError(bundle.get("unsupported_index_column"))
         return df
 
     @staticmethod
@@ -1181,10 +1190,7 @@ class FeaturesEnricher(TransformerMixin):
         for column, search_key in search_keys.items():
             if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(df[column]):
                 if self.date_format is None or len(self.date_format) == 0:
-                    msg = (
-                        f"Date column `{column}` is of string type, but date_format is not specified. "
-                        "Please convert column to datetime type or pass date_format."
-                    )
+                    msg = bundle.get("date_string_without_format").format(column)
                     self.logger.warning(msg)
                     raise ValidationError(msg)
 
@@ -1231,7 +1237,7 @@ class FeaturesEnricher(TransformerMixin):
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
-            raise RuntimeError("Search engine crashed on this request.")
+            raise RuntimeError(bundle.get("features_wasnt_returned"))
         result_features = (
             result_features.drop(columns=EVAL_SET_INDEX)
             if EVAL_SET_INDEX in result_features.columns
@@ -1241,10 +1247,7 @@ class FeaturesEnricher(TransformerMixin):
         dup_features = [c for c in X.columns if c in result_features.columns]
         if len(dup_features) > 0:
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
-            raise ValidationError(
-                "Columns set for transform method should be the same as for fit method, please check input dataframe. "
-                f"These columns are different: {dup_features}"
-            )
+            raise ValidationError(bundle.get("returned_features_same_as_passed").format(dup_features))
 
         result = pd.merge(
             df_with_original_index,
@@ -1265,9 +1268,7 @@ class FeaturesEnricher(TransformerMixin):
                     result_eval = result_eval.set_index(ORIGINAL_INDEX)
                     result_eval = pd.merge(left=eval_X, right=result_eval, left_index=True, right_index=True)
                 else:
-                    raise RuntimeError(
-                        f"Eval_set index {eval_set_index} from enriched result not found in original eval_set"
-                    )
+                    raise RuntimeError(bundle.get("missing_eval_set_for_enrichment").format(eval_set_index))
                 result_eval_sets[eval_set_index] = result_eval
             result_train = result_train.drop(columns=EVAL_SET_INDEX)
         else:
@@ -1284,10 +1285,10 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:
-            raise NotFittedError("Fit the enricher or pass search_id before calling transform.")
+            raise NotFittedError(bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
         if features_meta is None:
-            raise Exception("Internal error. There is no features metadata")
+            raise Exception(bundle.get("missing_features_meta"))
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
 
@@ -1304,21 +1305,21 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_importances_.append(feature_meta.shap_value)
             features_info.append(
                 {
-                    "provider": f"<a href='{feature_meta.data_provider_link}' "
+                    bundle.get("features_info_provider"): f"<a href='{feature_meta.data_provider_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
                     f"{feature_meta.data_provider}</a>"
                     if feature_meta.data_provider
                     else "",
-                    "source": f"<a href='{feature_meta.data_source_link}' "
+                    bundle.get("features_info_source"): f"<a href='{feature_meta.data_source_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
                     f"{feature_meta.data_source}</a>"
                     if feature_meta.data_source
                     else "",
-                    "feature name": feature_meta.name,
-                    "shap value": feature_meta.shap_value,
-                    "coverage %": feature_meta.hit_rate,
-                    "type": feature_meta.type,
-                    "feature type": feature_meta.commercial_schema or "",
+                    bundle.get("features_info_name"): feature_meta.name,
+                    bundle.get("features_info_shap"): feature_meta.shap_value,
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_type"): feature_meta.type,
+                    bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
                 }
             )
 
@@ -1327,8 +1328,10 @@ class FeaturesEnricher(TransformerMixin):
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[
-            self.features_info["feature name"].isin(client_features) & self.features_info["shap value"] > 0,
-            "feature name",
+            self.features_info[bundle.get("features_info_name")].isin(client_features)
+            & self.features_info[bundle.get("features_info_shap")]
+            > 0,
+            bundle.get("features_info_name"),
         ].values.tolist()
 
     def __filtered_importance_names(
@@ -1338,10 +1341,7 @@ class FeaturesEnricher(TransformerMixin):
             return []
 
         filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
-        # temporary workaround. generate this column later
-        filtered_importances = [
-            (name, importance) for name, importance in filtered_importances if name != "email_domain"
-        ]
+
         if importance_threshold is not None:
             filtered_importances = [
                 (name, importance) for name, importance in filtered_importances if importance > importance_threshold
@@ -1361,38 +1361,35 @@ class FeaturesEnricher(TransformerMixin):
             column_name = None
             if isinstance(column_id, str):
                 if column_id not in x.columns:
-                    raise ValidationError(f"Key `{column_id}` in search_keys was not found in X: {list(x.columns)}.")
+                    raise ValidationError(
+                        bundle.get("search_key_not_found").format(column_id, list(x.columns))
+                    )
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
                 if column_id >= x.shape[1]:
                     raise ValidationError(
-                        f"Index {column_id} in search_keys is out of bounds for {x.shape[1]} columns of X."
+                        bundle.get("numeric_search_key_not_found").format(column_id, x.shape[1])
                     )
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
             else:
-                raise ValidationError(f"Unsupported type of key in search_keys: {type(column_id)}.")
+                raise ValidationError(bundle.get("unsupported_search_key_type").format(type(column_id)))
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
-                msg = "SearchKey.COUNTRY and iso_code cannot be used simultaneously."
-                raise ValidationError(msg)
+                raise ValidationError(bundle.get("search_key_country_and_country_code"))
 
             if not is_registered and meaning_type in SearchKey.personal_keys():
-                msg = f"Search key {meaning_type} cannot be used without API key. It will be ignored."
+                msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
-                    print("WARNING: " + msg)
+                    print(msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
                 if x[column_name].isnull().all() or (
                     is_string_dtype(x[column_name]) and (x[column_name].astype("string").str.strip() == "").all()
                 ):
-                    msg = (
-                        f"Search key {column_name} is empty. "
-                        "Please fill values or remove this search key and try again."
-                    )
-                    raise ValidationError(msg)
+                    raise ValidationError(bundle.get("empty_search_key").format(column_name))
 
         if self.detect_missing_search_keys:
             valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys)
@@ -1404,34 +1401,18 @@ class FeaturesEnricher(TransformerMixin):
             and next(iter(using_keys.values())) == SearchKey.DATE
             and not silent_mode
         ):
-            msg = (
-                "WARNING: You have started the search with the DATE key only. "
-                "Try to add the COUNTRY and/or POSTAL_CODE and/or PHONE NUMBER and/or EMAIL/HEM and/or IP address "
-                "keys to your dataset so that the search engine gets access to the additional data sources. "
-                "Get details on https://github.com/upgini/upgini#readme"
-            )
-            print(msg)
+            print(bundle.get("date_only_search"))
 
         maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * len(x):
-                msg = (
-                    "WARNING: Looks like your training dataset is a time series. "
-                    "We recommend to set `cv=CVType.time_series` for the best results."
-                )
-                print(msg)
+                print(bundle.get("date_search_without_time_series"))
 
         if len(using_keys) == 1:
             for k, v in using_keys.items():
                 if x[k].nunique() == 1:
-                    msg = (
-                        f"WARNING: Constant value detected for the {v} search key in the X dataframe: {x.loc[0, k]}.\n"
-                        "That search key will add same constant features for different values from y. "
-                        "Please add extra search keys with non constant values, like postal code, date, phone number, "
-                        "hashed email or IP address."
-                    )
-                    raise ValidationError(msg)
+                    raise ValidationError(bundle.get("single_constant_search_key").format(v, x.loc[0, k]))
 
         return valid_search_keys
 
@@ -1458,7 +1439,7 @@ class FeaturesEnricher(TransformerMixin):
             silent=True,
         )
         if metrics is not None:
-            msg = "\nQuality metrics"
+            msg = bundle.get("quality_metrics_header")
 
             try:
                 from IPython.display import display
@@ -1475,9 +1456,7 @@ class FeaturesEnricher(TransformerMixin):
         return (self.features_info["feature type"] == "Paid").any()
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
-        msg = (
-            f"\n{len(self.feature_names_)} relevant feature(s) found with the search keys: {list(search_keys.keys())}."
-        )
+        msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
 
         try:
             from IPython.display import display
@@ -1496,14 +1475,14 @@ class FeaturesEnricher(TransformerMixin):
             return float(importance_threshold) if importance_threshold is not None else 0.0
         except ValueError:
             self.logger.exception(f"Invalid importance_threshold provided: {importance_threshold}")
-            raise ValidationError("importance_threshold must be float.")
+            raise ValidationError(bundle.get("invalid_importance_threshold"))
 
     def __validate_max_features(self, max_features: Optional[int]) -> int:
         try:
             return int(max_features) if max_features is not None else 400
         except ValueError:
             self.logger.exception(f"Invalid max_features provided: {max_features}")
-            raise ValidationError("max_features must be int.")
+            raise ValidationError(bundle.get("invalid_max_features"))
 
     def __filtered_enriched_features(
         self,
@@ -1523,24 +1502,14 @@ class FeaturesEnricher(TransformerMixin):
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
                 self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_key}")
-                msg = (
-                    f"Postal codes detected in column `{maybe_key}`. It will be used as a search key. "
-                    "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini#readme"
-                )
-                print(msg)
+                print(bundle.get("postal_code_detected").format(maybe_key))
 
         if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.COUNTRY
                 self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
-                msg = (
-                    f"Countries detected in column `{maybe_key}`. It will be used as a search key. "
-                    "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini#readme"
-                )
-                print(msg)
+                print(bundle.get("country_detected").format(maybe_key))
 
         if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
@@ -1552,12 +1521,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.info(
                         f"Autodetected search key EMAIL in column {maybe_key}. But not used because not registered user"
                     )
-                msg = (
-                    f"Emails detected in column `{maybe_key}`. It will be used as a search key. "
-                    "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini#readme"
-                )
-                print(msg)
+                print(bundle.get("email_detected").format(maybe_key))
 
         if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
@@ -1569,12 +1533,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.info(
                         f"Autodetected search key PHONE in column {maybe_key}. But not used because not registered user"
                     )
-                msg = (
-                    f"Phone numbers detected in column `{maybe_key}`. It will be used as a search key. "
-                    "Read how to turn off the automatic detection of search keys: "
-                    "https://github.com/upgini/upgini#readme"
-                )
-                print(msg)
+                print(bundle.get("phone_detected").format(maybe_key))
 
         return search_keys
 
@@ -1584,9 +1543,10 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.warning(f"User python libs versions: {libs}")
 
     def __display_slack_community_link(self):
-        slack_community_link = "https://4mlg.short.gy/join-upgini-community"
-        link_text = "WARNING: Looks like you've run into some kind of error. For help write us in the Upgini community"
-        badge = "https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"
+        slack_community_link = bundle.get("slack_community_link")
+        link_text = bundle.get("slack_community_text")
+        badge = bundle.get("slack_community_bage")
+        alt = bundle.get("slack_community_alt")
         try:
             from IPython.display import HTML, display
 
@@ -1594,7 +1554,7 @@ class FeaturesEnricher(TransformerMixin):
             display(
                 HTML(
                     f"""<p>{link_text}</p><a href='{slack_community_link}' target='_blank' rel='noopener noreferrer'>
-                    <img alt='Upgini slack community' src='{badge}'></a>
+                    <img alt='{alt}' src='{badge}'></a>
                     """
                 )
             )

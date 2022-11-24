@@ -23,6 +23,7 @@ from sklearn.model_selection import (
 from upgini.metadata import CVType, ModelTaskType
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.errors import ValidationError
+from upgini.resource_bundle import bundle
 
 CATBOOST_PARAMS = {
     "iterations": 250,
@@ -168,7 +169,7 @@ class EstimatorWrapper:
             elif target_type == ModelTaskType.REGRESSION:
                 estimator = CatBoostWrapper(CatBoostRegressor(**CATBOOST_PARAMS), **kwargs)
             else:
-                raise Exception(f"Unsupported type of target: {target_type}")
+                raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
             kwargs["estimator"] = estimator
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
@@ -280,7 +281,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
         elif target_type == ModelTaskType.REGRESSION:
             scoring = "mean_squared_error"
         else:
-            raise Exception(f"Unsupported type of target: {target_type}")
+            raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
 
     multiplier = 1
     if isinstance(scoring, str):
@@ -383,7 +384,7 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     check_consistent_length(y_true, y_pred, sample_weight)
 
     if (y_true < 0).any():
-        raise ValidationError("Mean Squared Logarithmic Error cannot be used when " "targets contain negative values.")
+        raise ValidationError(bundle.get("metrics_msle_negative_target"))
 
     return mean_squared_error(
         log1p(y_true),

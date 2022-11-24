@@ -15,6 +15,7 @@ import requests
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
+from upgini.resource_bundle import bundle
 
 from upgini.errors import HttpError, UnauthorizedError
 from upgini.metadata import (
@@ -232,7 +233,7 @@ class _RestClient:
             return request()
         except RequestException as e:
             if need_connection_retry:
-                print(f"Connection error: {e}. Retrying in 10 seconds...")
+                print(bundle.get("connection_error_with_retry").format(e))
                 time.sleep(10)
                 return self._with_unauth_retry(request)
             else:
@@ -246,7 +247,7 @@ class _RestClient:
                 time.sleep(random.randint(1, 10))
                 return self._with_unauth_retry(request, 1)
             elif e.status_code == 400 and "MD5Exception".lower() in e.message.lower() and try_number < 3:
-                print(f"File upload error, going to retry. {e.message}")
+                print(bundle.get("upload_file_checksum_fail").format(e.message))
                 return self._with_unauth_retry(request, try_number + 1)
             else:
                 raise e
