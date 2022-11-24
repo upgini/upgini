@@ -5,6 +5,7 @@ import logging
 
 from upgini.metadata import ModelTaskType
 from upgini.errors import ValidationError
+from upgini.resource_bundle import bundle
 
 
 def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> ModelTaskType:
@@ -14,7 +15,7 @@ def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> M
     else:
         target = target.loc[target != ""]
     if len(target) == 0:
-        raise ValidationError("Target is empty in all rows")
+        raise ValidationError(bundle.get("empty_target"))
     target_items = target.nunique()
     target_ratio = target_items / len(target)
     if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
@@ -23,10 +24,10 @@ def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> M
         if is_numeric_dtype(target):
             task = ModelTaskType.BINARY
         else:
-            raise ValidationError("Binary target should be numerical")
+            raise ValidationError(bundle.get("non_numeric_target"))
     else:
         task = ModelTaskType.MULTICLASS
     logger.info(f"Detected task type: {task}")
     if not silent:
-        print(f"Detected task type: {task}")
+        print(bundle.get("target_type_detected").format(task))
     return task

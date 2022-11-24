@@ -15,18 +15,16 @@ from upgini.metadata import (
     FileColumnMetadata,
     FileMetadata,
 )
+from upgini.resource_bundle import bundle
 
 
 def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKey], description: Optional[str] = None):
     if df.shape[0] < 1000:
-        raise ValueError(
-            "At least 1000 records per sample are needed. "
-            "Increase the sample size for evaluation and resubmit the data."
-        )
+        raise ValueError(bundle.get("ads_upload_too_few_rows"))
 
     for column, _ in search_keys.items():
         if column not in df.columns:
-            raise ValueError(f"Search key {column} was not found in df columns.")
+            raise ValueError(bundle.get("ads_upload_search_key_not_found").format(column))
 
     columns = []
     rows_count = df.shape[0]
@@ -34,10 +32,7 @@ def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKe
     for idx, (column_name, column_type) in enumerate(zip(df.columns, df.dtypes)):
         if column_name in search_keys:
             if df[column_name].notnull().sum() < min_valid_rows_count:
-                raise ValueError(
-                    "More than 50% of rows in the submitted sample don't contain valid keys. "
-                    "Please fill the key columns with valid values and resubmit the data."
-                )
+                raise ValueError(bundle.get("ads_upload_to_many_empty_rows"))
             meaning_type = search_keys[column_name].value
             if meaning_type == FileColumnMeaningType.MSISDN and not is_string_dtype(df[column_name]):
                 df[column_name] = df[column_name].values.astype(np.int64).astype("string")  # type: ignore
@@ -60,8 +55,7 @@ def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKe
         response = get_rest_client().upload_user_ads(parquet_file_path, metadata)
         logging.debug(f"Upload response: {response}")
 
-    print("Thank you for your submission!")
-    print("We will check your data sharing proposal and get back to you ASAP")
+    print(bundle.get("ads_upload_finish"))
 
 
 def __get_data_type(pandas_data_type) -> DataType:

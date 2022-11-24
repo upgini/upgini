@@ -22,6 +22,7 @@ from upgini.metadata import (
     FeaturesMetadataV2,
 )
 from upgini.spinner import Spinner
+from upgini.resource_bundle import bundle
 
 
 class SearchTask:
@@ -57,11 +58,7 @@ class SearchTask:
         failed_statuses = {"FAILED", "VALIDATION_FAILED"}
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
-            print(
-                f"Running search request with search_id={self.search_task_id}\n"
-                "We'll send email notification once it's completed, "
-                "just use your personal api_key from profile.upgini.com"
-            )
+            print(bundle.get("polling_search_task").format(self.search_task_id))
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
 
         try:
@@ -77,22 +74,19 @@ class SearchTask:
                     )
                     if self.summary.status in failed_statuses:
                         self.logger.error(f"Search {search_task_id} failed with status {self.summary.status}")
-                        raise RuntimeError("Oh! Server did something wrong, please retry with new search request")
+                        raise RuntimeError(bundle.get("search_task_failed_status"))
                     if (
                         self.summary.status in submitted_statuses
                         and len(self._get_provider_summaries(self.summary)) == 0
                     ):
                         self.logger.error(f"No provider summaries for search {search_task_id}")
-                        raise RuntimeError(
-                            "No datasets found to intersect"
-                            "Try with another set of search keys or different time period"
-                        )
+                        raise RuntimeError(bundle.get("no_one_provider_respond"))
                     time.sleep(5)
         except KeyboardInterrupt as e:
-            print("Search interrupted. Stopping search request")
+            print(bundle.get("search_stopping"))
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
             self.logger.warn(f"Search {search_task_id} stopped by user")
-            print("Search request stopped")
+            print(bundle.get("search_stopped"))
             raise e
         print()
 
@@ -105,10 +99,10 @@ class SearchTask:
             error_messages = [self._error_message(x) for x in self._get_provider_summaries(self.summary)]
             if len(error_messages) == 1 and (error_messages[0] is None or error_messages[0].endswith("Internal error")):
                 self.logger.error(f"Search failed with error: {error_messages[0]}")
-                raise RuntimeError("All search tasks in the request have failed")
+                raise RuntimeError(bundle.get("all_providers_failed"))
             else:
                 self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
-                raise RuntimeError("All search tasks in the request have failed: " + ",".join(error_messages) + ".")
+                raise RuntimeError(bundle.get("all_providers_failed_with_error").format(",".join(error_messages)))
 
         if self.summary.status == "COMPLETED":
             self.provider_metadata_v2 = []
@@ -149,11 +143,11 @@ class SearchTask:
             return provider_summary.error_message
         else:
             if provider_summary.status == "TIMED_OUT":
-                return "Search request timed out"
+                return bundle.get("search_timed_out")
             elif provider_summary.status == "EMPTY_INTERSECTION":
-                return "Datasets doesn't intersect with uploaded file"
+                return bundle.get("search_empty_intersection")
             else:
-                return "Internal error"
+                return bundle.get("search_other_error")
 
     def validation(
         self,
@@ -174,7 +168,7 @@ class SearchTask:
 
     def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:
         if self.summary is None or len(self.summary.initial_important_providers) == 0:
-            raise RuntimeError("Initial search didn't start.")
+            raise RuntimeError(bundle.get("search_not_started"))
         return self.summary.initial_important_providers
 
     def _check_finished_validation_search(self) -> List[ProviderTaskSummary]:
@@ -246,6 +240,7 @@ class SearchTask:
         else:
             return {"provider_id": max_provider, "value": max_metric}
 
+    # deprecated
     def initial_max_auc(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "AUC"):
@@ -253,6 +248,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_max_accuracy(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "ACCURACY"):
@@ -260,6 +256,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_max_rmse(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "RMSE"):
@@ -267,6 +264,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_max_uplift(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "UPLIFT"):
@@ -274,6 +272,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_max_hit_rate(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "HIT_RATE"):
@@ -285,6 +284,7 @@ class SearchTask:
         if self.provider_metadata_v2 is not None:
             return max([meta.hit_rate_metrics.hit_rate_percent for meta in self.provider_metadata_v2])
 
+    # deprecated
     def _initial_min_hit_rate(self) -> float:
         provider_summaries = self._check_finished_initial_search()
         min_hit_rate = None
@@ -298,6 +298,7 @@ class SearchTask:
         else:
             return min_hit_rate
 
+    # deprecated
     def initial_gini(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "GINI"):
@@ -307,6 +308,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_auc(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "AUC"):
@@ -316,6 +318,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_accuracy(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "ACCURACY"):
@@ -325,6 +328,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_rmse(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "RMSE"):
@@ -334,6 +338,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_uplift(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "UPLIFT"):
@@ -343,6 +348,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def initial_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_initial_search()
         result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
@@ -351,6 +357,7 @@ class SearchTask:
         )
         return result
 
+    # deprecated
     def initial_metadata(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_initial_search()
         quality_df = None
@@ -425,6 +432,7 @@ class SearchTask:
                 gzip_file.write(gzip_file_content)
             return pd.read_parquet(gzip_file_name)
 
+    # deprecated
     def get_initial_raw_features_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_initial_search()
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
@@ -470,6 +478,7 @@ class SearchTask:
                     result_df.rename(columns={column: column[7:]}, inplace=True)
         return result_df
 
+    # deprecated
     def download_model_by_provider_id(self, trace_id: str, provider_id: str, model_path: str) -> None:
         provider_summaries = self._check_finished_initial_search()
         models_response = get_rest_client(self.endpoint, self.api_key).get_search_models_v2(
@@ -496,6 +505,7 @@ class SearchTask:
             model_file.write(model_bytes)
         print(f"Model successfully saved to {model_path}")
 
+    # deprecated
     def get_max_initial_eval_set_metrics(self) -> Optional[List[dict]]:
         provider_summaries = self._check_finished_initial_search()
         max_idx = None
@@ -530,6 +540,7 @@ class SearchTask:
                             hit_rate_dict[eval_idx] = new_hit_rate
             return hit_rate_dict
 
+    # deprecated
     def validation_max_auc(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "AUC"):
@@ -537,6 +548,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_max_accuracy(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "ACCURACY"):
@@ -544,6 +556,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_max_rmse(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_initial_search()
         if self._has_metric(provider_summaries, "RMSE"):
@@ -551,6 +564,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_max_uplift(self) -> Optional[Dict[str, Any]]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "UPLIFT"):
@@ -558,6 +572,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_gini(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "GINI"):
@@ -567,6 +582,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_auc(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "AUC"):
@@ -576,6 +592,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_accuracy(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "ACCURACY"):
@@ -585,6 +602,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_rmse(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "RMSE"):
@@ -594,6 +612,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_uplift(self) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         if self._has_metric(provider_summaries, "UPLIFT"):
@@ -603,6 +622,7 @@ class SearchTask:
         else:
             return None
 
+    # deprecated
     def validation_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_validation_search()
         result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
@@ -611,6 +631,7 @@ class SearchTask:
         )
         return result
 
+    # deprecated
     def _validation_min_hit_rate(self) -> float:
         provider_summaries = self._check_finished_validation_search()
         min_hit_rate = None
@@ -624,6 +645,7 @@ class SearchTask:
         else:
             return min_hit_rate
 
+    # deprecated
     def validation_metadata(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_validation_search()
         quality_df = None
@@ -649,6 +671,7 @@ class SearchTask:
             result = pd.merge(result, uplift_df, on="provider_id")
         return result
 
+    # deprecated
     def get_validation_scores_by_provider_id(self, trace_id: str, provider_id: str) -> Optional[pd.DataFrame]:
         provider_summaries = self._check_finished_validation_search()
         validation_task_id = self._search_task_id_by_provider_id(provider_summaries, provider_id)
