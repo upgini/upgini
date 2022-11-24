@@ -737,38 +737,5 @@ class SearchTask:
 
         return result_df
 
-    def _get_features(self, trace_id: str, provider_summaries: List[ProviderTaskSummary]) -> List[Dict[str, Any]]:
-        features = []
-        file_metadata = self.get_file_metadata(trace_id)
-
-        def get_original_column_name(name: str) -> str:
-            for column_metadata in file_metadata.columns:
-                if column_metadata.name == name:
-                    return column_metadata.originalName or name
-            return name
-
-        for provider_summary in provider_summaries:
-            if provider_summary.status == "COMPLETED":
-                provider_features = get_rest_client(self.endpoint, self.api_key).get_search_features_meta_v2(
-                    trace_id, provider_summary.ads_search_task_id
-                )
-                for feature in provider_features["providerFeatures"] + provider_features["etalonFeatures"]:
-                    feature_meta = {
-                        "feature_name": get_original_column_name(feature["name"]),
-                        "shap_value": feature["importance"],
-                        "coverage %": feature["matchedInPercent"],
-                        "type": feature["valueType"] if "valueType" in feature else None,
-                    }
-                    features.append(feature_meta)
-        return features
-
-    def initial_features(self, trace_id: str) -> List[Dict[str, Any]]:
-        provider_summaries = self._check_finished_initial_search()
-        return self._get_features(trace_id, provider_summaries)
-
-    def validation_features(self, trace_id: str) -> List[Dict[str, Any]]:
-        provider_summaries = self._check_finished_validation_search()
-        return self._get_features(trace_id, provider_summaries)
-
     def get_file_metadata(self, trace_id: str) -> FileMetadata:
         return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id, trace_id)

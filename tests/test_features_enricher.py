@@ -13,6 +13,7 @@ from upgini.metadata import (
     CVType, RuntimeParameters, ProviderTaskMetadataV2, FeaturesMetadataV2, HitRateMetrics, ModelEvalSet
 )
 from upgini.search_task import SearchTask
+from upgini.resource_bundle import bundle
 
 from .utils import (
     mock_default_requests,
@@ -27,13 +28,24 @@ from .utils import (
     mock_validation_summary,
 )
 
+train_segment = bundle.get("quality_metrics_train_segment")
+eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
+eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
+match_rate_header = bundle.get("quality_metrics_match_rate_header")
+baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
+enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
+uplift = bundle.get("quality_metrics_uplift_header")
+feature_name_header = bundle.get("features_info_name")
+shap_value_header = bundle.get("features_info_shap")
+hitrate_header = bundle.get("features_info_hitrate")
+
 
 def test_search_keys_validation(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
     with pytest.raises(
-        Exception, match="DATE and DATETIME search keys cannot be used simultaneously. Choose one to keep."
+        Exception, match=bundle.get("date_and_datetime_simultanious")
     ):
         FeaturesEnricher(
             search_keys={"d1": SearchKey.DATE, "dt2": SearchKey.DATETIME},
@@ -41,7 +53,7 @@ def test_search_keys_validation(requests_mock: Mocker):
             logs_enabled=False,
         )
 
-    with pytest.raises(Exception, match="COUNTRY search key must be provided if POSTAL_CODE is present."):
+    with pytest.raises(Exception, match=bundle.get("postal_code_without_country")):
         FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url, logs_enabled=False)
 
 
@@ -178,9 +190,9 @@ def test_features_enricher(requests_mock: Mocker):
     )
     expected_metrics = pd.DataFrame(
         {
-            "segment": ["train", "eval 1", "eval 2"],
-            "match_rate": [99.9, 100.0, 99.0],
-            "enriched roc_auc": [0.492362, 0.508219, 0.531009],
+            "segment": [train_segment, eval_1_segment, eval_2_segment],
+            match_rate_header: [99.9, 100.0, 99.0],
+            enriched_rocauc: [0.492362, 0.508219, 0.531009],
         }
     ).set_index("segment").rename_axis("")
     print("Expected metrics: ")
@@ -197,8 +209,8 @@ def test_features_enricher(requests_mock: Mocker):
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature name"] == "feature"
-    assert first_feature_info["shap value"] == 10.1
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
 
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
@@ -336,9 +348,9 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     )
     expected_metrics = pd.DataFrame(
         {
-            "segment": ["train", "eval 1", "eval 2"],
-            "match_rate": [99.9, 100.0, 99.0],
-            "enriched roc_auc": [0.492362, 0.508219, 0.531009],
+            "segment": [train_segment, eval_1_segment, eval_2_segment],
+            match_rate_header: [99.9, 100.0, 99.0],
+            enriched_rocauc: [0.492362, 0.508219, 0.531009],
         }
     ).set_index("segment").rename_axis("")
     print("Expected metrics: ")
@@ -355,8 +367,8 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature name"] == "feature"
-    assert first_feature_info["shap value"] == 10.1
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
@@ -472,11 +484,11 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     metrics = enricher.calculate_metrics(train_features, train_target)
     expected_metrics = pd.DataFrame(
         {
-            "segment": ["train"],
-            "match_rate": [99.0],
-            "baseline roc_auc": [0.504187],
-            "enriched roc_auc": [0.511054],
-            "uplift": [0.006867507128359374]
+            "segment": [train_segment],
+            match_rate_header: [99.0],
+            baseline_rocauc: [0.504187],
+            enriched_rocauc: [0.511054],
+            uplift: [0.006867507128359374]
         }
     ).set_index("segment").rename_axis("")
     print("Expected metrics: ")
@@ -493,13 +505,13 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     assert enricher.feature_importances_ == [0.9]
     assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature name"] == "f_feature123"
-    assert first_feature_info["shap value"] == 0.9
-    assert first_feature_info["coverage %"] == 99.0
+    assert first_feature_info[feature_name_header] == "f_feature123"
+    assert first_feature_info[shap_value_header] == 0.9
+    assert first_feature_info[hitrate_header] == 99.0
     second_feature_info = enricher.features_info.iloc[1]
-    assert second_feature_info["feature name"] == "cos(3,freq=W-SUN)"
-    assert second_feature_info["shap value"] == 0.1
-    assert second_feature_info["coverage %"] == 100.0
+    assert second_feature_info[feature_name_header] == "cos(3,freq=W-SUN)"
+    assert second_feature_info[shap_value_header] == 0.1
+    assert second_feature_info[hitrate_header] == 100.0
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
@@ -1324,35 +1336,35 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     assert enricher.feature_importances_ == [10.1]
     assert len(enricher.features_info) == 9
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info["feature name"] == "feature"
-    assert first_feature_info["shap value"] == 10.1
-    assert enricher.features_info.loc[1, "feature name"] == "datetime_time_sin_1"
-    assert enricher.features_info.loc[1, "shap value"] == 0.001
-    assert enricher.features_info.loc[2, "feature name"] == "datetime_time_sin_2"
-    assert enricher.features_info.loc[2, "shap value"] == 0.001
-    assert enricher.features_info.loc[3, "feature name"] == "datetime_time_sin_24"
-    assert enricher.features_info.loc[3, "shap value"] == 0.001
-    assert enricher.features_info.loc[4, "feature name"] == "datetime_time_sin_48"
-    assert enricher.features_info.loc[4, "shap value"] == 0.001
-    assert enricher.features_info.loc[5, "feature name"] == "datetime_time_cos_1"
-    assert enricher.features_info.loc[5, "shap value"] == 0.001
-    assert enricher.features_info.loc[6, "feature name"] == "datetime_time_cos_2"
-    assert enricher.features_info.loc[6, "shap value"] == 0.001
-    assert enricher.features_info.loc[7, "feature name"] == "datetime_time_cos_24"
-    assert enricher.features_info.loc[7, "shap value"] == 0.001
-    assert enricher.features_info.loc[8, "feature name"] == "datetime_time_cos_48"
-    assert enricher.features_info.loc[8, "shap value"] == 0.001
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
+    assert enricher.features_info.loc[1, feature_name_header] == "datetime_time_sin_1"
+    assert enricher.features_info.loc[1, shap_value_header] == 0.001
+    assert enricher.features_info.loc[2, feature_name_header] == "datetime_time_sin_2"
+    assert enricher.features_info.loc[2, shap_value_header] == 0.001
+    assert enricher.features_info.loc[3, feature_name_header] == "datetime_time_sin_24"
+    assert enricher.features_info.loc[3, shap_value_header] == 0.001
+    assert enricher.features_info.loc[4, feature_name_header] == "datetime_time_sin_48"
+    assert enricher.features_info.loc[4, shap_value_header] == 0.001
+    assert enricher.features_info.loc[5, feature_name_header] == "datetime_time_cos_1"
+    assert enricher.features_info.loc[5, shap_value_header] == 0.001
+    assert enricher.features_info.loc[6, feature_name_header] == "datetime_time_cos_2"
+    assert enricher.features_info.loc[6, shap_value_header] == 0.001
+    assert enricher.features_info.loc[7, feature_name_header] == "datetime_time_cos_24"
+    assert enricher.features_info.loc[7, shap_value_header] == 0.001
+    assert enricher.features_info.loc[8, feature_name_header] == "datetime_time_cos_48"
+    assert enricher.features_info.loc[8, shap_value_header] == 0.001
 
     metrics = enricher.calculate_metrics(
         train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
     )
     expected_metrics = pd.DataFrame(
         {
-            "segment": ["train", "eval 1", "eval 2"],
-            "match_rate": [99.9, 100.0, 99.0],
-            "baseline roc_auc": [0.497995, 0.495701, 0.455651],
-            "enriched roc_auc": [0.498973, 0.520476, 0.472655],
-            "uplift": [0.000978, 0.024776, 0.017004]
+            "segment": [train_segment, eval_1_segment, eval_2_segment],
+            match_rate_header: [99.9, 100.0, 99.0],
+            baseline_rocauc: [0.497995, 0.495701, 0.455651],
+            enriched_rocauc: [0.498973, 0.520476, 0.472655],
+            uplift: [0.000978, 0.024776, 0.017004]
         }
     ).set_index("segment").rename_axis("")
     print("Expected metrics: ")

@@ -19,6 +19,7 @@ from pandas.api.types import (
 )
 from pandas.core.dtypes.common import is_period_dtype
 
+from upgini.resource_bundle import bundle
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
@@ -101,11 +102,11 @@ class Dataset(pd.DataFrame):
                 kwargs["sep"] = sep
                 data = pd.read_csv(path, **kwargs)
         else:
-            raise ValueError("DataFrame or path to file should be passed")
+            raise ValueError(bundle.get("dataset_dataframe_or_path_empty"))
         if isinstance(data, pd.DataFrame):
             super(Dataset, self).__init__(data)  # type: ignore
         else:
-            raise ValueError("Iteration is not supported. Remove `iterator` and `chunksize` arguments and try again")
+            raise ValueError(bundle.get("dataset_invalid_params"))
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
@@ -132,14 +133,14 @@ class Dataset(pd.DataFrame):
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
         if self.meaning_types is None:
-            raise ValueError("meaning_types is empty")
+            raise ValueError(bundle.get("dataset_empty_meaning_types"))
         else:
             return self.meaning_types
 
     @property
     def search_keys_checked(self) -> List[Tuple[str, ...]]:
         if self.search_keys is None:
-            raise ValueError("search_keys is empty")
+            raise ValueError(bundle.get("dataset_empty_search_keys"))
         else:
             return self.search_keys
 
@@ -154,7 +155,7 @@ class Dataset(pd.DataFrame):
 
     def __validate_min_rows_count(self):
         if self.shape[0] < self.MIN_ROWS_COUNT:
-            raise ValidationError(f"X should contain at least {self.MIN_ROWS_COUNT} valid distinct rows")
+            raise ValidationError(bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
 
     def __validate_max_row_count(self):
         api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
@@ -162,21 +163,19 @@ class Dataset(pd.DataFrame):
         if is_registered:
             if len(self) > self.MAX_ROWS_REGISTERED:
                 raise ValidationError(
-                    f"Total X + eval_set rows count limit is {self.MAX_ROWS_REGISTERED}. "
-                    "Please sample X and eval_set"
+                    bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED)
                 )
         else:
             if len(self) > self.MAX_ROWS_UNREGISTERED:
                 raise ValidationError(
-                    f"For unregistered users total rows count limit for X + eval_set is {self.MAX_ROWS_UNREGISTERED}. "
-                    "Please register to increase the limit"
+                    bundle.get("dataset_too_many_rows_unregistered").format(self.MAX_ROWS_UNREGISTERED)
                 )
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
         for column in self.columns:
             if len(column) == 0:
-                raise ValidationError("Some of column names are empty. Add names and try again, please")
+                raise ValidationError(bundle.get("dataset_empty_column_names"))
             new_column = str(column).lower()
             if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
                 new_column = "a" + new_column
@@ -199,10 +198,7 @@ class Dataset(pd.DataFrame):
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
                 if max_length > 400:
-                    raise ValidationError(
-                        f"Columns {col} are too long: {max_length} characters. "
-                        "Remove this columns or trim length to 50 characters"
-                    )
+                    raise ValidationError(bundle.get("dataset_too_long_column_name").format(col, max_length))
 
     def __clean_duplicates(self):
         """Clean DataSet from full duplicates."""
@@ -219,7 +215,7 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(f"{share_full_dedup:.5f}% of the rows are fully duplicated")
+            print(bundle.get("dataset_full_duplicates").format(share_full_dedup))
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
@@ -229,10 +225,7 @@ class Dataset(pd.DataFrame):
             num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
             share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
-                msg = (
-                    f"{share_tgt_dedup:.4f}% of rows ({num_dup_rows}) in X are duplicates with different y values. "
-                    "Please check X dataframe"
-                )
+                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows)
                 self.logger.warn(msg)
                 raise ValidationError(msg)
 
@@ -313,11 +306,11 @@ class Dataset(pd.DataFrame):
                 self.logger.info(f"df before dropping old rows: {self.shape}")
                 self.drop(index=old_subset.index, inplace=True)  # type: ignore
                 self.logger.info(f"df after dropping old rows: {self.shape}")
-                msg = "We don't have data before '2000-01-01' and removed all earlier records from the search dataset"
+                msg = bundle.get("dataset_drop_old_dates")
                 self.logger.warning(msg)
-                print("WARNING: ", msg)
+                print(msg)
                 if len(self) == 0:
-                    raise ValidationError("There is empty train dataset after dropping old rows")
+                    raise ValidationError(bundle.get("dataset_all_dates_old"))
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
@@ -349,12 +342,10 @@ class Dataset(pd.DataFrame):
                     self[target_column] = self[target_column].astype("int")
                 except ValueError:
                     self.logger.exception("Failed to cast target to integer for binary task type")
-                    raise ValidationError(
-                        f"Unexpected dtype of target for binary task type: {target.dtype}." " Expected int or bool"
-                    )
+                    raise ValidationError(bundle.get("dataset_invalid_target_type").format(target.dtype))
             target_classes_count = target.nunique()
             if target_classes_count != 2:
-                msg = f"Binary task type should contain only 2 target values, but {target_classes_count} presented"
+                msg = bundle.get("dataset_invalid_binary_target").format(target_classes_count)
                 self.logger.warn(msg)
                 raise ValidationError(msg)
         elif self.task_type == ModelTaskType.MULTICLASS:
@@ -365,11 +356,10 @@ class Dataset(pd.DataFrame):
                     except ValueError:
                         self.logger.exception("Failed to cast target to integer for multiclass task type")
                         raise ValidationError(
-                            f"Unexpected dtype of target for multiclass task type: {target.dtype}."
-                            "Expected int or str"
+                            bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
                         )
                 else:
-                    msg = f"Unexpected dtype of target for multiclass task type: {target.dtype}. Expected int or str"
+                    msg = bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
                     self.logger.exception(msg)
                     raise ValidationError(msg)
         elif self.task_type == ModelTaskType.REGRESSION:
@@ -378,18 +368,14 @@ class Dataset(pd.DataFrame):
                     self[target_column] = self[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for regression task type")
-                    raise ValidationError(
-                        f"Unexpected dtype of target for regression task type: {target.dtype}. Expected float"
-                    )
+                    raise ValidationError(bundle.get("dataset_invalid_regression_target").format(target.dtype))
         elif self.task_type == ModelTaskType.TIMESERIES:
             if not is_float_dtype(target):
                 try:
                     self[target_column] = self[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for timeseries task type")
-                    raise ValidationError(
-                        f"Unexpected dtype of target for timeseries task type: {target.dtype}. Expected float"
-                    )
+                    raise ValidationError(bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
 
     def __resample(self):
         # self.logger.info("Resampling etalon")
@@ -410,9 +396,8 @@ class Dataset(pd.DataFrame):
             target_classes_count = target.nunique()
 
             if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
-                msg = (
-                    f"The number of target classes {target_classes_count} exceeds the allowed threshold: "
-                    f"{self.MAX_MULTICLASS_CLASS_COUNT}. Please, correct your data and try again"
+                msg = bundle.get("dataset_to_many_multiclass_targets").format(
+                    target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
                 )
                 self.logger.warn(msg)
                 raise ValidationError(msg)
@@ -425,10 +410,8 @@ class Dataset(pd.DataFrame):
                     min_class_value = v
 
             if min_class_count < self.MIN_TARGET_CLASS_ROWS:
-                msg = (
-                    f"The rarest class `{min_class_value}` occurs {min_class_count}. "
-                    "The minimum number of observations for each class in a train dataset must be "
-                    f"grater than {self.MIN_TARGET_CLASS_ROWS}. Please, correct your data and try again"
+                msg = bundle.get("dataset_rarest_class_less_min").format(
+                    min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
                 )
                 self.logger.warn(msg)
                 raise ValidationError(msg)
@@ -437,12 +420,11 @@ class Dataset(pd.DataFrame):
             min_class_threshold = min_class_percent * count
 
             if min_class_count < min_class_threshold:
-                self.logger.info(
-                    f"Target is imbalanced. The rarest class `{min_class_value}` occurs {min_class_count} times. "
-                    "The minimum number of observations for each class in a train dataset must be "
-                    f"grater than or equal to {min_class_threshold} ({min_class_percent * 100} %). "
-                    "It will be undersampled"
+                msg = bundle.get("dataset_rarest_class_less_threshold").format(
+                    min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
                 )
+                self.logger.info(msg)
+                print(msg)
 
                 if is_string_dtype(target):
                     target_replacement = {v: i for i, v in enumerate(unique_target)}  # type: ignore
@@ -505,16 +487,13 @@ class Dataset(pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = (
-                f"Columns {removed_features} is a datetime or period type "
-                "but not used as a search key and has been droped from X"
-            )
+            msg = bundle.get("dataset_date_features").format(removed_features)
             print(msg)
             self.logger.warning(msg)
 
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
-            msg = f"Maximum count of features is {self.MAX_FEATURES_COUNT}"
+            msg = bundle.get("dataset_too_many_features").format(self.MAX_FEATURES_COUNT)
             self.logger.warn(msg)
             raise ValidationError(msg)
 
@@ -533,14 +512,14 @@ class Dataset(pd.DataFrame):
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if validate_target:
             if target is None:
-                raise ValidationError("Target column is absent in meaning_types")
+                raise ValidationError(bundle.get("dataset_missing_target"))
 
             target_value = self.__target_value()
             target_items = target_value.nunique()
             if target_items == 1:
-                raise ValidationError("Target contains only one distinct value")
+                raise ValidationError(bundle.get("dataset_constant_target"))
             elif target_items == 0:
-                raise ValidationError("Target contains only NaN or incorrect values.")
+                raise ValidationError(bundle.get("dataset_empty_target"))
 
             if self.task_type != ModelTaskType.MULTICLASS:
                 self[target] = self[target].apply(pd.to_numeric, errors="coerce")
@@ -555,6 +534,14 @@ class Dataset(pd.DataFrame):
         validation_stats = {}
         self["valid_keys"] = 0
         self["valid_mandatory"] = True
+
+        all_valid_status = bundle.get("validation_all_valid_status")
+        some_invalid_status = bundle.get("validation_some_invalid_status")
+        all_invalid_status = bundle.get("validation_all_invalid_status")
+        drop_message = bundle.get("validation_drop_message")
+        all_valid_message = bundle.get("validation_all_valid_message")
+        invalid_message = bundle.get("validation_invalid_message")
+
         for col in columns_to_validate:
             self[f"{col}_is_valid"] = ~self[col].isnull()
             if validate_target and target is not None and col == target:
@@ -566,24 +553,16 @@ class Dataset(pd.DataFrame):
             invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             validation_stats[col] = {}
-            optional_drop_message = "Invalid rows will be dropped. " if col in mandatory_columns else ""
+            optional_drop_message = drop_message if col in mandatory_columns else ""
             if valid_share == 1:
-                valid_status = "All valid"
-                valid_message = "All values in this column are good to go"
+                valid_status = all_valid_status
+                valid_message = all_valid_message
             elif 0 < valid_share < 1:
-                valid_status = "Some invalid"
-                valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
-                    f"{optional_drop_message}"
-                    f"Some examples of invalid values: {invalid_values}"
-                )
+                valid_status = some_invalid_status
+                valid_message = invalid_message.format(100 * (1 - valid_share), optional_drop_message, invalid_values)
             else:
-                valid_status = "All invalid"
-                valid_message = (
-                    f"{100 * (1 - valid_share):.5f}% of the values of this column failed validation. "
-                    f"{optional_drop_message}"
-                    f"Some examples of invalid values: {invalid_values}"
-                )
+                valid_status = all_invalid_status
+                valid_message = invalid_message.format(100 * (1 - valid_share), optional_drop_message, invalid_values)
             validation_stats[col]["valid_status"] = valid_status
             validation_stats[col]["valid_message"] = valid_message
 
@@ -602,7 +581,10 @@ class Dataset(pd.DataFrame):
         if not silent_mode:
             df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
             df_stats.reset_index(inplace=True)
-            df_stats.columns = ["Column name", "Status", "Description"]  # type: ignore
+            name_header = bundle.get("validation_column_name_header")
+            status_header = bundle.get("validation_status_header")
+            description_header = bundle.get("validation_descr_header")
+            df_stats.columns = [name_header, status_header, description_header]
             try:
                 import html
 
@@ -610,15 +592,24 @@ class Dataset(pd.DataFrame):
 
                 _ = get_ipython()  # type: ignore
 
+                all_valid_color = bundle.get("validation_all_valid_color")
+                some_invalid_color = bundle.get("validation_some_invalid_color")
+                all_invalid_color = bundle.get("validation_all_invalid_color")
+                text_color = bundle.get("validation_text_color")
+
                 def map_color(text):
-                    colormap = {"All valid": "#DAF7A6", "Some invalid": "#FFC300", "All invalid": "#FF5733"}
+                    colormap = {
+                        all_valid_status: all_valid_color,
+                        some_invalid_status: some_invalid_color,
+                        all_invalid_status: all_invalid_color,
+                    }
                     return (
-                        f"<td style='background-color:{colormap[text]};color:black'>{text}</td>"
+                        f"<td style='background-color:{colormap[text]};color:{text_color}'>{text}</td>"
                         if text in colormap
                         else f"<td>{text}</td>"
                     )
 
-                df_stats["Description"] = df_stats["Description"].apply(lambda x: html.escape(x))
+                df_stats[description_header] = df_stats[description_header].apply(lambda x: html.escape(x))
                 html_stats = (
                     "<table>"
                     + "<tr>"
@@ -634,7 +625,7 @@ class Dataset(pd.DataFrame):
     def __validate_meaning_types(self, validate_target: bool):
         # self.logger.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
-            raise ValueError("Please pass the `meaning_types` argument before validation")
+            raise ValueError(bundle.get("dataset_missing_meaning_types"))
 
         if SYSTEM_RECORD_ID not in self.columns:
             self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
@@ -642,19 +633,21 @@ class Dataset(pd.DataFrame):
 
         for column in self.meaning_types:
             if column not in self.columns:
-                raise ValueError(f"Meaning column `{column}` doesn't exist in dataframe columns: {self.columns}")
+                raise ValueError(bundle.get("dataset_missing_meaning_column").format(column, self.columns))
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
-            raise ValueError("Target column is not presented in meaning types. Specify it, please")
+            raise ValueError(bundle.get("dataset_missing_target"))
 
     def __validate_search_keys(self):
         # self.logger.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
-            raise ValueError("Please pass `search_keys` argument before validation")
+            raise ValueError(bundle.get("dataset_missing_search_keys"))
         for keys_group in self.search_keys:
             for key in keys_group:
                 if key not in self.columns:
                     showing_columns = set(self.columns) - SYSTEM_COLUMNS
-                    raise ValidationError(f"Search key `{key}` doesn't exist in dataframe columns: {showing_columns}")
+                    raise ValidationError(
+                        bundle.get("dataset_missing_search_key_column").format(key, showing_columns)
+                    )
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")
@@ -756,7 +749,7 @@ class Dataset(pd.DataFrame):
         elif is_string_dtype(pandas_data_type):
             return DataType.STRING
         else:
-            msg = f"Unsupported data type of column {column_name}: {pandas_data_type}"
+            msg = bundle.get("dataset_invalid_column_type").format(column_name, pandas_data_type)
             self.logger.warn(msg)
             raise ValidationError(msg)
 
@@ -785,10 +778,7 @@ class Dataset(pd.DataFrame):
                 for key in filter_features
                 if key not in {"min_importance", "max_psi", "max_count", "selected_features"}
             ]:
-                raise ValidationError(
-                    "Unknown field in filter_features. "
-                    "Should be {'min_importance', 'max_psi', 'max_count', 'selected_features'}."
-                )
+                raise ValidationError(bundle.get("dataset_invalid_filter"))
             feature_filter = FeaturesFilter(
                 minImportance=filter_features.get("min_importance"),
                 maxPSI=filter_features.get("max_psi"),
@@ -908,5 +898,5 @@ class Dataset(pd.DataFrame):
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
-            raise ValidationError("Dataset size is too big. Please try to reduce rows or columns count")
+            raise ValidationError(bundle.get("dataset_too_big_file"))
         return parquet_file_path
