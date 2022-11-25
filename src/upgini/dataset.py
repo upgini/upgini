@@ -592,17 +592,14 @@ class Dataset(pd.DataFrame):
 
                 _ = get_ipython()  # type: ignore
 
-                all_valid_color = bundle.get("validation_all_valid_color")
-                some_invalid_color = bundle.get("validation_some_invalid_color")
-                all_invalid_color = bundle.get("validation_all_invalid_color")
                 text_color = bundle.get("validation_text_color")
+                colormap = {
+                    all_valid_status: bundle.get("validation_all_valid_color"),
+                    some_invalid_status: bundle.get("validation_some_invalid_color"),
+                    all_invalid_status: bundle.get("validation_all_invalid_color"),
+                }
 
-                def map_color(text):
-                    colormap = {
-                        all_valid_status: all_valid_color,
-                        some_invalid_status: some_invalid_color,
-                        all_invalid_status: all_invalid_color,
-                    }
+                def map_color(text) -> str:
                     return (
                         f"<td style='background-color:{colormap[text]};color:{text_color}'>{text}</td>"
                         if text in colormap

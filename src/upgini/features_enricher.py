@@ -13,7 +13,6 @@ from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
-from upgini.resource_bundle import bundle
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory
@@ -33,6 +32,7 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.metrics import EstimatorWrapper
+from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
@@ -490,7 +490,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link()
 
                 self._validate_X(X)
-                y_array = self._validate_y(X, y)
+                validated_y = self._validate_y(X, y)
 
                 # TODO check that X and y are the same as on the fit
 
@@ -515,7 +515,7 @@ class FeaturesEnricher(TransformerMixin):
                     generated_features.extend(converter.generated_features)
                 generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
-                X_sampled, y_sampled = self._sample_X_and_y(extended_X, y_array, self.enriched_X)
+                X_sampled, y_sampled = self._sample_X_and_y(extended_X, validated_y, self.enriched_X)
                 self.logger.info(f"Shape of enriched_X: {self.enriched_X.shape}")
                 self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
                 self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
@@ -635,7 +635,7 @@ class FeaturesEnricher(TransformerMixin):
                         for idx, eval_pair in enumerate(eval_set):
                             eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
-                            eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
+                            eval_X, validated_eval_y = self._validate_eval_set_pair(X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
 
                             search_keys = self.search_keys.copy()
@@ -657,7 +657,7 @@ class FeaturesEnricher(TransformerMixin):
                             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
                             sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
-                                extended_eval_X, eval_y_array, enriched_eval_X
+                                extended_eval_X, validated_eval_y, enriched_eval_X
                             )
                             self.logger.info(f"Shape of enriched_eval_X: {enriched_eval_X.shape}")
                             self.logger.info(f"Shape of eval_X_{idx} after sampling: {sampled_eval_X.shape}")
@@ -907,15 +907,14 @@ class FeaturesEnricher(TransformerMixin):
     ):
         self.enriched_X = None
         self._validate_X(X)
-        y_array = self._validate_y(X, y)
+        validated_y = self._validate_y(X, y)
 
         self.__log_debug_information(X, y, eval_set)
 
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(X, search_keys)
 
-        df = X.copy()
-        df[self.TARGET_NAME] = y_array
+        df = pd.concat([X, validated_y], axis=1)
 
         df = self.__handle_index_search_keys(df, search_keys)
 
@@ -1030,70 +1029,80 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("unsupported_x_type").format(type(X)))
         if len(set(X.columns)) != len(X.columns):
             raise ValidationError(bundle.get("x_contains_dup_columns"))
+        if not X.index.is_unique:
+            raise ValidationError(bundle.get("x_non_unique_index"))
 
-    def _validate_y(self, X: pd.DataFrame, y) -> np.ndarray:
+    def _validate_y(self, X: pd.DataFrame, y) -> pd.Series:
         if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
             raise ValidationError(bundle.get("unsupported_y_type").format(type(y)))
 
-        if isinstance(y, pd.Series):
-            y_array = y.values
-        elif isinstance(y, np.ndarray):
-            y_array = y
-        else:
-            y_array = np.array(y)
+        if X.shape[0] != len(y):
+            raise ValidationError(bundle.get("x_and_y_diff_size").format(X.shape[0], len(y)))
 
-        if len(np.unique(y_array)) < 2:
+        if isinstance(y, pd.Series):
+            if (y.index != X.index).any():
+                raise ValidationError(bundle.get("x_and_y_diff_index"))
+            validated_y = y.copy()
+            validated_y.rename(TARGET, inplace=True)
+        elif isinstance(y, np.ndarray):
+            validated_y = pd.Series(y, name=TARGET)
+        else:
+            validated_y = pd.Series(y, name=TARGET)
+
+        if validated_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant"))
 
-        if X.shape[0] != len(y_array):
-            raise ValidationError(bundle.get("x_and_y_diff_size").format(X.shape[0], len(y_array)))
+        return validated_y
 
-        return y_array
-
-    def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, np.ndarray]:
+    def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
             raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
         eval_X = eval_pair[0]
         eval_y = eval_pair[1]
         if not isinstance(eval_X, pd.DataFrame):
             raise ValidationError(bundle.get("unsupported_x_type_eval_set").format(type(eval_X)))
+        if not eval_X.index.is_unique:
+            raise ValidationError(bundle.get("x_non_unique_index_eval_set"))
         if eval_X.columns.to_list() != X.columns.to_list():
             raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
         if not isinstance(eval_y, pd.Series) and not isinstance(eval_y, np.ndarray) and not isinstance(eval_y, list):
             raise ValidationError(bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
-        if isinstance(eval_y, pd.Series):
-            eval_y_array = eval_y.values
-        elif isinstance(eval_y, np.ndarray):
-            eval_y_array = eval_y
-        else:
-            eval_y_array = np.array(eval_y)
-
-        if len(np.unique(eval_y_array)) < 2:
-            raise ValidationError(bundle.get("y_is_constant_eval_set"))
-
-        if eval_X.shape[0] != len(eval_y_array):
+        if eval_X.shape[0] != len(eval_y):
             raise ValidationError(
-                bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y_array))
+                bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y))
             )
 
-        return eval_X, eval_y_array
+        if isinstance(eval_y, pd.Series):
+            if (eval_y.index != eval_X.index).any():
+                raise ValidationError(bundle.get("x_and_y_diff_index"))
+            validated_eval_y = eval_y.copy()
+            validated_eval_y.rename(TARGET, inplace=True)
+        elif isinstance(eval_y, np.ndarray):
+            validated_eval_y = pd.Series(eval_y, name=TARGET)
+        else:
+            validated_eval_y = pd.Series(eval_y, name=TARGET)
+
+        if validated_eval_y.nunique() < 2:
+            raise ValidationError(bundle.get("y_is_constant_eval_set"))
+
+        return eval_X, validated_eval_y
 
     @staticmethod
-    def _sample_X_and_y(X: pd.DataFrame, y: np.ndarray, enriched_X: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]:
-        Xy = X.copy()
-        Xy[TARGET] = y
+    def _sample_X_and_y(X: pd.DataFrame, y: pd.Series, enriched_X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+        Xy = pd.concat([X, y], axis=1)
         Xy = pd.merge(Xy, enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
-        return Xy[X.columns].copy(), Xy[TARGET].values
+        if TARGET not in Xy.columns:
+            print("AAAAAA")
+        return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
-    def _sort_by_date(X: pd.DataFrame, y: np.ndarray, date_column: Optional[str]) -> Tuple[pd.DataFrame, np.ndarray]:
+    def _sort_by_date(X: pd.DataFrame, y: pd.Series, date_column: Optional[str]) -> Tuple[pd.DataFrame, pd.Series]:
         if date_column is not None:
-            Xy = X.copy()
-            Xy[TARGET] = y
+            Xy = pd.concat([X, y], axis=1)
             Xy = Xy.sort_values(by=date_column).reset_index(drop=True)
             X = Xy.drop(columns=TARGET)
-            y = Xy[TARGET].values
+            y = Xy[TARGET].copy()
 
         return X, y
 

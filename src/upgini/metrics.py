@@ -69,23 +69,19 @@ class EstimatorWrapper:
         return self.estimator.predict(**kwargs)
 
     def _prepare_to_fit(
-        self, X: pd.DataFrame, y: np.ndarray
+        self, X: pd.DataFrame, y: pd.Series
     ) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
             else:
                 X[c] = X[c].astype(str)
-        if isinstance(y, pd.Series):
-            pass
-        elif isinstance(y, np.ndarray) or isinstance(y, list):
-            X = X.reset_index(drop=True)
-            y = pd.Series(y, name="target")
-        else:
+
+        if not isinstance(y, pd.Series):
             msg = f"Unsupported type of y: {type(y)}"
             raise Exception(msg)
 
-        joined = pd.concat([X, y.to_frame(name=y.name)], axis=1)
+        joined = pd.concat([X, y], axis=1)
         joined = joined[joined[y.name].notna()]
         joined = joined.reset_index(drop=True)
         X = joined.drop(columns=y.name)

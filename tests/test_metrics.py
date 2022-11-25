@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import numpy as np
@@ -197,13 +198,6 @@ def test_default_metric_binary(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -212,17 +206,20 @@ def test_default_metric_binary(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
                     name="feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -270,18 +267,22 @@ def test_default_metric_binary(requests_mock: Mocker):
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df["feature_2_cat"] = np.random.randint(0, 10, len(df))
     df["feature_2_cat"] = df["feature_2_cat"].astype("string").astype("category")
+    df["date"] = pd.date_range(datetime.date(2020, 1, 1), periods=len(df))
     df_train = df[0:500]
-    X = df_train[["phone", "feature1"]]
+    X = df_train[["phone", "date", "feature1"]]
     y = df_train["target"]
     eval_1 = df[500:750]
     eval_2 = df[750:1000]
-    eval_X_1 = eval_1[["phone", "feature1"]]
+    eval_X_1 = eval_1[["phone", "date", "feature1"]]
     eval_y_1 = eval_1["target"]
-    eval_X_2 = eval_2[["phone", "feature1"]]
+    eval_X_2 = eval_2[["phone", "date", "feature1"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+        search_keys={"phone": SearchKey.PHONE, "date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
     )
 
     # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
@@ -300,19 +301,155 @@ def test_default_metric_binary(requests_mock: Mocker):
     print(metrics_df)
     assert metrics_df.loc[train_segment, match_rate_header] == 99.0
 
-    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.49976)
-    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.503121)
-    assert metrics_df.loc[train_segment, uplift] == approx(0.003361)
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.498439)  # approx(0.49976)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.499160)  # approx(0.503121)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.000720)  # approx(0.003361)
 
     assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
-    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.485731)
-    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.536471)
-    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.050740)
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.472121)  # approx(0.485731)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.531045)  # approx(0.536471)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.058924)  # approx(0.050740)
 
     assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
-    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.518168)
-    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.506581)
-    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.011586)
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.518515)  # approx(0.518168)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.510654)  # approx(0.506581)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.007862)  # approx(-0.011586)
+
+
+def test_default_metric_binary_shuffled(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.0,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+                FeaturesMetadataV2(
+                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
+
+    df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
+    df["feature_2_cat"] = np.random.randint(0, 10, len(df))
+    df["feature_2_cat"] = df["feature_2_cat"].astype("string").astype("category")
+    df["date"] = pd.date_range(datetime.date(2020, 1, 1), periods=len(df))
+    df_train = df[0:500]
+    df_train = df_train.sample(frac=1)
+    X = df_train[["phone", "date", "feature1"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_1 = eval_1.sample(frac=1)
+    eval_2 = df[750:1000]
+    eval_2 = eval_2.sample(frac=1)
+    eval_X_1 = eval_1[["phone", "date", "feature1"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "date", "feature1"]]
+    eval_y_2 = eval_2["target"]
+    eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE, "date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
+    # enricher.calculate_metrics(X, y)
+
+    enriched_X = enricher.fit_transform(X, y, eval_set)
+
+    assert len(enriched_X) == len(X)
+
+    assert len(enricher.enriched_eval_sets) == 2
+    assert len(enricher.enriched_eval_sets[1]) == 250
+    assert len(enricher.enriched_eval_sets[2]) == 250
+
+    metrics_df = enricher.calculate_metrics(X, y, eval_set)
+    assert metrics_df is not None
+    print(metrics_df)
+
+    assert metrics_df.loc[train_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.498439)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.499160)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.000720)
+
+    assert metrics_df.loc[eval_1_segment, match_rate_header] == 100.0
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.472121)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.531045)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.058924)
+
+    assert metrics_df.loc[eval_2_segment, match_rate_header] == 99.0
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.518515)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.510654)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.007862)
 
 
 def test_blocked_timeseries_rmsle(requests_mock: Mocker):
