@@ -42,7 +42,7 @@ from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
-from upgini.utils.target_utils import define_task
+from upgini.utils.target_utils import define_task, correct_target
 from upgini.version_validator import validate_version
 
 
@@ -254,9 +254,12 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                self._dump_python_libs()
-                self.__display_slack_community_link()
-                raise e
+                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                else:
+                    self._dump_python_libs()
+                    self.__display_slack_community_link()
+                    raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
 
@@ -343,9 +346,12 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                self._dump_python_libs()
-                self.__display_slack_community_link()
-                raise e
+                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                else:
+                    self._dump_python_libs()
+                    self.__display_slack_community_link()
+                    raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
 
@@ -411,9 +417,12 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                self._dump_python_libs()
-                self.__display_slack_community_link()
-                raise e
+                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                else:
+                    self._dump_python_libs()
+                    self.__display_slack_community_link()
+                    raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
 
@@ -485,9 +494,8 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(bundle.get("metrics_empty_enriched_features"))
 
                 if self._has_important_paid_features():
-                    print(bundle.get("metrics_exclude_paid_features"))
                     self.logger.warning("Metrics will be calculated on free features only")
-                    self.__display_slack_community_link()
+                    self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
 
                 self._validate_X(X)
                 validated_y = self._validate_y(X, y)
@@ -601,21 +609,13 @@ class FeaturesEnricher(TransformerMixin):
                         uplift = None
 
                     train_metrics = {
-                        bundle.get("quality_metrics_segment_header"): bundle.get(
-                            "quality_metrics_train_segment"
-                        ),
-                        bundle.get(
-                            "quality_metrics_match_rate_header"
-                        ): self._search_task.initial_max_hit_rate_v2(),
+                        bundle.get("quality_metrics_segment_header"): bundle.get("quality_metrics_train_segment"),
+                        bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
                     if etalon_metric is not None:
-                        train_metrics[
-                            bundle.get("quality_metrics_baseline_header").format(metric)
-                        ] = etalon_metric
+                        train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
-                        train_metrics[
-                            bundle.get("quality_metrics_enriched_header").format(metric)
-                        ] = enriched_metric
+                        train_metrics[bundle.get("quality_metrics_enriched_header").format(metric)] = enriched_metric
                     if uplift is not None:
                         train_metrics[bundle.get("quality_metrics_uplift_header")] = uplift
                     metrics = [train_metrics]
@@ -719,11 +719,11 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
 
                     metrics_df = (
-                        pd.DataFrame(metrics)
-                        .set_index(bundle.get("quality_metrics_segment_header"))
-                        .rename_axis("")
+                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
                     )
-                    self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
+                    do_without_pandas_limits(
+                        lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
+                    )
                     return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
@@ -1052,6 +1052,8 @@ class FeaturesEnricher(TransformerMixin):
         if validated_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant"))
 
+        validated_y = correct_target(validated_y)
+
         return validated_y
 
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
@@ -1069,9 +1071,7 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
         if eval_X.shape[0] != len(eval_y):
-            raise ValidationError(
-                bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y))
-            )
+            raise ValidationError(bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y)))
 
         if isinstance(eval_y, pd.Series):
             if (eval_y.index != eval_X.index).any():
@@ -1126,15 +1126,18 @@ class FeaturesEnricher(TransformerMixin):
             f"Random state: {self.random_state}\n"
             f"Search id: {self.search_id}\n"
         )
-        self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{X.head(10)}")
-        if y is not None:
-            self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{y[:10]}")
-        if eval_set is not None:
-            for idx, eval_pair in enumerate(eval_set):
-                eval_X: pd.DataFrame = eval_pair[0]
-                eval_y = eval_pair[1]
-                self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
-                self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{eval_y[:10]}")
+
+        def print_datasets_sample():
+            self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{X.head(10)}")
+            if y is not None:
+                self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{y[:10]}")
+            if eval_set is not None:
+                for idx, eval_pair in enumerate(eval_set):
+                    eval_X: pd.DataFrame = eval_pair[0]
+                    eval_y = eval_pair[1]
+                    self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
+                    self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{eval_y[:10]}")
+        do_without_pandas_limits(print_datasets_sample)
 
     @staticmethod
     def __handle_index_search_keys(df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
@@ -1305,13 +1308,19 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         features_info = []
 
+        def round_shap_value(shap: float) -> float:
+            if shap > 0.0 and shap < 0.000001:
+                return 0.000001
+            else:
+                return shap
+
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
             if feature_meta.name not in x_columns:
                 self.feature_names_.append(feature_meta.name)
-                self.feature_importances_.append(feature_meta.shap_value)
+                self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
             features_info.append(
                 {
                     bundle.get("features_info_provider"): f"<a href='{feature_meta.data_provider_link}' "
@@ -1325,7 +1334,7 @@ class FeaturesEnricher(TransformerMixin):
                     if feature_meta.data_source
                     else "",
                     bundle.get("features_info_name"): feature_meta.name,
-                    bundle.get("features_info_shap"): feature_meta.shap_value,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
                     bundle.get("features_info_hitrate"): feature_meta.hit_rate,
                     bundle.get("features_info_type"): feature_meta.type,
                     bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
@@ -1370,16 +1379,12 @@ class FeaturesEnricher(TransformerMixin):
             column_name = None
             if isinstance(column_id, str):
                 if column_id not in x.columns:
-                    raise ValidationError(
-                        bundle.get("search_key_not_found").format(column_id, list(x.columns))
-                    )
+                    raise ValidationError(bundle.get("search_key_not_found").format(column_id, list(x.columns)))
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
                 if column_id >= x.shape[1]:
-                    raise ValidationError(
-                        bundle.get("numeric_search_key_not_found").format(column_id, x.shape[1])
-                    )
+                    raise ValidationError(bundle.get("numeric_search_key_not_found").format(column_id, x.shape[1]))
                 column_name = x.columns[column_id]
                 valid_search_keys[column_name] = meaning_type
             else:
@@ -1474,7 +1479,10 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info.head(60).style.hide_index())
-            self.logger.info(f"Features info:\n{self.features_info}")
+            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
+
+            if len(self.feature_names_) == 0:
+                self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
@@ -1551,9 +1559,9 @@ class FeaturesEnricher(TransformerMixin):
         libs = result.stdout.decode("utf-8")
         self.logger.warning(f"User python libs versions: {libs}")
 
-    def __display_slack_community_link(self):
+    def __display_slack_community_link(self, link_text: Optional[str] = None):
         slack_community_link = bundle.get("slack_community_link")
-        link_text = bundle.get("slack_community_text")
+        link_text = link_text or bundle.get("slack_community_text")
         badge = bundle.get("slack_community_bage")
         alt = bundle.get("slack_community_alt")
         try:
@@ -1569,3 +1577,20 @@ class FeaturesEnricher(TransformerMixin):
             )
         except (ImportError, NameError):
             print(f"{link_text} at {slack_community_link}")
+
+
+def do_without_pandas_limits(func: Callable):
+    prev_max_rows = pd.options.display.max_rows
+    prev_max_columns = pd.options.display.max_columns
+    prev_max_colwidth = pd.options.display.max_colwidth
+
+    pd.options.display.max_rows = None
+    pd.options.display.max_columns = None
+    pd.options.display.max_colwidth = None
+
+    try:
+        func()
+    finally:
+        pd.options.display.max_rows = prev_max_rows
+        pd.options.display.max_columns = prev_max_columns
+        pd.options.display.max_colwidth = prev_max_colwidth

@@ -427,15 +427,12 @@ class Dataset(pd.DataFrame):
                 print(msg)
 
                 if is_string_dtype(target):
-                    target_replacement = {v: i for i, v in enumerate(unique_target)}  # type: ignore
-                    prepared_target = target.replace(target_replacement)
-                else:
-                    prepared_target = target
+                    raise ValidationError(bundle.get("dataset_unsupported_string_target"))
 
                 sampler = RandomUnderSampler(random_state=self.random_state)
                 X = train_segment[SYSTEM_RECORD_ID]
                 X = X.to_frame(SYSTEM_RECORD_ID)
-                new_x, _ = sampler.fit_resample(X, prepared_target)  # type: ignore
+                new_x, _ = sampler.fit_resample(X, target)  # type: ignore
                 resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
                 if validation_segment is not None:
                     resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)

@@ -20,10 +20,10 @@ from sklearn.model_selection import (
     cross_validate,
 )
 
-from upgini.metadata import CVType, ModelTaskType
-from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.errors import ValidationError
+from upgini.metadata import CVType, ModelTaskType
 from upgini.resource_bundle import bundle
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 CATBOOST_PARAMS = {
     "iterations": 250,
@@ -49,7 +49,7 @@ class EstimatorWrapper:
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
-        target_type: ModelTaskType
+        target_type: ModelTaskType,
     ):
         self.estimator = estimator
         self.scorer = scorer
@@ -68,9 +68,7 @@ class EstimatorWrapper:
     def predict(self, **kwargs):
         return self.estimator.predict(**kwargs)
 
-    def _prepare_to_fit(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
@@ -78,8 +76,7 @@ class EstimatorWrapper:
                 X[c] = X[c].astype(str)
 
         if not isinstance(y, pd.Series):
-            msg = f"Unsupported type of y: {type(y)}"
-            raise Exception(msg)
+            raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
 
         joined = pd.concat([X, y], axis=1)
         joined = joined[joined[y.name].notna()]
@@ -103,7 +100,7 @@ class EstimatorWrapper:
             scoring={"score": scorer},
             cv=self.cv,
             fit_params=fit_params,
-            return_estimator=True
+            return_estimator=True,
         )
         metrics_by_fold = cv_results["test_score"]
         self.cv_estimators = cv_results["estimator"]
@@ -157,7 +154,7 @@ class EstimatorWrapper:
             "metric_name": metric_name,
             "multiplier": multiplier,
             "cv": cv,
-            "target_type": target_type
+            "target_type": target_type,
         }
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
@@ -297,9 +294,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             scoring = get_scorer("neg_" + scoring)
             multiplier = -1
         else:
-            raise ValidationError(
-                f"{scoring} is not a valid scoring value. " f"Use {sorted(SCORERS.keys())} " "to get valid options."
-            )
+            raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(SCORERS.keys())))
     elif hasattr(scoring, "__name__"):
         metric_name = scoring.__name__
     else:
