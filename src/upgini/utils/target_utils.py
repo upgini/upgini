@@ -10,9 +10,7 @@ from upgini.resource_bundle import bundle
 
 def correct_target(y: pd.Series) -> pd.Series:
     if is_string_dtype(y):
-        unique_target = y.unique()
-        target_replacement = {v: i for i, v in enumerate(unique_target)}
-        return y.replace(target_replacement)
+        return y.astype(str).astype("category").cat.codes
     else:
         return y
 
