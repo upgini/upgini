@@ -609,7 +609,7 @@ enricher.fit(
 
 ### Return initial dataframe enriched with TOP external features by importance
 
-`FeaturesEnricher` can be used with `fit_transform` method and two parameters:
+`transform` and `fit_transform` methods of `FeaturesEnricher` can be used with two additional parameters:
 - `importance_threshold`: float = 0 - only features with *importance >= threshold* will be added to the output dataframe
 - `max_features`: int  - only first TOP N features by importance will be returned, where *N = max_features*  
 
