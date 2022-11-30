@@ -1044,10 +1044,10 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(bundle.get("x_and_y_diff_index"))
             validated_y = y.copy()
             validated_y.rename(TARGET, inplace=True)
-        elif isinstance(y, np.ndarray):
-            validated_y = pd.Series(y, name=TARGET)
         else:
-            validated_y = pd.Series(y, name=TARGET)
+            Xy = X.copy()
+            Xy[TARGET] = y
+            validated_y = Xy[TARGET].copy()
 
         if validated_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant"))
@@ -1076,10 +1076,10 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(bundle.get("x_and_y_diff_index"))
             validated_eval_y = eval_y.copy()
             validated_eval_y.rename(TARGET, inplace=True)
-        elif isinstance(eval_y, np.ndarray):
-            validated_eval_y = pd.Series(eval_y, name=TARGET)
         else:
-            validated_eval_y = pd.Series(eval_y, name=TARGET)
+            Xy = eval_X.copy()
+            Xy[TARGET] = eval_y
+            validated_eval_y = Xy[TARGET].copy()
 
         if validated_eval_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant_eval_set"))
@@ -1090,8 +1090,6 @@ class FeaturesEnricher(TransformerMixin):
     def _sample_X_and_y(X: pd.DataFrame, y: pd.Series, enriched_X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
         Xy = pd.concat([X, y], axis=1)
         Xy = pd.merge(Xy, enriched_X, left_index=True, right_index=True, how="inner", suffixes=("", "enriched"))
-        if TARGET not in Xy.columns:
-            print("AAAAAA")
         return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
@@ -1135,6 +1133,7 @@ class FeaturesEnricher(TransformerMixin):
                     eval_y = eval_pair[1]
                     self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
                     self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{eval_y[:10]}")
+
         do_without_pandas_limits(print_datasets_sample)
 
     @staticmethod
@@ -1341,6 +1340,9 @@ class FeaturesEnricher(TransformerMixin):
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
+            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
+        else:
+            self.logger.warn("Empty features info")
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[
@@ -1477,7 +1479,6 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             display(self.features_info.head(60).style.hide_index())
-            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
 
             if len(self.feature_names_) == 0:
                 self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))

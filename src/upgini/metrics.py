@@ -202,7 +202,7 @@ class CatBoostWrapper(EstimatorWrapper):
     ):
         super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype("string").fillna("").astype(str)
