@@ -19,7 +19,6 @@ from pandas.api.types import (
 )
 from pandas.core.dtypes.common import is_period_dtype
 
-from upgini.resource_bundle import bundle
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
@@ -38,8 +37,10 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
+from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
+from upgini.utils.target_utils import correct_string_target
 
 
 class Dataset(pd.DataFrame):
@@ -162,9 +163,7 @@ class Dataset(pd.DataFrame):
         is_registered = api_key is not None and api_key != ""
         if is_registered:
             if len(self) > self.MAX_ROWS_REGISTERED:
-                raise ValidationError(
-                    bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED)
-                )
+                raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED))
         else:
             if len(self) > self.MAX_ROWS_UNREGISTERED:
                 raise ValidationError(
@@ -355,9 +354,7 @@ class Dataset(pd.DataFrame):
                         self[target_column] = self[target_column].astype("int")
                     except ValueError:
                         self.logger.exception("Failed to cast target to integer for multiclass task type")
-                        raise ValidationError(
-                            bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
-                        )
+                        raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
                 else:
                     msg = bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
                     self.logger.exception(msg)
@@ -426,8 +423,8 @@ class Dataset(pd.DataFrame):
                 self.logger.info(msg)
                 print(msg)
 
-                if is_string_dtype(target):
-                    raise ValidationError(bundle.get("dataset_unsupported_string_target"))
+                if not is_numeric_dtype(target):
+                    target = correct_string_target(target)
 
                 sampler = RandomUnderSampler(random_state=self.random_state)
                 X = train_segment[SYSTEM_RECORD_ID]
@@ -498,9 +495,7 @@ class Dataset(pd.DataFrame):
         # self.logger.info("Convert features to supported data types")
 
         for f in self.__features():
-            if self[f].dtype == object:
-                self[f] = self[f].astype("string")
-            elif not is_numeric_dtype(self[f].dtype):
+            if not is_numeric_dtype(self[f]):
                 self[f] = self[f].astype("string")
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
@@ -639,9 +634,7 @@ class Dataset(pd.DataFrame):
             for key in keys_group:
                 if key not in self.columns:
                     showing_columns = set(self.columns) - SYSTEM_COLUMNS
-                    raise ValidationError(
-                        bundle.get("dataset_missing_search_key_column").format(key, showing_columns)
-                    )
+                    raise ValidationError(bundle.get("dataset_missing_search_key_column").format(key, showing_columns))
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")

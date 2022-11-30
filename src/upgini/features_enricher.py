@@ -42,7 +42,7 @@ from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
-from upgini.utils.target_utils import define_task, correct_target
+from upgini.utils.target_utils import define_task
 from upgini.version_validator import validate_version
 
 
@@ -1051,8 +1051,6 @@ class FeaturesEnricher(TransformerMixin):
 
         if validated_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant"))
-
-        validated_y = correct_target(validated_y)
 
         return validated_y
 

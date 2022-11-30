@@ -1,24 +1,22 @@
-import pandas as pd
-from pandas.api.types import is_numeric_dtype, is_string_dtype
-import numpy as np
 import logging
 
-from upgini.metadata import ModelTaskType
+import numpy as np
+import pandas as pd
+from pandas.api.types import is_numeric_dtype
+
 from upgini.errors import ValidationError
+from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
 
 
-def correct_target(y: pd.Series) -> pd.Series:
-    if is_string_dtype(y):
-        return y.astype(str).astype("category").cat.codes
-    else:
-        return y
+def correct_string_target(y: pd.Series) -> pd.Series:
+    return y.astype(str).astype("category").cat.codes
 
 
 def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> ModelTaskType:
     target = y.dropna()
     if is_numeric_dtype(target):
-        target = target.loc[np.isfinite(target)]  # type: ignore
+        target = target.loc[np.isfinite(target)]
     else:
         target = target.loc[target != ""]
     if len(target) == 0:

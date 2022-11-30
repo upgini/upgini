@@ -12,7 +12,6 @@ from upgini.metadata import ModelTaskType, SearchKey
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
-from upgini.utils.target_utils import correct_target
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -189,7 +188,6 @@ def test_imbalanced_target():
             "target": ["a"] * 100 + ["b"] * 400 + ["c"] * 500 + ["d"] * 1000,
         }
     )
-    df["target"] = correct_target(df["target"])
     dataset = Dataset("test123", df=df)  # type: ignore
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,

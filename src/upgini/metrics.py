@@ -24,6 +24,7 @@ from upgini.errors import ValidationError
 from upgini.metadata import CVType, ModelTaskType
 from upgini.resource_bundle import bundle
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
+from upgini.utils.target_utils import correct_string_target
 
 CATBOOST_PARAMS = {
     "iterations": 250,
@@ -231,12 +232,14 @@ class LightGBMWrapper(EstimatorWrapper):
     ):
         super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         cat_features = _get_cat_features(X)
         X[cat_features] = X[cat_features].astype("string").fillna("").astype(str)
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
+        if not is_numeric_dtype(y):
+            y = correct_string_target(y)
 
         return X, y, params
 
@@ -262,6 +265,8 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         # TODO use one-hot encoding if cardinality is less 50
         for feature in cat_features:
             X[feature] = X[feature].astype("category").cat.codes
+        if not is_numeric_dtype(y):
+            y = correct_string_target(y)
         return X, y, params
 
 
