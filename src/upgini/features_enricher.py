@@ -43,6 +43,7 @@ from upgini.utils.format import Format
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
+from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
 
@@ -180,6 +181,7 @@ class FeaturesEnricher(TransformerMixin):
         self.enriched_eval_sets: Dict[int, pd.DataFrame] = dict()
         self.country_added = False
         self.fit_generated_features: List[str] = []
+        self.warning_counter = WarningCounter()
 
     def fit(
         self,
@@ -237,6 +239,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             try:
+                self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -249,6 +252,8 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit finished successfully")
+                if not self.warning_counter.has_warnings():
+                    self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
             except Exception as e:
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -329,6 +334,7 @@ class FeaturesEnricher(TransformerMixin):
                     ]
                 )
             try:
+                self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -341,6 +347,8 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Inner fit finished successfully")
+                if not self.warning_counter.has_warnings():
+                    self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
             except Exception as e:
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -496,6 +504,7 @@ class FeaturesEnricher(TransformerMixin):
                 if self._has_important_paid_features():
                     self.logger.warning("Metrics will be calculated on free features only")
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
+                    self.warning_counter.increment()
 
                 self._validate_X(X)
                 validated_y = self._validate_y(X, y)
@@ -555,6 +564,7 @@ class FeaturesEnricher(TransformerMixin):
                     else:
                         print(bundle.get("metrics_no_important_features"))
                         self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                    self.warning_counter.increment()
                     return None
 
                 model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
@@ -1397,6 +1407,7 @@ class FeaturesEnricher(TransformerMixin):
                 msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
+                    self.warning_counter.increment()
                     print(msg)
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
@@ -1416,12 +1427,14 @@ class FeaturesEnricher(TransformerMixin):
             and not silent_mode
         ):
             print(bundle.get("date_only_search"))
+            self.warning_counter.increment()
 
         maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * len(x):
                 print(bundle.get("date_search_without_time_series"))
+                self.warning_counter.increment()
 
         if len(using_keys) == 1:
             for k, v in using_keys.items():
@@ -1482,6 +1495,7 @@ class FeaturesEnricher(TransformerMixin):
 
             if len(self.feature_names_) == 0:
                 self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                self.warning_counter.increment()
         except (ImportError, NameError):
             print(msg)
             print(self.features_info.head(60))
@@ -1533,11 +1547,13 @@ class FeaturesEnricher(TransformerMixin):
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.EMAIL
                     self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
+                    print(bundle.get("email_detected").format(maybe_key))
                 else:
-                    self.logger.info(
+                    self.logger.warning(
                         f"Autodetected search key EMAIL in column {maybe_key}. But not used because not registered user"
                     )
-                print(bundle.get("email_detected").format(maybe_key))
+                    print(bundle.get("email_detected_not_registered").format(maybe_key))
+                    self.warning_counter.increment()
 
         if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
@@ -1545,11 +1561,13 @@ class FeaturesEnricher(TransformerMixin):
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.PHONE
                     self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
+                    print(bundle.get("phone_detected").format(maybe_key))
                 else:
-                    self.logger.info(
+                    self.logger.warning(
                         f"Autodetected search key PHONE in column {maybe_key}. But not used because not registered user"
                     )
-                print(bundle.get("phone_detected").format(maybe_key))
+                    print(bundle.get("phone_detected_not_registered"))
+                    self.warning_counter.increment()
 
         return search_keys
 

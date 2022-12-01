@@ -41,6 +41,7 @@ from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils.target_utils import correct_string_target
+from upgini.utils.warning_counter import WarningCounter
 
 
 class Dataset(pd.DataFrame):
@@ -74,6 +75,8 @@ class Dataset(pd.DataFrame):
         "api_key",
         "columns_renaming",
         "sampled",
+        "logger",
+        "warning_counter",
     ]
 
     def __init__(
@@ -89,6 +92,7 @@ class Dataset(pd.DataFrame):
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
+        warning_counter: Optional[WarningCounter] = None,
         **kwargs,
     ):
         if df is not None:
@@ -130,6 +134,7 @@ class Dataset(pd.DataFrame):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
+        self.warning_counter = warning_counter or WarningCounter()
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
@@ -215,6 +220,7 @@ class Dataset(pd.DataFrame):
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
             print(bundle.get("dataset_full_duplicates").format(share_full_dedup))
+            self.warning_counter.increment()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
@@ -305,11 +311,13 @@ class Dataset(pd.DataFrame):
                 self.logger.info(f"df before dropping old rows: {self.shape}")
                 self.drop(index=old_subset.index, inplace=True)  # type: ignore
                 self.logger.info(f"df after dropping old rows: {self.shape}")
-                msg = bundle.get("dataset_drop_old_dates")
-                self.logger.warning(msg)
-                print(msg)
                 if len(self) == 0:
                     raise ValidationError(bundle.get("dataset_all_dates_old"))
+                else:
+                    msg = bundle.get("dataset_drop_old_dates")
+                    self.logger.warning(msg)
+                    print(msg)
+                    self.warning_counter.increment()
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
@@ -420,8 +428,9 @@ class Dataset(pd.DataFrame):
                 msg = bundle.get("dataset_rarest_class_less_threshold").format(
                     min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
                 )
-                self.logger.info(msg)
+                self.logger.warning(msg)
                 print(msg)
+                self.warning_counter.increment()
 
                 if not is_numeric_dtype(target):
                     target = correct_string_target(target)
@@ -484,6 +493,7 @@ class Dataset(pd.DataFrame):
             msg = bundle.get("dataset_date_features").format(removed_features)
             print(msg)
             self.logger.warning(msg)
+            self.warning_counter.increment()
 
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
