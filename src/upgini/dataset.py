@@ -19,7 +19,6 @@ from pandas.api.types import (
 )
 from pandas.core.dtypes.common import is_period_dtype
 
-from upgini.resource_bundle import bundle
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, get_rest_client
 from upgini.metadata import (
@@ -38,8 +37,11 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
+from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
+from upgini.utils.target_utils import correct_string_target
+from upgini.utils.warning_counter import WarningCounter
 
 
 class Dataset(pd.DataFrame):
@@ -73,6 +75,8 @@ class Dataset(pd.DataFrame):
         "api_key",
         "columns_renaming",
         "sampled",
+        "logger",
+        "warning_counter",
     ]
 
     def __init__(
@@ -88,6 +92,7 @@ class Dataset(pd.DataFrame):
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
+        warning_counter: Optional[WarningCounter] = None,
         **kwargs,
     ):
         if df is not None:
@@ -129,6 +134,7 @@ class Dataset(pd.DataFrame):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
+        self.warning_counter = warning_counter or WarningCounter()
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
@@ -162,9 +168,7 @@ class Dataset(pd.DataFrame):
         is_registered = api_key is not None and api_key != ""
         if is_registered:
             if len(self) > self.MAX_ROWS_REGISTERED:
-                raise ValidationError(
-                    bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED)
-                )
+                raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED))
         else:
             if len(self) > self.MAX_ROWS_UNREGISTERED:
                 raise ValidationError(
@@ -216,6 +220,7 @@ class Dataset(pd.DataFrame):
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
             print(bundle.get("dataset_full_duplicates").format(share_full_dedup))
+            self.warning_counter.increment()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
@@ -306,11 +311,13 @@ class Dataset(pd.DataFrame):
                 self.logger.info(f"df before dropping old rows: {self.shape}")
                 self.drop(index=old_subset.index, inplace=True)  # type: ignore
                 self.logger.info(f"df after dropping old rows: {self.shape}")
-                msg = bundle.get("dataset_drop_old_dates")
-                self.logger.warning(msg)
-                print(msg)
                 if len(self) == 0:
                     raise ValidationError(bundle.get("dataset_all_dates_old"))
+                else:
+                    msg = bundle.get("dataset_drop_old_dates")
+                    self.logger.warning(msg)
+                    print(msg)
+                    self.warning_counter.increment()
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
@@ -355,9 +362,7 @@ class Dataset(pd.DataFrame):
                         self[target_column] = self[target_column].astype("int")
                     except ValueError:
                         self.logger.exception("Failed to cast target to integer for multiclass task type")
-                        raise ValidationError(
-                            bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
-                        )
+                        raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
                 else:
                     msg = bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
                     self.logger.exception(msg)
@@ -423,19 +428,17 @@ class Dataset(pd.DataFrame):
                 msg = bundle.get("dataset_rarest_class_less_threshold").format(
                     min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
                 )
-                self.logger.info(msg)
+                self.logger.warning(msg)
                 print(msg)
+                self.warning_counter.increment()
 
-                if is_string_dtype(target):
-                    target_replacement = {v: i for i, v in enumerate(unique_target)}  # type: ignore
-                    prepared_target = target.replace(target_replacement)
-                else:
-                    prepared_target = target
+                if not is_numeric_dtype(target):
+                    target = correct_string_target(target)
 
                 sampler = RandomUnderSampler(random_state=self.random_state)
                 X = train_segment[SYSTEM_RECORD_ID]
                 X = X.to_frame(SYSTEM_RECORD_ID)
-                new_x, _ = sampler.fit_resample(X, prepared_target)  # type: ignore
+                new_x, _ = sampler.fit_resample(X, target)  # type: ignore
                 resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
                 if validation_segment is not None:
                     resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)
@@ -490,6 +493,7 @@ class Dataset(pd.DataFrame):
             msg = bundle.get("dataset_date_features").format(removed_features)
             print(msg)
             self.logger.warning(msg)
+            self.warning_counter.increment()
 
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
@@ -501,9 +505,7 @@ class Dataset(pd.DataFrame):
         # self.logger.info("Convert features to supported data types")
 
         for f in self.__features():
-            if self[f].dtype == object:
-                self[f] = self[f].astype("string")
-            elif not is_numeric_dtype(self[f].dtype):
+            if not is_numeric_dtype(self[f]):
                 self[f] = self[f].astype("string")
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
@@ -642,9 +644,7 @@ class Dataset(pd.DataFrame):
             for key in keys_group:
                 if key not in self.columns:
                     showing_columns = set(self.columns) - SYSTEM_COLUMNS
-                    raise ValidationError(
-                        bundle.get("dataset_missing_search_key_column").format(key, showing_columns)
-                    )
+                    raise ValidationError(bundle.get("dataset_missing_search_key_column").format(key, showing_columns))
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")

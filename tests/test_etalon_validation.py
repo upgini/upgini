@@ -200,10 +200,8 @@ def test_imbalanced_target():
     assert len(dataset) == 400
     value_counts = dataset["target"].value_counts()
     assert len(value_counts) == 4
-    assert value_counts["a"] == 100
-    assert value_counts["b"] == 100
-    assert value_counts["c"] == 100
-    assert value_counts["d"] == 100
+    for label in dataset["target"].unique():
+        assert value_counts[label] == 100
 
 
 def test_fail_on_small_class_observations():

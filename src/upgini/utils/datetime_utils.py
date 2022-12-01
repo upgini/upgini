@@ -43,9 +43,11 @@ class DateTimeSearchKeyConverter:
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features
         seconds = "datetime_seconds"
+        df[self.date_column] = df[self.date_column].dt.tz_localize(None)
         df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
 
-        if (df[seconds] != 0).any():  # and df[seconds].nunique() != 1:
+        seconds_without_na = df[seconds].dropna()
+        if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
             self.logger.info("Time found in date search key. Add extra features based on time")
             seconds_in_day = 60 * 60 * 24
             orders = [1, 2, 24, 48]
