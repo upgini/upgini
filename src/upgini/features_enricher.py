@@ -1,7 +1,9 @@
 import itertools
 import logging
 import os
+import pickle
 import subprocess
+import tempfile
 import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -15,7 +17,7 @@ from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory
+from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -239,6 +241,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             try:
+                self.dump_input(trace_id, X, y, eval_set)
                 self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
@@ -252,8 +255,6 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Fit finished successfully")
-                if not self.warning_counter.has_warnings():
-                    self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
             except Exception as e:
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -334,6 +335,7 @@ class FeaturesEnricher(TransformerMixin):
                     ]
                 )
             try:
+                self.dump_input(trace_id, X, y, eval_set)
                 self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
@@ -347,8 +349,6 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                 )
                 self.logger.info("Inner fit finished successfully")
-                if not self.warning_counter.has_warnings():
-                    self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
             except Exception as e:
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -412,6 +412,7 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             self.logger.info(f"Start transform. X shape: {X.shape}")
             try:
+                self.dump_input(trace_id, X)
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -1019,6 +1020,9 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__show_selected_features(search_keys)
 
+        if not self.warning_counter.has_warnings():
+            self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
+
         try:
             self.enriched_X, self.enriched_eval_sets = self.__enrich(
                 df_with_original_index,
@@ -1136,13 +1140,21 @@ class FeaturesEnricher(TransformerMixin):
         def print_datasets_sample():
             self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{X.head(10)}")
             if y is not None:
-                self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{y[:10]}")
+                if isinstance(y, pd.Series) or isinstance(y, pd.DataFrame):
+                    sample_y = y.head(10)
+                else:
+                    sample_y = y[:10]
+                self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{sample_y}")
             if eval_set is not None:
                 for idx, eval_pair in enumerate(eval_set):
                     eval_X: pd.DataFrame = eval_pair[0]
                     eval_y = eval_pair[1]
                     self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
-                    self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{eval_y[:10]}")
+                    if isinstance(eval_y, pd.Series) or isinstance(eval_y, pd.DataFrame):
+                        sample_eval_y = eval_y.head(10)
+                    else:
+                        sample_eval_y = eval_y[:10]
+                    self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{sample_eval_y}")
 
         do_without_pandas_limits(print_datasets_sample)
 
@@ -1328,18 +1340,29 @@ class FeaturesEnricher(TransformerMixin):
             if feature_meta.name not in x_columns:
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
-            features_info.append(
-                {
-                    bundle.get("features_info_provider"): f"<a href='{feature_meta.data_provider_link}' "
+
+            if feature_meta.data_provider and ipython_available():
+                provider = (
+                    f"<a href='{feature_meta.data_provider_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
                     f"{feature_meta.data_provider}</a>"
-                    if feature_meta.data_provider
-                    else "",
-                    bundle.get("features_info_source"): f"<a href='{feature_meta.data_source_link}' "
+                )
+            else:
+                provider = feature_meta.data_provider or ""
+
+            if feature_meta.data_source and ipython_available():
+                source = (
+                    f"<a href='{feature_meta.data_source_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
                     f"{feature_meta.data_source}</a>"
-                    if feature_meta.data_source
-                    else "",
+                )
+            else:
+                source = feature_meta.data_source or ""
+
+            features_info.append(
+                {
+                    bundle.get("features_info_provider"): provider,
+                    bundle.get("features_info_source"): source,
                     bundle.get("features_info_name"): feature_meta.name,
                     bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
                     bundle.get("features_info_hitrate"): feature_meta.hit_rate,
@@ -1486,12 +1509,10 @@ class FeaturesEnricher(TransformerMixin):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
 
         try:
-            from IPython.display import display
-
             _ = get_ipython()  # type: ignore
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display(self.features_info.head(60).style.hide_index())
+            display_html_dataframe(self.features_info.head(60))
 
             if len(self.feature_names_) == 0:
                 self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
@@ -1595,6 +1616,65 @@ class FeaturesEnricher(TransformerMixin):
         except (ImportError, NameError):
             print(f"{link_text} at {slack_community_link}")
 
+    def dump_input(
+        self,
+        trace_id: str,
+        X: Union[pd.DataFrame, pd.Series],
+        y: Union[pd.DataFrame, pd.Series, None] = None,
+        eval_set: Union[Tuple, None] = None,
+    ):
+        try:
+            random_state = 42
+            rnd = np.random.RandomState(random_state)
+            xy_sample_index = rnd.randint(0, len(X), size=1000)
+
+            def sample(inp, sample_index):
+                if len(inp) <= 1000:
+                    return inp
+                if isinstance(inp, pd.DataFrame) or isinstance(inp, pd.Series):
+                    return inp.sample(n=1000, random_state=random_state)
+                if isinstance(inp, np.ndarray):
+                    return inp[sample_index]
+                if isinstance(inp, list):
+                    return inp[sample_index]
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                with open(f"{tmp_dir}/x.pickle", "wb") as x_file:
+                    pickle.dump(sample(X, xy_sample_index), x_file)
+                print(f"x saved to {tmp_dir}/x.pickle")
+                if y is not None:
+                    with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
+                        pickle.dump(sample(y, xy_sample_index), y_file)
+                    print(f"y saved to {tmp_dir}/y.pickle")
+                    if eval_set is not None:
+                        eval_xy_sample_index = rnd.randint(0, len(eval_set[0][0]), size=1000)
+                        with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
+                            pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
+                        print(f"eval_x saved to {tmp_dir}/eval_x.pickle")
+                        with open(f"{tmp_dir}/eval_y.pickle", "wb") as eval_y_file:
+                            pickle.dump(sample(eval_set[0][1], eval_xy_sample_index), eval_y_file)
+                        print(f"eval_y saved to {tmp_dir}/eval_y.pickle")
+                        get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                            trace_id,
+                            f"{tmp_dir}/x.pickle",
+                            f"{tmp_dir}/y.pickle",
+                            f"{tmp_dir}/eval_x.pickle",
+                            f"{tmp_dir}/eval_y.pickle",
+                        )
+                    else:
+                        get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                            trace_id,
+                            f"{tmp_dir}/x.pickle",
+                            f"{tmp_dir}/y.pickle",
+                        )
+                else:
+                    get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                        trace_id,
+                        f"{tmp_dir}/x.pickle",
+                    )
+        except Exception:
+            self.logger.exception("Failed to dump input files")
+
 
 def do_without_pandas_limits(func: Callable):
     prev_max_rows = pd.options.display.max_rows
@@ -1611,3 +1691,52 @@ def do_without_pandas_limits(func: Callable):
         pd.options.display.max_rows = prev_max_rows
         pd.options.display.max_columns = prev_max_columns
         pd.options.display.max_colwidth = prev_max_colwidth
+
+
+def ipython_available() -> bool:
+    try:
+        _ = get_ipython()  # type: ignore
+        return True
+    except NameError:
+        return False
+
+
+def display_html_dataframe(df: pd.DataFrame):
+    from IPython.display import HTML, display
+
+    def map_to_td(value) -> str:
+        if isinstance(value, float):
+            return f"<td class='upgini-number'>{value:.6f}</td>"
+        else:
+            return f"<td class='upgini-text'>{value}</td>"
+
+    table_str = (
+        """<style>
+            .upgini-df thead th {
+                font-weight:bold;
+                text-align: right;
+                padding: 0.5em;
+            }
+
+            .upgini-df td {
+                padding: 0.5em;
+            }
+
+            .upgini-text {
+                text-align: right;
+            }
+
+            .upgini-number {
+                text-align: center;
+            }
+        </style>"""
+        + "<table class='upgini-df'>"
+        + "<thead>"
+        + "".join(f"<th>{col}</th>" for col in df.columns)
+        + "</thead>"
+        + "<tbody>"
+        + "".join("<tr>" + "".join(map(map_to_td, row[1:])) + "</tr>" for row in df.itertuples())
+        + "</tbody>"
+        + "</table>"
+    )
+    display(HTML(table_str))
