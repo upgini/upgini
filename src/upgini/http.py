@@ -15,9 +15,8 @@ import requests
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
-from upgini.resource_bundle import bundle
 
-from upgini.errors import HttpError, UnauthorizedError
+from upgini.errors import HttpError, UnauthorizedError, ValidationError
 from upgini.metadata import (
     FileColumnMeaningType,
     FileMetadata,
@@ -25,6 +24,7 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
     SearchCustomization,
 )
+from upgini.resource_bundle import bundle
 from upgini.utils.track_info import get_track_metrics
 
 try:
@@ -181,6 +181,7 @@ class _RestClient:
     SEARCH_FEATURES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/rawfeatures/{0}/file"
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
     SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
+    SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -249,6 +250,8 @@ class _RestClient:
             elif e.status_code == 400 and "MD5Exception".lower() in e.message.lower() and try_number < 3:
                 print(bundle.get("upload_file_checksum_fail").format(e.message))
                 return self._with_unauth_retry(request, try_number + 1)
+            elif "more than one concurrent search request" in e.message.lower():
+                raise ValidationError(bundle.get("concurrent_request"))
             else:
                 raise e
 
@@ -258,7 +261,7 @@ class _RestClient:
             response = requests.get("https://api.github.com/repos/upgini/upgini/contents/error_status.txt")
             if response.status_code == requests.codes.ok:
                 js = response.json()
-                content = base64.b64decode(js["content"]).decode('utf-8')
+                content = base64.b64decode(js["content"]).decode("utf-8")
                 if len(content) > 0 and not content.isspace():
                     print(content)
         except Exception:
@@ -276,6 +279,44 @@ class _RestClient:
         search_key_names = {key for keys in metadata.searchKeys for key in keys}
         meaning_types = [_RestClient.meaning_type_by_name(name, metadata) for name in search_key_names]
         return [meaning_type.value for meaning_type in meaning_types if meaning_type is not None]
+
+    def dump_input_files(
+        self,
+        trace_id: str,
+        x_path: str,
+        y_path: Optional[str] = None,
+        eval_x_path: Optional[str] = None,
+        eval_y_path: Optional[str] = None,
+    ):
+        api_path = self.SEARCH_DUMP_INPUT_FMT_V2
+        files = {}
+        with open(x_path, "rb") as x_file:
+            files["x"] = ("x.pickle", x_file, "application/octet-stream")
+            if y_path:
+                with open(y_path, "rb") as y_file:
+                    files["y"] = ("y.pickle", y_file, "application/octet-stream")
+                    if eval_x_path and eval_y_path:
+                        with open(eval_x_path, "rb") as eval_x_file, open(eval_y_path, "rb") as eval_y_file:
+                            files["eval_x"] = ("eval_x.pickle", eval_x_file, "application/octet-stream")
+                            files["eval_y"] = ("eval_y.pickle", eval_y_file, "application/octet-stream")
+                            print(f"Sending dump input files: {files}")
+                            self._with_unauth_retry(
+                                lambda: self._send_post_file_req_v2(
+                                    api_path, files, trace_id=trace_id, need_json_response=False
+                                )
+                            )
+                    else:
+                        print(f"Sending dump input files: {files}")
+                        self._with_unauth_retry(
+                            lambda: self._send_post_file_req_v2(
+                                api_path, files, trace_id=trace_id, need_json_response=False
+                            )
+                        )
+            else:
+                print(f"Sending dump input files: {files}")
+                self._with_unauth_retry(
+                    lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
+                )
 
     def initial_search_v2(
         self,
@@ -567,6 +608,7 @@ class _RestClient:
         data=None,
         trace_id: Optional[str] = None,
         additional_headers: Optional[Dict[str, str]] = None,
+        need_json_response=True,
     ):
         additional_headers = additional_headers or {}
         response = requests.post(
@@ -579,7 +621,10 @@ class _RestClient:
         if response.status_code >= 400:
             raise HttpError(response.text, status_code=response.status_code)
 
-        return response.json()
+        if need_json_response:
+            return response.json()
+        else:
+            return response
 
     @staticmethod
     def _get_base_headers(
