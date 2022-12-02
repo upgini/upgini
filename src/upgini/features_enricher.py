@@ -1641,19 +1641,15 @@ class FeaturesEnricher(TransformerMixin):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 with open(f"{tmp_dir}/x.pickle", "wb") as x_file:
                     pickle.dump(sample(X, xy_sample_index), x_file)
-                print(f"x saved to {tmp_dir}/x.pickle")
                 if y is not None:
                     with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
                         pickle.dump(sample(y, xy_sample_index), y_file)
-                    print(f"y saved to {tmp_dir}/y.pickle")
                     if eval_set is not None:
                         eval_xy_sample_index = rnd.randint(0, len(eval_set[0][0]), size=1000)
                         with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
                             pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
-                        print(f"eval_x saved to {tmp_dir}/eval_x.pickle")
                         with open(f"{tmp_dir}/eval_y.pickle", "wb") as eval_y_file:
                             pickle.dump(sample(eval_set[0][1], eval_xy_sample_index), eval_y_file)
-                        print(f"eval_y saved to {tmp_dir}/eval_y.pickle")
                         get_rest_client(self.endpoint, self.api_key).dump_input_files(
                             trace_id,
                             f"{tmp_dir}/x.pickle",

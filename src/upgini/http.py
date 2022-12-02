@@ -299,21 +299,18 @@ class _RestClient:
                         with open(eval_x_path, "rb") as eval_x_file, open(eval_y_path, "rb") as eval_y_file:
                             files["eval_x"] = ("eval_x.pickle", eval_x_file, "application/octet-stream")
                             files["eval_y"] = ("eval_y.pickle", eval_y_file, "application/octet-stream")
-                            print(f"Sending dump input files: {files}")
                             self._with_unauth_retry(
                                 lambda: self._send_post_file_req_v2(
                                     api_path, files, trace_id=trace_id, need_json_response=False
                                 )
                             )
                     else:
-                        print(f"Sending dump input files: {files}")
                         self._with_unauth_retry(
                             lambda: self._send_post_file_req_v2(
                                 api_path, files, trace_id=trace_id, need_json_response=False
                             )
                         )
             else:
-                print(f"Sending dump input files: {files}")
                 self._with_unauth_retry(
                     lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
                 )
