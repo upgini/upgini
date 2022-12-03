@@ -38,7 +38,7 @@ try:
     send_log("Start setup PyLib")
     setup(
         name="upgini",
-        version="1.1.58",
+        version="1.1.59",
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -66,7 +66,7 @@ try:
         package_dir={"": "src"},
         packages=find_packages(where="src"),
         package_data={"": ['strings.properties']},
-        python_requires=">=3.7,<=3.9",
+        python_requires=">=3.7,<3.10",
         install_requires=[
             "python-dateutil>=2.8.0",
             "requests>=2.8.0",
