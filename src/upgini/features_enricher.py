@@ -719,6 +719,13 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
+                    metrics_df = (
+                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
+                    )
+                    do_without_pandas_limits(
+                        lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
+                    )
+
                     uplift_col = bundle.get("quality_metrics_uplift_header")
                     if (
                         uplift_col in eval_metrics.columns
@@ -728,12 +735,6 @@ class FeaturesEnricher(TransformerMixin):
                     ):
                         self.__display_slack_community_link(bundle.get("metrics_negative_uplift_without_cv"))
 
-                    metrics_df = (
-                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
-                    )
-                    do_without_pandas_limits(
-                        lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
-                    )
                     return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
