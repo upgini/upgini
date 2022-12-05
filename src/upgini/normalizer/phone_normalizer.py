@@ -67,7 +67,7 @@ class PhoneNormalizer:
             return None
 
     @staticmethod
-    def phone_int_to_int_safe(value: float) -> Optional[int]:
+    def phone_int_to_int_safe(value: int) -> Optional[int]:
         try:
             return PhoneNormalizer.validate_length(int(value))
         except Exception:
@@ -76,6 +76,7 @@ class PhoneNormalizer:
     @staticmethod
     def phone_str_to_int_safe(value: str) -> Optional[int]:
         try:
+            value = str(value)
             if value.endswith(".0"):
                 value = value[:len(value) - 2]
             numeric_filter = filter(str.isdigit, value)

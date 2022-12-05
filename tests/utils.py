@@ -11,6 +11,7 @@ def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.get("https://pypi.python.org/pypi/upgini/json", json={"releases": {"1.0.0": [{}]}})
+    requests_mock.post(url + "/public/api/v2/search/dump-input", content="123".encode())
 
 
 def random_id() -> str:

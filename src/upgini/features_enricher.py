@@ -1,5 +1,6 @@
 import itertools
 import logging
+import numbers
 import os
 import pickle
 import subprocess
@@ -89,6 +90,17 @@ class FeaturesEnricher(TransformerMixin):
 
     TARGET_NAME = "target"
     RANDOM_STATE = 42
+    EMPTY_FEATURES_INFO = pd.DataFrame(
+        columns=[
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
+            bundle.get("features_info_name"),
+            bundle.get("features_info_shap"),
+            bundle.get("features_info_hitrate"),
+            bundle.get("features_info_type"),
+            bundle.get("features_info_commercial_schema"),
+        ]
+    )
 
     def __init__(
         self,
@@ -121,17 +133,7 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
-        self.features_info: pd.DataFrame = pd.DataFrame(
-            columns=[
-                bundle.get("features_info_provider"),
-                bundle.get("features_info_source"),
-                bundle.get("features_info_name"),
-                bundle.get("features_info_shap"),
-                bundle.get("features_info_hitrate"),
-                bundle.get("features_info_type"),
-                bundle.get("features_info_commercial_schema"),
-            ]
-        )
+        self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self.search_id = search_id
         if search_id:
             search_task = SearchTask(
@@ -184,6 +186,9 @@ class FeaturesEnricher(TransformerMixin):
         self.country_added = False
         self.fit_generated_features: List[str] = []
         self.warning_counter = WarningCounter()
+        self.X: Optional[pd.DataFrame] = None
+        self.y: Optional[pd.Series] = None
+        self.eval_set: Optional[List[Tuple]] = None
 
     def fit(
         self,
@@ -231,18 +236,13 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
-            self.logger.info(f"Start fit. X shape: {X.shape}. y shape: {len(y)}")
-            if eval_set:
-                self.logger.info(
-                    [
-                        f"Eval {i} X shape: {eval_X.shape}, y shape: {len(eval_y)}"
-                        for i, (eval_X, eval_y) in enumerate(eval_set)
-                    ]
-                )
+            self.logger.info("Start fit")
 
             try:
+                self.X = X
+                self.y = y
+                self.eval_set = eval_set
                 self.dump_input(trace_id, X, y, eval_set)
-                self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -326,17 +326,12 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
-            self.logger.info(f"Start fit_transform. X shape: {X.shape}. y shape: {len(y)}")
-            if eval_set:
-                self.logger.info(
-                    [
-                        f"Eval {i} X shape: {eval_X.shape}, y shape: {len(eval_y)}"
-                        for i, (eval_X, eval_y) in enumerate(eval_set)
-                    ]
-                )
+            self.logger.info("Start fit_transform")
             try:
+                self.X = X
+                self.y = y
+                self.eval_set = eval_set
                 self.dump_input(trace_id, X, y, eval_set)
-                self.warning_counter.reset()
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -410,7 +405,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
-            self.logger.info(f"Start transform. X shape: {X.shape}")
+            self.logger.info("Start transform")
             try:
                 self.dump_input(trace_id, X)
                 result = self.__inner_transform(
@@ -445,9 +440,6 @@ class FeaturesEnricher(TransformerMixin):
 
     def calculate_metrics(
         self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list],
-        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]] = None,
         scoring: Union[Callable, str, None] = None,
         cv: Optional[BaseCrossValidator] = None,
         estimator=None,
@@ -460,15 +452,6 @@ class FeaturesEnricher(TransformerMixin):
 
         Parameters
         ----------
-        X: pandas.DataFrame of shape (n_samples, n_features)
-            The same input samples that have been used for fit.
-
-        y: array-like of shape (n_samples,)
-            The same target values that have been used for fit.
-
-        eval_set: List[tuple], optional (default=None)
-            The same list of validation pairs (X, y) that have been used for fit.
-
         scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
@@ -497,7 +480,12 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.logger.info("Start calculating metrics")
 
-                if self._search_task is None or self._search_task.initial_max_hit_rate_v2() is None:
+                if (
+                    self._search_task is None
+                    or self._search_task.initial_max_hit_rate_v2() is None
+                    or self.X is None
+                    or self.y is None
+                ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
                 if self.enriched_X is None:
                     raise ValidationError(bundle.get("metrics_empty_enriched_features"))
@@ -507,17 +495,17 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
                     self.warning_counter.increment()
 
-                self._validate_X(X)
-                validated_y = self._validate_y(X, y)
+                validated_X = self._validate_X(self.X)
+                validated_y = self._validate_y(validated_X, self.y)
 
                 # TODO check that X and y are the same as on the fit
 
-                self.__log_debug_information(X, y, eval_set)
+                self.__log_debug_information(self.X, self.y, self.eval_set)
 
                 search_keys = self.search_keys.copy()
-                search_keys = self.__prepare_search_keys(X, search_keys, silent_mode=True)
+                search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=True)
 
-                extended_X = X.copy()
+                extended_X = validated_X.copy()
                 generated_features = []
                 date_column = self.__get_date_column(search_keys)
                 if date_column is not None:
@@ -540,7 +528,9 @@ class FeaturesEnricher(TransformerMixin):
                 X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled, date_column)
                 enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled, date_column)
 
-                client_features = [c for c in (X.columns.to_list() + generated_features) if c not in search_keys.keys()]
+                client_features = [
+                    c for c in (validated_X.columns.to_list() + generated_features) if c not in search_keys.keys()
+                ]
 
                 filtered_client_features = self.__filtered_client_features(client_features)
 
@@ -568,7 +558,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.warning_counter.increment()
                     return None
 
-                model_task_type = self.model_task_type or define_task(pd.Series(y), self.logger, silent=True)
+                model_task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
 
                 # shuffle Kfold for case when date/datetime keys are not presented
                 key_types = search_keys.values()
@@ -634,23 +624,23 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
-                    if eval_set is not None:
-                        if len(self.enriched_eval_sets) != len(eval_set):
+                    if self.eval_set is not None:
+                        if len(self.enriched_eval_sets) != len(self.eval_set):
                             raise ValidationError(
                                 bundle.get("metrics_eval_set_count_diff").format(
-                                    len(self.enriched_eval_sets), len(eval_set)
+                                    len(self.enriched_eval_sets), len(self.eval_set)
                                 )
                             )
                         # TODO check that eval_set is the same as on the fit
 
-                        for idx, eval_pair in enumerate(eval_set):
+                        for idx, eval_pair in enumerate(self.eval_set):
                             eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
-                            eval_X, validated_eval_y = self._validate_eval_set_pair(X, eval_pair)
+                            eval_X, validated_eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
                             enriched_eval_X = self.enriched_eval_sets[idx + 1]
 
                             search_keys = self.search_keys.copy()
-                            search_keys = self.__prepare_search_keys(X, search_keys, silent_mode=True)
+                            search_keys = self.__prepare_search_keys(eval_X, search_keys, silent_mode=True)
 
                             extended_eval_X = eval_X.copy()
                             generated_features = []
@@ -774,18 +764,18 @@ class FeaturesEnricher(TransformerMixin):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
-            self._validate_X(X)
+            validated_X = self._validate_X(X)
 
             self.__log_debug_information(X)
 
             search_keys = self.search_keys.copy()
-            search_keys = self.__prepare_search_keys(X, search_keys, silent_mode=silent_mode)
+            search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=silent_mode)
 
-            df = X.copy()
+            df = validated_X.copy()
 
             df = self.__handle_index_search_keys(df, search_keys)
 
-            self.__check_string_dates(X, search_keys)
+            self.__check_string_dates(validated_X, search_keys)
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
@@ -848,18 +838,21 @@ class FeaturesEnricher(TransformerMixin):
                 print(bundle.get("transform_start"))
                 with Spinner():
                     result, _ = self.__enrich(
-                        df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), X, {}
+                        df_with_original_index,
+                        validation_task.get_all_validation_raw_features(trace_id),
+                        validated_X,
+                        {},
                     )
             else:
                 result, _ = self.__enrich(
-                    df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), X, {}
+                    df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), validated_X, {}
                 )
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
 
             existing_filtered_columns = [c for c in filtered_columns if c in result.columns]
 
-            return result[X.columns.tolist() + generated_features + existing_filtered_columns]
+            return result[validated_X.columns.tolist() + generated_features + existing_filtered_columns]
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -916,16 +909,17 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float],
         max_features: Optional[int],
     ):
+        self.warning_counter.reset()
         self.enriched_X = None
-        self._validate_X(X)
-        validated_y = self._validate_y(X, y)
+        validated_X = self._validate_X(X)
+        validated_y = self._validate_y(validated_X, y)
 
         self.__log_debug_information(X, y, eval_set)
 
         search_keys = self.search_keys.copy()
-        search_keys = self.__prepare_search_keys(X, search_keys)
+        search_keys = self.__prepare_search_keys(validated_X, search_keys)
 
-        df = pd.concat([X, validated_y], axis=1)
+        df = pd.concat([validated_X, validated_y], axis=1)
 
         df = self.__handle_index_search_keys(df, search_keys)
 
@@ -939,9 +933,8 @@ class FeaturesEnricher(TransformerMixin):
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
             for idx, eval_pair in enumerate(eval_set):
-                eval_X, eval_y_array = self._validate_eval_set_pair(X, eval_pair)
-                eval_df: pd.DataFrame = eval_X.copy()
-                eval_df[self.TARGET_NAME] = eval_y_array
+                eval_X, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+                eval_df = pd.concat([eval_X, eval_y], axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df])
                 eval_X_by_id[idx + 1] = eval_X
@@ -1016,7 +1009,7 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        self.__prepare_feature_importances(trace_id, X.columns.to_list() + self.fit_generated_features)
+        self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
         self.__show_selected_features(search_keys)
 
@@ -1027,7 +1020,7 @@ class FeaturesEnricher(TransformerMixin):
             self.enriched_X, self.enriched_eval_sets = self.__enrich(
                 df_with_original_index,
                 self._search_task.get_all_initial_raw_features(trace_id),
-                X,
+                validated_X,
                 eval_X_by_id,
                 "inner",
             )
@@ -1036,22 +1029,53 @@ class FeaturesEnricher(TransformerMixin):
             raise e
 
         if calculate_metrics:
-            self.__show_metrics(X, y, eval_set, scoring, estimator, importance_threshold, max_features, trace_id)
+            self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
 
-    def _validate_X(self, X):
-        if not isinstance(X, pd.DataFrame):
+    def _validate_X(self, X) -> pd.DataFrame:
+        if _num_samples(X) == 0:
+            raise ValidationError(bundle.get("x_is_empty"))
+
+        if isinstance(X, pd.DataFrame):
+            if isinstance(X.columns, pd.MultiIndex) or isinstance(X.index, pd.MultiIndex):
+                raise ValidationError(bundle.get("x_multiindex_unsupported"))
+            validated_X = X
+        elif isinstance(X, pd.Series):
+            validated_X = X.to_frame()
+        elif isinstance(X, np.ndarray):
+            validated_X = pd.DataFrame(X)
+            renaming = {c: str(c) for c in validated_X.columns}
+            validated_X = validated_X.rename(columns=renaming)
+        else:
             raise ValidationError(bundle.get("unsupported_x_type").format(type(X)))
-        if len(set(X.columns)) != len(X.columns):
+
+        if len(set(validated_X.columns)) != len(validated_X.columns):
             raise ValidationError(bundle.get("x_contains_dup_columns"))
-        if not X.index.is_unique:
+        if not validated_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index"))
 
+        return validated_X
+
     def _validate_y(self, X: pd.DataFrame, y) -> pd.Series:
-        if not isinstance(y, pd.Series) and not isinstance(y, np.ndarray) and not isinstance(y, list):
+        if _num_samples(y) == 0:
+            raise ValidationError(bundle.get("y_is_empty"))
+
+        if (
+            not isinstance(y, pd.Series)
+            and not isinstance(y, pd.DataFrame)
+            and not isinstance(y, np.ndarray)
+            and not isinstance(y, list)
+        ):
             raise ValidationError(bundle.get("unsupported_y_type").format(type(y)))
 
-        if X.shape[0] != len(y):
-            raise ValidationError(bundle.get("x_and_y_diff_size").format(X.shape[0], len(y)))
+        if _num_samples(X) != _num_samples(y):
+            raise ValidationError(bundle.get("x_and_y_diff_size").format(_num_samples(X), _num_samples(y)))
+
+        if isinstance(y, pd.DataFrame):
+            if len(y.columns) != 1:
+                raise ValidationError(bundle.get("y_invalid_dimension"))
+            if isinstance(y.columns, pd.MultiIndex) or isinstance(y.index, pd.MultiIndex):
+                raise ValidationError(bundle.get("y_multiindex_unsupported"))
+            y = y[y.columns[0]]
 
         if isinstance(y, pd.Series):
             if (y.index != X.index).any():
@@ -1073,32 +1097,58 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
         eval_X = eval_pair[0]
         eval_y = eval_pair[1]
-        if not isinstance(eval_X, pd.DataFrame):
-            raise ValidationError(bundle.get("unsupported_x_type_eval_set").format(type(eval_X)))
-        if not eval_X.index.is_unique:
-            raise ValidationError(bundle.get("x_non_unique_index_eval_set"))
-        if eval_X.columns.to_list() != X.columns.to_list():
-            raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
-        if not isinstance(eval_y, pd.Series) and not isinstance(eval_y, np.ndarray) and not isinstance(eval_y, list):
-            raise ValidationError(bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
-        if eval_X.shape[0] != len(eval_y):
-            raise ValidationError(bundle.get("x_and_y_diff_size_eval_set").format(eval_X.shape[0], len(eval_y)))
+        if _num_samples(eval_X) == 0:
+            raise ValidationError(bundle.get("eval_x_is_empty"))
+        if _num_samples(eval_X) == 0:
+            raise ValidationError(bundle.get("eval_y_is_empty"))
+
+        if isinstance(eval_X, pd.DataFrame):
+            if isinstance(eval_X.columns, pd.MultiIndex) or isinstance(eval_X.index, pd.MultiIndex):
+                raise ValidationError(bundle.get("eval_x_multiindex_unsupported"))
+            validated_eval_X = eval_X
+        elif isinstance(eval_X, pd.Series):
+            validated_eval_X = eval_X.to_frame()
+        elif isinstance(eval_X, np.ndarray) or isinstance(eval_X, list):
+            validated_eval_X = pd.DataFrame(eval_X)
+            renaming = {c: str(c) for c in validated_eval_X.columns}
+            validated_eval_X = validated_eval_X.rename(columns=renaming)
+        else:
+            raise ValidationError(bundle.get("unsupported_x_type_eval_set").format(type(eval_X)))
+
+        if not validated_eval_X.index.is_unique:
+            raise ValidationError(bundle.get("x_non_unique_index_eval_set"))
+        if validated_eval_X.columns.to_list() != X.columns.to_list():
+            raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
+
+        if _num_samples(validated_eval_X) != _num_samples(eval_y):
+            raise ValidationError(
+                bundle.get("x_and_y_diff_size_eval_set").format(_num_samples(validated_eval_X), _num_samples(eval_y))
+            )
+
+        if isinstance(eval_y, pd.DataFrame):
+            if len(eval_y.columns) != 1:
+                raise ValidationError(bundle.get("y_invalid_dimension_eval_set"))
+            if isinstance(eval_y.columns, pd.MultiIndex) or isinstance(eval_y.index, pd.MultiIndex):
+                raise ValidationError(bundle.get("eval_y_multiindex_unsupported"))
+            eval_y = eval_y[eval_y.columns[0]]
 
         if isinstance(eval_y, pd.Series):
-            if (eval_y.index != eval_X.index).any():
-                raise ValidationError(bundle.get("x_and_y_diff_index"))
+            if (eval_y.index != validated_eval_X.index).any():
+                raise ValidationError(bundle.get("x_and_y_diff_index_eval_set"))
             validated_eval_y = eval_y.copy()
             validated_eval_y.rename(TARGET, inplace=True)
-        else:
-            Xy = eval_X.copy()
+        elif isinstance(eval_y, np.ndarray) or isinstance(eval_y, list):
+            Xy = validated_eval_X.copy()
             Xy[TARGET] = eval_y
             validated_eval_y = Xy[TARGET].copy()
+        else:
+            raise ValidationError(bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
         if validated_eval_y.nunique() < 2:
             raise ValidationError(bundle.get("y_is_constant_eval_set"))
 
-        return eval_X, validated_eval_y
+        return validated_eval_X, validated_eval_y
 
     @staticmethod
     def _sample_X_and_y(X: pd.DataFrame, y: pd.Series, enriched_X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
@@ -1137,24 +1187,25 @@ class FeaturesEnricher(TransformerMixin):
             f"Search id: {self.search_id}\n"
         )
 
+        def sample(df):
+            if isinstance(df, pd.Series) or isinstance(df, pd.DataFrame):
+                return df.head(10)
+            else:
+                return df[:10]
+
         def print_datasets_sample():
-            self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{X.head(10)}")
+
+            self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{sample(X)}")
             if y is not None:
-                if isinstance(y, pd.Series) or isinstance(y, pd.DataFrame):
-                    sample_y = y.head(10)
-                else:
-                    sample_y = y[:10]
-                self.logger.info(f"First 10 rows of the y with shape {len(y)}:\n{sample_y}")
+                self.logger.info(f"First 10 rows of the y with shape {_num_samples(y)}:\n{sample(y)}")
             if eval_set is not None:
                 for idx, eval_pair in enumerate(eval_set):
                     eval_X: pd.DataFrame = eval_pair[0]
                     eval_y = eval_pair[1]
-                    self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{eval_X.head(10)}")
-                    if isinstance(eval_y, pd.Series) or isinstance(eval_y, pd.DataFrame):
-                        sample_eval_y = eval_y.head(10)
-                    else:
-                        sample_eval_y = eval_y[:10]
-                    self.logger.info(f"First 10 rows of the eval_y_{idx} with shape {len(eval_y)}:\n{sample_eval_y}")
+                    self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{sample(eval_X)}")
+                    self.logger.info(
+                        f"First 10 rows of the eval_y_{idx} with shape {_num_samples(eval_y)}:\n{sample(eval_y)}"
+                    )
 
         do_without_pandas_limits(print_datasets_sample)
 
@@ -1230,7 +1281,7 @@ class FeaturesEnricher(TransformerMixin):
         if is_string_dtype(target):
             maybe_numeric_target = pd.to_numeric(target, errors="coerce")
             # If less than 5% is non numeric then leave this rows with NaN target and later it will be dropped
-            if maybe_numeric_target.isna().sum() <= len(df) * 0.05:
+            if maybe_numeric_target.isna().sum() <= _num_samples(df) * 0.05:
                 self.logger.info("Target column has less than 5% non numeric values. Change non numeric values to NaN")
                 df[self.TARGET_NAME] = maybe_numeric_target
             else:
@@ -1375,6 +1426,7 @@ class FeaturesEnricher(TransformerMixin):
             self.features_info = pd.DataFrame(features_info)
             do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
         else:
+            self.features_info = self.EMPTY_FEATURES_INFO
             self.logger.warn("Empty features info")
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
@@ -1455,7 +1507,7 @@ class FeaturesEnricher(TransformerMixin):
         maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
-            if x[date_column].nunique() > 0.9 * len(x):
+            if x[date_column].nunique() > 0.9 * _num_samples(x):
                 print(bundle.get("date_search_without_time_series"))
                 self.warning_counter.increment()
 
@@ -1468,9 +1520,6 @@ class FeaturesEnricher(TransformerMixin):
 
     def __show_metrics(
         self,
-        X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list],
-        eval_set: Optional[List[Tuple[pd.DataFrame, Any]]],
         scoring: Union[Callable, str, None],
         estimator: Optional[Any],
         importance_threshold: Optional[float],
@@ -1478,9 +1527,6 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: str,
     ):
         metrics = self.calculate_metrics(
-            X,
-            y,
-            eval_set,
             scoring=scoring,
             estimator=estimator,
             importance_threshold=importance_threshold,
@@ -1626,10 +1672,13 @@ class FeaturesEnricher(TransformerMixin):
         try:
             random_state = 42
             rnd = np.random.RandomState(random_state)
-            xy_sample_index = rnd.randint(0, len(X), size=1000)
+            if _num_samples(X) > 0:
+                xy_sample_index = rnd.randint(0, _num_samples(X), size=1000)
+            else:
+                xy_sample_index = []
 
             def sample(inp, sample_index):
-                if len(inp) <= 1000:
+                if _num_samples(inp) <= 1000:
                     return inp
                 if isinstance(inp, pd.DataFrame) or isinstance(inp, pd.Series):
                     return inp.sample(n=1000, random_state=random_state)
@@ -1645,7 +1694,7 @@ class FeaturesEnricher(TransformerMixin):
                     with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
                         pickle.dump(sample(y, xy_sample_index), y_file)
                     if eval_set is not None:
-                        eval_xy_sample_index = rnd.randint(0, len(eval_set[0][0]), size=1000)
+                        eval_xy_sample_index = rnd.randint(0, _num_samples(eval_set[0][0]), size=1000)
                         with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
                             pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
                         with open(f"{tmp_dir}/eval_y.pickle", "wb") as eval_y_file:
@@ -1669,7 +1718,34 @@ class FeaturesEnricher(TransformerMixin):
                         f"{tmp_dir}/x.pickle",
                     )
         except Exception:
-            self.logger.exception("Failed to dump input files")
+            self.logger.warning("Failed to dump input files", exc_info=True)
+
+
+def _num_samples(x):
+    """Return number of samples in array-like x."""
+    message = "Expected sequence or array-like, got %s" % type(x)
+    if hasattr(x, "fit") and callable(x.fit):
+        # Don't get num_samples from an ensembles length!
+        raise TypeError(message)
+
+    if not hasattr(x, "__len__") and not hasattr(x, "shape"):
+        if hasattr(x, "__array__"):
+            x = np.asarray(x)
+        else:
+            raise TypeError(message)
+
+    if hasattr(x, "shape") and x.shape is not None:
+        if len(x.shape) == 0:
+            raise TypeError("Singleton array %r cannot be considered a valid collection." % x)
+        # Check that shape is returning an integer or default to len
+        # Dask dataframes may not return numeric shape[0] value
+        if isinstance(x.shape[0], numbers.Integral):
+            return x.shape[0]
+
+    try:
+        return len(x)
+    except TypeError as type_error:
+        raise TypeError(message) from type_error
 
 
 def do_without_pandas_limits(func: Callable):
