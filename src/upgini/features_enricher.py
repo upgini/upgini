@@ -728,8 +728,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     uplift_col = bundle.get("quality_metrics_uplift_header")
                     if (
-                        uplift_col in eval_metrics.columns
-                        and (eval_metrics[uplift_col] < 0).any()
+                        uplift_col in metrics_df.columns
+                        and (metrics_df[uplift_col] < 0).any()
                         and model_task_type == ModelTaskType.REGRESSION
                         and self.cv != CVType.time_series
                     ):
@@ -1059,7 +1059,7 @@ class FeaturesEnricher(TransformerMixin):
             validated_X = X
         elif isinstance(X, pd.Series):
             validated_X = X.to_frame()
-        elif isinstance(X, np.ndarray):
+        elif isinstance(X, np.ndarray) or isinstance(X, list):
             validated_X = pd.DataFrame(X)
             renaming = {c: str(c) for c in validated_X.columns}
             validated_X = validated_X.rename(columns=renaming)
