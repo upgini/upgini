@@ -1009,6 +1009,14 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
+        zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
+        if zero_hit_search_keys:
+            self.logger.warning(
+                f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
+            )
+            self.__display_slack_community_link(bundle.get("zero_hit_rate_search_keys").format(zero_hit_search_keys))
+            self.warning_counter.increment()
+
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
         self.__show_selected_features(search_keys)
@@ -1513,7 +1521,8 @@ class FeaturesEnricher(TransformerMixin):
 
         if len(using_keys) == 1:
             for k, v in using_keys.items():
-                if x[k].nunique() == 1:
+                # Show warning for country only if country is the only key
+                if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(using_keys) == 1):
                     print(bundle.get("single_constant_search_key").format(v, x.loc[0, k]))
                     self.warning_counter.increment()
 
