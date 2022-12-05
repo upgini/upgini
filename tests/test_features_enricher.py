@@ -176,9 +176,7 @@ def test_features_enricher(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 4)
 
-    metrics = enricher.calculate_metrics(
-        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
-    )
+    metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
@@ -206,6 +204,152 @@ def test_features_enricher(requests_mock: Mocker):
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
+
+
+def test_features_enricher_with_numpy(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000).reset_index(drop=True)
+    train_features = train_df.drop(columns="target").values
+    train_target = train_df["target"].values
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target").values
+    eval1_target = eval1_df["target"].values
+    eval2_df = df[11000:12000].reset_index(drop=True)
+    eval2_features = eval2_df.drop(columns="target").values
+    eval2_target = eval2_df["target"].values
+
+    enricher = FeaturesEnricher(
+        search_keys={1: SearchKey.PHONE, 2: SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
+
+    metrics = enricher.calculate_metrics()
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                match_rate_header: [99.9, 100.0, 99.0],
+                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 1
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
+
+    enricher.transform(train_features)
 
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
@@ -324,9 +468,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 4)
 
-    metrics = enricher.calculate_metrics(
-        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
-    )
+    metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
@@ -447,7 +589,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         train_target,
     )
 
-    metrics = enricher.calculate_metrics(train_features, train_target)
+    metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
@@ -737,7 +879,7 @@ def test_filter_by_importance(requests_mock: Mocker):
     #     "eval_set_index"
     # ]
 
-    metrics = enricher.calculate_metrics(train_features, train_target, eval_set, importance_threshold=0.8)
+    metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
     assert metrics is None
 
@@ -864,7 +1006,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
     #     "eval_set_index"
     # ]
 
-    metrics = enricher.calculate_metrics(train_features, train_target, eval_set, max_features=0)
+    metrics = enricher.calculate_metrics(max_features=0)
     print(metrics)
 
     assert metrics is None
@@ -912,11 +1054,13 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
 
     search_task.initial_max_hit_rate_v2 = initial_max_hit_rate
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
+    enricher.X = X
+    enricher.y = y
     enricher._search_task = search_task
     enricher.enriched_X = pd.DataFrame(
         {"system_record_id": [1, 2, 3], "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]}
     )
-    assert enricher.calculate_metrics(X, y) is None
+    assert enricher.calculate_metrics() is None
 
 
 def test_handle_index_search_keys(requests_mock: Mocker):
@@ -1231,9 +1375,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     assert enricher.features_info.loc[8, feature_name_header] == "datetime_time_cos_48"
     assert enricher.features_info.loc[8, shap_value_header] == 0.001
 
-    metrics = enricher.calculate_metrics(
-        train_features, train_target, eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)]
-    )
+    metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {

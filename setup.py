@@ -34,11 +34,12 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
+version = "1.1.60"
 try:
-    send_log("Start setup PyLib")
+    send_log(f"Start setup PyLib version {version}")
     setup(
         name="upgini",
-        version="1.1.59",
+        version=version,
         description="Low-code feature search and enrichment library for machine learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
@@ -83,11 +84,11 @@ try:
             "Source": "https://github.com/upgini/upgini",
         },
     )
-    send_log("Setup of PyLib successfully finished")
+    send_log(f"Setup of PyLib {version} successfully finished")
 except Exception as e:
     try:
         tb = Formatter().formatException(sys.exc_info())
-        send_log(f"Failed to setup PyLib: {e}\n{tb}")
+        send_log(f"Failed to setup PyLib {version}: {e}\n{tb}")
     except Exception:
         pass
     raise e

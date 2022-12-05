@@ -231,7 +231,7 @@ class Dataset(pd.DataFrame):
             share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
             if nrows_after_tgt_dedup < nrows_after_full_dedup:
                 msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows)
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
 
     def __convert_bools(self):
@@ -353,7 +353,7 @@ class Dataset(pd.DataFrame):
             target_classes_count = target.nunique()
             if target_classes_count != 2:
                 msg = bundle.get("dataset_invalid_binary_target").format(target_classes_count)
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target) and not is_string_dtype(target):
@@ -404,7 +404,7 @@ class Dataset(pd.DataFrame):
                 msg = bundle.get("dataset_to_many_multiclass_targets").format(
                     target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
                 )
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
 
             unique_target = target.unique()
@@ -418,7 +418,7 @@ class Dataset(pd.DataFrame):
                 msg = bundle.get("dataset_rarest_class_less_min").format(
                     min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
                 )
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 raise ValidationError(msg)
 
             min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
@@ -498,7 +498,7 @@ class Dataset(pd.DataFrame):
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
             msg = bundle.get("dataset_too_many_features").format(self.MAX_FEATURES_COUNT)
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
     def __convert_features_types(self):
@@ -747,7 +747,7 @@ class Dataset(pd.DataFrame):
             return DataType.STRING
         else:
             msg = bundle.get("dataset_invalid_column_type").format(column_name, pandas_data_type)
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
     def __construct_search_customization(
