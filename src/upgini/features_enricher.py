@@ -719,6 +719,15 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
+                    uplift_col = bundle.get("quality_metrics_uplift_header")
+                    if (
+                        uplift_col in eval_metrics.columns
+                        and (eval_metrics[uplift_col] < 0).any()
+                        and model_task_type == ModelTaskType.REGRESSION
+                        and self.cv != CVType.time_series
+                    ):
+                        self.__display_slack_community_link(bundle.get("metrics_negative_uplift_without_cv"))
+
                     metrics_df = (
                         pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
                     )
