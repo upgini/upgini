@@ -1514,7 +1514,8 @@ class FeaturesEnricher(TransformerMixin):
         if len(using_keys) == 1:
             for k, v in using_keys.items():
                 if x[k].nunique() == 1:
-                    raise ValidationError(bundle.get("single_constant_search_key").format(v, x.loc[0, k]))
+                    print(bundle.get("single_constant_search_key").format(v, x.loc[0, k]))
+                    self.warning_counter.increment()
 
         return valid_search_keys
 
