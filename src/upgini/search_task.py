@@ -125,6 +125,17 @@ class SearchTask:
 
         return features_meta
 
+    def get_zero_hit_rate_search_keys(self) -> Optional[List[str]]:
+        if self.provider_metadata_v2 is None:
+            return None
+
+        zero_hit_search_keys = set()
+        for meta in self.provider_metadata_v2:
+            if meta.zero_hit_rate_search_keys is not None:
+                zero_hit_search_keys.update(meta.zero_hit_rate_search_keys)
+
+        return list(zero_hit_search_keys)
+
     @staticmethod
     def _get_provider_summaries(summary: SearchTaskSummary) -> List[ProviderTaskSummary]:
         if summary.status in {

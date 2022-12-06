@@ -4,6 +4,7 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
+from dateutil.relativedelta import relativedelta
 
 from upgini.errors import ValidationError
 
@@ -65,3 +66,22 @@ class DateTimeSearchKeyConverter:
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 
         return df
+
+
+def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
+    try:
+        if df[date_col].isnull().any():
+            return False
+
+        new_df = pd.to_datetime(df[date_col]).to_frame()
+        new_df["shifted_date"] = new_df[date_col].shift(1)
+
+        def rel(row):
+            if not pd.isnull(row["date"]) and not pd.isnull(row["shifted_date"]):
+                return relativedelta(row["date"], row["shifted_date"])
+
+        if new_df.apply(rel, axis=1).nunique() == 1:
+            return True
+        return False
+    except Exception:
+        return False
