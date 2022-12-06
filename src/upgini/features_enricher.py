@@ -39,7 +39,7 @@ from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -731,7 +731,9 @@ class FeaturesEnricher(TransformerMixin):
                         uplift_col in metrics_df.columns
                         and (metrics_df[uplift_col] < 0).any()
                         and model_task_type == ModelTaskType.REGRESSION
-                        and self.cv != CVType.time_series
+                        and self.cv not in [CVType.time_series, CVType.blocked_time_series]
+                        and self.__get_date_column(self.search_keys) is not None
+                        and is_time_series(validated_X, self.__get_date_column(self.search_keys))
                     ):
                         self.__display_slack_community_link(bundle.get("metrics_negative_uplift_without_cv"))
 
@@ -1024,7 +1026,8 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(
                 f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
             )
-            self.__display_slack_community_link(bundle.get("zero_hit_rate_search_keys").format(zero_hit_search_keys))
+            zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
+            self.__display_slack_community_link(bundle.get("zero_hit_rate_search_keys").format(zero_hit_columns))
             self.warning_counter.increment()
 
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
@@ -1048,6 +1051,13 @@ class FeaturesEnricher(TransformerMixin):
 
         if calculate_metrics:
             self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
+
+    def get_columns_by_search_keys(self, keys: List[str]):
+        if "HEM" in keys:
+            keys.append("EMAIL")
+        if "DATE" in keys:
+            keys.append("DATETIME")
+        return [c for c, v in self.search_keys.items() if v.value.value in keys]
 
     def _validate_X(self, X) -> pd.DataFrame:
         if _num_samples(X) == 0:

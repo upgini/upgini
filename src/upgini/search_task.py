@@ -129,10 +129,10 @@ class SearchTask:
         if self.provider_metadata_v2 is None:
             return None
 
-        zero_hit_search_keys = {}
+        zero_hit_search_keys = set()
         for meta in self.provider_metadata_v2:
             if meta.zero_hit_rate_search_keys is not None:
-                zero_hit_search_keys += meta.zero_hit_rate_search_keys
+                zero_hit_search_keys.update(meta.zero_hit_rate_search_keys)
 
         return list(zero_hit_search_keys)
 
