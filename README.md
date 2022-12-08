@@ -550,17 +550,17 @@ enricher = FeaturesEnricher(search_keys={"registration_date": SearchKey.DATE})
 # CatBoost will be used
 enricher.fit(X, y, eval_set=eval_set, calculate_metrics=True)
 
-# LightGBM estimator for metrics. X and y - same as for fit
+# LightGBM estimator for metrics
 custom_estimator = LGBMRegressor()
-enricher.calculate_metrics(X, y, eval_set, estimator=custom_estimator)
+enricher.calculate_metrics(estimator=custom_estimator)
 
 # Custom metric function to scoring param (callable or name)
 custom_scoring = "RMSLE"
-enricher.calculate_metrics(X, y, eval_set, scoring=custom_scoring)
+enricher.calculate_metrics(scoring=custom_scoring)
 
 # Custom cross validator
 custom_cv = TimeSeriesSplit(n_splits=5)
-enricher.calculate_metrics(X, y, eval_set, cv=custom_cv)
+enricher.calculate_metrics(cv=custom_cv)
 
 # All this custom parameters could be combined in both methods: fit, fit_transform and calculate_metrics:
 enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator, scoring=custom_scoring, cv=custom_cv)
