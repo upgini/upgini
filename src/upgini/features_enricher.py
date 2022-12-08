@@ -735,7 +735,11 @@ class FeaturesEnricher(TransformerMixin):
                         and self.__get_date_column(self.search_keys) is not None
                         and is_time_series(validated_X, self.__get_date_column(self.search_keys))
                     ):
-                        self.__display_slack_community_link(bundle.get("metrics_negative_uplift_without_cv"))
+                        msg = bundle.get("metrics_negative_uplift_without_cv")
+                        self.logger.warning(msg)
+                        self.__display_slack_community_link(msg)
+                    elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
+                        self.logger.warning("Uplift is negative")
 
                     return metrics_df
             except Exception as e:
@@ -1027,7 +1031,9 @@ class FeaturesEnricher(TransformerMixin):
                 f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
             )
             zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
-            self.__display_slack_community_link(bundle.get("zero_hit_rate_search_keys").format(zero_hit_columns))
+            msg = bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
+            self.logger.warning(msg)
+            self.__display_slack_community_link(msg)
             self.warning_counter.increment()
 
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
@@ -1591,7 +1597,9 @@ class FeaturesEnricher(TransformerMixin):
             display_html_dataframe(self.features_info.head(60))
 
             if len(self.feature_names_) == 0:
-                self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                msg = bundle.get("features_info_zero_important_features")
+                self.logger.warning(msg)
+                self.__display_slack_community_link(msg)
                 self.warning_counter.increment()
         except (ImportError, NameError):
             print(msg)
