@@ -279,10 +279,21 @@ enricher = FeaturesEnricher(
 		"last_visit_ip_address": SearchKey.IP,
 		"registered_with_phone": SearchKey.PHONE
 	}, 
-	date_format="%Y-%d-%m"
+	date_format = "%Y-%d-%m"
 )
 ```
-
+Single country for the whole training dataset can be passed with `country_code` parameter:
+```python
+from upgini import FeaturesEnricher, SearchKey
+enricher = FeaturesEnricher(
+	search_keys={
+		"subscription_activation_date": SearchKey.DATE,
+    		"zip_code": SearchKey.POSTAL_CODE,
+	}, 
+	country_code = "US",
+	date_format = "%Y-%d-%m"
+)
+```
 <table border=1 cellpadding=10><tr><td>
 ⚠️  <b>Requirements for search initialization dataset</b>
 <br>
@@ -292,7 +303,7 @@ We do dataset verification and cleaning under the hood, but still there are some
 <br>
 - correct label column types: boolean/integers/strings for binary and multiclass labels, floats for regression;  
 <br>
-- at least one column defined as a <a href="#-search-key-types-we-support-more-to-come">search key</a>;
+- at least one column selected as a <a href="#-search-key-types-we-support-more-to-come">search key</a>;
 <br>
 - min size after deduplication by search key column and NaNs removal: <i>100 records</i>
 </td></tr></table>
