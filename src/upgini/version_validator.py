@@ -40,7 +40,7 @@ def validate_version(logger: logging.Logger):
                 logger.warning(msg)
                 print(msg)
         except Exception:
-            logger.exception("Failed to validate version")
+            logger.warning("Failed to validate version", exc_info=True)
 
     thread = threading.Thread(target=task)
     thread.start()
