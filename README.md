@@ -299,7 +299,7 @@ enricher = FeaturesEnricher(
 <br>
 We do dataset verification and cleaning under the hood, but still there are some requirements to follow:  
 <br>
-- pandas dataframe representation;  
+- <b>pandas.DataFrame</b>, <b>pandas.Series</b> or <b>numpy.ndarray</b> representation;  
 <br>
 - correct label column types: boolean/integers/strings for binary and multiclass labels, floats for regression;  
 <br>
