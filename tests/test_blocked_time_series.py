@@ -56,7 +56,8 @@ def test_bts_exceptions():
         _ = cross_val_score(model, X_short, y_short, cv=cv)
 
     with pytest.raises(
-        expected_exception=ValueError, match=re.escape(bundle.get("timeseries_invalid_split_type").format(5.5, "<class 'float'>"))
+        expected_exception=ValueError,
+        match=re.escape(bundle.get("timeseries_invalid_split_type").format(5.5, "<class 'float'>")),
     ):
         _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)  # type: ignore
 
