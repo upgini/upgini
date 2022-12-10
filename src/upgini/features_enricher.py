@@ -1461,7 +1461,7 @@ class FeaturesEnricher(TransformerMixin):
             do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
         else:
             self.features_info = self.EMPTY_FEATURES_INFO
-            self.logger.warn("Empty features info")
+            self.logger.warning("Empty features info")
 
     def __filtered_client_features(self, client_features: List[str]) -> List[str]:
         return self.features_info.loc[

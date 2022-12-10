@@ -85,7 +85,7 @@ class SearchTask:
         except KeyboardInterrupt as e:
             print(bundle.get("search_stopping"))
             get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
-            self.logger.warn(f"Search {search_task_id} stopped by user")
+            self.logger.warning(f"Search {search_task_id} stopped by user")
             print(bundle.get("search_stopped"))
             raise e
         print()

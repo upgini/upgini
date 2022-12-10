@@ -66,7 +66,7 @@ try:
         keywords=["data science", "machine learning", "data mining", "automl", "data search"],
         package_dir={"": "src"},
         packages=find_packages(where="src"),
-        package_data={"": ['strings.properties']},
+        package_data={"": ["strings.properties"]},
         python_requires=">=3.7,<3.10",
         install_requires=[
             "python-dateutil>=2.8.0",

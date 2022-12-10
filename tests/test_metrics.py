@@ -289,9 +289,6 @@ def test_default_metric_binary(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
-    # enricher.calculate_metrics(X, y)
-
     enriched_X = enricher.fit_transform(X, y, eval_set)
 
     assert len(enriched_X) == len(X)
@@ -424,9 +421,6 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
         api_key="fake_api_key",
         logs_enabled=False,
     )
-
-    # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
-    # enricher.calculate_metrics(X, y)
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
 
@@ -687,7 +681,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
+    with pytest.raises(Exception, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
@@ -955,7 +949,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
+    with pytest.raises(Exception, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
@@ -1088,9 +1082,6 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
-
-    # with pytest.raises(Exception, match="Fit the enricher before calling calculate_metrics."):
-    # enricher.calculate_metrics(X, y)
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
 

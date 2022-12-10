@@ -9,6 +9,7 @@ import pytest
 from upgini import Dataset, FileColumnMeaningType
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType, SearchKey
+from upgini.resource_bundle import bundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
@@ -221,7 +222,7 @@ def test_fail_on_small_class_observations():
         "target": FileColumnMeaningType.TARGET,
     }
     dataset.task_type = ModelTaskType.MULTICLASS
-    with pytest.raises(ValidationError, match=r".*The minimum number of observations for each class.*"):
+    with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
         dataset._Dataset__resample()
 
 
