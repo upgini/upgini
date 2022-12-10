@@ -1,7 +1,11 @@
+import re
+
 import pandas as pd
 import pytest
-from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+
+from upgini.resource_bundle import bundle
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 
@@ -42,23 +46,28 @@ def test_bts_exceptions():
     X, y, cv, _, model = _prepare_data()
 
     X_short, y_short = X.iloc[:3, :], y.iloc[:3]
-    with pytest.raises(ValueError, match=r"Cannot have number of splits=.* greater than the number of samples=.*"):
+    with pytest.raises(
+        expected_exception=ValueError, match=re.escape(bundle.get("timeseries_splits_more_than_samples").format(5, 3))
+    ):
         _ = cross_val_score(model, X_short, y_short, cv=cv)
 
     X_short, y_short = X.iloc[:10, :], y.iloc[:10]
-    with pytest.raises(ValueError, match=r"Cannot have number of samples in test fold .* <= 1"):
+    with pytest.raises(expected_exception=ValueError, match=re.escape(bundle.get("timeseries_invalid_test_size"))):
         _ = cross_val_score(model, X_short, y_short, cv=cv)
 
     with pytest.raises(
-        ValueError, match=r"The number of folds must be of Integral type. .* of type <class 'float'> was passed."
+        expected_exception=ValueError,
+        match=re.escape(bundle.get("timeseries_invalid_split_type").format(5.5, "<class 'float'>")),
     ):
         _ = BlockedTimeSeriesSplit(n_splits=5.5, test_size=0.2)  # type: ignore
 
     with pytest.raises(
-        ValueError,
-        match=r"Cross-validation requires at least one train/test split by setting n_splits=2 or more, got n_splits=.*",
+        expected_exception=ValueError,
+        match=re.escape(bundle.get("timeseries_invalid_split_count").format(0)),
     ):
         _ = BlockedTimeSeriesSplit(n_splits=0, test_size=0.2)
 
-    with pytest.raises(ValueError, match=r"test_size=.* should be a float in the .* range"):
+    with pytest.raises(
+        expected_exception=ValueError, match=re.escape(bundle.get("timeseries_invalid_test_size_type").format(2))
+    ):
         _ = BlockedTimeSeriesSplit(n_splits=5, test_size=2)

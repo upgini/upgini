@@ -38,7 +38,7 @@ class DateTimeSearchKeyConverter:
             df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
         elif is_numeric_dtype(df[self.date_column]):
             msg = f"Unsupported type of date column {self.date_column}. Convert to datetime please."
-            self.logger.warn(msg)
+            self.logger.warning(msg)
             raise ValidationError(msg)
 
         # If column with date is datetime then extract seconds of the day and minute of the hour
