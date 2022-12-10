@@ -1585,7 +1585,7 @@ class FeaturesEnricher(TransformerMixin):
                 print(metrics)
 
     def _has_important_paid_features(self) -> bool:
-        return (self.features_info["feature type"] == "Paid").any()
+        return (self.features_info[bundle.get("features_info_commercial_schema")] == "Paid").any()
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
