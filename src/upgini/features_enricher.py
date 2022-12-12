@@ -1689,9 +1689,11 @@ class FeaturesEnricher(TransformerMixin):
         return search_keys
 
     def _dump_python_libs(self):
+        python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
+        python_version = python_version_result.stdout.decode("utf-8")
         result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
         libs = result.stdout.decode("utf-8")
-        self.logger.warning(f"User python libs versions: {libs}")
+        self.logger.warning(f"User python {python_version} libs versions:\n{libs}")
 
     def __display_slack_community_link(self, link_text: Optional[str] = None):
         slack_community_link = bundle.get("slack_community_link")
