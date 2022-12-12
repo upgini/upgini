@@ -1106,7 +1106,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if isinstance(y, pd.DataFrame):
             if len(y.columns) != 1:
-                raise ValidationError(bundle.get("y_invalid_dimension"))
+                raise ValidationError(bundle.get("y_invalid_dimension_dataframe"))
             if isinstance(y.columns, pd.MultiIndex) or isinstance(y.index, pd.MultiIndex):
                 raise ValidationError(bundle.get("y_multiindex_unsupported"))
             y = y[y.columns[0]]
@@ -1116,6 +1116,12 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(bundle.get("x_and_y_diff_index"))
             validated_y = y.copy()
             validated_y.rename(TARGET, inplace=True)
+        elif isinstance(y, np.ndarray):
+            if y.ndim != 1:
+                raise ValidationError(bundle.get("y_invalid_dimension_array"))
+            Xy = X.copy()
+            Xy[TARGET] = y
+            validated_y = Xy[TARGET].copy()
         else:
             Xy = X.copy()
             Xy[TARGET] = y
@@ -1162,7 +1168,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if isinstance(eval_y, pd.DataFrame):
             if len(eval_y.columns) != 1:
-                raise ValidationError(bundle.get("y_invalid_dimension_eval_set"))
+                raise ValidationError(bundle.get("y_invalid_dimension_dataframe_eval_set"))
             if isinstance(eval_y.columns, pd.MultiIndex) or isinstance(eval_y.index, pd.MultiIndex):
                 raise ValidationError(bundle.get("eval_y_multiindex_unsupported"))
             eval_y = eval_y[eval_y.columns[0]]
@@ -1172,7 +1178,13 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(bundle.get("x_and_y_diff_index_eval_set"))
             validated_eval_y = eval_y.copy()
             validated_eval_y.rename(TARGET, inplace=True)
-        elif isinstance(eval_y, np.ndarray) or isinstance(eval_y, list):
+        elif isinstance(eval_y, np.ndarray):
+            if eval_y.ndim != 1:
+                raise ValidationError(bundle.get("y_invalid_dimension_array_eval_set"))
+            Xy = validated_eval_X.copy()
+            Xy[TARGET] = eval_y
+            validated_eval_y = Xy[TARGET].copy()
+        elif isinstance(eval_y, list):
             Xy = validated_eval_X.copy()
             Xy[TARGET] = eval_y
             validated_eval_y = Xy[TARGET].copy()
