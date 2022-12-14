@@ -12,7 +12,7 @@ from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 class EmailSearchKeyDetector(BaseSearchKeyDetector):
     def _is_search_key_by_name(self, column_name: str) -> bool:
-        return column_name.lower() in ["email", "e_mail", "e-mail"]
+        return str(column_name).lower() in ["email", "e_mail", "e-mail"]
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
         if not is_string_dtype(column):
