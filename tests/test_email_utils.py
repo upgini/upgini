@@ -42,24 +42,24 @@ def test_convertion_to_hem():
     converter = EmailSearchKeyConverter("email", None, search_keys)
     df = converter.convert(df)
 
-    assert search_keys == {"generated_hem": SearchKey.HEM}
+    assert search_keys == {EmailSearchKeyConverter.HEM_COLUMN_NAME: SearchKey.HEM}
 
     expected_df = pd.DataFrame(
         {
-            "generated_hem": [
+            EmailSearchKeyConverter.HEM_COLUMN_NAME: [
                 "8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57",
                 None,
                 None,
                 None,
                 None,
             ],
-            "email_domain": ["google.com", None, None, None, None],
+            EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None, None],
         }
     )
 
     assert_frame_equal(expected_df, df)
 
-    assert df["email_domain"].astype("string").isnull().sum() == 4
+    assert df[EmailSearchKeyConverter.DOMAIN_COLUMN_NAME].astype("string").isnull().sum() == 4
 
 
 def test_convertion_to_hem_with_existing_hem():
@@ -79,7 +79,7 @@ def test_convertion_to_hem_with_existing_hem():
     expected_df = pd.DataFrame(
         {
             "hem": ["8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57", None, None, None],
-            "email_domain": ["google.com", None, None, None],
+            EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None],
         }
     )
 

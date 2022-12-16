@@ -189,6 +189,7 @@ class FeaturesEnricher(TransformerMixin):
         self.X: Optional[pd.DataFrame] = None
         self.y: Optional[pd.Series] = None
         self.eval_set: Optional[List[Tuple]] = None
+        self.autodetected_search_keys: Dict[str, SearchKey] = {}
 
     def fit(
         self,
@@ -260,7 +261,7 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                if "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0]):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
                 else:
                     self._dump_python_libs()
@@ -440,6 +441,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def calculate_metrics(
         self,
+        *,
         scoring: Union[Callable, str, None] = None,
         cv: Optional[BaseCrossValidator] = None,
         estimator=None,
@@ -1063,7 +1065,8 @@ class FeaturesEnricher(TransformerMixin):
             keys.append("EMAIL")
         if "DATE" in keys:
             keys.append("DATETIME")
-        return [c for c, v in self.search_keys.items() if v.value.value in keys]
+        search_keys_with_autodetection = {**self.search_keys, **self.autodetected_search_keys}
+        return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
     def _validate_X(self, X) -> pd.DataFrame:
         if _num_samples(X) == 0:
@@ -1086,6 +1089,13 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("x_contains_dup_columns"))
         if not validated_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index"))
+
+        if TARGET in validated_X.columns:
+            raise ValidationError(bundle.get("x_contains_reserved_column_name").format(TARGET))
+        if EVAL_SET_INDEX in validated_X.columns:
+            raise ValidationError(bundle.get("x_contains_reserved_column_name").format(EVAL_SET_INDEX))
+        if SYSTEM_RECORD_ID in validated_X.columns:
+            raise ValidationError(bundle.get("x_contains_reserved_column_name").format(SYSTEM_RECORD_ID))
 
         return validated_X
 
@@ -1538,7 +1548,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(bundle.get("empty_search_key").format(column_name))
 
         if self.detect_missing_search_keys:
-            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys)
+            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, silent_mode)
 
         using_keys = self.__using_search_keys(search_keys)
         if (
@@ -1641,35 +1651,44 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.__filtered_importance_names(importance_threshold, max_features)
 
-    def __detect_missing_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:
+    def __detect_missing_search_keys(
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False
+    ) -> Dict[str, SearchKey]:
         sample = df.head(100)
 
         if SearchKey.POSTAL_CODE not in search_keys.values():
             maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
+                self.autodetected_search_keys[maybe_key] = SearchKey.POSTAL_CODE
                 self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_key}")
-                print(bundle.get("postal_code_detected").format(maybe_key))
+                if not silent_mode:
+                    print(bundle.get("postal_code_detected").format(maybe_key))
 
         if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.COUNTRY
+                self.autodetected_search_keys[maybe_key] = SearchKey.COUNTRY
                 self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
-                print(bundle.get("country_detected").format(maybe_key))
+                if not silent_mode:
+                    print(bundle.get("country_detected").format(maybe_key))
 
         if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.EMAIL
+                    self.autodetected_search_keys[maybe_key] = SearchKey.EMAIL
                     self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
-                    print(bundle.get("email_detected").format(maybe_key))
+                    if not silent_mode:
+                        print(bundle.get("email_detected").format(maybe_key))
                 else:
                     self.logger.warning(
                         f"Autodetected search key EMAIL in column {maybe_key}. But not used because not registered user"
                     )
-                    print(bundle.get("email_detected_not_registered").format(maybe_key))
+                    if not silent_mode:
+                        print(bundle.get("email_detected_not_registered").format(maybe_key))
                     self.warning_counter.increment()
 
         if SearchKey.PHONE not in search_keys.values():
@@ -1677,13 +1696,16 @@ class FeaturesEnricher(TransformerMixin):
             if maybe_key is not None:
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.PHONE
+                    self.autodetected_search_keys[maybe_key] = SearchKey.PHONE
                     self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
-                    print(bundle.get("phone_detected").format(maybe_key))
+                    if not silent_mode:
+                        print(bundle.get("phone_detected").format(maybe_key))
                 else:
                     self.logger.warning(
                         f"Autodetected search key PHONE in column {maybe_key}. But not used because not registered user"
                     )
-                    print(bundle.get("phone_detected_not_registered"))
+                    if not silent_mode:
+                        print(bundle.get("phone_detected_not_registered"))
                     self.warning_counter.increment()
 
         return search_keys
@@ -1704,9 +1726,10 @@ class FeaturesEnricher(TransformerMixin):
             from IPython.display import HTML, display
 
             _ = get_ipython()  # type: ignore
+            print(link_text)
             display(
                 HTML(
-                    f"""<p>{link_text}</p><a href='{slack_community_link}' target='_blank' rel='noopener noreferrer'>
+                    f"""<a href='{slack_community_link}' target='_blank' rel='noopener noreferrer'>
                     <img alt='{alt}' src='{badge}'></a>
                     """
                 )

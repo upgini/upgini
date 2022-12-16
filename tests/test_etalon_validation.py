@@ -41,8 +41,8 @@ def test_email_to_hem_convertion():
     }
     converter = EmailSearchKeyConverter("email", None, search_keys)
     df = converter.convert(df)
-    assert "generated_hem" in df.columns
-    assert "email_domain" in df.columns
+    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
+    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
     assert "email" not in df.columns
 
 

@@ -55,7 +55,7 @@ class SearchTask:
 
     def poll_result(self, trace_id: str, quiet: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
-        failed_statuses = {"FAILED", "VALIDATION_FAILED"}
+        failed_statuses = {"FAILED", "VALIDATION_FAILED", "EMPTY_INTERSECTION"}
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(bundle.get("polling_search_task").format(self.search_task_id))
@@ -156,7 +156,7 @@ class SearchTask:
             if provider_summary.status == "TIMED_OUT":
                 return bundle.get("search_timed_out")
             elif provider_summary.status == "EMPTY_INTERSECTION":
-                return bundle.get("search_empty_intersection")
+                return "Empty intersection"
             else:
                 return bundle.get("search_other_error")
 
