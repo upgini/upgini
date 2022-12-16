@@ -20,8 +20,9 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, get_rest_client
+from upgini.http import UPGINI_API_KEY, get_rest_client, resolve_api_token
 from upgini.metadata import (
+    TARGET,
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
@@ -177,15 +178,40 @@ class Dataset(pd.DataFrame):
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
+        suffix = resolve_api_token(self.api_key)[:6]
+        new_columns = []
+        dup_counter = 0
         for column in self.columns:
-            if len(column) == 0:
+            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID]:
+                self.columns_renaming[column] = column
+                continue
+
+            new_column = str(column)
+            if len(new_column) == 0:
                 raise ValidationError(bundle.get("dataset_empty_column_names"))
-            new_column = str(column).lower()
+            # db limit for column length
+            if len(new_column) > 250:
+                new_column = column[:250]
+
+            # make column name unique relative to server features
+            new_column = f"{new_column}_{suffix}"
+
+            new_column = new_column.lower()
+
+            # if column starts with non alphabetic symbol then add "a" to the beginning of string
             if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
                 new_column = "a" + new_column
+
+            # replace unsupported characters to "_"
             for idx, c in enumerate(new_column):
                 if ord(c) not in range(ord("a"), ord("z") + 1) and ord(c) not in range(ord("0"), ord("9") + 1):
                     new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
+
+            if new_column in new_columns:
+                new_column = f"{new_column}_{dup_counter}"
+                dup_counter += 1
+            new_columns.append(new_column)
+
             self.rename(columns={column: new_column}, inplace=True)
             self.meaning_types = {
                 (new_column if key == str(column) else key): value for key, value in self.meaning_types_checked.items()
@@ -356,17 +382,12 @@ class Dataset(pd.DataFrame):
                 self.logger.warning(msg)
                 raise ValidationError(msg)
         elif self.task_type == ModelTaskType.MULTICLASS:
-            if not is_integer_dtype(target) and not is_string_dtype(target):
-                if is_numeric_dtype(target):
-                    try:
-                        self[target_column] = self[target_column].astype("int")
-                    except ValueError:
-                        self.logger.exception("Failed to cast target to integer for multiclass task type")
-                        raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
-                else:
-                    msg = bundle.get("dataset_invalid_multiclass_target").format(target.dtype)
-                    self.logger.exception(msg)
-                    raise ValidationError(msg)
+            if not is_integer_dtype(target):
+                try:
+                    self[target_column] = self[target_column].astype("category").cat.codes
+                except Exception:
+                    self.logger.exception("Failed to cast target to category codes for multiclass task type")
+                    raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
@@ -554,7 +575,8 @@ class Dataset(pd.DataFrame):
 
             invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
             valid_share = self[f"{col}_is_valid"].sum() / nrows
-            validation_stats[col] = {}
+            original_col_name = self.columns_renaming[col]
+            validation_stats[original_col_name] = {}
             optional_drop_message = drop_message if col in mandatory_columns else ""
             if valid_share == 1:
                 valid_status = all_valid_status
@@ -565,8 +587,8 @@ class Dataset(pd.DataFrame):
             else:
                 valid_status = all_invalid_status
                 valid_message = invalid_message.format(100 * (1 - valid_share), optional_drop_message, invalid_values)
-            validation_stats[col]["valid_status"] = valid_status
-            validation_stats[col]["valid_message"] = valid_message
+            validation_stats[original_col_name]["valid_status"] = valid_status
+            validation_stats[original_col_name]["valid_message"] = valid_message
 
             if col in keys_to_validate:
                 self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
@@ -612,7 +634,7 @@ class Dataset(pd.DataFrame):
                 html_stats = (
                     "<table>"
                     + "<tr>"
-                    + "".join(f"<th style='font-weight:bold'>{col}</th>" for col in df_stats.columns)
+                    + "".join(f"<th style='font-weight:bold'>{column}</th>" for column in df_stats.columns)
                     + "</tr>"
                     + "".join("<tr>" + "".join(map(map_color, row[1:])) + "</tr>" for row in df_stats.itertuples())
                     + "</table>"

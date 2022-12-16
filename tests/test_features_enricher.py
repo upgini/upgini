@@ -206,6 +206,108 @@ def test_features_enricher(requests_mock: Mocker):
     assert first_feature_info[shap_value_header] == 10.1
 
 
+def test_features_enricher_with_demo_key(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+        ),
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    train = pd.read_parquet(os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/real_train.parquet"))
+    train.drop_duplicates(["request_date", "score"], inplace=True)
+    X = train[["request_date", "score"]]
+    y = train["target1"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"request_date": SearchKey.DATE},
+        country_code="RU",
+        date_format="%Y-%m-%d",
+        endpoint=url,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        X,
+        y,
+    )
+    assert enriched_train_features.shape == (23738, 3)
+
+    metrics = enricher.calculate_metrics()
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment],
+                match_rate_header: [99.9],
+                enriched_rocauc: [0.488023],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 1
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
+
+
 def test_features_enricher_with_numpy(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
     pd.set_option("display.max_columns", 1000)

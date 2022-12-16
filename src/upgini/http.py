@@ -666,7 +666,7 @@ def _resolve_backend_url(backend_url: Optional[str]) -> str:
         return _RestClient.PROD_BACKEND_URL
 
 
-def _resolve_api_token(api_token: Optional[str]) -> str:
+def resolve_api_token(api_token: Optional[str]) -> str:
     if api_token is not None:
         return api_token
     elif UPGINI_API_KEY in os.environ and os.environ[UPGINI_API_KEY]:
@@ -678,7 +678,7 @@ def _resolve_api_token(api_token: Optional[str]) -> str:
 
 def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
     url = _resolve_backend_url(backend_url)
-    token = _resolve_api_token(api_token)
+    token = resolve_api_token(api_token)
 
     return _get_rest_client(url, token)
 
@@ -742,7 +742,7 @@ class LoggerFactory:
 
     def get_logger(self, backend_url: Optional[str] = None, api_token: Optional[str] = None) -> logging.Logger:
         url = _resolve_backend_url(backend_url)
-        token = _resolve_api_token(api_token)
+        token = resolve_api_token(api_token)
         key = url + token
 
         if key in self._loggers:
