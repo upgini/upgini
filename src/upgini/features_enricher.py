@@ -1316,7 +1316,8 @@ class FeaturesEnricher(TransformerMixin):
 
         date_column = self.__get_date_column(search_keys)
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
-            df = df.sort_values(by=date_column)
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
+            df = df.sort_values(by=[date_column] + other_search_keys)
 
         df = df.reset_index(drop=True)
         df = df.reset_index()
