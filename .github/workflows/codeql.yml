@@ -41,12 +41,12 @@ jobs:
 
     steps:
     - name: Checkout repository
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
+      uses: actions/checkout@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
         cache: 'pip' # caching pip dependencies
-    -  run: pip install -r requirements.txt
+    - run: pip install -r requirements.txt
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
