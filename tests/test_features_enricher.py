@@ -1178,7 +1178,7 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     tds.set_index("date", inplace=True)
     tds["date"] = [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]
     search_keys = {"date": SearchKey.DATE}
-    enricher = FeaturesEnricher(search_keys=search_keys, logs_enabled=False)
+    enricher = FeaturesEnricher(search_keys=search_keys, endpoint=url, logs_enabled=False)
     handled = enricher._FeaturesEnricher__handle_index_search_keys(tds, search_keys)  # type: ignore
     expected = pd.DataFrame({"feature": [1, 2, 3], "date": [date(2021, 1, 1), date(2021, 2, 1), date(2021, 3, 1)]})
     assert_frame_equal(handled, expected)
@@ -1194,7 +1194,7 @@ def test_correct_target_regression(requests_mock: Mocker):
             "target": [str(i) for i in range(1, 20)] + ["non_numeric_value"],
         }
     )
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     handled = enricher._FeaturesEnricher__correct_target(tds)  # type: ignore
     expected = pd.DataFrame({"date": [date(2020, 1, 1)] * 20, "target": [float(i) for i in range(1, 20)] + [np.nan]})
     assert_frame_equal(handled, expected)
@@ -1210,7 +1210,7 @@ def test_correct_target_multiclass(requests_mock: Mocker):
             "target": ["1", "2", "1", "2", "3", "single non numeric", "5", "6", "non numeric", "non numeric"],
         }
     )
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     handled = enricher._FeaturesEnricher__correct_target(tds)  # type: ignore
     print(handled)
     expected = pd.DataFrame(

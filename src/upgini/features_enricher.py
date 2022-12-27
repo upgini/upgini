@@ -17,7 +17,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
-from upgini.errors import ValidationError
+from upgini.errors import UpginiConnectionError, ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
@@ -119,6 +119,12 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        try:
+            self.rest_client = get_rest_client(endpoint, self.api_key)
+        except UpginiConnectionError as e:
+            print(e)
+            return
+
         if logs_enabled:
             self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
         else:
