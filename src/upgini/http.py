@@ -186,6 +186,13 @@ class _RestClient:
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
 
+    REGISTER_ADS_URI = "private/api/v2/ads/register"
+    TOGGLE_ADS_URI_FMT = "private/api/v2/ads/{0}/toggle"
+    DELETE_ADS_URI_FMT = "private/api/v2/ads/{0}"
+    POLL_ADS_MANAGEMENT_STATUS_URI_FMT = "private/api/v2/ads/management-task/{0}"
+    GET_ADS_DESCRIPTION_URI_FMT = "private/api/v2/ads/{0}"
+    GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads"
+
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
     CONTENT_TYPE_HEADER_VALUE_JSON = "application/json;charset=UTF8"
@@ -549,6 +556,36 @@ class _RestClient:
         except Exception:
             pass
 
+    # ADS management
+
+    def register_ads(self, request: Dict, trace_id: str) -> str:
+        api_path = self.REGISTER_ADS_URI
+        response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request))
+        return response["adsManagementTaskId"]
+
+    def delete_ads(self, ads_definition_id: str, trace_id: str) -> str:
+        api_path = self.DELETE_ADS_URI_FMT.format(ads_definition_id)
+        response = self._with_unauth_retry(lambda: self._send_delete_req(api_path, trace_id))
+        return response["adsManagementTaskId"]
+
+    def toggle_ads(self, ads_definition_id: str, trace_id: str):
+        api_path = self.TOGGLE_ADS_URI_FMT.format(ads_definition_id)
+        return self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id))
+
+    def poll_ads_management_task_status(self, ads_management_task_id: str, trace_id: str) -> Dict[str, str]:
+        api_path = self.POLL_ADS_MANAGEMENT_STATUS_URI_FMT.format(ads_management_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return response
+
+    def get_ads_description(self, ads_definition_id: str, trace_id: str):
+        api_path = self.GET_ADS_DESCRIPTION_URI_FMT.format(ads_definition_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return response
+
+    def get_all_ads_descriptions(self):
+        response = self._with_unauth_retry(lambda: self._send_get_req(self.GET_ALL_ADS_DESCRIPTIONS_URI))
+        return response
+
     # ---
 
     def _send_get_req(self, api_path: str, trace_id: Optional[str]):
@@ -585,6 +622,29 @@ class _RestClient:
             url=urljoin(self._service_endpoint, api_path),
             data=data,
             json=json_data,
+            headers=self._get_headers(content_type, trace_id=trace_id),
+        )
+
+        if response.status_code >= 400:
+            if not silent:
+                logging.error(f"Failed to execute request to {api_path}: {response}")
+            raise HttpError(response.text, status_code=response.status_code)
+
+        if result_format == "json":
+            return response.json()
+        else:
+            return response.text
+    
+    def _send_delete_req(
+        self,
+        api_path: str,
+        trace_id: Optional[str],
+        content_type=None,
+        result_format="json",
+        silent=False,
+    ):
+        response = requests.delete(
+            url=urljoin(self._service_endpoint, api_path),
             headers=self._get_headers(content_type, trace_id=trace_id),
         )
 
