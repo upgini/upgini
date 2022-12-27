@@ -22,10 +22,10 @@ from pandas.core.dtypes.common import is_period_dtype
 from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, get_rest_client, resolve_api_token
 from upgini.metadata import (
-    TARGET,
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
+    TARGET,
     DataType,
     FeaturesFilter,
     FileColumnMeaningType,
@@ -51,6 +51,7 @@ class Dataset(pd.DataFrame):
     MAX_ROWS_UNREGISTERED = 149_999
     FIT_SAMPLE_ROWS = 100_000
     FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+    MIN_SAMPLE_THRESHOLD = 20_000
     IMBALANCE_THESHOLD = 0.4
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
@@ -406,14 +407,16 @@ class Dataset(pd.DataFrame):
     def __resample(self):
         # self.logger.info("Resampling etalon")
         # Resample imbalanced target. Only train segment (without eval_set)
-        if self.task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
-            if EVAL_SET_INDEX in self.columns:
-                train_segment = self[self[EVAL_SET_INDEX] == 0]
-                validation_segment = self[self[EVAL_SET_INDEX] != 0]
-            else:
-                train_segment = self
-                validation_segment = None
+        if EVAL_SET_INDEX in self.columns:
+            train_segment = self[self[EVAL_SET_INDEX] == 0]
+            validation_segment = self[self[EVAL_SET_INDEX] != 0]
+        else:
+            train_segment = self
+            validation_segment = None
 
+        if self.task_type == ModelTaskType.MULTICLASS or (
+            self.task_type == ModelTaskType.BINARY and len(train_segment) > self.MIN_SAMPLE_THRESHOLD
+        ):
             count = len(train_segment)
             min_class_count = count
             min_class_value = None
@@ -456,11 +459,23 @@ class Dataset(pd.DataFrame):
                 if not is_numeric_dtype(target):
                     target = correct_string_target(target)
 
-                sampler = RandomUnderSampler(random_state=self.random_state)
-                X = train_segment[SYSTEM_RECORD_ID]
-                X = X.to_frame(SYSTEM_RECORD_ID)
-                new_x, _ = sampler.fit_resample(X, target)  # type: ignore
-                resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
+                if self.task_type == ModelTaskType.BINARY and min_class_count < self.MIN_SAMPLE_THRESHOLD / 2:
+                    minority_class = train_segment[train_segment[target_column] == min_class_value]
+                    majority_class = train_segment[train_segment[target_column] != min_class_value]
+                    sampled_majority_class = majority_class.sample(
+                        n=self.MIN_SAMPLE_THRESHOLD - min_class_count, random_state=self.random_state
+                    )
+                    resampled_data = train_segment[
+                        (train_segment[SYSTEM_RECORD_ID].isin(minority_class[SYSTEM_RECORD_ID]))
+                        | (train_segment[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))
+                    ]
+                else:
+                    sampler = RandomUnderSampler(random_state=self.random_state)
+                    X = train_segment[SYSTEM_RECORD_ID]
+                    X = X.to_frame(SYSTEM_RECORD_ID)
+                    new_x, _ = sampler.fit_resample(X, target)  # type: ignore
+                    resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
+
                 if validation_segment is not None:
                     resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)
                 self._update_inplace(resampled_data)
