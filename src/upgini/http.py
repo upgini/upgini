@@ -211,7 +211,7 @@ class _RestClient:
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
 
-    def _refresh_access_token(self) -> str:
+    def _refresh_access_token(self, retry_attempts_rest=5) -> str:
         api_path = self.REFRESH_TOKEN_URI_FMT
         try:
             response = requests.post(
@@ -223,6 +223,9 @@ class _RestClient:
             self._access_token = response.json()["access_token"]
             return self._access_token
         except requests.exceptions.ConnectionError:
+            if retry_attempts_rest > 0:
+                time.sleep(5)
+                return self._refresh_access_token(retry_attempts_rest - 1)
             try:
                 local_ip = socket.gethostbyname(socket.gethostname())
             except Exception:
@@ -252,7 +255,7 @@ class _RestClient:
             return request()
         except RequestException as e:
             if need_connection_retry:
-                print(bundle.get("connection_error_with_retry").format(e))
+                print(bundle.get("connection_error_with_retry"))
                 time.sleep(10)
                 return self._with_unauth_retry(request)
             else:
