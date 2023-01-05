@@ -21,11 +21,12 @@ class FeaturesValidator:
         count = len(df)
 
         for f in features:
-            # value_counts = df[f].value_counts(dropna=False, normalize=True)
-            # most_frequent_percent = value_counts.iloc[0]
-            # if most_frequent_percent >= 0.99:
-            #     empty_or_constant_features.append(f)
-            #     continue
+            value_counts = df[f].value_counts(dropna=False, normalize=True)
+            most_frequent_percent = value_counts.iloc[0]
+            if most_frequent_percent >= 0.99:
+                # TODO add check for one hot encoded features
+                empty_or_constant_features.append(f)
+                continue
 
             if (is_string_dtype(df[f]) or is_integer_dtype(df[f])) and df[f].nunique() / count >= 0.9:
                 high_cardinality_features.append(f)
