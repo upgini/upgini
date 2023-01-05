@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_string_dtype
+from upgini.resource_bundle import bundle
 
 
 class FeaturesValidator:
@@ -23,6 +24,7 @@ class FeaturesValidator:
             value_counts = df[f].value_counts(dropna=False, normalize=True)
             most_frequent_percent = value_counts.iloc[0]
             if most_frequent_percent >= 0.99:
+                # TODO add check for one hot encoded features
                 empty_or_constant_features.append(f)
                 continue
 
@@ -31,18 +33,12 @@ class FeaturesValidator:
                 continue
 
         if empty_or_constant_features:
-            msg = (
-                f"Columns {empty_or_constant_features} has value with frequency more than 99% "
-                "and has been droped from X"
-            )
+            msg = bundle.get("empty_or_contant_features").format(empty_or_constant_features)
             print(msg)
             self.logger.warning(msg)
 
         if high_cardinality_features:
-            msg = (
-                f"Columns {high_cardinality_features} has high cardinality (>90% unique values) "
-                "and has been droped from X"
-            )
+            msg = bundle.get("high_cardinality_features").format(high_cardinality_features)
             print(msg)
             self.logger.warning(msg)
 

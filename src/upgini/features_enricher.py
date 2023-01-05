@@ -486,7 +486,13 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             try:
-                self.logger.info("Start calculating metrics")
+                self.logger.info(
+                    f"Start calculating metrics\nscoring: {scoring}\n"
+                    f"cv: {cv}\n"
+                    f"estimator: {estimator}\n"
+                    f"importance_threshold: {importance_threshold}\n"
+                    f"max_features: {max_features}"
+                )
 
                 if (
                     self._search_task is None
