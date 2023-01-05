@@ -295,6 +295,12 @@ enricher = FeaturesEnricher(
 	}, 
 	date_format = "%Y-%d-%m"
 )
+
+To use datetime not in UTC timezone, you can cast datetime column explicitly to your timezone (example for Warsaw):
+```python
+df["date"] = df.date.astype("datetime64").dt.tz_localize("Europe/Warsaw")
+```
+
 ```
 Single country for the whole training dataset can be passed with `country_code` parameter:
 ```python
