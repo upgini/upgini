@@ -655,7 +655,7 @@ class _RestClient:
             return response.json()
         else:
             return response.text
-    
+
     def _send_delete_req(
         self,
         api_path: str,
