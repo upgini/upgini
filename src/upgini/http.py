@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import random
+import socket
 import threading
 import time
 from functools import lru_cache
@@ -16,7 +17,12 @@ from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
 
-from upgini.errors import HttpError, UnauthorizedError, ValidationError
+from upgini.errors import (
+    HttpError,
+    UnauthorizedError,
+    UpginiConnectionError,
+    ValidationError,
+)
 from upgini.metadata import (
     FileColumnMeaningType,
     FileMetadata,
@@ -203,24 +209,39 @@ class _RestClient:
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
     SEARCH_KEYS_HEADER_NAME = "Search-Keys"
 
-    def __init__(self, service_endpoint, refresh_token):
+    def __init__(self, service_endpoint, refresh_token, silent_mode=False):
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
+        self.silent_mode = silent_mode
         self._access_token = self._refresh_access_token()
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
 
-    def _refresh_access_token(self) -> str:
+    def _refresh_access_token(self, retry_attempts_rest=5) -> str:
         api_path = self.REFRESH_TOKEN_URI_FMT
-        response = requests.post(
-            url=urljoin(self._service_endpoint, api_path),
-            json={"refreshToken": self._refresh_token},
-        )
-        if response.status_code >= 400:
-            raise HttpError(response.text, response.status_code)
-        self._access_token = response.json()["access_token"]
-        return self._access_token
+        try:
+            response = requests.post(
+                url=urljoin(self._service_endpoint, api_path),
+                json={"refreshToken": self._refresh_token},
+            )
+            if response.status_code >= 400:
+                raise HttpError(response.text, response.status_code)
+            self._access_token = response.json()["access_token"]
+            return self._access_token
+        except requests.exceptions.ConnectionError:
+            if retry_attempts_rest > 0:
+                time.sleep(5)
+                return self._refresh_access_token(retry_attempts_rest - 1)
+            try:
+                local_ip = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                local_ip = ""
+            try:
+                requests.get("https://pypi.org")
+                raise UpginiConnectionError(bundle.get("no_connection_to_upgini").format(local_ip))
+            except requests.exceptions.ConnectionError:
+                raise UpginiConnectionError(bundle.get("no_internet_connection").format(local_ip))
 
     def _syncronized_refresh_access_token(self) -> str:
         with refresh_token_lock:
@@ -241,7 +262,7 @@ class _RestClient:
             return request()
         except RequestException as e:
             if need_connection_retry:
-                print(bundle.get("connection_error_with_retry").format(e))
+                print(bundle.get("connection_error_with_retry"))
                 time.sleep(10)
                 return self._with_unauth_retry(request)
             else:

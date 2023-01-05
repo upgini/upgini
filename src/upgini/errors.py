@@ -1,11 +1,3 @@
-from typing import Any, Optional
-
-
-class _ErrorMessages(object):
-    not_none = '"{0}" should not be None.'
-    not_none_or_empty = '"{0}" should not be None or empty.'
-
-
 class HttpError(Exception):
     """Error from REST API."""
 
@@ -28,14 +20,9 @@ class UnauthorizedError(HttpError):
         super(UnauthorizedError, self).__init__(message, status_code)
 
 
-def _not_none(param_name: str, param: Optional[Any]):
-    if param is None:
-        raise TypeError(_ErrorMessages.not_none.format(param_name))
-
-
-def _not_none_or_empty(param_name: str, param: Optional[str]):
-    if param is None:
-        raise TypeError(_ErrorMessages.not_none_or_empty.format(param_name))
+class UpginiConnectionError(Exception):
+    def __init__(self, message):
+        super(UpginiConnectionError, self).__init__(message)
 
 
 class ValidationError(Exception):

@@ -17,7 +17,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.dataset import Dataset
-from upgini.errors import ValidationError
+from upgini.errors import UpginiConnectionError, ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
@@ -119,6 +119,12 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        try:
+            self.rest_client = get_rest_client(endpoint, self.api_key)
+        except UpginiConnectionError as e:
+            print(e)
+            return
+
         if logs_enabled:
             self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
         else:
@@ -1564,21 +1570,27 @@ class FeaturesEnricher(TransformerMixin):
             and next(iter(using_keys.values())) == SearchKey.DATE
             and not silent_mode
         ):
-            print(bundle.get("date_only_search"))
+            msg = bundle.get("date_only_search")
+            print(msg)
+            self.logger.warning(msg)
             self.warning_counter.increment()
 
         maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * _num_samples(x):
-                print(bundle.get("date_search_without_time_series"))
+                msg = bundle.get("date_search_without_time_series")
+                print(msg)
+                self.logger.warning(msg)
                 self.warning_counter.increment()
 
         if len(using_keys) == 1:
             for k, v in using_keys.items():
                 # Show warning for country only if country is the only key
                 if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(using_keys) == 1):
-                    print(bundle.get("single_constant_search_key").format(v, x.loc[0, k]))
+                    msg = bundle.get("single_constant_search_key").format(v, x.loc[0, k])
+                    print(msg)
+                    self.logger.warning(msg)
                     self.warning_counter.increment()
 
         return valid_search_keys
