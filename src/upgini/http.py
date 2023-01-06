@@ -197,7 +197,8 @@ class _RestClient:
     DELETE_ADS_URI_FMT = "private/api/v2/ads/{0}"
     POLL_ADS_MANAGEMENT_STATUS_URI_FMT = "private/api/v2/ads/management-task/{0}"
     GET_ADS_DESCRIPTION_URI_FMT = "private/api/v2/ads/{0}"
-    GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads"
+    GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads/descriptions"
+    GET_ACTIVE_ADS_DEFINITIONS_URI = "private/api/v2/ads/definitions"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -598,14 +599,16 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return response
 
-    def get_ads_description(self, ads_definition_id: str, trace_id: str):
+    def get_ads_description(self, ads_definition_id: str):
         api_path = self.GET_ADS_DESCRIPTION_URI_FMT.format(ads_definition_id)
-        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, None))
         return response
 
     def get_all_ads_descriptions(self):
-        response = self._with_unauth_retry(lambda: self._send_get_req(self.GET_ALL_ADS_DESCRIPTIONS_URI))
-        return response
+        return self._with_unauth_retry(lambda: self._send_get_req(self.GET_ALL_ADS_DESCRIPTIONS_URI, None))
+
+    def get_active_ads_definitions(self):
+        return self._with_unauth_retry(lambda: self._send_get_req(self.GET_ACTIVE_ADS_DEFINITIONS_URI, None))
 
     # ---
 
@@ -647,7 +650,7 @@ class _RestClient:
         )
 
         if response.status_code >= 400:
-            if not silent:
+            if not silent and response.status_code != 401:
                 logging.error(f"Failed to execute request to {api_path}: {response}")
             raise HttpError(response.text, status_code=response.status_code)
 

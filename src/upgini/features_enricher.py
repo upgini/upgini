@@ -512,8 +512,6 @@ class FeaturesEnricher(TransformerMixin):
                 validated_X = self._validate_X(self.X)
                 validated_y = self._validate_y(validated_X, self.y)
 
-                # TODO check that X and y are the same as on the fit
-
                 self.__log_debug_information(self.X, self.y, self.eval_set)
 
                 search_keys = self.search_keys.copy()
@@ -988,7 +986,7 @@ class FeaturesEnricher(TransformerMixin):
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
-        features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns)
+        features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns, self.warning_counter)
         df = df.drop(columns=features_to_drop)
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in features_to_drop]
