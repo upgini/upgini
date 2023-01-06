@@ -13,6 +13,7 @@ from upgini.resource_bundle import bundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
+from upgini.utils.warning_counter import WarningCounter
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -167,8 +168,8 @@ def test_python_datetime_to_timestamp_conversion():
 
 def test_constant_and_empty_validation():
     df = pd.DataFrame(
-        [{"phone": random.randint(1, 99999999999), "a": 1, "b": None}] * 995
-        + [{"phone": random.randint(1, 99999999999), "a": 2, "b": 3}] * 5
+        [{"phone": random.randint(1, 99999999999), "a": 1, "b": None, "c": 0}] * 995
+        + [{"phone": random.randint(1, 99999999999), "a": 2, "b": 3, "c": 1}] * 5
     )
     dataset = Dataset("test4", df=df)  # type: ignore
     dataset.meaning_types = {
@@ -176,8 +177,10 @@ def test_constant_and_empty_validation():
         "a": FileColumnMeaningType.FEATURE,
         "b": FileColumnMeaningType.FEATURE,
     }
-    features_to_drop = FeaturesValidator().validate(df, ["a", "b"])
+    warnings_counter = WarningCounter()
+    features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], warnings_counter)
     assert features_to_drop == ["a", "b"]
+    assert warnings_counter.has_warnings()
 
 
 def test_imbalanced_target():
