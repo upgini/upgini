@@ -14,16 +14,12 @@ from sklearn.metrics._regression import (
 )
 from sklearn.model_selection import (
     BaseCrossValidator,
-    KFold,
-    StratifiedKFold,
-    TimeSeriesSplit,
     cross_validate,
 )
 
 from upgini.errors import ValidationError
-from upgini.metadata import CVType, ModelTaskType
+from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
-from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.utils.target_utils import correct_string_target
 
 CATBOOST_PARAMS = {
@@ -117,39 +113,14 @@ class EstimatorWrapper:
         return np.mean(metrics) * self.multiplier
 
     @staticmethod
-    def _create_cv(
-        cv: Union[BaseCrossValidator, CVType, None], target_type: ModelTaskType, shuffle: bool, random_state: int
-    ) -> BaseCrossValidator:
-        if isinstance(cv, BaseCrossValidator):
-            return cv
-
-        if cv == CVType.time_series:
-            return TimeSeriesSplit(n_splits=N_FOLDS)
-        elif cv == CVType.blocked_time_series:
-            return BlockedTimeSeriesSplit(n_splits=N_FOLDS, test_size=BLOCKED_TS_TEST_SIZE)
-        elif target_type == ModelTaskType.REGRESSION:
-            if shuffle:
-                return KFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
-            else:
-                return KFold(n_splits=N_FOLDS, shuffle=False)
-        else:
-            if shuffle:
-                return StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
-            else:
-                return StratifiedKFold(n_splits=N_FOLDS, shuffle=False)
-
-    @staticmethod
     def create(
         estimator,
         logger: logging.Logger,
         target_type: ModelTaskType,
-        cv: Union[BaseCrossValidator, CVType, None],
+        cv: BaseCrossValidator,
         scoring: Union[Callable, str, None] = None,
-        shuffle: bool = False,
-        random_state: int = 42,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
-        cv = EstimatorWrapper._create_cv(cv, target_type, shuffle, random_state)
         kwargs = {
             "scorer": scorer,
             "metric_name": metric_name,
