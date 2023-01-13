@@ -202,7 +202,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
         *,
-        calculate_metrics: bool = False,
+        calculate_metrics: bool = True,
         estimator: Optional[Any] = None,
         scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
@@ -284,7 +284,7 @@ class FeaturesEnricher(TransformerMixin):
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        calculate_metrics: bool = False,
+        calculate_metrics: bool = True,
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
     ) -> pd.DataFrame:
@@ -511,101 +511,102 @@ class FeaturesEnricher(TransformerMixin):
 
                 self.__log_debug_information(self.X, self.y, self.eval_set)
 
-                # enrich X with eval_set
-                if len(self.feature_names_) > 0:
-                    if self.eval_set is not None:
-                        df_with_eval_set_index = self.X.copy()
-                        df_with_eval_set_index[EVAL_SET_INDEX] = 0
-                        for idx, eval_tuple in enumerate(self.eval_set):
-                            eval_x_with_index = eval_tuple[0].copy()
-                            eval_x_with_index[EVAL_SET_INDEX] = idx + 1
-                            df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_x_with_index])
-
-                        enriched = self.transform(df_with_eval_set_index, silent_mode=True)
-
-                        enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
-                        enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
-                        enriched_eval_set = enriched[enriched[EVAL_SET_INDEX] != 0]
-                        enriched_eval_sets = dict()
-                        for idx in enriched_eval_set[EVAL_SET_INDEX].unique():
-                            enriched_eval_sets[idx] = enriched[enriched[EVAL_SET_INDEX] == idx].copy()
-                            enriched_eval_sets[idx].drop(columns=EVAL_SET_INDEX, inplace=True)
-                    else:
-                        enriched_X = self.transform(self.X, silent_mode=True)
-                else:
-                    enriched = self.X.copy()
-                    for idx, eval_tuple in enumerate(self.eval_set):
-                        enriched_eval_sets[idx + 1] = eval_tuple[0].copy()
-
-                search_keys = self.search_keys.copy()
-                search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=True)
-
-                extended_X = validated_X.copy()
-                generated_features = []
-                date_column = self.__get_date_column(search_keys)
-                if date_column is not None:
-                    converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-                    extended_X = converter.convert(extended_X)
-
-                    generated_features.extend(converter.generated_features)
-                email_column = self.__get_email_column(search_keys)
-                hem_column = self.__get_hem_column(search_keys)
-                if email_column:
-                    converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
-                    extended_X = converter.convert(extended_X)
-                    generated_features.extend(converter.generated_features)
-                generated_features = [f for f in generated_features if f in self.fit_generated_features]
-
-                self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
-                self.logger.info(f"Shape of X: {extended_X.shape}")
-                self.logger.info(f"Shape of y: {len(validated_y)}")
-                X_sorted, y_sorted = self._sort_by_date(extended_X, validated_y, date_column)
-                enriched_X_sorted, enriched_y_sorted = self._sort_by_date(enriched_X, validated_y, date_column)
-
-                client_features = [
-                    c for c in (validated_X.columns.to_list() + generated_features) if c not in search_keys.keys()
-                ]
-
-                filtered_enriched_features = self.__filtered_enriched_features(
-                    importance_threshold,
-                    max_features,
-                )
-
-                existing_filtered_enriched_features = [
-                    c for c in filtered_enriched_features if c in enriched_X_sorted.columns
-                ]
-
-                fitting_X = X_sorted[client_features].copy()
-                fitting_enriched_X = enriched_X_sorted[
-                    client_features + existing_filtered_enriched_features
-                ].copy()
-
-                if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    if self._has_important_paid_features():
-                        print(bundle.get("metrics_no_important_free_features"))
-                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
-                    else:
-                        print(bundle.get("metrics_no_important_features"))
-                        self.logger.warning("No client or relevant ADS features found to calculate metrics")
-                    self.warning_counter.increment()
-                    return None
-
-                model_task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
-
-                _cv = cv or self.cv
-                if not isinstance(_cv, BaseCrossValidator):
-                    date_series = self.X[date_column] if date_column is not None else None
-                    _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
-
-                wrapper = EstimatorWrapper.create(
-                    estimator, self.logger, model_task_type, _cv, scoring
-                )
-                metric = wrapper.metric_name
-                multiplier = wrapper.multiplier
-
                 print(bundle.get("metrics_start"))
 
                 with Spinner():
+
+                    # enrich X with eval_set
+                    if len(self.feature_names_) > 0:
+                        if self.eval_set is not None:
+                            df_with_eval_set_index = validated_X.copy()
+                            df_with_eval_set_index[EVAL_SET_INDEX] = 0
+                            for idx, eval_pair in enumerate(self.eval_set):
+                                eval_x, _ = self._validate_eval_set_pair(validated_X, eval_pair)
+                                eval_x_with_index = eval_x.copy()
+                                eval_x_with_index[EVAL_SET_INDEX] = idx + 1
+                                df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_x_with_index])
+
+                            enriched = self.transform(df_with_eval_set_index, silent_mode=True)
+
+                            enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
+                            enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
+                            enriched_eval_set = enriched[enriched[EVAL_SET_INDEX] != 0]
+                            enriched_eval_sets = dict()
+                            for idx in enriched_eval_set[EVAL_SET_INDEX].unique():
+                                enriched_eval_sets[idx] = enriched[enriched[EVAL_SET_INDEX] == idx].copy()
+                                enriched_eval_sets[idx].drop(columns=EVAL_SET_INDEX, inplace=True)
+                        else:
+                            enriched_X = self.transform(self.X, silent_mode=True)
+                    else:
+                        enriched_X = validated_X.copy()
+                        if self.eval_set is not None:
+                            enriched_eval_sets = dict()
+                            for idx, eval_pair in enumerate(self.eval_set):
+                                eval_x, _ = self._validate_eval_set_pair(validated_X, eval_pair)
+                                enriched_eval_sets[idx + 1] = eval_x.copy()
+
+                    search_keys = self.search_keys.copy()
+                    search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=True)
+
+                    extended_X = validated_X.copy()
+                    generated_features = []
+                    date_column = self.__get_date_column(search_keys)
+                    if date_column is not None:
+                        converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+                        extended_X = converter.convert(extended_X)
+
+                        generated_features.extend(converter.generated_features)
+                    email_column = self.__get_email_column(search_keys)
+                    hem_column = self.__get_hem_column(search_keys)
+                    if email_column:
+                        converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
+                        extended_X = converter.convert(extended_X)
+                        generated_features.extend(converter.generated_features)
+                    generated_features = [f for f in generated_features if f in self.fit_generated_features]
+
+                    self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
+                    self.logger.info(f"Shape of X: {extended_X.shape}")
+                    self.logger.info(f"Shape of y: {len(validated_y)}")
+                    X_sorted, y_sorted = self._sort_by_date(extended_X, validated_y, date_column)
+                    enriched_X_sorted, enriched_y_sorted = self._sort_by_date(enriched_X, validated_y, date_column)
+
+                    client_features = [
+                        c for c in extended_X.columns.to_list() if c not in search_keys.keys()
+                    ]
+
+                    filtered_enriched_features = self.__filtered_enriched_features(
+                        importance_threshold,
+                        max_features,
+                    )
+
+                    existing_filtered_enriched_features = [
+                        c for c in filtered_enriched_features if c in enriched_X_sorted.columns
+                    ]
+
+                    fitting_X = X_sorted[client_features].copy()
+                    fitting_enriched_X = enriched_X_sorted[client_features + existing_filtered_enriched_features].copy()
+
+                    if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
+                        if self._has_important_paid_features():
+                            print(bundle.get("metrics_no_important_free_features"))
+                            self.logger.warning("No client or free relevant ADS features found to calculate metrics")
+                        else:
+                            print(bundle.get("metrics_no_important_features"))
+                            self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                        self.warning_counter.increment()
+                        return None
+
+                    model_task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
+
+                    _cv = cv or self.cv
+                    if not isinstance(_cv, BaseCrossValidator):
+                        date_series = validated_X[date_column] if date_column is not None else None
+                        _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
+
+                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
+                    metric = wrapper.metric_name
+                    multiplier = wrapper.multiplier
+
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
@@ -842,12 +843,11 @@ class FeaturesEnricher(TransformerMixin):
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-            index_name = df.index.name or DEFAULT_INDEX
-            df = df.reset_index()
-            df = df.rename(columns={index_name: ORIGINAL_INDEX})
-            system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX] + generated_features
+            df = df.reset_index(drop=True)
+            system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
+            # if EVAL_SET_INDEX in df.columns:
+            #     system_columns_with_original_index.append(EVAL_SET_INDEX)
             df_with_original_index = df[system_columns_with_original_index].copy()
-            df = df.drop(columns=ORIGINAL_INDEX)
 
             combined_search_keys = []
             for L in range(1, len(search_keys.keys()) + 1):
@@ -881,15 +881,14 @@ class FeaturesEnricher(TransformerMixin):
             if not silent_mode:
                 print(bundle.get("transform_start"))
                 with Spinner():
-                    result, _ = self.__enrich(
+                    result = self.__enrich(
                         df_with_original_index,
                         validation_task.get_all_validation_raw_features(trace_id),
                         validated_X,
-                        {},
                     )
             else:
-                result, _ = self.__enrich(
-                    df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), validated_X, {}
+                result = self.__enrich(
+                    df_with_original_index, validation_task.get_all_validation_raw_features(trace_id), validated_X
                 )
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
@@ -1096,7 +1095,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if len(set(validated_X.columns)) != len(validated_X.columns):
             raise ValidationError(bundle.get("x_contains_dup_columns"))
-        if not validated_X.index.is_unique:
+        if not is_transform and not validated_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index"))
 
         if TARGET in validated_X.columns:
@@ -1374,9 +1373,8 @@ class FeaturesEnricher(TransformerMixin):
         df_with_original_index: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
         X: pd.DataFrame,
-        eval_set_by_id: Dict[int, pd.DataFrame],
         join_type: str = "left",
-    ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
+    ) -> pd.DataFrame:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError(bundle.get("features_wasnt_returned"))
@@ -1391,7 +1389,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(bundle.get("returned_features_same_as_passed").format(dup_features))
 
-        result = pd.merge(
+        result_features = pd.merge(
             df_with_original_index,
             result_features,
             left_on=SYSTEM_RECORD_ID,
@@ -1399,31 +1397,14 @@ class FeaturesEnricher(TransformerMixin):
             how=join_type,
         )
 
-        result_eval_sets = dict()
-        if EVAL_SET_INDEX in result.columns:
-            result_train = result.loc[result[EVAL_SET_INDEX] == 0].copy()
-            result_eval_set = result[result[EVAL_SET_INDEX] != 0]
-            for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
-                result_eval = result.loc[result[EVAL_SET_INDEX] == eval_set_index].copy()
-                if eval_set_index in eval_set_by_id.keys():
-                    eval_X = eval_set_by_id[eval_set_index]
-                    result_eval = result_eval.set_index(ORIGINAL_INDEX)
-                    result_eval = pd.merge(left=eval_X, right=result_eval, left_index=True, right_index=True)
-                else:
-                    raise RuntimeError(bundle.get("missing_eval_set_for_enrichment").format(eval_set_index))
-                result_eval_sets[eval_set_index] = result_eval
-            result_train = result_train.drop(columns=EVAL_SET_INDEX)
-        else:
-            result_train = result
-
-        result_train = result_train.set_index(ORIGINAL_INDEX)
-        result_train = pd.merge(left=X, right=result_train, left_index=True, right_index=True, how=join_type)
+        result = X.copy()
+        index_name = result.index.name
+        result = pd.concat([X.reset_index(), result_features], axis=1).set_index(index_name or "index")
+        result.index.name = index_name
         if SYSTEM_RECORD_ID in result.columns:
-            result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
-            for eval_set_index in result_eval_sets.keys():
-                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(columns=SYSTEM_RECORD_ID)
+            result = result.drop(columns=SYSTEM_RECORD_ID)
 
-        return result_train, result_eval_sets
+        return result
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str]):
         if self._search_task is None:

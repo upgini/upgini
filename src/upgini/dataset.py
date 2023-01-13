@@ -231,7 +231,7 @@ class Dataset(pd.DataFrame):
                 if max_length > 400:
                     raise ValidationError(bundle.get("dataset_too_long_column_name").format(col, max_length))
 
-    def __clean_duplicates(self):
+    def __clean_duplicates(self, silent_mode=False):
         """Clean DataSet from full duplicates."""
         # self.logger.info("Clean full duplicates")
         nrows = len(self)
@@ -246,7 +246,10 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(bundle.get("dataset_full_duplicates").format(share_full_dedup))
+            msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
+            self.logger.warning(msg)
+            if not silent_mode:
+                print(msg)
             self.warning_counter.increment()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
@@ -328,7 +331,7 @@ class Dataset(pd.DataFrame):
                 .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
 
-    def __remove_old_dates(self):
+    def __remove_old_dates(self, silent_mode=False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -343,7 +346,8 @@ class Dataset(pd.DataFrame):
                 else:
                     msg = bundle.get("dataset_drop_old_dates")
                     self.logger.warning(msg)
-                    print(msg)
+                    if not silent_mode:
+                        print(msg)
                     self.warning_counter.increment()
 
     def __drop_ignore_columns(self):
@@ -515,7 +519,7 @@ class Dataset(pd.DataFrame):
             f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
         ]
 
-    def __remove_dates_from_features(self):
+    def __remove_dates_from_features(self, silent_mode):
         # self.logger.info("Remove date columns from features")
 
         removed_features = []
@@ -527,8 +531,9 @@ class Dataset(pd.DataFrame):
 
         if removed_features:
             msg = bundle.get("dataset_date_features").format(removed_features)
-            print(msg)
             self.logger.warning(msg)
+            if not silent_mode:
+                print(msg)
             self.warning_counter.increment()
 
     def __validate_features_count(self):
@@ -694,7 +699,7 @@ class Dataset(pd.DataFrame):
 
         self.__drop_ignore_columns()
 
-        self.__remove_dates_from_features()
+        self.__remove_dates_from_features(silent_mode)
 
         self.__validate_features_count()
 
@@ -706,7 +711,7 @@ class Dataset(pd.DataFrame):
 
         self.__correct_decimal_comma()
 
-        self.__remove_old_dates()
+        self.__remove_old_dates(silent_mode)
 
         self.__convert_ip()
 
@@ -718,7 +723,7 @@ class Dataset(pd.DataFrame):
 
         self.__convert_features_types()
 
-        self.__clean_duplicates()
+        self.__clean_duplicates(silent_mode)
 
         self.__validate_dataset(validate_target, silent_mode)
 

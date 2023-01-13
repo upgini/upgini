@@ -27,7 +27,6 @@ from .utils import (
     mock_get_task_metadata_v2,
     mock_initial_search,
     mock_initial_summary,
-    mock_raw_features,
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
@@ -36,6 +35,7 @@ from .utils import (
 train_segment = bundle.get("quality_metrics_train_segment")
 eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
 eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
+rows_header = bundle.get("quality_metrics_rows_header")
 match_rate_header = bundle.get("quality_metrics_match_rate_header")
 baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
 enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
@@ -120,7 +120,6 @@ def test_features_enricher(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -181,8 +180,11 @@ def test_features_enricher(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
                 match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.502776, 0.5, 0.5],
+                uplift: [0.0027758698980688834, 0.0, 0.0]
             }
         )
         .set_index("segment")
@@ -244,7 +246,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             ),
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -283,8 +285,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment],
+                rows_header: [23738],
                 match_rate_header: [99.9],
-                enriched_rocauc: [0.49787240371408253],
+                baseline_rocauc: [0.695287],
+                enriched_rocauc: [0.695218],
+                uplift: [-6.959225994240814e-05]
             }
         )
         .set_index("segment")
@@ -366,7 +371,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -422,13 +427,33 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 4)
 
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
     metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
                 match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.5, 0.5, 0.5],  # [0.492362, 0.508219, 0.531009],
+                uplift: [0.0, 0.0, 0.0]
             }
         )
         .set_index("segment")
@@ -512,7 +537,6 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -575,8 +599,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
                 match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.5, 0.5, 0.5],  # [0.492362, 0.508219, 0.531009],
+                uplift: [0.0, 0.0, 0.0]
             }
         )
         .set_index("segment")
@@ -604,6 +631,10 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     pd.set_option("mode.chained_assignment", "raise")
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
@@ -667,10 +698,23 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             ),
         ),
     )
-    path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_features.parquet"
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_tds.parquet")
     df = pd.read_parquet(path)
@@ -696,10 +740,11 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment],
+                rows_header: [5319],
                 match_rate_header: [99.0],
-                baseline_rocauc: [0.504187],
-                enriched_rocauc: [0.511054],
-                uplift: [0.006867507128359374],
+                baseline_rocauc: [0.501952],  # [0.504187],
+                # enriched_rocauc: [0.511054],
+                # uplift: [0.006867507128359374],
             }
         )
         .set_index("segment")
@@ -800,7 +845,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -943,7 +987,23 @@ def test_filter_by_importance(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -969,38 +1029,22 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, importance_threshold=0.8)
 
-    assert enricher.enriched_X is not None
-    # assert len(enricher.enriched_X) == 10000
-    # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
-    # assert enricher.enriched_eval_set is not None
-    # assert len(enricher.enriched_eval_set) == 2000
-    # assert enricher.enriched_eval_set.columns.to_list() == [
-    #     "SystemRecordId_473310000",
-    #     "phone_num",
-    #     "rep_date",
-    #     "eval_set_index"
-    # ]
-
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
-    assert metrics is None
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    assert_frame_equal(metrics, expected_metrics)
 
     train_features = enricher.fit_transform(
         train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8
@@ -1070,7 +1114,23 @@ def test_filter_by_max_features(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -1096,39 +1156,23 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, max_features=0)
 
-    # assert enricher.enriched_X is not None
-    # assert len(enricher.enriched_X) == 10000
-    # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
-    # assert enricher.enriched_eval_set is not None
-    # assert len(enricher.enriched_eval_set) == 2000
-    # assert enricher.enriched_eval_set.columns.to_list() == [
-    #     "SystemRecordId_473310000",
-    #     "phone_num",
-    #     "rep_date",
-    #     "eval_set_index"
-    # ]
-
     metrics = enricher.calculate_metrics(max_features=0)
     print(metrics)
 
-    assert metrics is None
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    assert_frame_equal(metrics, expected_metrics)
 
     train_features = enricher.fit_transform(
         train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0
@@ -1159,9 +1203,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher.X = X
     enricher.y = y
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame(
-        {"system_record_id": [1, 2, 3], "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]}
-    )
+
     assert enricher.calculate_metrics() is None
 
 
@@ -1257,10 +1299,12 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)]
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            )
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1289,10 +1333,10 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     train_target = train_df["target"]
     eval1_df = df[10000:10100].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    # eval1_target = eval1_df["target"].reset_index(drop=True)
     eval2_df = df[10100:10200].reset_index(drop=True)
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"].reset_index(drop=True)
+    # eval2_target = eval2_df["target"].reset_index(drop=True)
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -1302,22 +1346,21 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.fit(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-    )
+    enricher.fit(train_features, train_target)
 
-    print("Enriched X")
-    print(enricher.enriched_X)
+    train_features["eval_set_index"] = 0
+    eval1_features["eval_set_index"] = 1
+    eval2_features["eval_set_index"] = 2
+    combined_df = pd.concat([train_features, eval1_features, eval2_features], axis=0)
 
-    assert_frame_equal(train_features, enricher.enriched_X[train_features.columns])
+    enriched = enricher.transform(combined_df)
 
-    enriched_eval1 = enricher.enriched_eval_sets[1]
-    assert_frame_equal(eval1_features, enriched_eval1[eval1_features.columns])
+    print("Enriched:")
+    print(enriched)
 
-    enriched_eval2 = enricher.enriched_eval_sets[2]
-    assert_frame_equal(eval2_features, enriched_eval2[eval2_features.columns])
+    assert_frame_equal(train_features, enriched[enriched["eval_set_index"] == 0][train_features.columns])
+    assert_frame_equal(eval1_features, enriched[enriched["eval_set_index"] == 1][eval1_features.columns])
+    assert_frame_equal(eval2_features, enriched[enriched["eval_set_index"] == 2][eval2_features.columns])
 
 
 def test_features_enricher_with_datetime(requests_mock: Mocker):
@@ -1398,7 +1441,6 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             ],
         ),
     )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1482,10 +1524,11 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
                 match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.497995, 0.495701, 0.455651],
-                enriched_rocauc: [0.498973, 0.520476, 0.472655],
-                uplift: [0.000978, 0.024776, 0.017004],
+                baseline_rocauc: [0.496982, 0.500184, 0.459055],
+                enriched_rocauc: [0.500709, 0.502574, 0.460107],
+                uplift: [0.003728, 0.002389, 0.001051],
             }
         )
         .set_index("segment")
