@@ -164,6 +164,7 @@ def test_features_enricher(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -172,6 +173,7 @@ def test_features_enricher(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -184,7 +186,7 @@ def test_features_enricher(requests_mock: Mocker):
                 match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.502776, 0.5, 0.5],
-                uplift: [0.0027758698980688834, 0.0, 0.0]
+                uplift: [0.0027758698980688834, 0.0, 0.0],
             }
         )
         .set_index("segment")
@@ -274,10 +276,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enriched_train_features = enricher.fit_transform(
-        X,
-        y,
-    )
+    enriched_train_features = enricher.fit_transform(X, y, calculate_metrics=False)
     assert enriched_train_features.shape == (23738, 3)
 
     metrics = enricher.calculate_metrics()
@@ -289,7 +288,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
                 match_rate_header: [99.9],
                 baseline_rocauc: [0.695287],
                 enriched_rocauc: [0.695218],
-                uplift: [-6.959225994240814e-05]
+                uplift: [-6.959225994240814e-05],
             }
         )
         .set_index("segment")
@@ -416,6 +415,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -424,6 +424,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -453,7 +454,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
                 match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.5, 0.5, 0.5],  # [0.492362, 0.508219, 0.531009],
-                uplift: [0.0, 0.0, 0.0]
+                uplift: [0.0, 0.0, 0.0],
             }
         )
         .set_index("segment")
@@ -582,6 +583,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
     assert enriched_train_features.index.name == "custom_index_name"
@@ -591,6 +593,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 4)
 
@@ -603,7 +606,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
                 match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.5, 0.5, 0.5],  # [0.492362, 0.508219, 0.531009],
-                uplift: [0.0, 0.0, 0.0]
+                uplift: [0.0, 0.0, 0.0],
             }
         )
         .set_index("segment")
@@ -730,10 +733,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.fit(
-        train_features,
-        train_target,
-    )
+    enricher.fit(train_features, train_target, calculate_metrics=False)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -846,6 +846,23 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         ),
     )
 
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
     train_df = df.head(10000)
@@ -886,23 +903,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert fit_req is not None
     assert "runtimeProperty1" in str(fit_req.body)
     assert "runtimeValue1" in str(fit_req.body)
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
-    )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     transformed = enricher.transform(train_features, keep_input=True)
 
@@ -1027,7 +1027,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, importance_threshold=0.8)
+    enricher.fit(train_features, train_target, eval_set=eval_set, importance_threshold=0.8, calculate_metrics=False)
 
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
@@ -1047,7 +1047,12 @@ def test_filter_by_importance(requests_mock: Mocker):
     assert_frame_equal(metrics, expected_metrics)
 
     train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=eval_set, keep_input=True, importance_threshold=0.8
+        train_features,
+        train_target,
+        eval_set=eval_set,
+        keep_input=True,
+        importance_threshold=0.8,
+        calculate_metrics=False,
     )
 
     assert train_features.shape == (10000, 3)
@@ -1154,7 +1159,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, max_features=0)
+    enricher.fit(train_features, train_target, eval_set=eval_set, max_features=0, calculate_metrics=False)
 
     metrics = enricher.calculate_metrics(max_features=0)
     print(metrics)
@@ -1175,7 +1180,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
     assert_frame_equal(metrics, expected_metrics)
 
     train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0
+        train_features, train_target, eval_set=eval_set, keep_input=True, max_features=0, calculate_metrics=False
     )
 
     assert train_features.shape == (10000, 3)
@@ -1302,7 +1307,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
             features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
-            )
+            ),
         ),
     )
 
@@ -1483,6 +1488,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         train_features,
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 12)
 
@@ -1491,6 +1497,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
+        calculate_metrics=False,
     )
     assert enriched_train_features.shape == (10000, 12)
 
