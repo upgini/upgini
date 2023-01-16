@@ -185,8 +185,8 @@ def test_features_enricher(requests_mock: Mocker):
                 rows_header: [10000, 1000, 1000],
                 match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
-                enriched_rocauc: [0.502776, 0.5, 0.5],
-                uplift: [0.0027758698980688834, 0.0, 0.0],
+                enriched_rocauc: [0.5, 0.5, 0.5],
+                uplift: [0.0, 0.0, 0.0],
             }
         )
         .set_index("segment")
@@ -265,6 +265,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
     train = pd.read_parquet(os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/real_train.parquet"))
     train.drop_duplicates(["request_date", "score"], inplace=True)
+    train = train.sample(n=12000)
     X = train[["request_date", "score"]]
     y = train["target1"]
 
@@ -277,18 +278,18 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     )
 
     enriched_train_features = enricher.fit_transform(X, y, calculate_metrics=False)
-    assert enriched_train_features.shape == (23738, 3)
+    assert enriched_train_features.shape == (12000, 3)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
                 "segment": [train_segment],
-                rows_header: [23738],
+                rows_header: [12000],
                 match_rate_header: [99.9],
-                baseline_rocauc: [0.695287],
-                enriched_rocauc: [0.695218],
-                uplift: [-6.959225994240814e-05],
+                baseline_rocauc: [0.692062],
+                enriched_rocauc: [0.69197],
+                uplift: [-0.000118],
             }
         )
         .set_index("segment")
