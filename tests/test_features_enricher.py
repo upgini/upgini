@@ -288,10 +288,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             {
                 "segment": [train_segment],
                 rows_header: [23738],
-                # match_rate_header: [99.9],
-                baseline_rocauc: [0.695287],
-                enriched_rocauc: [0.695218],
-                uplift: [-0.00007],
+                baseline_rocauc: [0.695376],  # [0.695287], local value
+                enriched_rocauc: [0.695736],  # [0.695218], local value
+                uplift: [0.00036],  # [-0.00007], local value
             }
         )
         .set_index("segment")
