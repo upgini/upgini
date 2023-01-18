@@ -1732,7 +1732,7 @@ class FeaturesEnricher(TransformerMixin):
             _ = get_ipython()  # type: ignore
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
-            display_html_dataframe(self.features_info.head(60))
+            display_html_dataframe(self.features_info)
 
             if len(self.feature_names_) == 0:
                 msg = bundle.get("features_info_zero_important_features")
