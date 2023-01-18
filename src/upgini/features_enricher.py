@@ -39,6 +39,7 @@ from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
+from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
@@ -196,6 +197,8 @@ class FeaturesEnricher(TransformerMixin):
         self.y: Optional[pd.Series] = None
         self.eval_set: Optional[List[Tuple]] = None
         self.autodetected_search_keys: Dict[str, SearchKey] = {}
+        self.imbalanced = False
+        self.cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
 
     def fit(
         self,
@@ -382,6 +385,7 @@ class FeaturesEnricher(TransformerMixin):
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        trace_id: Optional[str] = None,
         silent_mode=False,
     ) -> pd.DataFrame:
         """Transform `X`.
@@ -409,7 +413,7 @@ class FeaturesEnricher(TransformerMixin):
             Transformed dataframe, enriched with valuable features.
         """
 
-        trace_id = str(uuid.uuid4())
+        trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
             self.logger.info("Start transform")
@@ -449,7 +453,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         *,
         scoring: Union[Callable, str, None] = None,
-        cv: Optional[BaseCrossValidator] = None,
+        cv: Union[BaseCrossValidator, CVType, None] = None,
         estimator=None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -501,7 +505,7 @@ class FeaturesEnricher(TransformerMixin):
                     or self.y is None
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
-                if self.enriched_X is None:
+                if not self.imbalanced and self.enriched_X is None:
                     raise ValidationError(bundle.get("metrics_empty_enriched_features"))
 
                 if self._has_important_paid_features():
@@ -509,86 +513,41 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
                     self.warning_counter.increment()
 
-                validated_X = self._validate_X(self.X)
-                validated_y = self._validate_y(validated_X, self.y)
-
-                self.__log_debug_information(self.X, self.y, self.eval_set)
-
-                search_keys = self.search_keys.copy()
-                search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=True)
-
-                extended_X = validated_X.copy()
-                generated_features = []
-                date_column = self.__get_date_column(search_keys)
-                if date_column is not None:
-                    converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-                    extended_X = converter.convert(extended_X)
-
-                    generated_features.extend(converter.generated_features)
-                email_column = self.__get_email_column(search_keys)
-                hem_column = self.__get_hem_column(search_keys)
-                if email_column:
-                    converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
-                    extended_X = converter.convert(extended_X)
-                    generated_features.extend(converter.generated_features)
-                generated_features = [f for f in generated_features if f in self.fit_generated_features]
-
-                X_sampled, y_sampled = self._sample_X_and_y(extended_X, validated_y, self.enriched_X)
-                self.logger.info(f"Shape of enriched_X: {self.enriched_X.shape}")
-                self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
-                self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
-                X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled, date_column)
-                enriched_X_sorted, enriched_y_sorted = self._sort_by_date(self.enriched_X, y_sampled, date_column)
-
-                client_features = [
-                    c for c in (validated_X.columns.to_list() + generated_features) if c not in search_keys.keys()
-                ]
-
-                filtered_client_features = self.__filtered_client_features(client_features)
-
-                filtered_enriched_features = self.__filtered_enriched_features(
-                    importance_threshold,
-                    max_features,
-                )
-
-                existing_filtered_enriched_features = [
-                    c for c in filtered_enriched_features if c in enriched_X_sorted.columns
-                ]
-
-                fitting_X = X_sorted[filtered_client_features].copy()
-                fitting_enriched_X = enriched_X_sorted[
-                    filtered_client_features + existing_filtered_enriched_features
-                ].copy()
-
-                if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    if self._has_important_paid_features():
-                        print(bundle.get("metrics_no_important_free_features"))
-                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
-                    else:
-                        print(bundle.get("metrics_no_important_features"))
-                        self.logger.warning("No client or relevant ADS features found to calculate metrics")
-                    self.warning_counter.increment()
-                    return None
-
-                model_task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
-
-                # shuffle Kfold for case when date/datetime keys are not presented
-                key_types = search_keys.values()
-                shuffle = True
-                if SearchKey.DATE in key_types or SearchKey.DATETIME in key_types:
-                    shuffle = False
-
-                _cv = cv or self.cv
-
-                wrapper = EstimatorWrapper.create(
-                    estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
-                )
-                metric = wrapper.metric_name
-                multiplier = wrapper.multiplier
-
                 print(bundle.get("metrics_start"))
 
                 with Spinner():
+                    (
+                        validated_X,
+                        fitting_X,
+                        y_sorted,
+                        fitting_enriched_X,
+                        enriched_y_sorted,
+                        fitting_eval_set_dict,
+                        search_keys
+                    ) = self._prepare_data_for_metrics(trace_id, importance_threshold, max_features)
+
+                    if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
+                        if self._has_important_paid_features():
+                            print(bundle.get("metrics_no_important_free_features"))
+                            self.logger.warning("No client or free relevant ADS features found to calculate metrics")
+                        else:
+                            print(bundle.get("metrics_no_important_features"))
+                            self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                        self.warning_counter.increment()
+                        return None
+
+                    model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
+
+                    _cv = cv or self.cv
+                    if not isinstance(_cv, BaseCrossValidator):
+                        date_column = self.__get_date_column(search_keys)
+                        date_series = validated_X[date_column] if date_column is not None else None
+                        _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
+
+                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
+                    metric = wrapper.metric_name
+                    multiplier = wrapper.multiplier
+
                     # 1 If client features are presented - fit and predict with KFold CatBoost model
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
@@ -598,7 +557,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
+                            estimator, self.logger, model_task_type, _cv, scoring
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
@@ -610,7 +569,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring, shuffle, self.random_state
+                            estimator, self.logger, model_task_type, _cv, scoring
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
@@ -623,7 +582,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     train_metrics = {
                         bundle.get("quality_metrics_segment_header"): bundle.get("quality_metrics_train_segment"),
-                        bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
+                        bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
+                        # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -635,57 +595,17 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
-                    max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
+                    # max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
                     if self.eval_set is not None:
-                        if len(self.enriched_eval_sets) != len(self.eval_set):
-                            raise ValidationError(
-                                bundle.get("metrics_eval_set_count_diff").format(
-                                    len(self.enriched_eval_sets), len(self.eval_set)
-                                )
-                            )
-                        # TODO check that eval_set is the same as on the fit
+                        for idx, _ in enumerate(self.eval_set):
+                            # eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
-                        for idx, eval_pair in enumerate(self.eval_set):
-                            eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
-
-                            eval_X, validated_eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
-                            enriched_eval_X = self.enriched_eval_sets[idx + 1]
-
-                            search_keys = self.search_keys.copy()
-                            search_keys = self.__prepare_search_keys(eval_X, search_keys, silent_mode=True)
-
-                            extended_eval_X = eval_X.copy()
-                            generated_features = []
-                            date_column = self.__get_date_column(search_keys)
-                            if date_column is not None:
-                                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-                                extended_eval_X = converter.convert(extended_eval_X)
-                                generated_features.extend(converter.generated_features)
-                            email_column = self.__get_email_column(search_keys)
-                            hem_column = self.__get_hem_column(search_keys)
-                            if email_column:
-                                converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
-                                extended_eval_X = converter.convert(extended_eval_X)
-                                generated_features.extend(converter.generated_features)
-                            generated_features = [f for f in generated_features if f in self.fit_generated_features]
-
-                            sampled_eval_X, sampled_eval_y = self._sample_X_and_y(
-                                extended_eval_X, validated_eval_y, enriched_eval_X
-                            )
-                            self.logger.info(f"Shape of enriched_eval_X: {enriched_eval_X.shape}")
-                            self.logger.info(f"Shape of eval_X_{idx} after sampling: {sampled_eval_X.shape}")
-                            self.logger.info(f"Shape of eval_y_{idx} after sampling: {len(sampled_eval_y)}")
-                            eval_X_sorted, eval_y_sorted = self._sort_by_date(
-                                sampled_eval_X, sampled_eval_y, date_column
-                            )
-                            eval_X_sorted = eval_X_sorted[filtered_client_features].copy()
-
-                            enriched_eval_X_sorted, enriched_y_sorted = self._sort_by_date(
-                                enriched_eval_X, sampled_eval_y, date_column
-                            )
-                            enriched_eval_X_sorted = enriched_eval_X_sorted[
-                                filtered_client_features + existing_filtered_enriched_features
-                            ].copy()
+                            (
+                                eval_X_sorted,
+                                eval_y_sorted,
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                            ) = fitting_eval_set_dict[idx]
 
                             if baseline_estimator is not None:
                                 self.logger.info(
@@ -702,7 +622,7 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on client features: {enriched_eval_X_sorted.columns.to_list()}"
                                 )
                                 enriched_eval_metric = enriched_estimator.calculate_metric(
-                                    enriched_eval_X_sorted, enriched_y_sorted
+                                    enriched_eval_X_sorted, enriched_eval_y_sorted
                                 )
                             else:
                                 enriched_eval_metric = None
@@ -716,7 +636,8 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_segment_header"): bundle.get(
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
-                                bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
+                                bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
+                                # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if etalon_eval_metric is not None:
                                 eval_metrics[
@@ -739,13 +660,14 @@ class FeaturesEnricher(TransformerMixin):
                     )
 
                     uplift_col = bundle.get("quality_metrics_uplift_header")
+                    date_column = self.__get_date_column(search_keys)
                     if (
                         uplift_col in metrics_df.columns
                         and (metrics_df[uplift_col] < 0).any()
                         and model_task_type == ModelTaskType.REGRESSION
                         and self.cv not in [CVType.time_series, CVType.blocked_time_series]
-                        and self.__get_date_column(self.search_keys) is not None
-                        and is_time_series(validated_X, self.__get_date_column(self.search_keys))
+                        and date_column is not None
+                        and is_time_series(validated_X, date_column)
                     ):
                         msg = bundle.get("metrics_negative_uplift_without_cv")
                         self.logger.warning(msg)
@@ -765,6 +687,180 @@ class FeaturesEnricher(TransformerMixin):
                 raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
+
+    def _extend_x(self, x: pd.DataFrame):
+        search_keys = self.search_keys.copy()
+        search_keys = self.__prepare_search_keys(x, search_keys, silent_mode=True)
+
+        extended_X = x.copy()
+        generated_features = []
+        date_column = self.__get_date_column(search_keys)
+        if date_column is not None:
+            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+            extended_X = converter.convert(extended_X)
+
+            generated_features.extend(converter.generated_features)
+        email_column = self.__get_email_column(search_keys)
+        hem_column = self.__get_hem_column(search_keys)
+        if email_column:
+            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
+            extended_X = converter.convert(extended_X)
+            generated_features.extend(converter.generated_features)
+        generated_features = [f for f in generated_features if f in self.fit_generated_features]
+
+        return extended_X, search_keys
+
+    def _prepare_data_for_metrics(
+        self, trace_id: str, importance_threshold: Optional[float] = None, max_features: Optional[int] = None
+    ):
+        validated_X = self._validate_X(self.X)
+        validated_y = self._validate_y(validated_X, self.y)
+
+        self.__log_debug_information(self.X, self.y, self.eval_set)
+
+        eval_set_sampled_dict = dict()
+
+        if not self.imbalanced:
+            self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
+            extended_X, search_keys = self._extend_x(validated_X)
+            enriched_X = self.enriched_X
+            X_sampled, y_sampled = self._sample_X_and_y(extended_X, validated_y, enriched_X)
+            self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
+            self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
+            self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
+
+            if self.eval_set is not None:
+                if len(self.enriched_eval_sets) != len(self.eval_set):
+                    raise ValidationError(
+                        bundle.get("metrics_eval_set_count_diff").format(
+                            len(self.enriched_eval_sets), len(self.eval_set)
+                        )
+                    )
+
+                for idx, eval_pair in enumerate(self.eval_set):
+                    eval_X, validated_eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+                    enriched_eval_X = self.enriched_eval_sets[idx + 1]
+                    extended_eval_X, _ = self._extend_x(eval_X)
+                    eval_X_sampled, eval_y_sampled = self._sample_X_and_y(
+                        extended_eval_X, validated_eval_y, enriched_eval_X
+                    )
+                    eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+        elif self.cached_sampled_datasets is not None:
+            self.logger.info("Dataset is imbalanced, but cache found. Use it")
+            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.cached_sampled_datasets
+        else:
+            self.logger.info("Dataset is imbalanced. Run transform")
+            if self.eval_set is not None:
+                self.logger.info("Transform with eval_set")
+                # concatenate X and eval_set with eval_set_index
+                df_with_eval_set_index = validated_X.copy()
+                df_with_eval_set_index[TARGET] = validated_y
+                df_with_eval_set_index[EVAL_SET_INDEX] = 0
+                for idx, eval_pair in enumerate(self.eval_set):
+                    eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+                    eval_df_with_index = eval_x.copy()
+                    eval_df_with_index[TARGET] = eval_y
+                    eval_df_with_index[EVAL_SET_INDEX] = idx + 1
+                    df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
+
+                # downsample if need to eval_set threshold
+                if len(df_with_eval_set_index) > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
+                    df_with_eval_set_index = df_with_eval_set_index.sample(
+                        n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state
+                    )
+
+                X_sampled = (
+                    df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0]
+                    .copy()
+                    .drop(columns=[EVAL_SET_INDEX, TARGET])
+                )
+                X_sampled, search_keys = self._extend_x(X_sampled)
+                y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
+                eval_set_sampled_dict = dict()
+                for idx in range(len(self.eval_set)):
+                    eval_x_sampled = (
+                        df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)]
+                        .copy()
+                        .drop(columns=[EVAL_SET_INDEX, TARGET])
+                    )
+                    eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
+                        TARGET
+                    ]
+                    eval_set_sampled_dict[idx] = (eval_x_sampled, eval_y_sampled)
+
+                df_with_eval_set_index.drop(columns=TARGET, inplace=True)
+
+                enriched = self.transform(df_with_eval_set_index, silent_mode=True, trace_id=trace_id)
+
+                enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
+                enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
+
+                for idx in range(len(self.eval_set)):
+                    enriched_eval_x = enriched[enriched[EVAL_SET_INDEX] == (idx + 1)].copy()
+                    enriched_eval_x.drop(columns=EVAL_SET_INDEX, inplace=True)
+                    eval_x_sampled, eval_y_sampled = eval_set_sampled_dict[idx]
+                    eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
+            else:
+                self.logger.info("Transform without eval_set")
+                df = self.X.copy()
+                df[TARGET] = validated_y
+                if len(df) > Dataset.FIT_SAMPLE_THRESHOLD:
+                    df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
+
+                X_sampled = df.copy().drop(columns=TARGET)
+                X_sampled, search_keys = self._extend_x(X_sampled)
+                y_sampled = df.copy()[TARGET]
+
+                df.drop(columns=TARGET, inplace=True)
+
+                enriched_X = self.transform(self.X, silent_mode=True, trace_id=trace_id)
+
+            self.cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+        client_features = [c for c in X_sampled.columns.to_list() if c not in search_keys.keys()]
+
+        filtered_enriched_features = self.__filtered_enriched_features(
+            importance_threshold,
+            max_features,
+        )
+
+        date_column = self.__get_date_column(search_keys)
+
+        X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled, date_column)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_date(enriched_X, y_sampled, date_column)
+
+        existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
+
+        fitting_X = X_sorted[client_features].copy()
+        fitting_enriched_X = enriched_X_sorted[client_features + existing_filtered_enriched_features].copy()
+
+        fitting_eval_set_dict = dict()
+        for idx, eval_tuple in eval_set_sampled_dict.items():
+            eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
+            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X_sampled, eval_y_sampled, date_column)
+            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_date(
+                enriched_eval_X, eval_y_sampled, date_column
+            )
+            fitting_eval_X = eval_X_sorted[client_features].copy()
+            fitting_enriched_eval_X = enriched_eval_X_sorted[
+                client_features + existing_filtered_enriched_features
+            ].copy()
+            fitting_eval_set_dict[idx] = (
+                fitting_eval_X,
+                eval_y_sorted,
+                fitting_enriched_eval_X,
+                enriched_eval_y_sorted,
+            )
+
+        return (
+            validated_X,
+            fitting_X,
+            y_sorted,
+            fitting_enriched_X,
+            enriched_y_sorted,
+            fitting_eval_set_dict,
+            search_keys,
+        )
 
     def get_search_id(self) -> Optional[str]:
         """Returns search_id of the fitted enricher. Not available before a successful fit."""
@@ -792,7 +888,7 @@ class FeaturesEnricher(TransformerMixin):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
-            validated_X = self._validate_X(X)
+            validated_X = self._validate_X(X, is_transform=True)
 
             self.__log_debug_information(X)
 
@@ -939,6 +1035,7 @@ class FeaturesEnricher(TransformerMixin):
     ):
         self.warning_counter.reset()
         self.enriched_X = None
+        self.cached_sampled_datasets = None
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
 
@@ -1037,6 +1134,8 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
+        self.imbalanced = dataset.imbalanced
+
         zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
         if zero_hit_search_keys:
             self.logger.warning(
@@ -1078,7 +1177,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys_with_autodetection = {**self.search_keys, **self.autodetected_search_keys}
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
-    def _validate_X(self, X) -> pd.DataFrame:
+    def _validate_X(self, X, is_transform=False) -> Tuple[pd.DataFrame, Dict]:
         if _num_samples(X) == 0:
             raise ValidationError(bundle.get("x_is_empty"))
 
@@ -1097,12 +1196,12 @@ class FeaturesEnricher(TransformerMixin):
 
         if len(set(validated_X.columns)) != len(validated_X.columns):
             raise ValidationError(bundle.get("x_contains_dup_columns"))
-        if not validated_X.index.is_unique:
+        if not is_transform and not validated_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index"))
 
         if TARGET in validated_X.columns:
             raise ValidationError(bundle.get("x_contains_reserved_column_name").format(TARGET))
-        if EVAL_SET_INDEX in validated_X.columns:
+        if not is_transform and EVAL_SET_INDEX in validated_X.columns:
             raise ValidationError(bundle.get("x_contains_reserved_column_name").format(EVAL_SET_INDEX))
         if SYSTEM_RECORD_ID in validated_X.columns:
             raise ValidationError(bundle.get("x_contains_reserved_column_name").format(SYSTEM_RECORD_ID))
