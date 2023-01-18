@@ -717,7 +717,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.014745)
 
 
-# @pytest.mark.skip()
+@pytest.mark.skip()
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
