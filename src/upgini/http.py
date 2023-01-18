@@ -47,6 +47,7 @@ except ImportError:
 
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
+DEMO_API_KEY: str = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
 
 refresh_token_lock = threading.Lock()
 
@@ -756,8 +757,7 @@ def resolve_api_token(api_token: Optional[str]) -> str:
     elif UPGINI_API_KEY in os.environ and os.environ[UPGINI_API_KEY]:
         return os.environ[UPGINI_API_KEY]
     else:
-        # Demo user api-key
-        return "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
+        return DEMO_API_KEY
 
 
 def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
@@ -765,6 +765,10 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
     token = resolve_api_token(api_token)
 
     return _get_rest_client(url, token)
+
+
+def is_demo_api_key(api_token: Optional[str]) -> bool:
+    return api_token is None or api_token == DEMO_API_KEY
 
 
 @lru_cache()

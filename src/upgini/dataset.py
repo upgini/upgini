@@ -49,8 +49,10 @@ class Dataset(pd.DataFrame):
     MIN_ROWS_COUNT = 100
     MAX_ROWS_REGISTERED = 299_999
     MAX_ROWS_UNREGISTERED = 149_999
-    FIT_SAMPLE_ROWS = 100_000
-    FIT_SAMPLE_THRESHOLD = FIT_SAMPLE_ROWS * 3
+    FIT_SAMPLE_ROWS = 200_000
+    FIT_SAMPLE_THRESHOLD = 200_000
+    FIT_SAMPLE_WITH_EVAL_SET_ROWS = 300_000
+    FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 300_000
     MIN_SAMPLE_THRESHOLD = 20_000
     IMBALANCE_THESHOLD = 0.4
     MIN_TARGET_CLASS_ROWS = 100
@@ -130,7 +132,7 @@ class Dataset(pd.DataFrame):
         self.api_key = api_key
         self.random_state = random_state
         self.columns_renaming: Dict[str, str] = {}
-        self.sampled: bool = False
+        self.imbalanced: bool = False
         if logger is not None:
             self.logger = logger
         else:
@@ -231,7 +233,7 @@ class Dataset(pd.DataFrame):
                 if max_length > 400:
                     raise ValidationError(bundle.get("dataset_too_long_column_name").format(col, max_length))
 
-    def __clean_duplicates(self):
+    def __clean_duplicates(self, silent_mode: bool = False):
         """Clean DataSet from full duplicates."""
         # self.logger.info("Clean full duplicates")
         nrows = len(self)
@@ -246,7 +248,10 @@ class Dataset(pd.DataFrame):
         nrows_after_full_dedup = len(self)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            print(bundle.get("dataset_full_duplicates").format(share_full_dedup))
+            msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
+            self.logger.warning(msg)
+            if not silent_mode:
+                print(msg)
             self.warning_counter.increment()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
@@ -328,7 +333,7 @@ class Dataset(pd.DataFrame):
                 .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
 
-    def __remove_old_dates(self):
+    def __remove_old_dates(self, silent_mode: bool = False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
@@ -343,7 +348,8 @@ class Dataset(pd.DataFrame):
                 else:
                     msg = bundle.get("dataset_drop_old_dates")
                     self.logger.warning(msg)
-                    print(msg)
+                    if not silent_mode:
+                        print(msg)
                     self.warning_counter.increment()
 
     def __drop_ignore_columns(self):
@@ -409,10 +415,8 @@ class Dataset(pd.DataFrame):
         # Resample imbalanced target. Only train segment (without eval_set)
         if EVAL_SET_INDEX in self.columns:
             train_segment = self[self[EVAL_SET_INDEX] == 0]
-            validation_segment = self[self[EVAL_SET_INDEX] != 0]
         else:
             train_segment = self
-            validation_segment = None
 
         if self.task_type == ModelTaskType.MULTICLASS or (
             self.task_type == ModelTaskType.BINARY and len(train_segment) > self.MIN_SAMPLE_THRESHOLD
@@ -476,30 +480,26 @@ class Dataset(pd.DataFrame):
                     new_x, _ = sampler.fit_resample(X, target)  # type: ignore
                     resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
 
-                if validation_segment is not None:
-                    resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)
                 self._update_inplace(resampled_data)
                 self.logger.info(f"Shape after rebalance resampling: {self.shape}")
-                self.sampled = True
+                self.imbalanced = True
 
         # Resample over fit threshold
-        if EVAL_SET_INDEX in self.columns:
-            train_segment = self[self[EVAL_SET_INDEX] == 0]
-            validation_segment = self[self[EVAL_SET_INDEX] != 0]
+        if not self.imbalanced and EVAL_SET_INDEX in self.columns:
+            sample_threshold = self.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
+            sample_rows = self.FIT_SAMPLE_WITH_EVAL_SET_ROWS
         else:
-            train_segment = self
-            validation_segment = None
-        if len(train_segment) > self.FIT_SAMPLE_THRESHOLD:
+            sample_threshold = self.FIT_SAMPLE_THRESHOLD
+            sample_rows = self.FIT_SAMPLE_ROWS
+
+        if len(self) > sample_threshold:
             self.logger.info(
-                f"Etalon has size {len(train_segment)} more than threshold {self.FIT_SAMPLE_THRESHOLD} "
-                f"and will be downsampled to {self.FIT_SAMPLE_ROWS}"
+                f"Etalon has size {len(self)} more than threshold {sample_threshold} "
+                f"and will be downsampled to {sample_rows}"
             )
-            resampled_data = train_segment.sample(n=self.FIT_SAMPLE_ROWS, random_state=self.random_state)
-            if validation_segment is not None:
-                resampled_data = pd.concat([resampled_data, validation_segment], ignore_index=True)  # type: ignore
+            resampled_data = self.sample(n=sample_rows, random_state=self.random_state)
             self._update_inplace(resampled_data)
             self.logger.info(f"Shape after threshold resampling: {self.shape}")
-            self.sampled = True
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
@@ -515,7 +515,7 @@ class Dataset(pd.DataFrame):
             f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
         ]
 
-    def __remove_dates_from_features(self):
+    def __remove_dates_from_features(self, silent_mode: bool = False):
         # self.logger.info("Remove date columns from features")
 
         removed_features = []
@@ -527,8 +527,9 @@ class Dataset(pd.DataFrame):
 
         if removed_features:
             msg = bundle.get("dataset_date_features").format(removed_features)
-            print(msg)
             self.logger.warning(msg)
+            if not silent_mode:
+                print(msg)
             self.warning_counter.increment()
 
     def __validate_features_count(self):
@@ -694,7 +695,7 @@ class Dataset(pd.DataFrame):
 
         self.__drop_ignore_columns()
 
-        self.__remove_dates_from_features()
+        self.__remove_dates_from_features(silent_mode)
 
         self.__validate_features_count()
 
@@ -706,7 +707,7 @@ class Dataset(pd.DataFrame):
 
         self.__correct_decimal_comma()
 
-        self.__remove_old_dates()
+        self.__remove_old_dates(silent_mode)
 
         self.__convert_ip()
 
@@ -718,7 +719,7 @@ class Dataset(pd.DataFrame):
 
         self.__convert_features_types()
 
-        self.__clean_duplicates()
+        self.__clean_duplicates(silent_mode)
 
         self.__validate_dataset(validate_target, silent_mode)
 

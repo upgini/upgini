@@ -17,7 +17,8 @@ class Spinner:
         self.frames = frames
         self.iterations = len(self.frames)
         self.step_time = step_time
-        self.ok_msg = "Done"
+        # self.ok_msg = "Done"
+        self.ok_msg = ""
         self.thread: Optional[threading.Thread] = None
 
     def __enter__(self) -> "Spinner":

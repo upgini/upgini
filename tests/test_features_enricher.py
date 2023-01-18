@@ -37,6 +37,7 @@ train_segment = bundle.get("quality_metrics_train_segment")
 eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
 eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
 match_rate_header = bundle.get("quality_metrics_match_rate_header")
+rows_header = bundle.get("quality_metrics_rows_header")
 baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
 enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
 uplift = bundle.get("quality_metrics_uplift_header")
@@ -181,8 +182,11 @@ def test_features_enricher(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
-                match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                rows_header: [10000, 1000, 1000],
+                # match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.495492, 0.509347, 0.519655],
+                uplift: [-0.004508, 0.009347, 0.019655]
             }
         )
         .set_index("segment")
@@ -194,7 +198,7 @@ def test_features_enricher(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics)
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -283,8 +287,10 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment],
-                match_rate_header: [99.9],
-                enriched_rocauc: [0.49787240371408253],
+                rows_header: [23738],
+                baseline_rocauc: [0.695376],  # [0.695287], local value
+                enriched_rocauc: [0.695736],  # [0.695218], local value
+                uplift: [0.00036],  # [-0.00007], local value
             }
         )
         .set_index("segment")
@@ -296,7 +302,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics)
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -427,8 +433,11 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
-                match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                rows_header: [10000, 1000, 1000],
+                # match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.495492, 0.509347, 0.519655],
+                uplift: [-0.004508, 0.009347, 0.019655]
             }
         )
         .set_index("segment")
@@ -440,7 +449,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics)
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -575,8 +584,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
-                match_rate_header: [99.9, 100.0, 99.0],
-                enriched_rocauc: [0.492362, 0.508219, 0.531009],
+                rows_header: [10000, 1000, 1000],
+                # match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+                enriched_rocauc: [0.495492, 0.509347, 0.519655],
+                uplift: [-0.004508, 0.009347, 0.019655]
             }
         )
         .set_index("segment")
@@ -588,7 +600,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics)
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -696,10 +708,11 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment],
-                match_rate_header: [99.0],
-                baseline_rocauc: [0.504187],
-                enriched_rocauc: [0.511054],
-                uplift: [0.006867507128359374],
+                rows_header: [5319],
+                # match_rate_header: [99.0],
+                baseline_rocauc: [0.501952],
+                enriched_rocauc: [0.504399],
+                uplift: [0.002448],
             }
         )
         .set_index("segment")
@@ -711,7 +724,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics)
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -983,7 +996,24 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
-    assert metrics is None
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1109,9 +1139,24 @@ def test_filter_by_max_features(requests_mock: Mocker):
     # ]
 
     metrics = enricher.calculate_metrics(max_features=0)
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                baseline_rocauc: [0.5, 0.5, 0.5],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
     print(metrics)
 
-    assert metrics is None
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1482,10 +1527,11 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         pd.DataFrame(
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
-                match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.497995, 0.495701, 0.455651],
-                enriched_rocauc: [0.498973, 0.520476, 0.472655],
-                uplift: [0.000978, 0.024776, 0.017004],
+                rows_header: [10000, 1000, 1000],
+                # match_rate_header: [99.9, 100.0, 99.0],
+                baseline_rocauc: [0.496982, 0.500184, 0.459055],
+                enriched_rocauc: [0.506967, 0.517383, 0.471194],
+                uplift: [0.009985, 0.017199, 0.012139],
             }
         )
         .set_index("segment")
