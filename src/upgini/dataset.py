@@ -1,6 +1,5 @@
 import csv
 import logging
-import os
 import tempfile
 import time
 from ipaddress import IPv4Address, ip_address
@@ -20,7 +19,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, get_rest_client, resolve_api_token
+from upgini.http import get_rest_client, resolve_api_token
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -47,8 +46,7 @@ from upgini.utils.warning_counter import WarningCounter
 
 class Dataset(pd.DataFrame):
     MIN_ROWS_COUNT = 100
-    MAX_ROWS_REGISTERED = 299_999
-    MAX_ROWS_UNREGISTERED = 149_999
+    MAX_ROWS = 300_000
     FIT_SAMPLE_ROWS = 200_000
     FIT_SAMPLE_THRESHOLD = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_ROWS = 300_000
@@ -168,16 +166,8 @@ class Dataset(pd.DataFrame):
             raise ValidationError(bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
 
     def __validate_max_row_count(self):
-        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
-        is_registered = api_key is not None and api_key != ""
-        if is_registered:
-            if len(self) > self.MAX_ROWS_REGISTERED:
-                raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS_REGISTERED))
-        else:
-            if len(self) > self.MAX_ROWS_UNREGISTERED:
-                raise ValidationError(
-                    bundle.get("dataset_too_many_rows_unregistered").format(self.MAX_ROWS_UNREGISTERED)
-                )
+        if len(self) > self.MAX_ROWS:
+            raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
