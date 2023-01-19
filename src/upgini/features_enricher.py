@@ -813,7 +813,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 df.drop(columns=TARGET, inplace=True)
 
-                enriched_X = self.transform(self.X, silent_mode=True, trace_id=trace_id)
+                enriched_X = self.transform(df, silent_mode=True, trace_id=trace_id)
 
             self.cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
