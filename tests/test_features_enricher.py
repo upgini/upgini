@@ -186,7 +186,7 @@ def test_features_enricher(requests_mock: Mocker):
                 # match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655]
+                uplift: [-0.004508, 0.009347, 0.019655],
             }
         )
         .set_index("segment")
@@ -437,7 +437,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
                 # match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655]
+                uplift: [-0.004508, 0.009347, 0.019655],
             }
         )
         .set_index("segment")
@@ -588,7 +588,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
                 # match_rate_header: [99.9, 100.0, 99.0],
                 baseline_rocauc: [0.5, 0.5, 0.5],
                 enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655]
+                uplift: [-0.004508, 0.009347, 0.019655],
             }
         )
         .set_index("segment")
