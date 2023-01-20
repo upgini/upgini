@@ -251,13 +251,17 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                self.eval_set = eval_set
+                checked_eval_set = []
+                for eval_pair in eval_set or []:
+                    if not is_frames_equal(X, eval_pair):
+                        checked_eval_set.append(eval_pair[0])
+                self.eval_set = checked_eval_set
                 self.dump_input(trace_id, X, y, eval_set)
                 self.__inner_fit(
                     trace_id,
                     X,
                     y,
-                    eval_set,
+                    checked_eval_set,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
                     scoring=scoring,
@@ -340,13 +344,17 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                self.eval_set = eval_set
+                checked_eval_set = []
+                for eval_pair in eval_set or []:
+                    if not is_frames_equal(X, eval_pair[0]):
+                        checked_eval_set.append(eval_pair)
+                self.eval_set = checked_eval_set
                 self.dump_input(trace_id, X, y, eval_set)
                 self.__inner_fit(
                     trace_id,
                     X,
                     y,
-                    eval_set,
+                    checked_eval_set,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
                     estimator=estimator,
@@ -513,19 +521,18 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
                     self.warning_counter.increment()
 
+                (
+                    validated_X,
+                    fitting_X,
+                    y_sorted,
+                    fitting_enriched_X,
+                    enriched_y_sorted,
+                    fitting_eval_set_dict,
+                    search_keys,
+                ) = self._prepare_data_for_metrics(trace_id, importance_threshold, max_features)
+
                 print(bundle.get("metrics_start"))
-
                 with Spinner():
-                    (
-                        validated_X,
-                        fitting_X,
-                        y_sorted,
-                        fitting_enriched_X,
-                        enriched_y_sorted,
-                        fitting_eval_set_dict,
-                        search_keys
-                    ) = self._prepare_data_for_metrics(trace_id, importance_threshold, max_features)
-
                     if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
                         if self._has_important_paid_features():
                             print(bundle.get("metrics_no_important_free_features"))
@@ -750,6 +757,7 @@ class FeaturesEnricher(TransformerMixin):
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.cached_sampled_datasets
         else:
             self.logger.info("Dataset is imbalanced. Run transform")
+            print(bundle.get("prepare_data_for_metrics"))
             if self.eval_set is not None:
                 self.logger.info("Transform with eval_set")
                 # concatenate X and eval_set with eval_set_index
@@ -764,7 +772,9 @@ class FeaturesEnricher(TransformerMixin):
                     df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
 
                 # downsample if need to eval_set threshold
-                if len(df_with_eval_set_index) > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
+                num_samples = _num_samples(df_with_eval_set_index)
+                if num_samples > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
+                    self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
                     df_with_eval_set_index = df_with_eval_set_index.sample(
                         n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state
                     )
@@ -804,7 +814,9 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info("Transform without eval_set")
                 df = self.X.copy()
                 df[TARGET] = validated_y
-                if len(df) > Dataset.FIT_SAMPLE_THRESHOLD:
+                num_samples = _num_samples(df)
+                if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
+                    self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
                     df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
 
                 X_sampled = df.copy().drop(columns=TARGET)
@@ -922,12 +934,10 @@ class FeaturesEnricher(TransformerMixin):
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-            index_name = df.index.name or DEFAULT_INDEX
-            df = df.reset_index()
-            df = df.rename(columns={index_name: ORIGINAL_INDEX})
-            system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX] + generated_features
+
+            df = df.reset_index(drop=True)
+            system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
             df_with_original_index = df[system_columns_with_original_index].copy()
-            df = df.drop(columns=ORIGINAL_INDEX)
 
             combined_search_keys = []
             for L in range(1, len(search_keys.keys()) + 1):
@@ -1100,11 +1110,10 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_fit_system_record_id(df, meaning_types, search_keys)
 
-        system_columns_with_original_index = [SYSTEM_RECORD_ID, ORIGINAL_INDEX] + self.fit_generated_features
+        system_columns_with_original_index = [SYSTEM_RECORD_ID] + self.fit_generated_features
         if EVAL_SET_INDEX in df.columns:
             system_columns_with_original_index.append(EVAL_SET_INDEX)
         df_with_original_index = df[system_columns_with_original_index].copy()
-        df = df.drop(columns=ORIGINAL_INDEX)
 
         combined_search_keys = []
         for L in range(1, len(search_keys.keys()) + 1):
@@ -1419,18 +1428,24 @@ class FeaturesEnricher(TransformerMixin):
     def __add_fit_system_record_id(
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey]
     ) -> pd.DataFrame:
-        index_name = df.index.name or DEFAULT_INDEX
-        df = df.reset_index()
-        df = df.rename(columns={index_name: ORIGINAL_INDEX})
+        # save original order or rows
+        df = df.reset_index(drop=True).reset_index()
+        df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
 
+        # order by date and idempotent order by other keys
         date_column = self.__get_date_column(search_keys)
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
             df = df.sort_values(by=[date_column] + other_search_keys)
 
-        df = df.reset_index(drop=True)
-        df = df.reset_index()
+        df = df.reset_index(drop=True).reset_index()
+        # system_record_id saves correct order for fit
         df = df.rename(columns={DEFAULT_INDEX: SYSTEM_RECORD_ID})
+
+        # return original order
+        df = df.set_index(ORIGINAL_INDEX)
+        df = df.sort_index()
+
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
 
@@ -1480,7 +1495,7 @@ class FeaturesEnricher(TransformerMixin):
         df_with_original_index: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
         X: pd.DataFrame,
-        eval_set_by_id: Dict[int, pd.DataFrame],
+        eval_X_by_id: Dict[int, pd.DataFrame],
         join_type: str = "left",
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
@@ -1497,7 +1512,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(bundle.get("returned_features_same_as_passed").format(dup_features))
 
-        result = pd.merge(
+        result_features = pd.merge(
             df_with_original_index,
             result_features,
             left_on=SYSTEM_RECORD_ID,
@@ -1506,27 +1521,31 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         result_eval_sets = dict()
-        if EVAL_SET_INDEX in result.columns:
-            result_train = result.loc[result[EVAL_SET_INDEX] == 0].copy()
-            result_eval_set = result[result[EVAL_SET_INDEX] != 0]
-            for eval_set_index in result_eval_set[EVAL_SET_INDEX].unique().tolist():
-                result_eval = result.loc[result[EVAL_SET_INDEX] == eval_set_index].copy()
-                if eval_set_index in eval_set_by_id.keys():
-                    eval_X = eval_set_by_id[eval_set_index]
-                    result_eval = result_eval.set_index(ORIGINAL_INDEX)
-                    result_eval = pd.merge(left=eval_X, right=result_eval, left_index=True, right_index=True)
-                else:
-                    raise RuntimeError(bundle.get("missing_eval_set_for_enrichment").format(eval_set_index))
+        if len(eval_X_by_id) > 0 and EVAL_SET_INDEX in result_features.columns:
+            result_train_features = result_features.loc[result_features[EVAL_SET_INDEX] == 0].copy()
+            for eval_set_index, eval_X in eval_X_by_id.items():
+                result_eval_features = result_features.loc[result_features[EVAL_SET_INDEX] == eval_set_index].copy()
+                result_eval = eval_X.copy()
+                index_name = eval_X.index.name
+                result_eval = pd.concat(
+                    [eval_X.reset_index(), result_eval_features.reset_index(drop=True)], axis=1
+                ).set_index(index_name or DEFAULT_INDEX)
+                result_eval.index.name = index_name
                 result_eval_sets[eval_set_index] = result_eval
-            result_train = result_train.drop(columns=EVAL_SET_INDEX)
+            result_train_features = result_train_features.drop(columns=EVAL_SET_INDEX)
         else:
-            result_train = result
+            result_train_features = result_features
 
-        result_train = result_train.set_index(ORIGINAL_INDEX)
-        result_train = pd.merge(left=X, right=result_train, left_index=True, right_index=True, how=join_type)
-        if SYSTEM_RECORD_ID in result.columns:
+        index_name = X.index.name
+        result_train = pd.concat([X.reset_index(), result_train_features.reset_index(drop=True)], axis=1).set_index(
+            index_name or DEFAULT_INDEX
+        )
+        result_train.index.name = index_name
+
+        if SYSTEM_RECORD_ID in result_train.columns:
             result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
-            for eval_set_index in result_eval_sets.keys():
+        for eval_set_index in result_eval_sets.keys():
+            if SYSTEM_RECORD_ID in result_eval_sets[eval_set_index].columns:
                 result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(columns=SYSTEM_RECORD_ID)
 
         return result_train, result_eval_sets
@@ -1937,6 +1956,15 @@ def _num_samples(x):
         return len(x)
     except TypeError as type_error:
         raise TypeError(message) from type_error
+
+
+def is_frames_equal(first, second) -> bool:
+    if isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame):
+        return first.equals(second)
+    elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
+        return np.array_equal(first, second)
+    else:
+        return first == second
 
 
 def do_without_pandas_limits(func: Callable):
