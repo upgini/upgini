@@ -253,8 +253,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.y = y
                 checked_eval_set = []
                 for eval_pair in eval_set or []:
-                    if not is_frames_equal(X, eval_pair):
-                        checked_eval_set.append(eval_pair[0])
+                    if not is_frames_equal(X, eval_pair[0]):
+                        checked_eval_set.append(eval_pair)
                 self.eval_set = checked_eval_set
                 self.dump_input(trace_id, X, y, eval_set)
                 self.__inner_fit(
