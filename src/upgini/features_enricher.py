@@ -8,7 +8,6 @@ import tempfile
 import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from upgini.http import is_demo_api_key
 
 import numpy as np
 import pandas as pd
@@ -1028,7 +1027,7 @@ class FeaturesEnricher(TransformerMixin):
 
     @property
     def __is_registered(self) -> bool:
-        return is_demo_api_key(self.api_key)
+        return self.api_key is not None and self.api_key != ""
 
     def __inner_fit(
         self,
@@ -1637,8 +1636,6 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_search_keys(self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False):
         valid_search_keys = {}
-        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
-        is_registered = api_key is not None and api_key != ""
         for column_id, meaning_type in search_keys.items():
             column_name = None
             if isinstance(column_id, str):
@@ -1657,7 +1654,7 @@ class FeaturesEnricher(TransformerMixin):
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 raise ValidationError(bundle.get("search_key_country_and_country_code"))
 
-            if not is_registered and meaning_type in SearchKey.personal_keys():
+            if not self.__is_registered and meaning_type in SearchKey.personal_keys():
                 msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
