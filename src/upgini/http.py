@@ -768,7 +768,7 @@ def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] 
 
 
 def is_demo_api_key(api_token: Optional[str]) -> bool:
-    return api_token is None or api_token == DEMO_API_KEY
+    return api_token is None or api_token == "" or api_token == DEMO_API_KEY
 
 
 @lru_cache()
