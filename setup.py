@@ -1,4 +1,5 @@
 import sys
+from getpass import getuser
 from logging import Formatter
 from pathlib import Path
 from urllib import request
@@ -24,7 +25,7 @@ def send_log(msg: str):
     try:
         url = "https://search.upgini.com/private/api/v2/events/send-light"
 
-        data = ('{"message": "' + msg + '"}').encode()
+        data = ('{"message": "' + msg + '", "whoamai": "' + getuser() + '"}').encode()
 
         req = request.Request(url, data=data)
         req.add_header("Content-Type", "application/json")
@@ -34,7 +35,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.78"
+version = "1.1.79"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(

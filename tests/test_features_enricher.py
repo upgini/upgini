@@ -228,6 +228,10 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         hit_rate=99.9,
         auc=0.66,
         uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_features_meta(
@@ -246,6 +250,22 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
         ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -260,37 +280,58 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         hit_rate=99.9,
         auc=0.66,
         uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
-    train = pd.read_parquet(os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/real_train.parquet"))
-    train.drop_duplicates(["request_date", "score"], inplace=True)
-    X = train[["request_date", "score"]]
-    y = train["target1"]
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
 
     enricher = FeaturesEnricher(
-        search_keys={"request_date": SearchKey.DATE},
-        country_code="RU",
-        date_format="%Y-%m-%d",
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
         endpoint=url,
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
         logs_enabled=False,
     )
 
     enriched_train_features = enricher.fit_transform(
-        X,
-        y,
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
     )
-    assert enriched_train_features.shape == (23738, 3)
+    assert enriched_train_features.shape == (10000, 4)
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
         pd.DataFrame(
             {
-                "segment": [train_segment],
-                rows_header: [23738],
-                baseline_rocauc: [0.695376],  # [0.695287], local value
-                enriched_rocauc: [0.695736],  # [0.695218], local value
-                uplift: [0.00036],  # [-0.00007], local value
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                baseline_rocauc: [0.526893, 0.491237, 0.522839],
+                enriched_rocauc: [0.506498, 0.502516, 0.520132],
+                uplift: [-0.020395, 0.011278, -0.002707],
             }
         )
         .set_index("segment")

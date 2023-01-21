@@ -929,7 +929,6 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
-            search_keys = self.__using_search_keys(search_keys)
             feature_columns = [column for column in df.columns if column not in search_keys.keys()]
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[search_keys.keys()].values]  # type: ignore
@@ -1105,8 +1104,6 @@ class FeaturesEnricher(TransformerMixin):
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
         if eval_set is not None and len(eval_set) > 0:
             meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
-
-        search_keys = self.__using_search_keys(search_keys)
 
         df = self.__add_fit_system_record_id(df, meaning_types, search_keys)
 
@@ -1404,10 +1401,6 @@ class FeaturesEnricher(TransformerMixin):
         return df
 
     @staticmethod
-    def __using_search_keys(search_keys: Dict[str, SearchKey]) -> Dict[str, SearchKey]:
-        return {col: key for col, key in search_keys.items() if key != SearchKey.CUSTOM_KEY}
-
-    @staticmethod
     def __get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         date_columns = [col for col, t in search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
         if len(date_columns) > 0:
@@ -1643,8 +1636,6 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_search_keys(self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False):
         valid_search_keys = {}
-        api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
-        is_registered = api_key is not None and api_key != ""
         for column_id, meaning_type in search_keys.items():
             column_name = None
             if isinstance(column_id, str):
@@ -1663,7 +1654,7 @@ class FeaturesEnricher(TransformerMixin):
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 raise ValidationError(bundle.get("search_key_country_and_country_code"))
 
-            if not is_registered and meaning_type in SearchKey.personal_keys():
+            if not self.__is_registered and meaning_type in SearchKey.personal_keys():
                 msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
@@ -1679,11 +1670,15 @@ class FeaturesEnricher(TransformerMixin):
         if self.detect_missing_search_keys:
             valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, silent_mode)
 
-        using_keys = self.__using_search_keys(search_keys)
+        if SearchKey.CUSTOM_KEY in valid_search_keys.values():
+            custom_keys = [column for column, key in valid_search_keys.items() if key == SearchKey.CUSTOM_KEY]
+            for key in custom_keys:
+                del valid_search_keys[key]
+
         if (
-            len(using_keys.values()) == 1
+            len(valid_search_keys.values()) == 1
             and self.country_code is None
-            and next(iter(using_keys.values())) == SearchKey.DATE
+            and next(iter(valid_search_keys.values())) == SearchKey.DATE
             and not silent_mode
         ):
             msg = bundle.get("date_only_search")
@@ -1691,7 +1686,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
             self.warning_counter.increment()
 
-        maybe_date = [k for k, v in using_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
+        maybe_date = [k for k, v in valid_search_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * _num_samples(x):
@@ -1700,10 +1695,10 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 self.warning_counter.increment()
 
-        if len(using_keys) == 1:
-            for k, v in using_keys.items():
+        if len(valid_search_keys) == 1:
+            for k, v in valid_search_keys.items():
                 # Show warning for country only if country is the only key
-                if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(using_keys) == 1):
+                if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(valid_search_keys) == 1):
                     msg = bundle.get("single_constant_search_key").format(v, x.loc[0, k])
                     print(msg)
                     self.logger.warning(msg)
@@ -1811,7 +1806,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None:
+            if maybe_key is not None and maybe_key not in search_keys.keys():
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.EMAIL
                     self.autodetected_search_keys[maybe_key] = SearchKey.EMAIL
@@ -1828,7 +1823,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None:
+            if maybe_key is not None and maybe_key not in search_keys.keys():
                 if self.__is_registered:
                     search_keys[maybe_key] = SearchKey.PHONE
                     self.autodetected_search_keys[maybe_key] = SearchKey.PHONE
