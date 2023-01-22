@@ -73,15 +73,28 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
         if df[date_col].isnull().any():
             return False
 
-        new_df = pd.to_datetime(df[date_col]).to_frame()
-        new_df["shifted_date"] = new_df[date_col].shift(1)
+        df = pd.to_datetime(df[date_col]).to_frame()
 
         def rel(row):
-            if not pd.isnull(row["date"]) and not pd.isnull(row["shifted_date"]):
-                return relativedelta(row["date"], row["shifted_date"])
+            if not pd.isnull(row[date_col]) and not pd.isnull(row["shifted_date"]):
+                return relativedelta(row[date_col], row["shifted_date"])
 
-        if new_df.apply(rel, axis=1).nunique() == 1:
-            return True
+        value_counts = df[date_col].value_counts()
+        # count with each date is constant
+        if value_counts.nunique() == 1:
+            # Univariate timeseries
+            if value_counts.unique()[0] == 1:
+                df["shifted_date"] = df[date_col].shift(1)
+                # if dates cover full interval without gaps
+                return df.apply(rel, axis=1).nunique() == 1
+
+            # Multivariate timeseries
+            df_with_unique_dates = df.drop_duplicates()
+
+            df_with_unique_dates["shifted_date"] = df_with_unique_dates[date_col].shift(1)
+            # if unique dates cover full interval without gaps
+            return df_with_unique_dates.apply(rel, axis=1).nunique() == 1
+
         return False
     except Exception:
         return False
