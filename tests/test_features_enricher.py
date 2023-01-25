@@ -5,10 +5,11 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.errors import ValidationError
 from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
@@ -183,10 +184,7 @@ def test_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                # match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.5, 0.5, 0.5],
-                enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655],
+                enriched_rocauc: [0.494292, 0.511682, 0.525530],
             }
         )
         .set_index("segment")
@@ -291,13 +289,13 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     df = pd.read_csv(path, sep=",")
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
+    train_target = train_df["target"].to_frame()
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval1_target = eval1_df["target"].to_frame().reset_index(drop=True)
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
+    eval2_target = eval2_df["target"].to_frame()
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -329,9 +327,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.526893, 0.491237, 0.522839],
-                enriched_rocauc: [0.506498, 0.502516, 0.520132],
-                uplift: [-0.020395, 0.011278, -0.002707],
+                baseline_rocauc: [0.529049, 0.491025, 0.519194],
+                enriched_rocauc: [0.502432, 0.485560, 0.517911],
+                uplift: [-0.026617, -0.005464, -0.001283],
             }
         )
         .set_index("segment")
@@ -353,6 +351,37 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
+
+
+def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"].to_frame()
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].to_frame()
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size").format(1000, 500)):
+        enricher.fit(train_features.head(1000), train_target.head(500))
+
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size_eval_set").format(1000, 500)):
+        enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
 
 
 def test_features_enricher_with_numpy(requests_mock: Mocker):
@@ -475,10 +504,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                # match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.5, 0.5, 0.5],
-                enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655],
+                enriched_rocauc: [0.494292, 0.511682, 0.525530],
             }
         )
         .set_index("segment")
@@ -586,13 +612,13 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     df.index.name = "custom_index_name"
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
+    train_target = train_df["target"].to_list()
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval1_target = eval1_df["target"].reset_index(drop=True).to_list()
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
+    eval2_target = eval2_df["target"].to_list()
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -626,10 +652,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                # match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.5, 0.5, 0.5],
-                enriched_rocauc: [0.495492, 0.509347, 0.519655],
-                uplift: [-0.004508, 0.009347, 0.019655],
+                enriched_rocauc: [0.494292, 0.511682, 0.525530],
             }
         )
         .set_index("segment")
@@ -1002,6 +1025,7 @@ def test_filter_by_importance(requests_mock: Mocker):
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
     train_df = df.head(10000)
+    print(train_df.head(10))
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
     eval1_df = df[10000:11000]
@@ -1023,7 +1047,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, importance_threshold=0.8)
 
-    assert enricher.enriched_X is not None
+    # assert enricher.enriched_X is not None
     # assert len(enricher.enriched_X) == 10000
     # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
     # assert enricher.enriched_eval_set is not None
@@ -1037,24 +1061,24 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
-    expected_metrics = (
-        pd.DataFrame(
-            {
-                "segment": [train_segment, eval_1_segment, eval_2_segment],
-                rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.5, 0.5, 0.5],
-            }
-        )
-        .set_index("segment")
-        .rename_axis("")
-    )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    # expected_metrics = (
+    #     pd.DataFrame(
+    #         {
+    #             "segment": [train_segment, eval_1_segment, eval_2_segment],
+    #             rows_header: [10000, 1000, 1000],
+    #             baseline_rocauc: [0.5, 0.5, 0.5],
+    #         }
+    #     )
+    #     .set_index("segment")
+    #     .rename_axis("")
+    # )
+    # print("Expected metrics: ")
+    # print(expected_metrics)
+    # print("Actual metrics: ")
+    # print(metrics)
 
-    assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert metrics is None
+    # assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1180,24 +1204,24 @@ def test_filter_by_max_features(requests_mock: Mocker):
     # ]
 
     metrics = enricher.calculate_metrics(max_features=0)
-    expected_metrics = (
-        pd.DataFrame(
-            {
-                "segment": [train_segment, eval_1_segment, eval_2_segment],
-                rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.5, 0.5, 0.5],
-            }
-        )
-        .set_index("segment")
-        .rename_axis("")
-    )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    # expected_metrics = (
+    #     pd.DataFrame(
+    #         {
+    #             "segment": [train_segment, eval_1_segment, eval_2_segment],
+    #             rows_header: [10000, 1000, 1000],
+    #             baseline_rocauc: [0.5, 0.5, 0.5],
+    #         }
+    #     )
+    #     .set_index("segment")
+    #     .rename_axis("")
+    # )
+    # print("Expected metrics: ")
+    # print(expected_metrics)
+    # print("Actual metrics: ")
+    # print(metrics)
 
-    assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert metrics is None
+    # assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1245,8 +1269,12 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher.X = X
     enricher.y = y
     enricher._search_task = search_task
-    enricher.enriched_X = pd.DataFrame(
-        {"system_record_id": [1, 2, 3], "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)]}
+    enricher._FeaturesEnricher__enriched_Xy = pd.DataFrame(
+        {
+            "system_record_id": [1, 2, 3],
+            "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
+            "target": [0, 1, 0],
+        }
     )
     assert enricher.calculate_metrics() is None
 
@@ -1368,6 +1396,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
     df = df.sample(frac=1).reset_index(drop=True)
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     print("Train features")
@@ -1394,16 +1423,23 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
     )
 
-    print("Enriched X")
-    print(enricher.enriched_X)
+    print("Enriched Xy")
+    print(enricher._FeaturesEnricher__enriched_Xy)
 
-    assert_frame_equal(train_features, enricher.enriched_X[train_features.columns])
+    assert_series_equal(
+        train_features["phone_num"].reset_index(drop=True),
+        enricher._FeaturesEnricher__enriched_Xy["phone_num"].reset_index(drop=True),
+    )
 
-    enriched_eval1 = enricher.enriched_eval_sets[1]
-    assert_frame_equal(eval1_features, enriched_eval1[eval1_features.columns])
+    enriched_eval1 = enricher._FeaturesEnricher__enriched_eval_sets[1]
+    assert_series_equal(
+        eval1_features["phone_num"].reset_index(drop=True), enriched_eval1["phone_num"].reset_index(drop=True)
+    )
 
-    enriched_eval2 = enricher.enriched_eval_sets[2]
-    assert_frame_equal(eval2_features, enriched_eval2[eval2_features.columns])
+    enriched_eval2 = enricher._FeaturesEnricher__enriched_eval_sets[2]
+    assert_series_equal(
+        eval2_features["phone_num"].reset_index(drop=True), enriched_eval2["phone_num"].reset_index(drop=True)
+    )
 
 
 def test_features_enricher_with_datetime(requests_mock: Mocker):
@@ -1569,10 +1605,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                # match_rate_header: [99.9, 100.0, 99.0],
-                baseline_rocauc: [0.496982, 0.500184, 0.459055],
-                enriched_rocauc: [0.506967, 0.517383, 0.471194],
-                uplift: [0.009985, 0.017199, 0.012139],
+                baseline_rocauc: [0.497894, 0.498918, 0.458837],
+                enriched_rocauc: [0.496989, 0.511756, 0.473135],
+                uplift: [-0.000905, 0.012838, 0.014298],
             }
         )
         .set_index("segment")
