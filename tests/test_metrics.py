@@ -166,11 +166,13 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     enricher.y = y
     enricher.eval_set = eval_set
 
-    enriched_X = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_x.parquet"))
-    enricher.enriched_X = enriched_X
+    enriched_Xy = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_x.parquet"))
+    enriched_Xy["target"] = y
+    enricher._FeaturesEnricher__enriched_Xy = enriched_Xy
 
-    enriched_eval_x = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_eval_x.parquet"))
-    enricher.enriched_eval_sets = {1: enriched_eval_x}
+    enriched_eval_xy = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_eval_x.parquet"))
+    enriched_eval_xy["target"] = test["target1"]
+    enricher._FeaturesEnricher__enriched_eval_sets = {1: enriched_eval_xy}
 
     metrics = enricher.calculate_metrics()
     print(metrics)
@@ -180,7 +182,6 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment],
                 rows_header: [6582, 2505],
-                # match_rate_header: [100.0, 100.0],
                 baseline_rocauc: [0.741056, 0.719275],
             }
         )
@@ -297,9 +298,9 @@ def test_default_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics()
     assert metrics_df is not None
@@ -430,9 +431,9 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics()
     assert metrics_df is not None
@@ -562,9 +563,9 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics(scoring="RMSLE")
     assert metrics_df is not None
@@ -692,9 +693,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False)
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
@@ -827,9 +828,9 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     from lightgbm import LGBMClassifier  # type: ignore
 
@@ -962,9 +963,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     estimator = RandomForestClassifier(random_state=42)
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="rmse")
@@ -1093,9 +1094,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    assert len(enricher.enriched_eval_sets) == 2
-    assert len(enricher.enriched_eval_sets[1]) == 250
-    assert len(enricher.enriched_eval_sets[2]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets) == 2
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[1]) == 250
+    assert len(enricher._FeaturesEnricher__enriched_eval_sets[2]) == 250
 
     metrics_df = enricher.calculate_metrics()
     assert metrics_df is not None
