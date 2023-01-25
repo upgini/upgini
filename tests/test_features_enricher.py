@@ -9,6 +9,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.errors import ValidationError
 from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
@@ -288,13 +289,13 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     df = pd.read_csv(path, sep=",")
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
+    train_target = train_df["target"].to_frame()
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval1_target = eval1_df["target"].to_frame().reset_index(drop=True)
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
+    eval2_target = eval2_df["target"].to_frame()
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -350,6 +351,37 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
+
+
+def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"].to_frame()
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].to_frame()
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size").format(1000, 500)):
+        enricher.fit(train_features.head(1000), train_target.head(500))
+
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size_eval_set").format(1000, 500)):
+        enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
 
 
 def test_features_enricher_with_numpy(requests_mock: Mocker):
@@ -580,13 +612,13 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     df.index.name = "custom_index_name"
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
+    train_target = train_df["target"].to_list()
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval1_target = eval1_df["target"].reset_index(drop=True).to_list()
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
+    eval2_target = eval2_df["target"].to_list()
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
