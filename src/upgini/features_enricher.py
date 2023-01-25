@@ -1616,9 +1616,9 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 source = feature_meta.data_source or ""
 
-            if feature_meta.data_provider == "Upgini" and feature_meta.data_source_link and ipython_available():
+            if feature_meta.doc_link and ipython_available():
                 feature_name = (
-                    f"<a href='{feature_meta.data_source_link}#{feature_meta.name}' "
+                    f"<a href='{feature_meta.doc_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
                     f"{feature_meta.name}</a>"
                 )

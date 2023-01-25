@@ -144,6 +144,7 @@ class FeaturesMetadataV2(BaseModel):
     data_provider_link: Optional[str]
     data_source: Optional[str]
     data_source_link: Optional[str]
+    doc_link: Optional[str]
 
 
 class HitRateMetrics(BaseModel):
