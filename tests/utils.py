@@ -1,10 +1,9 @@
 from random import randint
+import tempfile
 from typing import List, Optional, Union
 
 import pandas as pd
 from requests_mock import Mocker
-
-from io import BytesIO
 
 from upgini.metadata import ProviderTaskMetadataV2
 
@@ -267,12 +266,13 @@ def mock_validation_raw_features(
                 url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=buffer
             )
     elif isinstance(mock_features, pd.DataFrame):
-        buffer = BytesIO()
-        mock_features.to_parquet(buffer)
-        content = buffer.getvalue()
-        requests_mock.get(
-            url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=content
-        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_features.to_parquet(f"{tmp_dir}/tmp.parquet")
+            with open(f"{tmp_dir}/tmp.parquet", "rb") as f:
+                buffer = f.read()
+                requests_mock.get(
+                    url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=buffer
+                )
     else:
         raise Exception(
             f"Unsupported type of mock features: {type(mock_features)}. Supported only string (path) or DataFrame"
