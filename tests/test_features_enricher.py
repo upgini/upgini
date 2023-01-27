@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal, assert_series_equal
+from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
@@ -20,6 +20,7 @@ from upgini.metadata import (
 )
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
+from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 from .utils import (
     mock_default_requests,
@@ -1265,17 +1266,13 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
         return 1.0
 
     search_task.initial_max_hit_rate_v2 = initial_max_hit_rate
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
+    search_keys = {"date": SearchKey.DATE}
+    enricher = FeaturesEnricher(search_keys=search_keys, endpoint=url, logs_enabled=False)
     enricher.X = X
     enricher.y = y
     enricher._search_task = search_task
-    enricher._FeaturesEnricher__enriched_Xy = pd.DataFrame(
-        {
-            "system_record_id": [1, 2, 3],
-            "date": [date(2020, 1, 1), date(2020, 2, 1), date(2020, 3, 1)],
-            "target": [0, 1, 0],
-        }
-    )
+    enricher._FeaturesEnricher__cached_sampled_datasets = (X, y, X, dict(), search_keys)
+
     assert enricher.calculate_metrics() is None
 
 
@@ -1359,22 +1356,65 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)]
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
         ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df = df.sample(frac=1).reset_index(drop=True)
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    print("Train features")
+    print(train_features)
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000].reset_index(drop=True)
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"].reset_index(drop=True)
+    eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        eval_set=eval_set,
+    )
+
+    df_with_eval_set_index = train_features.copy()
+    df_with_eval_set_index["eval_set_index"] = 0
+    for idx, eval_pair in enumerate(eval_set):
+        eval_x, _ = eval_pair
+        eval_df_with_index = eval_x.copy()
+        eval_df_with_index["eval_set_index"] = idx + 1
+        df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1391,55 +1431,33 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
             {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
         ],
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
-    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
-    df = pd.read_csv(path, sep=",")
-    df = df.sample(frac=1).reset_index(drop=True)
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
-    train_df = df.head(10000)
-    train_features = train_df.drop(columns="target")
-    print("Train features")
-    print(train_features)
-    train_target = train_df["target"]
-    eval1_df = df[10000:10100].reset_index(drop=True)
-    eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
-    eval2_df = df[10100:10200].reset_index(drop=True)
-    eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"].reset_index(drop=True)
+    mock_features = pd.read_parquet(path_to_mock_features)
+    converter = DateTimeSearchKeyConverter("rep_date")
+    df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
+    mock_features["system_record_id"] = [
+        hash(tuple(row)) for row in df_with_eval_set_index_with_date[sorted(search_keys.keys())].values
+    ]
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
-    enricher = FeaturesEnricher(
-        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-        endpoint=url,
-        api_key="fake_api_key",
-        date_format="%Y-%m-%d",
-        logs_enabled=False,
-    )
+    enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)
 
-    enricher.fit(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-    )
+    enriched_X = enriched_df_with_eval_set[enriched_df_with_eval_set.eval_set_index == 0]
+    enriched_eval_X_1 = enriched_df_with_eval_set[enriched_df_with_eval_set.eval_set_index == 1]
+    enriched_eval_X_2 = enriched_df_with_eval_set[enriched_df_with_eval_set.eval_set_index == 2]
 
-    print("Enriched Xy")
-    print(enricher._FeaturesEnricher__enriched_Xy)
+    print("Enriched X")
+    print(enriched_X)
 
-    assert_series_equal(
-        train_features["phone_num"].reset_index(drop=True),
-        enricher._FeaturesEnricher__enriched_Xy["phone_num"].reset_index(drop=True),
-    )
+    assert not enriched_X["feature"].isna().any()
+    assert not enriched_eval_X_1["feature"].isna().any()
+    assert not enriched_eval_X_2["feature"].isna().any()
 
-    enriched_eval1 = enricher._FeaturesEnricher__enriched_eval_sets[1]
-    assert_series_equal(
-        eval1_features["phone_num"].reset_index(drop=True), enriched_eval1["phone_num"].reset_index(drop=True)
-    )
+    assert_frame_equal(train_features, enriched_X[train_features.columns])
 
-    enriched_eval2 = enricher._FeaturesEnricher__enriched_eval_sets[2]
-    assert_series_equal(
-        eval2_features["phone_num"].reset_index(drop=True), enriched_eval2["phone_num"].reset_index(drop=True)
-    )
+    assert_frame_equal(eval1_features, enriched_eval_X_1[eval1_features.columns])
+
+    assert_frame_equal(eval2_features, enriched_eval_X_2[eval2_features.columns])
 
 
 def test_features_enricher_with_datetime(requests_mock: Mocker):
