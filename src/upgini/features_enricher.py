@@ -41,6 +41,11 @@ from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
+from upgini.utils.display_utils import (
+    display_html_dataframe,
+    do_without_pandas_limits,
+    ipython_available,
+)
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -1984,69 +1989,3 @@ def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
         return pd.DataFrame(df).drop_duplicates()
     else:
         return df
-
-
-def do_without_pandas_limits(func: Callable):
-    prev_max_rows = pd.options.display.max_rows
-    prev_max_columns = pd.options.display.max_columns
-    prev_max_colwidth = pd.options.display.max_colwidth
-
-    pd.options.display.max_rows = None
-    pd.options.display.max_columns = None
-    pd.options.display.max_colwidth = None
-
-    try:
-        func()
-    finally:
-        pd.options.display.max_rows = prev_max_rows
-        pd.options.display.max_columns = prev_max_columns
-        pd.options.display.max_colwidth = prev_max_colwidth
-
-
-def ipython_available() -> bool:
-    try:
-        _ = get_ipython()  # type: ignore
-        return True
-    except NameError:
-        return False
-
-
-def display_html_dataframe(df: pd.DataFrame):
-    from IPython.display import HTML, display
-
-    def map_to_td(value) -> str:
-        if isinstance(value, float):
-            return f"<td class='upgini-number'>{value:.6f}</td>"
-        else:
-            return f"<td class='upgini-text'>{value}</td>"
-
-    table_str = (
-        """<style>
-            .upgini-df thead th {
-                font-weight:bold;
-                text-align: right;
-                padding: 0.5em;
-            }
-
-            .upgini-df td {
-                padding: 0.5em;
-            }
-
-            .upgini-text {
-                text-align: right;
-            }
-
-            .upgini-number {
-                text-align: center;
-            }
-        </style>"""
-        + "<table class='upgini-df'>"
-        + "<thead>"
-        + "".join(f"<th>{col}</th>" for col in df.columns)
-        + "</thead>"
-        + "<tbody>"
-        + "".join("<tr>" + "".join(map(map_to_td, row[1:])) + "</tr>" for row in df.itertuples())
-        + "</tbody>"
-        + "</table>"
-    )
-    display(HTML(table_str))
