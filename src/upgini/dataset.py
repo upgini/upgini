@@ -113,8 +113,10 @@ class Dataset(pd.DataFrame):
             raise ValueError(bundle.get("dataset_dataframe_or_path_empty"))
         if isinstance(data, pd.DataFrame):
             super(Dataset, self).__init__(data)  # type: ignore
+        elif isinstance(data, pd.io.parsers.TextFileReader):  # type: ignore
+            raise ValueError(bundle.get("dataset_dataframe_iterator"))
         else:
-            raise ValueError(bundle.get("dataset_invalid_params"))
+            raise ValueError(bundle.get("dataset_dataframe_not_pandas"))
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
