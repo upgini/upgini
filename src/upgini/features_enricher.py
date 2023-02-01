@@ -1160,7 +1160,7 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        calculate_metrics = calculate_metrics or (
+        calculate_metrics = calculate_metrics if calculate_metrics is not None else (
             len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD
         )
         self.imbalanced = dataset.imbalanced
