@@ -445,8 +445,8 @@ You can use any model estimator with scikit-learn compartible interface, some ex
 
 <details>
 	<summary>
-		Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
-		out-of-the box Upgini supports 👉
+		👈 Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
+		out-of-the box Upgini supports 
 	</summary>
 <table style="table-layout: fixed;">
   <tr>
