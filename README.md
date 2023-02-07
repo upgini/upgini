@@ -80,7 +80,7 @@ We want radically simplify features search and delivery to make external data a 
 |Data scource|Countries|History, years|Update|Search keys|API Key required
 |--|--|--|--|--|--|
 |Historical weather & Climate normals | 68 |22|Monthly|date, country, postal/ZIP code|No
-|Location/Places/POI information from OpenStreetMap | 221 |2|Monthly|date, country, postal/ZIP code|No
+|Location/Places/POI/Area information from OpenStreetMap | 221 |2|Monthly|date, country, postal/ZIP code|No
 |International holidays & events, Workweek calendar| 232 |22|Monthly|date, country|No
 |Consumer Confidence index| 44 |22|Monthly|date, country|No
 |World economic indicators|191 |41|Monthly|date, country|No
@@ -445,8 +445,8 @@ You can use any model estimator with scikit-learn compartible interface, some ex
 
 <details>
 	<summary>
-		Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
-		out-of-the box Upgini supports 👉
+		👈 Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
+		out-of-the box Upgini supports 
 	</summary>
 <table style="table-layout: fixed;">
   <tr>

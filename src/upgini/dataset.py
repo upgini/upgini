@@ -42,6 +42,7 @@ from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils.target_utils import correct_string_target
 from upgini.utils.warning_counter import WarningCounter
+from upgini.utils.display_utils import do_without_pandas_limits
 
 
 class Dataset(pd.DataFrame):
@@ -112,8 +113,10 @@ class Dataset(pd.DataFrame):
             raise ValueError(bundle.get("dataset_dataframe_or_path_empty"))
         if isinstance(data, pd.DataFrame):
             super(Dataset, self).__init__(data)  # type: ignore
+        elif isinstance(data, pd.io.parsers.TextFileReader):  # type: ignore
+            raise ValueError(bundle.get("dataset_dataframe_iterator"))
         else:
-            raise ValueError(bundle.get("dataset_invalid_params"))
+            raise ValueError(bundle.get("dataset_dataframe_not_pandas"))
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
@@ -246,13 +249,25 @@ class Dataset(pd.DataFrame):
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
-            # unique_columns.remove(SYSTEM_RECORD_ID)
-            self.drop_duplicates(subset=unique_columns, inplace=True)
-            nrows_after_tgt_dedup = len(self)
-            num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
-            share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
-            if nrows_after_tgt_dedup < nrows_after_full_dedup:
-                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows)
+            marked_duplicates = self.duplicated(subset=unique_columns, keep=False)
+            if marked_duplicates.sum() > 0:
+                dups_sample = self[marked_duplicates].head(5)
+                dups_sample.drop(columns=SYSTEM_RECORD_ID, inplace=True)
+                if EVAL_SET_INDEX in dups_sample.columns:
+                    dups_sample.drop(columns=EVAL_SET_INDEX, inplace=True)
+                nrows_after_tgt_dedup = len(self.drop_duplicates(subset=unique_columns))
+                num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
+                share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
+
+                print(bundle.get("duplicates_sample"))
+                self.logger.warning(bundle.get("duplicates_sample"))
+
+                def print_dups_sample():
+                    print(dups_sample)
+                    self.logger.warning(dups_sample)
+
+                do_without_pandas_limits(print_dups_sample)
+                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_sample)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
 

@@ -1,6 +1,8 @@
 from random import randint
-from typing import List, Optional
+import tempfile
+from typing import List, Optional, Union
 
+import pandas as pd
 from requests_mock import Mocker
 
 from upgini.metadata import ProviderTaskMetadataV2
@@ -153,10 +155,7 @@ def mock_get_features_meta(
 
 
 def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_id: str, meta: ProviderTaskMetadataV2):
-    requests_mock.get(
-        url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id,
-        json=meta.dict()
-    )
+    requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.dict())
 
 
 def mock_raw_features(requests_mock: Mocker, url: str, search_task_id: str, path_to_mock_features: str):
@@ -249,7 +248,7 @@ def mock_validation_summary(
 
 
 def mock_validation_raw_features(
-    requests_mock: Mocker, url: str, validation_search_task_id: str, path_to_mock_features: str
+    requests_mock: Mocker, url: str, validation_search_task_id: str, mock_features: Union[str, pd.DataFrame]
 ):
     ads_search_task_features_id = random_id()
     requests_mock.get(
@@ -260,6 +259,21 @@ def mock_validation_raw_features(
             ]
         },
     )
-    with open(path_to_mock_features, "rb") as f:
-        buffer = f.read()
-        requests_mock.get(url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=buffer)
+    if isinstance(mock_features, str):
+        with open(mock_features, "rb") as f:
+            buffer = f.read()
+            requests_mock.get(
+                url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=buffer
+            )
+    elif isinstance(mock_features, pd.DataFrame):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_features.to_parquet(f"{tmp_dir}/tmp.parquet")
+            with open(f"{tmp_dir}/tmp.parquet", "rb") as f:
+                buffer = f.read()
+                requests_mock.get(
+                    url + f"/public/api/v2/search/rawfeatures/{ads_search_task_features_id}/file", content=buffer
+                )
+    else:
+        raise Exception(
+            f"Unsupported type of mock features: {type(mock_features)}. Supported only string (path) or DataFrame"
+        )
