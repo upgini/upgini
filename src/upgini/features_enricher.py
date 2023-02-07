@@ -438,6 +438,8 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Start transform")
             try:
                 self.dump_input(trace_id, X)
+                if not is_frames_same_schema(X, self.X):
+                    raise ValidationError(bundle.get("dataset_transform_diff_fit"))
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -1974,12 +1976,26 @@ def _num_samples(x):
 
 
 def is_frames_equal(first, second) -> bool:
-    if isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame):
+    if (
+        (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or
+        (isinstance(first, pd.Series) and isinstance(second, pd.Series))
+    ):
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
     else:
         return first == second
+
+
+def is_frames_same_schema(first, second) -> bool:
+    if isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame):
+        return first.columns.to_list() == second.columns.to_list()
+    elif isinstance(first, pd.Series) and isinstance(second, pd.Series):
+        return first.name == second.name
+    elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
+        return first.shape[1] == second.shape[1]
+    else:
+        return False
 
 
 def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
