@@ -194,6 +194,7 @@ class _RestClient:
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
 
     REGISTER_ADS_URI = "private/api/v2/ads/register"
+    ACTIVATE_ADS_URI = "private/api/v2/ads/activate"
     TOGGLE_ADS_URI_FMT = "private/api/v2/ads/{0}/toggle"
     DELETE_ADS_URI_FMT = "private/api/v2/ads/{0}"
     POLL_ADS_MANAGEMENT_STATUS_URI_FMT = "private/api/v2/ads/management-task/{0}"
@@ -585,6 +586,10 @@ class _RestClient:
         api_path = self.REGISTER_ADS_URI
         response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request))
         return response["adsManagementTaskId"]
+
+    def activate_datatables(self, request: Dict, trace_id: str):
+        api_path = self.ACTIVATE_ADS_URI
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request))
 
     def delete_ads(self, ads_definition_id: str, trace_id: str) -> str:
         api_path = self.DELETE_ADS_URI_FMT.format(ads_definition_id)
