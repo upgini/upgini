@@ -438,6 +438,8 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Start transform")
             try:
                 self.dump_input(trace_id, X)
+                if not is_frames_same_schema(X, self.X):
+                    raise ValidationError(bundle.get("dataset_transform_diff_fit"))
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -1861,11 +1863,14 @@ class FeaturesEnricher(TransformerMixin):
         return search_keys
 
     def _dump_python_libs(self):
-        python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
-        python_version = python_version_result.stdout.decode("utf-8")
-        result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
-        libs = result.stdout.decode("utf-8")
-        self.logger.warning(f"User python {python_version} libs versions:\n{libs}")
+        try:
+            python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
+            python_version = python_version_result.stdout.decode("utf-8")
+            result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
+            libs = result.stdout.decode("utf-8")
+            self.logger.warning(f"User python {python_version} libs versions:\n{libs}")
+        except Exception:
+            self.logger.exception("Failed to dump python libs")
 
     def __display_slack_community_link(self, link_text: Optional[str] = None):
         slack_community_link = bundle.get("slack_community_link")
@@ -1974,12 +1979,27 @@ def _num_samples(x):
 
 
 def is_frames_equal(first, second) -> bool:
-    if isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame):
+    if (
+        (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or
+        (isinstance(first, pd.Series) and isinstance(second, pd.Series))
+    ):
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
     else:
         return first == second
+
+
+def is_frames_same_schema(fit_df, transform_df) -> bool:
+    if isinstance(fit_df, pd.DataFrame) and isinstance(transform_df, pd.DataFrame):
+        diff = set(fit_df.columns).difference(transform_df.columns)
+        return len(diff) == 0 or diff == {EVAL_SET_INDEX}
+    elif isinstance(fit_df, pd.Series) and isinstance(transform_df, pd.Series):
+        return fit_df.name == transform_df.name
+    elif isinstance(fit_df, np.ndarray) and isinstance(transform_df, np.ndarray):
+        return fit_df.shape[1] == transform_df.shape[1]
+    else:
+        return False
 
 
 def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
