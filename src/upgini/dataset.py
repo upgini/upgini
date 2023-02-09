@@ -40,9 +40,9 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
+from upgini.utils.display_utils import do_without_pandas_limits
 from upgini.utils.target_utils import correct_string_target
 from upgini.utils.warning_counter import WarningCounter
-from upgini.utils.display_utils import do_without_pandas_limits
 
 
 class Dataset(pd.DataFrame):
@@ -251,10 +251,15 @@ class Dataset(pd.DataFrame):
             unique_columns.remove(target_column)
             marked_duplicates = self.duplicated(subset=unique_columns, keep=False)
             if marked_duplicates.sum() > 0:
-                dups_sample = self[marked_duplicates].head(5)
+                dups_sample: pd.DataFrame = (
+                    self[marked_duplicates].sort_values(by=self.columns.to_list()).head(5).copy()
+                )
                 dups_sample.drop(columns=SYSTEM_RECORD_ID, inplace=True)
                 if EVAL_SET_INDEX in dups_sample.columns:
                     dups_sample.drop(columns=EVAL_SET_INDEX, inplace=True)
+                for c in dups_sample.columns:
+                    if c in self.columns_renaming.keys():
+                        dups_sample.rename(columns={c: self.columns_renaming[c]}, inplace=True)
                 nrows_after_tgt_dedup = len(self.drop_duplicates(subset=unique_columns))
                 num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
                 share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
