@@ -437,9 +437,16 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             self.logger.info("Start transform")
             try:
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+                ).any() and not self.__is_registered:
+                    msg = bundle.get("transform_with_trial_features")
+                    self.logger.warn(msg)
+                    print(msg)
+                    return None
+
                 self.dump_input(trace_id, X)
-                if not is_frames_same_schema(X, self.X):
-                    raise ValidationError(bundle.get("dataset_transform_diff_fit"))
+                
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -527,6 +534,15 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
 
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+                ).any() and not self.__is_registered:
+                    msg = bundle.get("metrics_with_trial_features")
+                    self.logger.warn(msg)
+                    print(msg)
+                    return None
+
+                # TODO remove
                 if self._has_important_paid_features():
                     self.logger.warning("Metrics will be calculated on free features only")
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
@@ -922,6 +938,9 @@ class FeaturesEnricher(TransformerMixin):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
+            if not is_frames_same_schema(X, self.X):
+                raise ValidationError(bundle.get("dataset_transform_diff_fit"))
+
             validated_X = self._validate_X(X, is_transform=True)
 
             self.__log_debug_information(X)
@@ -1162,9 +1181,6 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        calculate_metrics = calculate_metrics if calculate_metrics is not None else (
-            len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD
-        )
         self.imbalanced = dataset.imbalanced
 
         zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
@@ -1185,6 +1201,20 @@ class FeaturesEnricher(TransformerMixin):
         if not self.warning_counter.has_warnings():
             self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
 
+        if (
+            self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+        ).any() and not self.__is_registered:
+            if calculate_metrics is not None and calculate_metrics:
+                msg = bundle.get("metrics_with_trial_features")
+                self.logger.warn(msg)
+                print(msg)
+            return
+
+        calculate_metrics = (
+            calculate_metrics
+            if calculate_metrics is not None
+            else (len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD)
+        )
         if calculate_metrics:
             self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
 
@@ -1979,9 +2009,8 @@ def _num_samples(x):
 
 
 def is_frames_equal(first, second) -> bool:
-    if (
-        (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or
-        (isinstance(first, pd.Series) and isinstance(second, pd.Series))
+    if (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or (
+        isinstance(first, pd.Series) and isinstance(second, pd.Series)
     ):
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
