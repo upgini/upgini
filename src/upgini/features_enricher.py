@@ -446,7 +446,7 @@ class FeaturesEnricher(TransformerMixin):
                     return None
 
                 self.dump_input(trace_id, X)
-                
+
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -574,7 +574,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     _cv = cv or self.cv
                     if not isinstance(_cv, BaseCrossValidator):
-                        date_column = self.__get_date_column(search_keys)
+                        date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
                         _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
 
@@ -694,7 +694,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
 
                     uplift_col = bundle.get("quality_metrics_uplift_header")
-                    date_column = self.__get_date_column(search_keys)
+                    date_column = self._get_date_column(search_keys)
                     if (
                         uplift_col in metrics_df.columns
                         and (metrics_df[uplift_col] < 0).any()
@@ -728,7 +728,7 @@ class FeaturesEnricher(TransformerMixin):
 
         extended_X = x.copy()
         generated_features = []
-        date_column = self.__get_date_column(search_keys)
+        date_column = self._get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X)
@@ -874,10 +874,8 @@ class FeaturesEnricher(TransformerMixin):
             max_features,
         )
 
-        date_column = self.__get_date_column(search_keys)
-
-        X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled, date_column)
-        enriched_X_sorted, enriched_y_sorted = self._sort_by_date(enriched_X, y_sampled, date_column)
+        X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys)
 
         existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
 
@@ -887,9 +885,9 @@ class FeaturesEnricher(TransformerMixin):
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
-            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X_sampled, eval_y_sampled, date_column)
-            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_date(
-                enriched_eval_X, eval_y_sampled, date_column
+            eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys)
+            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_keys(
+                enriched_eval_X, eval_y_sampled, search_keys
             )
             fitting_eval_X = eval_X_sorted[client_features].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[
@@ -956,7 +954,7 @@ class FeaturesEnricher(TransformerMixin):
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
-            date_column = self.__get_date_column(search_keys)
+            date_column = self._get_date_column(search_keys)
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
                 df = converter.convert(df)
@@ -1120,7 +1118,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__add_country_code(df, self.fit_search_keys)
 
         self.fit_generated_features = []
-        date_column = self.__get_date_column(self.fit_search_keys)
+        date_column = self._get_date_column(self.fit_search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             df = converter.convert(df)
@@ -1371,10 +1369,14 @@ class FeaturesEnricher(TransformerMixin):
         return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
-    def _sort_by_date(X: pd.DataFrame, y: pd.Series, date_column: Optional[str]) -> Tuple[pd.DataFrame, pd.Series]:
+    def _sort_by_keys(
+        X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey]
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        date_column = FeaturesEnricher._get_date_column(search_keys)
         if date_column is not None:
             Xy = pd.concat([X, y], axis=1)
-            Xy = Xy.sort_values(by=date_column).reset_index(drop=True)
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
+            Xy = Xy.sort_values(by=[date_column] + other_search_keys).reset_index(drop=True)
             X = Xy.drop(columns=TARGET)
             y = Xy[TARGET].copy()
 
@@ -1444,7 +1446,7 @@ class FeaturesEnricher(TransformerMixin):
         return df
 
     @staticmethod
-    def __get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+    def _get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         date_columns = [col for col, t in search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
         if len(date_columns) > 0:
             return date_columns[0]
@@ -1469,9 +1471,10 @@ class FeaturesEnricher(TransformerMixin):
         df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
 
         # order by date and idempotent order by other keys
-        date_column = self.__get_date_column(search_keys)
+        date_column = self._get_date_column(search_keys)
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
+            df = df.sample(frac=1, random_state=self.random_state)
             df = df.sort_values(by=[date_column] + other_search_keys)
 
         df = df.reset_index(drop=True).reset_index()

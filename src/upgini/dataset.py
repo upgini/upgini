@@ -473,6 +473,7 @@ class Dataset(pd.DataFrame):
                 if not is_numeric_dtype(target):
                     target = correct_string_target(target)
 
+                train_segment.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
                 if self.task_type == ModelTaskType.BINARY and min_class_count < self.MIN_SAMPLE_THRESHOLD / 2:
                     minority_class = train_segment[train_segment[target_column] == min_class_value]
                     majority_class = train_segment[train_segment[target_column] != min_class_value]
