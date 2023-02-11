@@ -132,7 +132,7 @@ class DataSourcePublisher:
 
                 request = {"dataTableIds": data_table_ids}
                 if commercial_schema is not None:
-                    request["commercialSchema"] = commercial_schema
+                    request["commercialSchema"] = commercial_schema.value
                 if listing_type is not None:
                     request["listingType"] = listing_type.value
                 if provider is not None:
