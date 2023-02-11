@@ -1658,6 +1658,8 @@ class FeaturesEnricher(TransformerMixin):
 
     def __prepare_search_keys(self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False):
         valid_search_keys = {}
+        if SearchKey.IP_RANGE_FROM in search_keys.values() or SearchKey.IP_RANGE_TO in search_keys.values():
+            raise ValidationError(bundle.get("unsupported_search_key"))
         for column_id, meaning_type in search_keys.items():
             column_name = None
             if isinstance(column_id, str):
