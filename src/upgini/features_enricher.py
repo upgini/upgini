@@ -1377,7 +1377,7 @@ class FeaturesEnricher(TransformerMixin):
             Xy = pd.concat([X, y], axis=1)
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
             search_keys_hash = "search_keys_hash"
-            Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys.keys())].values]
+            Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
             Xy = Xy.sort_values(by=[date_column] + other_search_keys).reset_index(drop=True)
             X = Xy.drop(columns=[TARGET, search_keys_hash])
             y = Xy[TARGET].copy()
@@ -1477,7 +1477,7 @@ class FeaturesEnricher(TransformerMixin):
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
             search_keys_hash = "search_keys_hash"
-            df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys.keys())].values]
+            df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
             df = df.sort_values(by=[date_column] + search_keys_hash)
             df.drop(colums=search_keys_hash, inplace=True)
 
