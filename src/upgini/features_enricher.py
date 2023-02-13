@@ -446,6 +446,14 @@ class FeaturesEnricher(TransformerMixin):
                     print(msg)
                     return None
 
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+                ).any():
+                    msg = bundle.get("transform_with_paid_features")
+                    self.logger.warn(msg)
+                    self.__display_slack_community_link(msg)
+                    return None
+
                 self.dump_input(trace_id, X)
 
                 result = self.__inner_transform(
@@ -541,6 +549,14 @@ class FeaturesEnricher(TransformerMixin):
                     msg = bundle.get("metrics_with_trial_features")
                     self.logger.warn(msg)
                     print(msg)
+                    return None
+
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+                ).any():
+                    msg = bundle.get("metrics_with_paid_features")
+                    self.logger.warn(msg)
+                    self.__display_slack_community_link(msg)
                     return None
 
                 # TODO remove
@@ -1208,6 +1224,15 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warn(msg)
                 print(msg)
             return
+
+        if (
+            self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+        ).any():
+            if calculate_metrics is not None and calculate_metrics:
+                msg = bundle.get("metrics_with_paid_features")
+                self.logger.warn(msg)
+                self.__display_slack_community_link(msg)
+            return None
 
         calculate_metrics = (
             calculate_metrics
