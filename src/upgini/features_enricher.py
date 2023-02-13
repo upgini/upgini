@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+import zlib
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -1377,9 +1378,14 @@ class FeaturesEnricher(TransformerMixin):
             Xy = pd.concat([X, y], axis=1)
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in Xy.columns])
             search_keys_hash = "search_keys_hash"
-            Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
+
+            # Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
+            Xy[search_keys_hash] = [
+                hash_row(row) for row in Xy[sorted(other_search_keys)].values
+            ]
             Xy = Xy.sort_values(by=[date_column, search_keys_hash]).reset_index(drop=True)
             X = Xy.drop(columns=[TARGET, search_keys_hash])
+            # X = Xy.drop(columns=[TARGET])
             y = Xy[TARGET].copy()
 
         return X, y
@@ -1477,7 +1483,10 @@ class FeaturesEnricher(TransformerMixin):
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
             search_keys_hash = "search_keys_hash"
-            df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
+            # df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
+            df[search_keys_hash] = [
+                hash_row(row) for row in df[sorted(other_search_keys)].values
+            ]
             df = df.sort_values(by=[date_column, search_keys_hash])
             df.drop(columns=search_keys_hash, inplace=True)
 
@@ -2047,3 +2056,7 @@ def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
         return pd.DataFrame(df).drop_duplicates()
     else:
         return df
+
+
+def hash_row(row) -> int:
+    return zlib.crc32(str(row).encode())
