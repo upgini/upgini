@@ -185,7 +185,7 @@ def test_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.494292, 0.511682, 0.525530],
+                enriched_rocauc: [0.491912, 0.509986, 0.529709],
             }
         )
         .set_index("segment")
@@ -328,9 +328,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.529049, 0.491025, 0.519194],
-                enriched_rocauc: [0.502432, 0.485560, 0.517911],
-                uplift: [-0.026617, -0.005464, -0.001283],
+                baseline_rocauc: [0.529017, 0.490646, 0.523306],
+                enriched_rocauc: [0.510232, 0.492119, 0.520055],
+                uplift: [-0.018785, 0.001472, -0.003252],
             }
         )
         .set_index("segment")
@@ -505,7 +505,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.494292, 0.511682, 0.525530],
+                enriched_rocauc: [0.491912, 0.509986, 0.529709],
             }
         )
         .set_index("segment")
@@ -653,7 +653,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.494292, 0.511682, 0.525530],
+                enriched_rocauc: [0.491912, 0.509986, 0.529709],
             }
         )
         .set_index("segment")
@@ -1623,9 +1623,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.497894, 0.498918, 0.458837],
-                enriched_rocauc: [0.496989, 0.511756, 0.473135],
-                uplift: [-0.000905, 0.012838, 0.014298],
+                baseline_rocauc: [0.495653, 0.499708, 0.457375],
+                enriched_rocauc: [0.496246, 0.516493, 0.471468],
+                uplift: [0.000593, 0.016785, 0.014093],
             }
         )
         .set_index("segment")

@@ -187,7 +187,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment],
                 rows_header: [6582, 2505],
-                baseline_rocauc: [0.741056, 0.719275],
+                baseline_rocauc: [0.740367, 0.719481],
             }
         )
         .set_index("segment")

@@ -1375,10 +1375,10 @@ class FeaturesEnricher(TransformerMixin):
         date_column = FeaturesEnricher._get_date_column(search_keys)
         if date_column is not None:
             Xy = pd.concat([X, y], axis=1)
-            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in Xy.columns])
             search_keys_hash = "search_keys_hash"
             Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
-            Xy = Xy.sort_values(by=[date_column] + other_search_keys).reset_index(drop=True)
+            Xy = Xy.sort_values(by=[date_column, search_keys_hash]).reset_index(drop=True)
             X = Xy.drop(columns=[TARGET, search_keys_hash])
             y = Xy[TARGET].copy()
 
@@ -1475,11 +1475,11 @@ class FeaturesEnricher(TransformerMixin):
         # order by date and idempotent order by other keys
         date_column = self._get_date_column(search_keys)
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
-            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
             search_keys_hash = "search_keys_hash"
             df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
-            df = df.sort_values(by=[date_column] + search_keys_hash)
-            df.drop(colums=search_keys_hash, inplace=True)
+            df = df.sort_values(by=[date_column, search_keys_hash])
+            df.drop(columns=search_keys_hash, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
