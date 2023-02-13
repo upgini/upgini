@@ -3,7 +3,7 @@ from logging import Logger
 from typing import List, Optional
 
 import pandas as pd
-from pandas.api.types import is_integer_dtype, is_string_dtype
+from pandas.api.types import is_integer_dtype, is_string_dtype, is_object_dtype
 from upgini.resource_bundle import bundle
 from upgini.utils.warning_counter import WarningCounter
 
@@ -23,7 +23,10 @@ class FeaturesValidator:
         count = len(df)
 
         for f in features:
-            value_counts = df[f].value_counts(dropna=False, normalize=True)
+            column = df[f]
+            if is_object_dtype(column):
+                column = column.astype("string")
+            value_counts = column.value_counts(dropna=False, normalize=True)
             most_frequent_percent = value_counts.iloc[0]
             if most_frequent_percent >= 0.99:
                 if set(value_counts.index.to_list()) == {0, 1}:
@@ -32,7 +35,7 @@ class FeaturesValidator:
                     empty_or_constant_features.append(f)
                 continue
 
-            if (is_string_dtype(df[f]) or is_integer_dtype(df[f])) and df[f].nunique() / count >= 0.9:
+            if (is_string_dtype(column) or is_integer_dtype(column)) and column.nunique() / count >= 0.9:
                 high_cardinality_features.append(f)
                 continue
 

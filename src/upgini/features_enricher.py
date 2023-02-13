@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+import zlib
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -437,9 +438,24 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             self.logger.info("Start transform")
             try:
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+                ).any() and not self.__is_registered:
+                    msg = bundle.get("transform_with_trial_features")
+                    self.logger.warn(msg)
+                    print(msg)
+                    return None
+
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+                ).any():
+                    msg = bundle.get("transform_with_paid_features")
+                    self.logger.warn(msg)
+                    self.__display_slack_community_link(msg)
+                    return None
+
                 self.dump_input(trace_id, X)
-                if not is_frames_same_schema(X, self.X):
-                    raise ValidationError(bundle.get("dataset_transform_diff_fit"))
+
                 result = self.__inner_transform(
                     trace_id,
                     X,
@@ -527,6 +543,23 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
 
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+                ).any() and not self.__is_registered:
+                    msg = bundle.get("metrics_with_trial_features")
+                    self.logger.warn(msg)
+                    print(msg)
+                    return None
+
+                if (
+                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+                ).any():
+                    msg = bundle.get("metrics_with_paid_features")
+                    self.logger.warn(msg)
+                    self.__display_slack_community_link(msg)
+                    return None
+
+                # TODO remove
                 if self._has_important_paid_features():
                     self.logger.warning("Metrics will be calculated on free features only")
                     self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
@@ -558,7 +591,7 @@ class FeaturesEnricher(TransformerMixin):
 
                     _cv = cv or self.cv
                     if not isinstance(_cv, BaseCrossValidator):
-                        date_column = self.__get_date_column(search_keys)
+                        date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
                         _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
 
@@ -678,7 +711,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
 
                     uplift_col = bundle.get("quality_metrics_uplift_header")
-                    date_column = self.__get_date_column(search_keys)
+                    date_column = self._get_date_column(search_keys)
                     if (
                         uplift_col in metrics_df.columns
                         and (metrics_df[uplift_col] < 0).any()
@@ -712,7 +745,7 @@ class FeaturesEnricher(TransformerMixin):
 
         extended_X = x.copy()
         generated_features = []
-        date_column = self.__get_date_column(search_keys)
+        date_column = self._get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X)
@@ -858,10 +891,8 @@ class FeaturesEnricher(TransformerMixin):
             max_features,
         )
 
-        date_column = self.__get_date_column(search_keys)
-
-        X_sorted, y_sorted = self._sort_by_date(X_sampled, y_sampled, date_column)
-        enriched_X_sorted, enriched_y_sorted = self._sort_by_date(enriched_X, y_sampled, date_column)
+        X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys)
 
         existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
 
@@ -871,9 +902,9 @@ class FeaturesEnricher(TransformerMixin):
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
-            eval_X_sorted, eval_y_sorted = self._sort_by_date(eval_X_sampled, eval_y_sampled, date_column)
-            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_date(
-                enriched_eval_X, eval_y_sampled, date_column
+            eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys)
+            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_keys(
+                enriched_eval_X, eval_y_sampled, search_keys
             )
             fitting_eval_X = eval_X_sorted[client_features].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[
@@ -922,6 +953,9 @@ class FeaturesEnricher(TransformerMixin):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
+            if not is_frames_same_schema(X, self.X):
+                raise ValidationError(bundle.get("dataset_transform_diff_fit"))
+
             validated_X = self._validate_X(X, is_transform=True)
 
             self.__log_debug_information(X)
@@ -937,7 +971,7 @@ class FeaturesEnricher(TransformerMixin):
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
-            date_column = self.__get_date_column(search_keys)
+            date_column = self._get_date_column(search_keys)
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
                 df = converter.convert(df)
@@ -1101,7 +1135,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__add_country_code(df, self.fit_search_keys)
 
         self.fit_generated_features = []
-        date_column = self.__get_date_column(self.fit_search_keys)
+        date_column = self._get_date_column(self.fit_search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             df = converter.convert(df)
@@ -1162,9 +1196,6 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self.runtime_parameters,
         )
 
-        calculate_metrics = calculate_metrics if calculate_metrics is not None else (
-            len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD
-        )
         self.imbalanced = dataset.imbalanced
 
         zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
@@ -1185,6 +1216,29 @@ class FeaturesEnricher(TransformerMixin):
         if not self.warning_counter.has_warnings():
             self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
 
+        if (
+            self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
+        ).any() and not self.__is_registered:
+            if calculate_metrics is not None and calculate_metrics:
+                msg = bundle.get("metrics_with_trial_features")
+                self.logger.warn(msg)
+                print(msg)
+            return
+
+        if (
+            self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
+        ).any():
+            if calculate_metrics is not None and calculate_metrics:
+                msg = bundle.get("metrics_with_paid_features")
+                self.logger.warn(msg)
+                self.__display_slack_community_link(msg)
+            return None
+
+        calculate_metrics = (
+            calculate_metrics
+            if calculate_metrics is not None
+            else (len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD)
+        )
         if calculate_metrics:
             self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
 
@@ -1341,11 +1395,22 @@ class FeaturesEnricher(TransformerMixin):
         return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
-    def _sort_by_date(X: pd.DataFrame, y: pd.Series, date_column: Optional[str]) -> Tuple[pd.DataFrame, pd.Series]:
+    def _sort_by_keys(
+        X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey]
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        date_column = FeaturesEnricher._get_date_column(search_keys)
         if date_column is not None:
             Xy = pd.concat([X, y], axis=1)
-            Xy = Xy.sort_values(by=date_column).reset_index(drop=True)
-            X = Xy.drop(columns=TARGET)
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in Xy.columns])
+            search_keys_hash = "search_keys_hash"
+
+            # Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
+            Xy[search_keys_hash] = [
+                hash_row(row) for row in Xy[sorted(other_search_keys)].values
+            ]
+            Xy = Xy.sort_values(by=[date_column, search_keys_hash]).reset_index(drop=True)
+            X = Xy.drop(columns=[TARGET, search_keys_hash])
+            # X = Xy.drop(columns=[TARGET])
             y = Xy[TARGET].copy()
 
         return X, y
@@ -1414,7 +1479,7 @@ class FeaturesEnricher(TransformerMixin):
         return df
 
     @staticmethod
-    def __get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+    def _get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         date_columns = [col for col, t in search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
         if len(date_columns) > 0:
             return date_columns[0]
@@ -1439,10 +1504,16 @@ class FeaturesEnricher(TransformerMixin):
         df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
 
         # order by date and idempotent order by other keys
-        date_column = self.__get_date_column(search_keys)
+        date_column = self._get_date_column(search_keys)
         if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
-            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column])
-            df = df.sort_values(by=[date_column] + other_search_keys)
+            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
+            search_keys_hash = "search_keys_hash"
+            # df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
+            df[search_keys_hash] = [
+                hash_row(row) for row in df[sorted(other_search_keys)].values
+            ]
+            df = df.sort_values(by=[date_column, search_keys_hash])
+            df.drop(columns=search_keys_hash, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
@@ -1981,9 +2052,8 @@ def _num_samples(x):
 
 
 def is_frames_equal(first, second) -> bool:
-    if (
-        (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or
-        (isinstance(first, pd.Series) and isinstance(second, pd.Series))
+    if (isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame)) or (
+        isinstance(first, pd.Series) and isinstance(second, pd.Series)
     ):
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
@@ -2011,3 +2081,7 @@ def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
         return pd.DataFrame(df).drop_duplicates()
     else:
         return df
+
+
+def hash_row(row) -> int:
+    return zlib.crc32(str(row).encode())
