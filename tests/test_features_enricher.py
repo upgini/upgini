@@ -856,7 +856,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
                     source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
-                    commercial_schema="Paid",
+                    commercial_schema="Trial",
                     data_provider="Upgini",
                     data_provider_link="https://upgini.com",
                     data_source="Community shared",
