@@ -703,7 +703,7 @@ class Dataset(pd.DataFrame):
         self.__validate_meaning_types(validate_target=validate_target)
 
         self.__drop_ignore_columns()
-        
+
         self.__rename_columns()
 
         self.__remove_dates_from_features(silent_mode)
