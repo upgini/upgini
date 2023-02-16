@@ -395,9 +395,11 @@ class FeaturesEnricher(TransformerMixin):
 
             result = self.transform(
                 X,
+                exclude_features_sources=exclude_features_sources,
                 keep_input=keep_input,
                 importance_threshold=importance_threshold,
                 max_features=max_features,
+                trace_id=trace_id,
                 silent_mode=True,
             )
             self.logger.info("Fit_transform finished successfully")
