@@ -44,7 +44,8 @@ def test_email_to_hem_convertion():
     df = converter.convert(df)
     assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
     assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
-    assert "email" not in df.columns
+    assert "email" in df.columns
+    assert converter.email_converted_to_hem
 
 
 def test_string_ip_to_int_conversion():

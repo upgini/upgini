@@ -17,6 +17,7 @@ from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
+from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import UpginiConnectionError, ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
@@ -214,6 +215,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
         *,
+        exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
         estimator: Optional[Any] = None,
         scoring: Union[Callable, str, None] = None,
@@ -270,6 +272,7 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
                     scoring=scoring,
@@ -297,6 +300,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
         *,
+        exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -367,6 +371,7 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
                     estimator=estimator,
@@ -402,6 +407,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: pd.DataFrame,
         *,
+        exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -438,17 +444,13 @@ class FeaturesEnricher(TransformerMixin):
         with MDC(trace_id=trace_id):
             self.logger.info("Start transform")
             try:
-                if (
-                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
-                ).any() and not self.__is_registered:
+                if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
                     msg = bundle.get("transform_with_trial_features")
                     self.logger.warn(msg)
                     print(msg)
                     return None
 
-                if (
-                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
-                ).any():
+                if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("transform_with_paid_features")
                     self.logger.warn(msg)
                     self.__display_slack_community_link(msg)
@@ -459,6 +461,7 @@ class FeaturesEnricher(TransformerMixin):
                 result = self.__inner_transform(
                     trace_id,
                     X,
+                    exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     silent_mode=silent_mode,
@@ -492,6 +495,7 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         cv: Union[BaseCrossValidator, CVType, None] = None,
         estimator=None,
+        exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
@@ -543,27 +547,17 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
 
-                if (
-                    self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
-                ).any() and not self.__is_registered:
+                if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
                     msg = bundle.get("metrics_with_trial_features")
                     self.logger.warn(msg)
                     print(msg)
                     return None
 
-                if (
-                    self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
-                ).any():
+                if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
                     self.logger.warn(msg)
                     self.__display_slack_community_link(msg)
                     return None
-
-                # TODO remove
-                if self._has_important_paid_features():
-                    self.logger.warning("Metrics will be calculated on free features only")
-                    self.__display_slack_community_link(bundle.get("metrics_exclude_paid_features"))
-                    self.warning_counter.increment()
 
                 (
                     validated_X,
@@ -573,17 +567,15 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_y_sorted,
                     fitting_eval_set_dict,
                     search_keys,
-                ) = self._prepare_data_for_metrics(trace_id, importance_threshold, max_features)
+                ) = self._prepare_data_for_metrics(
+                    trace_id, exclude_features_sources, importance_threshold, max_features
+                )
 
                 print(bundle.get("metrics_start"))
                 with Spinner():
                     if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                        if self._has_important_paid_features():
-                            print(bundle.get("metrics_no_important_free_features"))
-                            self.logger.warning("No client or free relevant ADS features found to calculate metrics")
-                        else:
-                            print(bundle.get("metrics_no_important_features"))
-                            self.logger.warning("No client or relevant ADS features found to calculate metrics")
+                        print(bundle.get("metrics_no_important_free_features"))
+                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
                         self.warning_counter.increment()
                         return None
 
@@ -739,7 +731,24 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
-    def _extend_x(self, x: pd.DataFrame):
+    def _has_features_with_commercial_schema(
+        self, commercial_schema: str, exclude_features_sources: Optional[List[str]]
+    ) -> bool:
+        if exclude_features_sources:
+            filtered_features_info = self.features_info[
+                ~self.features_info[bundle.get("features_info_name")].isin(exclude_features_sources)
+            ]
+        else:
+            filtered_features_info = self.features_info
+        return (filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema).any()
+
+    def _has_trial_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
+        return self._has_features_with_commercial_schema(CommercialSchema.TRIAL.value, exclude_features_sources)
+
+    def _has_paid_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
+        return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
+
+    def _extend_x(self, x: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(x, search_keys, silent_mode=True)
 
@@ -749,7 +758,6 @@ class FeaturesEnricher(TransformerMixin):
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X)
-
             generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(search_keys)
         hem_column = self.__get_hem_column(search_keys)
@@ -762,7 +770,11 @@ class FeaturesEnricher(TransformerMixin):
         return extended_X, search_keys
 
     def _prepare_data_for_metrics(
-        self, trace_id: str, importance_threshold: Optional[float] = None, max_features: Optional[int] = None
+        self,
+        trace_id: str,
+        exclude_features_sources: Optional[List[str]] = None,
+        importance_threshold: Optional[float] = None,
+        max_features: Optional[int] = None,
     ):
         validated_X = self._validate_X(self.X)
         validated_y = self._validate_y(validated_X, self.y)
@@ -774,7 +786,9 @@ class FeaturesEnricher(TransformerMixin):
         if self.__cached_sampled_datasets is not None:
             self.logger.info("Cached enriched dataset found - use it")
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
-        elif not self.imbalanced:
+            if exclude_features_sources:
+                enriched_X = enriched_X.drop(columns=[c for c in exclude_features_sources if c in enriched_X.columns])
+        elif not self.imbalanced and not exclude_features_sources:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             search_keys = self.fit_search_keys
 
@@ -808,7 +822,7 @@ class FeaturesEnricher(TransformerMixin):
 
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
         else:
-            self.logger.info("Dataset is imbalanced. Run transform")
+            self.logger.info("Dataset is imbalanced or exclude_features_sources was passed. Run transform")
             print(bundle.get("prepare_data_for_metrics"))
             if self.eval_set is not None:
                 self.logger.info("Transform with eval_set")
@@ -845,6 +859,7 @@ class FeaturesEnricher(TransformerMixin):
                         .copy()
                         .drop(columns=[EVAL_SET_INDEX, TARGET])
                     )
+                    eval_x_sampled, _ = self._extend_x(eval_x_sampled)
                     eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
                         TARGET
                     ]
@@ -852,7 +867,12 @@ class FeaturesEnricher(TransformerMixin):
 
                 df_with_eval_set_index.drop(columns=TARGET, inplace=True)
 
-                enriched = self.transform(df_with_eval_set_index, silent_mode=True, trace_id=trace_id)
+                enriched = self.transform(
+                    df_with_eval_set_index,
+                    exclude_features_sources=exclude_features_sources,
+                    silent_mode=True,
+                    trace_id=trace_id,
+                )
 
                 enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
                 enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
@@ -878,7 +898,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 df.drop(columns=TARGET, inplace=True)
 
-                enriched_X = self.transform(df, silent_mode=True, trace_id=trace_id)
+                enriched_X = self.transform(
+                    df, exclude_features_sources=exclude_features_sources, silent_mode=True, trace_id=trace_id
+                )
 
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
@@ -945,6 +967,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id,
         X: pd.DataFrame,
         *,
+        exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float],
         max_features: Optional[int],
         silent_mode: bool = False,
@@ -978,14 +1001,18 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             email_column = self.__get_email_column(search_keys)
             hem_column = self.__get_hem_column(search_keys)
+            email_converted_to_hem = False
             if email_column:
                 converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
+                email_converted_to_hem = converter.email_converted_to_hem
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
-            feature_columns = [column for column in df.columns if column not in search_keys.keys()]
+            non_keys_columns = [column for column in df.columns if column not in search_keys.keys()]
+            if email_converted_to_hem:
+                non_keys_columns.append(email_column)
 
             df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[sorted(search_keys.keys())].values]  # type: ignore
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
@@ -1000,8 +1027,8 @@ class FeaturesEnricher(TransformerMixin):
                     combined_search_keys.append(subset)
 
             # Don't pass features in backend on transform
-            if len(feature_columns) > 0:
-                df_without_features = df.drop(columns=feature_columns)
+            if len(non_keys_columns) > 0:
+                df_without_features = df.drop(columns=non_keys_columns)
             else:
                 df_without_features = df
 
@@ -1015,30 +1042,32 @@ class FeaturesEnricher(TransformerMixin):
             )
             dataset.meaning_types = meaning_types
             dataset.search_keys = combined_search_keys
+            if email_converted_to_hem:
+                dataset.ignore_columns = [email_column]
             validation_task = self._search_task.validation(
                 trace_id,
                 dataset,
                 extract_features=True,
                 runtime_parameters=self.runtime_parameters,
+                exclude_features_sources=exclude_features_sources,
                 silent_mode=silent_mode,
             )
 
-            if not silent_mode:
-                print(bundle.get("transform_start"))
-                with Spinner():
-                    result, _ = self.__enrich(
-                        df_with_original_index,
-                        validation_task.get_all_validation_raw_features(trace_id),
-                        validated_X,
-                        is_transform=True,
-                    )
-            else:
-                result, _ = self.__enrich(
+            def enrich():
+                res, _ = self.__enrich(
                     df_with_original_index,
                     validation_task.get_all_validation_raw_features(trace_id),
                     validated_X,
                     is_transform=True,
                 )
+                return res
+
+            if not silent_mode:
+                print(bundle.get("transform_start"))
+                with Spinner():
+                    result = enrich()
+            else:
+                result = enrich()
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
 
@@ -1095,6 +1124,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
         eval_set: Optional[List[tuple]],
         *,
+        exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool],
         scoring: Union[Callable, str, None],
         estimator: Optional[Any],
@@ -1142,17 +1172,24 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(self.fit_search_keys)
         hem_column = self.__get_hem_column(self.fit_search_keys)
+        email_converted_to_hem = False
         if email_column:
             converter = EmailSearchKeyConverter(email_column, hem_column, self.fit_search_keys, self.logger)
             df = converter.convert(df)
             self.fit_generated_features.extend(converter.generated_features)
+            email_converted_to_hem = converter.email_converted_to_hem
 
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
+        if email_converted_to_hem:
+            non_feature_columns.append(email_column)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
         self.fit_dropped_features = FeaturesValidator(self.logger).validate(df, features_columns, self.warning_counter)
         df = df.drop(columns=self.fit_dropped_features)
+
+        if email_converted_to_hem:
+            self.fit_dropped_features.append(email_column)
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
@@ -1185,6 +1222,8 @@ class FeaturesEnricher(TransformerMixin):
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = combined_search_keys
+        if email_converted_to_hem:
+            dataset.ignore_columns = [email_column]
 
         self.passed_features = [
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
@@ -1194,6 +1233,7 @@ class FeaturesEnricher(TransformerMixin):
             trace_id,
             extract_features=True,
             runtime_parameters=self.runtime_parameters,
+            exclude_features_sources=exclude_features_sources,
         )
 
         self.imbalanced = dataset.imbalanced
@@ -1216,18 +1256,14 @@ class FeaturesEnricher(TransformerMixin):
         if not self.warning_counter.has_warnings():
             self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
 
-        if (
-            self.features_info[bundle.get("features_info_commercial_schema")] == "Trial"
-        ).any() and not self.__is_registered:
+        if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_trial_features")
                 self.logger.warn(msg)
                 print(msg)
             return
 
-        if (
-            self.features_info[bundle.get("features_info_commercial_schema")] == "Paid"
-        ).any():
+        if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
                 self.logger.warn(msg)
@@ -1405,9 +1441,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys_hash = "search_keys_hash"
 
             # Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
-            Xy[search_keys_hash] = [
-                hash_row(row) for row in Xy[sorted(other_search_keys)].values
-            ]
+            Xy[search_keys_hash] = [hash_row(row) for row in Xy[sorted(other_search_keys)].values]
             Xy = Xy.sort_values(by=[date_column, search_keys_hash]).reset_index(drop=True)
             X = Xy.drop(columns=[TARGET, search_keys_hash])
             # X = Xy.drop(columns=[TARGET])
@@ -1509,9 +1543,7 @@ class FeaturesEnricher(TransformerMixin):
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
             search_keys_hash = "search_keys_hash"
             # df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
-            df[search_keys_hash] = [
-                hash_row(row) for row in df[sorted(other_search_keys)].values
-            ]
+            df[search_keys_hash] = [hash_row(row) for row in df[sorted(other_search_keys)].values]
             df = df.sort_values(by=[date_column, search_keys_hash])
             df.drop(columns=search_keys_hash, inplace=True)
 
@@ -1700,14 +1732,6 @@ class FeaturesEnricher(TransformerMixin):
             self.features_info = self.EMPTY_FEATURES_INFO
             self.logger.warning("Empty features info")
 
-    def __filtered_client_features(self, client_features: List[str]) -> List[str]:
-        return self.features_info.loc[
-            self.features_info[bundle.get("features_info_name")].isin(client_features)
-            & self.features_info[bundle.get("features_info_shap")]
-            > 0,
-            bundle.get("features_info_name"),
-        ].values.tolist()
-
     def __filtered_importance_names(
         self, importance_threshold: Optional[float], max_features: Optional[int]
     ) -> List[str]:
@@ -1831,9 +1855,6 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
                 print(metrics)
 
-    def _has_important_paid_features(self) -> bool:
-        return (self.features_info[bundle.get("features_info_commercial_schema")] == "Paid").any()
-
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
 
@@ -1841,6 +1862,7 @@ class FeaturesEnricher(TransformerMixin):
             _ = get_ipython()  # type: ignore
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
+            self.logger.info(msg)
             display_html_dataframe(self.features_info)
 
             if len(self.feature_names_) == 0:
@@ -2065,7 +2087,9 @@ def is_frames_equal(first, second) -> bool:
 def is_frames_same_schema(fit_df, transform_df) -> bool:
     if isinstance(fit_df, pd.DataFrame) and isinstance(transform_df, pd.DataFrame):
         diff = set(fit_df.columns).difference(transform_df.columns)
-        return len(diff) == 0 or diff == {EVAL_SET_INDEX}
+        return len(diff) == 0 or diff.issubset(
+            [EVAL_SET_INDEX, EmailSearchKeyConverter.DOMAIN_COLUMN_NAME, EmailSearchKeyConverter.HEM_COLUMN_NAME]
+        )
     elif isinstance(fit_df, pd.Series) and isinstance(transform_df, pd.Series):
         return fit_df.name == transform_df.name
     elif isinstance(fit_df, np.ndarray) and isinstance(transform_df, np.ndarray):

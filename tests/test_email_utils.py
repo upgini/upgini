@@ -46,6 +46,7 @@ def test_convertion_to_hem():
 
     expected_df = pd.DataFrame(
         {
+            "email": ["test@google.com", "", "@", None, 0.0],
             EmailSearchKeyConverter.HEM_COLUMN_NAME: [
                 "8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57",
                 None,
@@ -78,6 +79,7 @@ def test_convertion_to_hem_with_existing_hem():
 
     expected_df = pd.DataFrame(
         {
+            "email": ["test@google.com", "", None, 0.0],
             "hem": ["8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57", None, None, None],
             EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None],
         }
