@@ -637,6 +637,21 @@ enricher = FeaturesEnricher(
 )
 enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
 ```
+
+### Exclude features sources from fit, transform and calculation of metrics
+
+`fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with parameter `exclude_features_sources` that allows to exclude Trial or Paid features that cannot be used for enrichment or calculation of metrics:
+```python
+enricher = FeaturesEnricher(
+  search_keys={"subscription_activation_date": SearchKey.DATE}
+)
+enricher.fit(X, y, calculate_metrics=False)
+trial_features = enricher.get_features_info()[enricher.get_features_info()["Feature type"] == "Trial"]["Feature name"].values.tolist()
+paid_features = enricher.get_features_info()[enricher.get_features_info()["Feature type"] == "Paid"]["Feature name"].values.tolist()
+enricher.calculate_metrics(exclude_features_sources=(trial_features + paid_features))
+enricher.transform(X, exclude_features_sources=(trial_features + paid_features))
+```
+
 ### Turn off autodetection for search key columns
 Upgini has autodetection of search keys on by default.
 To turn off use `detect_missing_search_keys=False`:
