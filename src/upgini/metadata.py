@@ -15,6 +15,8 @@ SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
 
 class FileColumnMeaningType(Enum):
     MSISDN = "MSISDN"
+    MSISDN_RANGE_FROM = "MSISDN_RANGE_FROM"
+    MSISDN_RANGE_TO = "MSISDN_RANGE_TO"
     EMAIL = "EMAIL"
     IP_ADDRESS = "IP_ADDRESS"
     IP_RANGE_FROM = "IP_RANGE_FROM"
@@ -39,6 +41,8 @@ class SearchKey(Enum):
     IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
     IP_RANGE_TO = FileColumnMeaningType.IP_RANGE_TO
     PHONE = FileColumnMeaningType.MSISDN
+    MSISDN_RANGE_FROM = FileColumnMeaningType.MSISDN_RANGE_FROM
+    MSISDN_RANGE_TO = FileColumnMeaningType.MSISDN_RANGE_TO
     DATE = FileColumnMeaningType.DATE
     DATETIME = FileColumnMeaningType.DATETIME
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
