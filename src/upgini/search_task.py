@@ -107,7 +107,7 @@ class SearchTask:
                 self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
                 raise RuntimeError(bundle.get("all_providers_failed_with_error").format(",".join(error_messages)))
 
-        if self.summary.status == "COMPLETED":
+        if self.summary.status in ["COMPLETED", "VALIDATION_COMPLETED"]:
             self.provider_metadata_v2 = []
             for provider_summary in self.summary.initial_important_providers:
                 if provider_summary.status == "COMPLETED":
@@ -169,6 +169,7 @@ class SearchTask:
         validation_dataset: "dataset.Dataset",
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        exclude_features_sources: Optional[List[str]] = None,
         silent_mode: bool = False,
     ) -> "SearchTask":
         return validation_dataset.validation(
@@ -177,6 +178,7 @@ class SearchTask:
             return_scores=True,
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
+            exclude_features_sources=exclude_features_sources,
             silent_mode=silent_mode,
         )
 

@@ -702,9 +702,9 @@ class Dataset(pd.DataFrame):
 
         self.__validate_meaning_types(validate_target=validate_target)
 
-        self.__rename_columns()
-
         self.__drop_ignore_columns()
+
+        self.__rename_columns()
 
         self.__remove_dates_from_features(silent_mode)
 
@@ -743,7 +743,7 @@ class Dataset(pd.DataFrame):
 
         self.__validate_max_row_count()
 
-    def __construct_metadata(self) -> FileMetadata:
+    def __construct_metadata(self, exclude_features_sources: Optional[List[str]] = None) -> FileMetadata:
         # self.logger.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
@@ -782,6 +782,7 @@ class Dataset(pd.DataFrame):
             description=self.description,
             columns=columns,
             searchKeys=self.search_keys,
+            excludeFeaturesSources=exclude_features_sources,
             hierarchicalGroupKeys=self.hierarchical_group_keys,
             hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
             taskType=self.task_type,
@@ -841,6 +842,7 @@ class Dataset(pd.DataFrame):
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
+        exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,  # deprecated
         max_features: Optional[int] = None,  # deprecated
         filter_features: Optional[dict] = None,  # deprecated
@@ -850,7 +852,7 @@ class Dataset(pd.DataFrame):
             self.validate()
         file_metrics = FileMetrics()
 
-        file_metadata = self.__construct_metadata()
+        file_metadata = self.__construct_metadata(exclude_features_sources)
         search_customization = self.__construct_search_customization(
             return_scores=return_scores,
             extract_features=extract_features,
@@ -895,13 +897,14 @@ class Dataset(pd.DataFrame):
         return_scores: bool = True,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        exclude_features_sources: Optional[List[str]] = None,
         silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
             self.validate(validate_target=False, silent_mode=silent_mode)
         file_metrics = FileMetrics()
 
-        file_metadata = self.__construct_metadata()
+        file_metadata = self.__construct_metadata(exclude_features_sources=exclude_features_sources)
         search_customization = self.__construct_search_customization(
             return_scores, extract_features, runtime_parameters=runtime_parameters
         )

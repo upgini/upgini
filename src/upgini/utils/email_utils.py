@@ -51,6 +51,7 @@ class EmailSearchKeyConverter:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
+        self.email_converted_to_hem = False
 
     @staticmethod
     def _email_to_hem(email: str) -> Optional[str]:
@@ -74,11 +75,11 @@ class EmailSearchKeyConverter:
         if self.hem_column is None:
             df[self.HEM_COLUMN_NAME] = df[self.email_column].apply(self._email_to_hem)
             self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
+            self.email_converted_to_hem = True
 
         del self.search_keys[self.email_column]
 
         df[self.DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_domain)
         self.generated_features.append(self.DOMAIN_COLUMN_NAME)
-        df.drop(columns=self.email_column, inplace=True)
 
         return df
