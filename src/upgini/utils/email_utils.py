@@ -34,6 +34,7 @@ class EmailSearchKeyConverter:
 
     HEM_COLUMN_NAME = "hashed_email"
     DOMAIN_COLUMN_NAME = "email_domain"
+    EMAIL_ONE_DOMAIN_COLUMN_NAME = "email_one_domain"
 
     def __init__(
         self,
@@ -64,11 +65,11 @@ class EmailSearchKeyConverter:
         return sha256(email.lower().encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _email_to_domain(email: str) -> Optional[str]:
+    def _email_to_one_domain(email: str) -> Optional[str]:
         if email is not None and type(email) == str and "@" in email:
-            domain_candidate = email.split("@")[1]
-            if len(domain_candidate) > 0:
-                return domain_candidate
+            name_and_domain = email.split("@")
+            if len(name_and_domain) == 2 and len(name_and_domain[0]) > 0 and len(name_and_domain[1]) > 0:
+                return name_and_domain[0][0] + name_and_domain[1]
 
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -79,7 +80,11 @@ class EmailSearchKeyConverter:
 
         del self.search_keys[self.email_column]
 
-        df[self.DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_domain)
+        df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_one_domain)
+
+        self.search_keys[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = SearchKey.EMAIL_ONE_DOMAIN
+
+        df[self.DOMAIN_COLUMN_NAME] = df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME].str[1:]
         self.generated_features.append(self.DOMAIN_COLUMN_NAME)
 
         return df
