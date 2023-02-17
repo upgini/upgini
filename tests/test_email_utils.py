@@ -36,31 +36,36 @@ def test_email_search_key_detection_by_values():
 
 
 def test_convertion_to_hem():
-    df = pd.DataFrame({"email": ["test@google.com", "", "@", None, 0.0]})
+    df = pd.DataFrame({"email": ["test@google.com", "", "@", None, 0.0, "asdf@oiouo@asdf"]})
 
     search_keys = {"email": SearchKey.EMAIL}
     converter = EmailSearchKeyConverter("email", None, search_keys)
     df = converter.convert(df)
 
-    assert search_keys == {EmailSearchKeyConverter.HEM_COLUMN_NAME: SearchKey.HEM}
+    assert search_keys == {
+        EmailSearchKeyConverter.HEM_COLUMN_NAME: SearchKey.HEM,
+        EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: SearchKey.EMAIL_ONE_DOMAIN,
+    }
 
     expected_df = pd.DataFrame(
         {
-            "email": ["test@google.com", "", "@", None, 0.0],
+            "email": ["test@google.com", "", "@", None, 0.0, "asdf@oiouo@asdf"],
             EmailSearchKeyConverter.HEM_COLUMN_NAME: [
                 "8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57",
                 None,
                 None,
                 None,
                 None,
+                None
             ],
-            EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None, None],
+            EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: ["tgoogle.com", None, None, None, None, None],
+            EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None, None, None],
         }
     )
 
     assert_frame_equal(expected_df, df)
 
-    assert df[EmailSearchKeyConverter.DOMAIN_COLUMN_NAME].astype("string").isnull().sum() == 4
+    assert df[EmailSearchKeyConverter.DOMAIN_COLUMN_NAME].astype("string").isnull().sum() == 5
 
 
 def test_convertion_to_hem_with_existing_hem():
@@ -75,12 +80,16 @@ def test_convertion_to_hem_with_existing_hem():
     converter = EmailSearchKeyConverter("email", "hem", search_keys)
     df = converter.convert(df)
 
-    assert search_keys == {"hem": SearchKey.HEM}
+    assert search_keys == {
+        "hem": SearchKey.HEM,
+        EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: SearchKey.EMAIL_ONE_DOMAIN,
+    }
 
     expected_df = pd.DataFrame(
         {
             "email": ["test@google.com", "", None, 0.0],
             "hem": ["8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57", None, None, None],
+            EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: ["tgoogle.com", None, None, None],
             EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None],
         }
     )

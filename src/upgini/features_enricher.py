@@ -781,7 +781,7 @@ class FeaturesEnricher(TransformerMixin):
         validated_X = self._validate_X(self.X)
         validated_y = self._validate_y(validated_X, self.y)
 
-        self.__log_debug_information(self.X, self.y, self.eval_set)
+        self.__log_debug_information(self.X, self.y, self.eval_set, exclude_features_sources=exclude_features_sources)
 
         eval_set_sampled_dict = dict()
 
@@ -983,7 +983,7 @@ class FeaturesEnricher(TransformerMixin):
 
             validated_X = self._validate_X(X, is_transform=True)
 
-            self.__log_debug_information(X)
+            self.__log_debug_information(X, exclude_features_sources=exclude_features_sources)
 
             search_keys = self.search_keys.copy()
             search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=silent_mode)
@@ -1139,7 +1139,7 @@ class FeaturesEnricher(TransformerMixin):
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
 
-        self.__log_debug_information(X, y, eval_set)
+        self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
         self.fit_search_keys = self.search_keys.copy()
         self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys)
@@ -1456,6 +1456,7 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
+        exclude_features_sources: Optional[List[str]] = None,
     ):
         resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
         self.logger.info(
@@ -1469,6 +1470,7 @@ class FeaturesEnricher(TransformerMixin):
             f"CV: {self.cv}\n"
             f"Shared datasets: {self.shared_datasets}\n"
             f"Random state: {self.random_state}\n"
+            f"Exclude features sources: {exclude_features_sources}\n"
             f"Search id: {self.search_id}\n"
         )
 
@@ -1760,6 +1762,7 @@ class FeaturesEnricher(TransformerMixin):
             or SearchKey.IP_RANGE_TO in search_keys.values()
             or SearchKey.MSISDN_RANGE_FROM in search_keys.values()
             or SearchKey.MSISDN_RANGE_TO in search_keys.values()
+            or SearchKey.EMAIL_ONE_DOMAIN in search_keys.values()
         ):
             raise ValidationError(bundle.get("unsupported_search_key"))
         for column_id, meaning_type in search_keys.items():

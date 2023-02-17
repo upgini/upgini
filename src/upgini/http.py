@@ -686,7 +686,7 @@ class _RestClient:
         )
 
         if response.status_code >= 400:
-            if not silent:
+            if not silent and response.status_code != 401:
                 logging.error(f"Failed to execute request to {api_path}: {response}")
             raise HttpError(response.text, status_code=response.status_code)
 

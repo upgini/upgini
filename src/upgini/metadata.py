@@ -18,6 +18,7 @@ class FileColumnMeaningType(Enum):
     MSISDN_RANGE_FROM = "MSISDN_RANGE_FROM"
     MSISDN_RANGE_TO = "MSISDN_RANGE_TO"
     EMAIL = "EMAIL"
+    EMAIL_ONE_DOMAIN = "EMAIL_ONE_DOMAIN"
     IP_ADDRESS = "IP_ADDRESS"
     IP_RANGE_FROM = "IP_RANGE_FROM"
     IP_RANGE_TO = "IP_RANGE_TO"
@@ -36,6 +37,7 @@ class FileColumnMeaningType(Enum):
 
 class SearchKey(Enum):
     EMAIL = FileColumnMeaningType.EMAIL
+    EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
     HEM = FileColumnMeaningType.HEM
     IP = FileColumnMeaningType.IP_ADDRESS
     IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
