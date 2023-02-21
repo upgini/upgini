@@ -389,9 +389,9 @@ class Dataset(pd.DataFrame):
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
                 try:
-                    self[target_column] = self[target_column].astype("int")
+                    target = target.astype("category").cat.codes
                 except ValueError:
-                    self.logger.exception("Failed to cast target to integer for binary task type")
+                    self.logger.exception("Failed to cast target to category codes for binary task type")
                     raise ValidationError(bundle.get("dataset_invalid_target_type").format(target.dtype))
             target_classes_count = target.nunique()
             if target_classes_count != 2:
@@ -401,7 +401,7 @@ class Dataset(pd.DataFrame):
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target):
                 try:
-                    self[target_column] = self[target_column].astype("category").cat.codes
+                    target = self[target_column].astype("category").cat.codes
                 except Exception:
                     self.logger.exception("Failed to cast target to category codes for multiclass task type")
                     raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
@@ -435,7 +435,7 @@ class Dataset(pd.DataFrame):
             min_class_count = count
             min_class_value = None
             target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-            target = train_segment[target_column]
+            target = train_segment[target_column].copy()
             target_classes_count = target.nunique()
 
             if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
@@ -571,8 +571,8 @@ class Dataset(pd.DataFrame):
             elif target_items == 0:
                 raise ValidationError(bundle.get("dataset_empty_target"))
 
-            if self.task_type != ModelTaskType.MULTICLASS:
-                self[target] = self[target].apply(pd.to_numeric, errors="coerce")
+            # if self.task_type != ModelTaskType.MULTICLASS:
+            #     self[target] = self[target].apply(pd.to_numeric, errors="coerce")
 
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
         mandatory_columns = [target]

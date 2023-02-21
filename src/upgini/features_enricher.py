@@ -978,7 +978,14 @@ class FeaturesEnricher(TransformerMixin):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
-            if not is_frames_same_schema(X, self.X):
+            if self.X is not None and not is_frames_same_schema(X, self.X):
+                try:
+                    self.logger.warning(
+                        f"Schema of fitting X:\n{self.X.columns.to_list()}\n"
+                        f"schema of X passed on transform:\n{X.columns.to_list()}"
+                    )
+                except Exception:
+                    pass
                 raise ValidationError(bundle.get("dataset_transform_diff_fit"))
 
             validated_X = self._validate_X(X, is_transform=True)
@@ -1860,6 +1867,17 @@ class FeaturesEnricher(TransformerMixin):
                 _ = get_ipython()  # type: ignore
 
                 print(Format.GREEN + Format.BOLD + msg + Format.END)
+                if bundle.get("quality_metrics_uplift_header") in metrics.columns:
+                    metrics = metrics.copy()
+                    try:
+                        baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
+                        metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
+                            metrics[bundle.get("quality_metrics_uplift_header")]
+                            / metrics[baseline_header]
+                            * 100.0
+                        ).round(2)
+                    except Exception:
+                        pass
                 display(metrics)
             except (ImportError, NameError):
                 print(msg)
