@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 import time
 import uuid
@@ -113,6 +114,8 @@ class DataSourcePublisher:
         self,
         data_table_ids: Union[List[str], str],
         commercial_schema: Optional[CommercialSchema] = None,
+        trial_limit: Optional[int] = None,
+        expires_at: Optional[str] = None,
         listing_type: Optional[ListingType] = None,
         provider: Optional[str] = None,
         provider_link: Optional[str] = None,
@@ -125,14 +128,22 @@ class DataSourcePublisher:
             try:
                 if data_table_ids is None or len(data_table_ids) == 0:
                     raise ValidationError("Empty data table ids")
-                if listing_type == ListingType.PRIVATE and (client_emails is None or len(client_emails) == 0):
-                    raise ValidationError("Empty client emails for private data tables")
-                if listing_type != ListingType.PRIVATE and client_emails is not None:
-                    raise ValidationError("Client emails make sense only for private data table")
+                # if listing_type == ListingType.PRIVATE and (client_emails is None or len(client_emails) == 0):
+                #     raise ValidationError("Empty client emails for private data tables")
+                # if listing_type not in [ListingType.PRIVATE, ListingType.TRIAL] and client_emails is not None:
+                #     raise ValidationError("Client emails make sense only for private data table")
 
                 request = {"dataTableIds": data_table_ids}
                 if commercial_schema is not None:
                     request["commercialSchema"] = commercial_schema.value
+                if trial_limit is not None:
+                    request["trialLimit"] = trial_limit
+                if expires_at is not None:
+                    try:
+                        datetime.strptime(expires_at, "%Y-%m-%d")
+                    except Exception:
+                        raise ValidationError("Invalid format of expires_at. It should be like YYYY-MM-DD")
+                    request["expiresAt"] = expires_at
                 if listing_type is not None:
                     request["listingType"] = listing_type.value
                 if provider is not None:

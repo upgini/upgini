@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -9,8 +10,11 @@ from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
 
 
-def correct_string_target(y: pd.Series) -> pd.Series:
-    return y.astype(str).astype("category").cat.codes
+def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, np.ndarray]:
+    if isinstance(y, pd.Series):
+        return y.astype(str).astype("category").cat.codes
+    elif isinstance(y, np.ndarray):
+        return pd.Series(y).astype(str).astype("category").cat.codes.values
 
 
 def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> ModelTaskType:
