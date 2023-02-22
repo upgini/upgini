@@ -16,14 +16,14 @@ from upgini.http import (
 )
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
+    FeaturesMetadataV2,
     FileMetadata,
     ModelTaskType,
-    RuntimeParameters,
     ProviderTaskMetadataV2,
-    FeaturesMetadataV2,
+    RuntimeParameters,
 )
-from upgini.spinner import Spinner
 from upgini.resource_bundle import bundle
+from upgini.spinner import Spinner
 
 
 class SearchTask:
@@ -54,7 +54,7 @@ class SearchTask:
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
 
-    def poll_result(self, trace_id: str, quiet: bool = False) -> "SearchTask":
+    def poll_result(self, trace_id: str, quiet: bool = False, check_fit: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
         failed_statuses = {"FAILED", "VALIDATION_FAILED", "EMPTY_INTERSECTION"}
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
@@ -70,7 +70,9 @@ class SearchTask:
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
                     trace_id, search_task_id
                 )
-                while self.summary.status not in completed_statuses:
+                while self.summary.status not in completed_statuses and (
+                    check_fit and "VALIDATION" not in self.summary.status
+                ):
                     time.sleep(5)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
                         trace_id, search_task_id
@@ -86,10 +88,11 @@ class SearchTask:
                         raise RuntimeError(bundle.get("no_one_provider_respond"))
                     time.sleep(5)
         except KeyboardInterrupt as e:
-            print(bundle.get("search_stopping"))
-            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
-            self.logger.warning(f"Search {search_task_id} stopped by user")
-            print(bundle.get("search_stopped"))
+            if not check_fit:
+                print(bundle.get("search_stopping"))
+                get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
+                self.logger.warning(f"Search {search_task_id} stopped by user")
+                print(bundle.get("search_stopped"))
             raise e
         print()
 
@@ -98,7 +101,7 @@ class SearchTask:
             if provider_summary.status == "COMPLETED":
                 has_completed_provider_task = True
 
-        if not has_completed_provider_task:
+        if not has_completed_provider_task and not check_fit:
             error_messages = [self._error_message(x) for x in self._get_provider_summaries(self.summary)]
             if len(error_messages) == 1 and (error_messages[0] is None or error_messages[0].endswith("Internal error")):
                 self.logger.error(f"Search failed with error: {error_messages[0]}")
@@ -107,13 +110,16 @@ class SearchTask:
                 self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
                 raise RuntimeError(bundle.get("all_providers_failed_with_error").format(",".join(error_messages)))
 
-        if self.summary.status in ["COMPLETED", "VALIDATION_COMPLETED"]:
+        if self.summary.status in ["COMPLETED", "VALIDATION_COMPLETED"] or (
+            check_fit and "VALIDATION" in self.summary.status
+        ):
             self.provider_metadata_v2 = []
             for provider_summary in self.summary.initial_important_providers:
                 if provider_summary.status == "COMPLETED":
                     self.provider_metadata_v2.append(
-                        get_rest_client(self.endpoint, self.api_key)
-                        .get_provider_search_metadata_v3(provider_summary.ads_search_task_id, trace_id)
+                        get_rest_client(self.endpoint, self.api_key).get_provider_search_metadata_v3(
+                            provider_summary.ads_search_task_id, trace_id
+                        )
                     )
 
         return self
@@ -368,9 +374,7 @@ class SearchTask:
     def initial_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_initial_search()
         result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
-        result.rename(
-            columns={"value": "hit_rate"}, inplace=True
-        )
+        result.rename(columns={"value": "hit_rate"}, inplace=True)
         return result
 
     # deprecated
@@ -642,9 +646,7 @@ class SearchTask:
     def validation_hit_rate(self) -> pd.DataFrame:
         provider_summaries = self._check_finished_validation_search()
         result = pd.DataFrame(self._metric_by_provider(provider_summaries, "HIT_RATE"))
-        result.rename(
-            columns={"value": "hit_rate"}, inplace=True
-        )
+        result.rename(columns={"value": "hit_rate"}, inplace=True)
         return result
 
     # deprecated
