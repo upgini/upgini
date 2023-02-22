@@ -162,7 +162,7 @@ class FeaturesEnricher(TransformerMixin):
             with MDC(trace_id=trace_id):
                 try:
                     self.logger.info(f"FeaturesEnricher created from existing search: {search_id}")
-                    self._search_task = search_task.poll_result(trace_id, quiet=True)
+                    self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
                     self.__prepare_feature_importances(trace_id, x_columns)
@@ -474,8 +474,14 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                if "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0]):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    return None
+                elif "You have reached the quota limit of trial data usage" in str(
+                    e.args[0]
+                ) or "Current user hasn't access to trial features" in str(e.args[0]):
+                    self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                    return None
                 else:
                     self._dump_python_libs()
                     self.__display_slack_community_link()
@@ -561,6 +567,11 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(msg)
                     return None
 
+                prepared_data = self._prepare_data_for_metrics(
+                    trace_id, exclude_features_sources, importance_threshold, max_features
+                )
+                if prepared_data is None:
+                    return None
                 (
                     validated_X,
                     fitting_X,
@@ -569,9 +580,7 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_y_sorted,
                     fitting_eval_set_dict,
                     search_keys,
-                ) = self._prepare_data_for_metrics(
-                    trace_id, exclude_features_sources, importance_threshold, max_features
-                )
+                ) = prepared_data
 
                 print(bundle.get("metrics_start"))
                 with Spinner():
@@ -727,9 +736,14 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 self.logger.exception(error_message)
                 self._dump_python_libs()
-                if not silent:
-                    self.__display_slack_community_link()
-                raise e
+                if "You have reached the quota limit of trial data usage" in str(
+                    e.args[0]
+                ) or "Current user hasn't access to trial features" in str(e.args[0]):
+                    self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                else:
+                    if not silent:
+                        self.__display_slack_community_link()
+                    raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
@@ -875,6 +889,8 @@ class FeaturesEnricher(TransformerMixin):
                     silent_mode=True,
                     trace_id=trace_id,
                 )
+                if enriched is None:
+                    return None
 
                 enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
                 enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
@@ -903,6 +919,8 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_X = self.transform(
                     df, exclude_features_sources=exclude_features_sources, silent_mode=True, trace_id=trace_id
                 )
+                if enriched_X is None:
+                    return None
 
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
@@ -1872,9 +1890,7 @@ class FeaturesEnricher(TransformerMixin):
                     try:
                         baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
                         metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
-                            metrics[bundle.get("quality_metrics_uplift_header")]
-                            / metrics[baseline_header]
-                            * 100.0
+                            metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
                         ).round(2)
                     except Exception:
                         pass
