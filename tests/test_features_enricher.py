@@ -33,6 +33,7 @@ from .utils import (
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
+    mock_initial_and_validation_summary,
 )
 
 train_segment = bundle.get("quality_metrics_train_segment")
@@ -76,10 +77,12 @@ def test_features_enricher(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
-    ads_search_task_id = mock_initial_summary(
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
+        validation_search_task_id,
         hit_rate=99.9,
         auc=0.66,
         uplift=0.1,
@@ -124,22 +127,6 @@ def test_features_enricher(requests_mock: Mocker):
         ),
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
-    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")

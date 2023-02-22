@@ -8,6 +8,15 @@ from requests_mock import Mocker
 from upgini.metadata import ProviderTaskMetadataV2
 
 
+class RequestsCounter:
+
+    def __init__(self):
+        self.count = 0
+
+    def increment(self):
+        self.count += 1
+
+
 def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.get("https://ident.me", content="1.1.1.1".encode())
     requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
@@ -243,6 +252,202 @@ def mock_validation_summary(
             ],
             "createdAt": 1633302145414,
         },
+    )
+    return ads_search_task_id
+
+
+def mock_initial_and_validation_summary(
+    requests_mock: Mocker,
+    url: str,
+    search_task_id: str,
+    validation_search_task_id: str,
+    hit_rate: float,
+    auc: Optional[float] = None,
+    rmse: Optional[float] = None,
+    accuracy: Optional[float] = None,
+    uplift: Optional[float] = None,
+    eval_set_metrics: Optional[List[dict]] = None,
+):
+    ads_search_task_id = random_id()
+    validation_ads_search_task_id = random_id()
+    metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
+
+    req_counter = RequestsCounter()
+    file_upload_task_id = random_id()
+
+    def response(request, context):
+        if req_counter.count == 0:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": file_upload_task_id,
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "CREATED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [],
+                "validationImportantProviders": [],
+                "createdAt": 1633302145414,
+            }
+        elif req_counter.count == 1:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": file_upload_task_id,
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "SUBMITTED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [
+                    {
+                        "adsSearchTaskId": ads_search_task_id,
+                        "searchTaskId": search_task_id,
+                        "searchType": "INITIAL",
+                        "taskStatus": "SUBMITTED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "featuresFoundCount": 1,
+                        "providerQuality": {"metrics": []},
+                        "evalSetMetrics": [],
+                    }
+                ],
+                "validationImportantProviders": [],
+                "createdAt": 1633302145414,
+            }
+        elif req_counter.count == 2:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": file_upload_task_id,
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "COMPLETED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [
+                    {
+                        "adsSearchTaskId": ads_search_task_id,
+                        "searchTaskId": search_task_id,
+                        "searchType": "INITIAL",
+                        "taskStatus": "COMPLETED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "providerQuality": {"metrics": metrics},
+                        "featuresFoundCount": 1,
+                        "evalSetMetrics": eval_set_metrics or [],
+                    }
+                ],
+                "validationImportantProviders": [],
+                "createdAt": 1633302145414,
+            }
+        elif req_counter.count == 3:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": "validation_fileUploadTaskId",
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "VALIDATION_CREATED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [
+                    {
+                        "adsSearchTaskId": ads_search_task_id,
+                        "searchTaskId": search_task_id,
+                        "searchType": "INITIAL",
+                        "taskStatus": "COMPLETED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "providerQuality": {"metrics": metrics},
+                        "featuresFoundCount": 1,
+                        "evalSetMetrics": eval_set_metrics or [],
+                    }
+                ],
+                "validationImportantProviders": [],
+                "createdAt": 1633302145414,
+            }
+        elif req_counter.count == 4:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": "validation_fileUploadTaskId",
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "VALIDATION_SUBMITTED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [
+                    {
+                        "adsSearchTaskId": ads_search_task_id,
+                        "searchTaskId": search_task_id,
+                        "searchType": "INITIAL",
+                        "taskStatus": "COMPLETED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "providerQuality": {"metrics": metrics},
+                        "featuresFoundCount": 1,
+                        "evalSetMetrics": eval_set_metrics or [],
+                    }
+                ],
+                "validationImportantProviders": [
+                    {
+                        "adsSearchTaskId": validation_ads_search_task_id,
+                        "searchTaskId": validation_search_task_id,
+                        "searchType": "VALIDATION",
+                        "taskStatus": "SUBMITTED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "featuresFoundCount": 1,
+                        "providerQuality": {"metrics": []},
+                        "evalSetMetrics": [],
+                    }
+                ],
+                "createdAt": 1633302145414,
+            }
+        else:
+            req_counter.increment()
+            return {
+                "fileUploadTaskId": "validation_fileUploadTaskId",
+                "searchTaskId": search_task_id,
+                "searchTaskStatus": "COMPLETED",
+                "featuresFoundCount": 1,
+                "providersCheckedCount": 1,
+                "importantProvidersCount": 1,
+                "importantFeaturesCount": 1,
+                "importantProviders": [
+                    {
+                        "adsSearchTaskId": ads_search_task_id,
+                        "searchTaskId": search_task_id,
+                        "searchType": "INITIAL",
+                        "taskStatus": "COMPLETED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "providerQuality": {"metrics": metrics},
+                        "featuresFoundCount": 1,
+                        "evalSetMetrics": eval_set_metrics or [],
+                    }
+                ],
+                "validationImportantProviders": [
+                    {
+                        "adsSearchTaskId": validation_ads_search_task_id,
+                        "searchTaskId": validation_search_task_id,
+                        "searchType": "VALIDATION",
+                        "taskStatus": "VALIDATION_COMPLETED",
+                        "providerName": "Provider-123456",
+                        "providerId": "123456",
+                        "providerQuality": {"metrics": metrics},
+                        "featuresFoundCount": 1,
+                        "evalSetMetrics": eval_set_metrics or [],
+                    }
+                ],
+                "createdAt": 1633302145414,
+            }
+
+    requests_mock.get(
+        url + "/public/api/v2/search/" + search_task_id,
+        json=response,
     )
     return ads_search_task_id
 
