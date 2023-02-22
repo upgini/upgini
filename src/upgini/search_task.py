@@ -71,7 +71,7 @@ class SearchTask:
                     trace_id, search_task_id
                 )
                 while self.summary.status not in completed_statuses and (
-                    check_fit and "VALIDATION" not in self.summary.status
+                    not check_fit or "VALIDATION" not in self.summary.status
                 ):
                     time.sleep(5)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
