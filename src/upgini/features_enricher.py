@@ -1017,6 +1017,13 @@ class FeaturesEnricher(TransformerMixin):
 
             df = self.__handle_index_search_keys(df, search_keys)
 
+            if DEFAULT_INDEX in df.columns:
+                msg = bundle.get("unsupported_index_column")
+                self.logger.info(msg)
+                print(msg)
+                df.drop(columns=DEFAULT_INDEX, inplace=True)
+                validated_X.drop(columns=DEFAULT_INDEX, inplace=True)
+
             self.__check_string_dates(validated_X, search_keys)
             df = self.__add_country_code(df, search_keys)
 
@@ -1189,6 +1196,12 @@ class FeaturesEnricher(TransformerMixin):
                 df = pd.concat([df, eval_df])
                 eval_X_by_id[idx + 1] = eval_X
 
+        if DEFAULT_INDEX in df.columns:
+            msg = bundle.get("unsupported_index_column")
+            self.logger.info(msg)
+            print(msg)
+            df.drop(columns=DEFAULT_INDEX, inplace=True)
+
         df = self.__add_country_code(df, self.fit_search_keys)
 
         self.fit_generated_features = []
@@ -1320,7 +1333,7 @@ class FeaturesEnricher(TransformerMixin):
         if isinstance(X, pd.DataFrame):
             if isinstance(X.columns, pd.MultiIndex) or isinstance(X.index, pd.MultiIndex):
                 raise ValidationError(bundle.get("x_multiindex_unsupported"))
-            validated_X = X
+            validated_X = X.copy()
         elif isinstance(X, pd.Series):
             validated_X = X.to_frame()
         elif isinstance(X, np.ndarray) or isinstance(X, list):
@@ -1401,7 +1414,7 @@ class FeaturesEnricher(TransformerMixin):
         if isinstance(eval_X, pd.DataFrame):
             if isinstance(eval_X.columns, pd.MultiIndex) or isinstance(eval_X.index, pd.MultiIndex):
                 raise ValidationError(bundle.get("eval_x_multiindex_unsupported"))
-            validated_eval_X = eval_X
+            validated_eval_X = eval_X.copy()
         elif isinstance(eval_X, pd.Series):
             validated_eval_X = eval_X.to_frame()
         elif isinstance(eval_X, np.ndarray) or isinstance(eval_X, list):
@@ -1521,8 +1534,7 @@ class FeaturesEnricher(TransformerMixin):
 
         do_without_pandas_limits(print_datasets_sample)
 
-    @staticmethod
-    def __handle_index_search_keys(df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
+    def __handle_index_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
         index_search_keys = set(index_names).intersection(search_keys.keys())
         if len(index_search_keys) > 0:
@@ -1537,8 +1549,7 @@ class FeaturesEnricher(TransformerMixin):
                 df = df.rename(columns={DEFAULT_INDEX: RENAMED_INDEX})
                 search_keys[RENAMED_INDEX] = search_keys[DEFAULT_INDEX]
                 del search_keys[DEFAULT_INDEX]
-        elif DEFAULT_INDEX in df.columns:
-            raise ValidationError(bundle.get("unsupported_index_column"))
+
         return df
 
     @staticmethod
