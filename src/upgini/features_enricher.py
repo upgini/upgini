@@ -285,7 +285,9 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                if "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0]):
+                if len(e.args) > 0 and (
+                    "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
+                ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
                 else:
                     self._dump_python_libs()
@@ -474,12 +476,15 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                if "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0]):
+                if len(e.args) > 0 and (
+                    "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
+                ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
                     return None
-                elif "You have reached the quota limit of trial data usage" in str(
-                    e.args[0]
-                ) or "Current user hasn't access to trial features" in str(e.args[0]):
+                elif len(e.args) > 0 and (
+                    "You have reached the quota limit of trial data usage" in str(e.args[0])
+                    or "Current user hasn't access to trial features" in str(e.args[0])
+                ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
                     return None
                 else:
@@ -736,9 +741,10 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 self.logger.exception(error_message)
                 self._dump_python_libs()
-                if "You have reached the quota limit of trial data usage" in str(
-                    e.args[0]
-                ) or "Current user hasn't access to trial features" in str(e.args[0]):
+                if len(e.args) > 0 and (
+                    "You have reached the quota limit of trial data usage" in str(e.args[0])
+                    or "Current user hasn't access to trial features" in str(e.args[0])
+                ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
                 else:
                     if not silent:

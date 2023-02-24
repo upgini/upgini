@@ -10,6 +10,7 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.errors import ValidationError
+from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
@@ -27,13 +28,13 @@ from .utils import (
     mock_get_features_meta,
     mock_get_metadata,
     mock_get_task_metadata_v2,
+    mock_initial_and_validation_summary,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
-    mock_initial_and_validation_summary,
 )
 
 train_segment = bundle.get("quality_metrics_train_segment")
@@ -1524,12 +1525,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.fit(
-        train_features,
-        train_target,
-        eval_set=eval_set,
-        calculate_metrics=False
-    )
+    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
 
     df_with_eval_set_index = train_features.copy()
     df_with_eval_set_index["eval_set_index"] = 0
@@ -1763,3 +1759,156 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+
+def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df = df[df["phone_num"] >= 10_000_000]
+
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
+
+    result_wrapper = DataFrameWrapper()
+
+    def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
+        result_wrapper.df = pd.read_parquet(file_path)
+        raise TestException()
+
+    _RestClient.initial_search_v2 = mocked_initial_search
+
+    expected_result_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared.parquet"
+    )
+
+    expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+
+    def test(n_shuffles: int):
+        train_df = df.head(10000)
+        for _ in range(n_shuffles):
+            train_df = train_df.sample(frac=1).reset_index(drop=True)
+        train_features = train_df.drop(columns="target")
+        train_target = train_df["target"]
+        eval1_df = df[10000:11000]
+        for _ in range(n_shuffles):
+            eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
+        eval1_features = eval1_df.drop(columns="target")
+        eval1_target = eval1_df["target"]
+        eval2_df = df[11000:12000]
+        for _ in range(n_shuffles):
+            eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
+        eval2_features = eval2_df.drop(columns="target")
+        eval2_target = eval2_df["target"]
+        eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+
+        try:
+            enricher.fit(train_features, train_target, eval_set, calculate_metrics=False)
+        except TestException:
+            pass
+
+        actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+        assert_frame_equal(actual_result_df, expected_result_df)
+
+    for i in range(5):
+        test(i)
+
+
+# def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
+#     pd.set_option("display.max_columns", 1000)
+#     url = "http://fake_url2"
+
+#     mock_default_requests(requests_mock, url)
+
+#     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/valid_data.parquet")
+#     df = pd.read_parquet(path)
+#     df.drop(columns="SystemRecordId_473310000", inplace=True)
+
+#     if (df.phone_num < 10_000_000).any():
+#         raise Exception("Oops")
+
+#     train_df_zero = df[df["target"] == 0].sample(n=7000)
+#     train_df_one = df[df["target"] == 1].sample(n=1000)
+#     initial_train_df = pd.concat([train_df_zero, train_df_one], axis=0)
+
+#     from upgini.dataset import Dataset
+
+#     Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+
+#     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+#     enricher = FeaturesEnricher(
+#         search_keys=search_keys,
+#         endpoint=url,
+#         api_key="fake_api_key",
+#         date_format="%Y-%m-%d",
+#         logs_enabled=False,
+#     )
+
+#     result_wrapper = DataFrameWrapper()
+
+#     def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
+#         result_wrapper.df = pd.read_parquet(file_path)
+#         raise TestException()
+
+#     _RestClient.initial_search_v2 = mocked_initial_search
+
+#     expected_result_path = os.path.join(
+#         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalance.parquet"
+#     )
+
+#     expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+
+#     def test(n_shuffles: int):
+#         train_df = initial_train_df
+#         for _ in range(n_shuffles):
+#             train_df = initial_train_df.sample(frac=1).reset_index(drop=True)
+#         train_features = train_df.drop(columns="target")
+#         train_target = train_df["target"]
+#         eval1_df = df[10000:11000]
+#         for _ in range(n_shuffles):
+#             eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
+#         eval1_features = eval1_df.drop(columns="target")
+#         eval1_target = eval1_df["target"]
+#         eval2_df = df[11000:12000]
+#         for _ in range(n_shuffles):
+#             eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
+#         eval2_features = eval2_df.drop(columns="target")
+#         eval2_target = eval2_df["target"]
+#         eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+
+#         try:
+#             enricher.fit(train_features, train_target, eval_set, calculate_metrics=False)
+#         except TestException:
+#             pass
+
+#         actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+#         if not actual_result_df.equals(expected_result_df):
+#             actual_result_df.to_parquet("/Users/nikolaytoroptsev/Downloads/actual.parquet")
+#             expected_result_df.to_parquet("/Users/nikolaytoroptsev/Downloads/expected.parquet")
+
+#         assert_frame_equal(actual_result_df, expected_result_df)
+
+#     for i in range(5):
+        test(i)
+
+
+class DataFrameWrapper:
+    def __init__(self):
+        self.df = None
+
+
+class TestException(Exception):
+
+    def __init__(self):
+        super().__init__()
