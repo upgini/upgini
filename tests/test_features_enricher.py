@@ -175,7 +175,7 @@ def test_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.486751, 0.507267, 0.528008],
+                enriched_rocauc: [0.488020, 0.508249, 0.511376],
             }
         )
         .set_index("segment")
@@ -320,9 +320,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.529017, 0.490646, 0.523306],
-                enriched_rocauc: [0.510232, 0.492119, 0.520055],
-                uplift: [-0.018785, 0.001472, -0.003252],
+                baseline_rocauc: [0.498860, 0.529256, 0.522158],
+                enriched_rocauc: [0.494321, 0.518849, 0.522010],
+                uplift: [-0.004540, -0.010407, -0.000148],
             }
         )
         .set_index("segment")
@@ -499,7 +499,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.486751, 0.507267, 0.528008],
+                enriched_rocauc: [0.488020, 0.508249, 0.511376],
             }
         )
         .set_index("segment")
@@ -649,7 +649,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.486751, 0.507267, 0.528008],
+                enriched_rocauc: [0.488020, 0.508249, 0.511376],
             }
         )
         .set_index("segment")
@@ -797,7 +797,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.486751, 0.507267, 0.528008],
+                enriched_rocauc: [0.488020, 0.508249, 0.511376],
             }
         )
         .set_index("segment")
@@ -1744,9 +1744,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.495165, 0.498326, 0.462597],
-                enriched_rocauc: [0.498229, 0.512327, 0.474131],
-                uplift: [0.003064, 0.014001, 0.011534],
+                baseline_rocauc: [0.492343, 0.512044, 0.468342],
+                enriched_rocauc: [0.495704, 0.502245, 0.474845],
+                uplift: [0.003361, -0.009799, 0.006503],
             }
         )
         .set_index("segment")
@@ -1867,7 +1867,9 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
 #         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalance.parquet"
 #     )
 
-#     expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+#     expected_result_df = (
+#         pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+#     )
 
 #     def test(n_shuffles: int):
 #         train_df = initial_train_df
@@ -1909,6 +1911,5 @@ class DataFrameWrapper:
 
 
 class TestException(Exception):
-
     def __init__(self):
         super().__init__()

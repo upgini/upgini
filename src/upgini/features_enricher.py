@@ -939,8 +939,8 @@ class FeaturesEnricher(TransformerMixin):
             max_features,
         )
 
-        X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys)
-        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys)
+        X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys, self.cv)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys, self.cv)
 
         existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
 
@@ -950,9 +950,9 @@ class FeaturesEnricher(TransformerMixin):
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
-            eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys)
+            eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys, self.cv)
             enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_keys(
-                enriched_eval_X, eval_y_sampled, search_keys
+                enriched_eval_X, eval_y_sampled, search_keys, self.cv
             )
             fitting_eval_X = eval_X_sorted[client_features].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[
@@ -1478,19 +1478,28 @@ class FeaturesEnricher(TransformerMixin):
 
     @staticmethod
     def _sort_by_keys(
-        X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey]
+        X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
-        date_column = FeaturesEnricher._get_date_column(search_keys)
-        if date_column is not None:
+        if cv not in [CVType.time_series, CVType.blocked_time_series]:
+            sort_columns = []
+            date_column = FeaturesEnricher._get_date_column(search_keys)
+            sort_columns = [date_column] if date_column is not None else []
+
             Xy = pd.concat([X, y], axis=1)
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in Xy.columns])
             search_keys_hash = "search_keys_hash"
 
-            # Xy[search_keys_hash] = [hash(tuple(row)) for row in Xy[sorted(other_search_keys)].values]
-            Xy[search_keys_hash] = [hash_row(row) for row in Xy[sorted(other_search_keys)].values]
-            Xy = Xy.sort_values(by=[date_column, search_keys_hash]).reset_index(drop=True)
-            X = Xy.drop(columns=[TARGET, search_keys_hash])
-            # X = Xy.drop(columns=[TARGET])
+            if len(other_search_keys) > 0:
+                sort_columns.append(search_keys_hash)
+                Xy[search_keys_hash] = [hash_row(row) for row in Xy[sorted(other_search_keys)].values]
+
+            Xy = Xy.sort_values(by=sort_columns).reset_index(drop=True)
+
+            drop_columns = [TARGET]
+            if search_keys_hash in Xy.columns:
+                drop_columns.append(search_keys_hash)
+            X = Xy.drop(columns=drop_columns)
+
             y = Xy[TARGET].copy()
 
         return X, y
@@ -1584,14 +1593,21 @@ class FeaturesEnricher(TransformerMixin):
         df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
 
         # order by date and idempotent order by other keys
-        date_column = self._get_date_column(search_keys)
-        if (self.cv is None or self.cv == CVType.k_fold) and date_column is not None:
+        if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
+            date_column = self._get_date_column(search_keys)
+            sort_columns = [date_column] if date_column is not None else []
+
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
+
             search_keys_hash = "search_keys_hash"
-            # df[search_keys_hash] = [hash(tuple(row)) for row in df[sorted(other_search_keys)].values]
-            df[search_keys_hash] = [hash_row(row) for row in df[sorted(other_search_keys)].values]
-            df = df.sort_values(by=[date_column, search_keys_hash])
-            df.drop(columns=search_keys_hash, inplace=True)
+            if len(other_search_keys) > 0:
+                sort_columns.append(search_keys_hash)
+                df[search_keys_hash] = [hash_row(row) for row in df[sorted(other_search_keys)].values]
+
+            df = df.sort_values(by=sort_columns)
+
+            if search_keys_hash in df.columns:
+                df.drop(columns=search_keys_hash, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
