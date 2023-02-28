@@ -1787,6 +1787,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
         result_wrapper.df = pd.read_parquet(file_path)
         raise TestException()
 
+    original_initial_search = _RestClient.initial_search_v2
     _RestClient.initial_search_v2 = mocked_initial_search
 
     expected_result_path = os.path.join(
@@ -1821,8 +1822,11 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
         actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
         assert_frame_equal(actual_result_df, expected_result_df)
 
-    for i in range(5):
-        test(i)
+    try:
+        for i in range(5):
+            test(i)
+    finally:
+        _RestClient.initial_search_v2 = original_initial_search
 
 
 # def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
