@@ -1906,7 +1906,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
 #         assert_frame_equal(actual_result_df, expected_result_df)
 
 #     for i in range(5):
-        test(i)
+#         test(i)
 
 
 class DataFrameWrapper:
