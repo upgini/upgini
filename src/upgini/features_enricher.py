@@ -386,7 +386,9 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                if e.args[0] == {"userMessage": "File doesn't intersect with any ADS"}:
+                if len(e.args) > 0 and (
+                    "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
+                ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
                 else:
                     self._dump_python_libs()
