@@ -160,6 +160,7 @@ class FeaturesEnricher(TransformerMixin):
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self.search_id = search_id
         if search_id:
             search_task = SearchTask(
@@ -941,7 +942,7 @@ class FeaturesEnricher(TransformerMixin):
 
             enriched_Xy, enriched_eval_sets = self.__enrich(
                 self.df_with_original_index,
-                self._search_task.get_all_initial_raw_features(trace_id),
+                self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
             )
 
             enriched_X = enriched_Xy.drop(columns=TARGET)
@@ -1214,6 +1215,16 @@ class FeaturesEnricher(TransformerMixin):
             dataset.search_keys = combined_search_keys
             if email_converted_to_hem:
                 dataset.ignore_columns = [email_column]
+
+            if max_features is not None or importance_threshold is not None:
+                exclude_features_sources = list(
+                    set(
+                        (exclude_features_sources or [])
+                        + self._get_excluded_features(max_features, importance_threshold)
+                    )
+                )
+                if len(exclude_features_sources) == 0:
+                    exclude_features_sources = None
             validation_task = self._search_task.validation(
                 trace_id,
                 dataset,
@@ -1245,6 +1256,34 @@ class FeaturesEnricher(TransformerMixin):
             existing_filtered_columns = [c for c in filtered_columns if c in result.columns]
 
             return result[validated_X.columns.tolist() + generated_features + existing_filtered_columns]
+
+    def _get_excluded_features(self, max_features: Optional[int], importance_threshold: Optional[float]) -> List[str]:
+        features_info = self._internal_features_info
+        comm_schema_header = bundle.get("features_info_commercial_schema")
+        shap_value_header = bundle.get("features_info_shap")
+        feature_name_header = bundle.get("features_info_name")
+        external_features = features_info[features_info[comm_schema_header].str.len() > 0]
+        filtered_features = external_features
+        if importance_threshold is not None:
+            filtered_features = filtered_features[filtered_features[shap_value_header] >= importance_threshold]
+        if max_features is not None and len(filtered_features) > max_features:
+            filtered_features = filtered_features.iloc[:max_features, :]
+        if len(filtered_features) == len(external_features):
+            return []
+        else:
+            if len(
+                filtered_features[
+                    filtered_features[comm_schema_header].isin(
+                        [CommercialSchema.PAID.value, CommercialSchema.TRIAL.value]
+                    )
+                ]
+            ):
+                return []
+            excluded_features = external_features[~external_features.index.isin(filtered_features.index)].copy()
+            excluded_features = excluded_features[
+                excluded_features[comm_schema_header].isin([CommercialSchema.PAID.value, CommercialSchema.TRIAL.value])
+            ]
+            return excluded_features[feature_name_header].values.tolist()
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
         if len(search_keys) == 0:
@@ -1861,6 +1900,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.feature_importances_ = []
         features_info = []
+        internal_features_info = []
 
         def round_shap_value(shap: float) -> float:
             if shap > 0.0 and shap < 0.000001:
@@ -1876,6 +1916,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
 
+            internal_provider = feature_meta.data_provider or ""
             if feature_meta.data_provider and ipython_available():
                 provider = (
                     f"<a href='{feature_meta.data_provider_link}' "
@@ -1883,8 +1924,9 @@ class FeaturesEnricher(TransformerMixin):
                     f"{feature_meta.data_provider}</a>"
                 )
             else:
-                provider = feature_meta.data_provider or ""
+                provider = internal_provider
 
+            internal_source = feature_meta.data_source or ""
             if feature_meta.data_source and ipython_available():
                 source = (
                     f"<a href='{feature_meta.data_source_link}' "
@@ -1892,8 +1934,9 @@ class FeaturesEnricher(TransformerMixin):
                     f"{feature_meta.data_source}</a>"
                 )
             else:
-                source = feature_meta.data_source or ""
+                source = internal_source
 
+            internal_feature_name = feature_meta.name
             if feature_meta.doc_link and ipython_available():
                 feature_name = (
                     f"<a href='{feature_meta.doc_link}' "
@@ -1901,7 +1944,7 @@ class FeaturesEnricher(TransformerMixin):
                     f"{feature_meta.name}</a>"
                 )
             else:
-                feature_name = feature_meta.name
+                feature_name = internal_feature_name
 
             features_info.append(
                 {
@@ -1914,12 +1957,25 @@ class FeaturesEnricher(TransformerMixin):
                     bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
                 }
             )
+            internal_features_info.append(
+                {
+                    bundle.get("features_info_provider"): internal_provider,
+                    bundle.get("features_info_source"): internal_source,
+                    bundle.get("features_info_name"): internal_feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_type"): feature_meta.type,
+                    bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
+                }
+            )
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
+            self._internal_features_info = pd.DataFrame(internal_features_info)
             do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
         else:
             self.features_info = self.EMPTY_FEATURES_INFO
+            self._internal_features_info = self.EMPTY_FEATURES_INFO
             self.logger.warning("Empty features info")
 
     def __filtered_importance_names(
