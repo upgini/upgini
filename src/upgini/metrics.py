@@ -4,6 +4,7 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
+from lightgbm import LGBMClassifier
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
@@ -12,15 +13,14 @@ from sklearn.metrics._regression import (
     check_consistent_length,
     mean_squared_error,
 )
-from sklearn.model_selection import (
-    BaseCrossValidator,
-    cross_validate,
-)
+from sklearn.model_selection import BaseCrossValidator, cross_validate
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
 from upgini.utils.target_utils import correct_string_target
+
+DEFAULT_RANDOM_STATE = 42
 
 CATBOOST_PARAMS = {
     "iterations": 250,
@@ -30,8 +30,12 @@ CATBOOST_PARAMS = {
     "early_stopping_rounds": 20,
     "one_hot_max_size": 100,
     "verbose": False,
-    "random_state": 42,
+    "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
+}
+
+LIGHTGBM_PARAMS = {
+    "random_state": DEFAULT_RANDOM_STATE,
 }
 
 N_FOLDS = 5
@@ -118,6 +122,7 @@ class EstimatorWrapper:
         logger: logging.Logger,
         target_type: ModelTaskType,
         cv: BaseCrossValidator,
+        X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
@@ -130,7 +135,10 @@ class EstimatorWrapper:
         }
         if estimator is None:
             if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
-                estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
+                if target_type == ModelTaskType.MULTICLASS and _is_too_many_categorical_values(X):
+                    estimator = LightGBMWrapper(LGBMClassifier(**LIGHTGBM_PARAMS), **kwargs)
+                else:
+                    estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
                 estimator = CatBoostWrapper(CatBoostRegressor(**CATBOOST_PARAMS), **kwargs)
             else:
@@ -360,3 +368,11 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
         multioutput=multioutput,
         squared=squared,
     )
+
+
+def _is_too_many_categorical_values(X: pd.DataFrame) -> bool:
+    many_values_features_count = 0
+    for f in _get_cat_features(X):
+        if X[f].nunique() > 100:
+            many_values_features_count += 1
+    return many_values_features_count >= 2

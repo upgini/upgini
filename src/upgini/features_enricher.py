@@ -20,7 +20,12 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import UpginiConnectionError, ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import (
+    UPGINI_API_KEY,
+    LoggerFactory,
+    get_rest_client,
+    show_status_error,
+)
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -126,6 +131,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
         logs_enabled: bool = True,
+        **kwargs,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
         try:
@@ -139,6 +145,11 @@ class FeaturesEnricher(TransformerMixin):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
+
+        if len(kwargs) > 0:
+            msg = f"WARNING: Unsupported arguments: {kwargs}"
+            self.logger.warning(msg)
+            print(msg)
 
         validate_version(self.logger)
 
@@ -214,13 +225,14 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
         estimator: Optional[Any] = None,
         scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        **kwargs,
     ):
         """Fit to data.
 
@@ -256,6 +268,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start fit")
 
             try:
@@ -289,7 +310,11 @@ class FeaturesEnricher(TransformerMixin):
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
+                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -301,7 +326,7 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -309,6 +334,7 @@ class FeaturesEnricher(TransformerMixin):
         calculate_metrics: Optional[bool] = None,
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
+        **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
 
@@ -354,7 +380,17 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start fit_transform")
+
             try:
                 self.X = X
                 self.y = y
@@ -390,7 +426,12 @@ class FeaturesEnricher(TransformerMixin):
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    return None
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
+                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -412,7 +453,7 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -420,6 +461,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: Optional[str] = None,
         metrics_calculation: bool = False,
         silent_mode=False,
+        **kwargs,
     ) -> pd.DataFrame:
         """Transform `X`.
 
@@ -449,6 +491,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start transform")
             try:
                 if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
@@ -491,8 +542,13 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
                     return None
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
+                    return None
                 else:
                     if not silent_mode:
+                        show_status_error()
                         self._dump_python_libs()
                         self.__display_slack_community_link()
                     raise e
@@ -512,7 +568,7 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
         eval_set: Optional[List[tuple]] = None,
-        *,
+        *args,
         scoring: Union[Callable, str, None] = None,
         cv: Union[BaseCrossValidator, CVType, None] = None,
         estimator=None,
@@ -521,6 +577,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
         silent: bool = False,
+        **kwargs,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
 
@@ -560,6 +617,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             try:
                 self.logger.info(
                     f"Start calculating metrics\nscoring: {scoring}\n"
@@ -617,7 +683,9 @@ class FeaturesEnricher(TransformerMixin):
                         date_series = validated_X[date_column] if date_column is not None else None
                         _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
 
-                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
+                    wrapper = EstimatorWrapper.create(
+                        estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
+                    )
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
 
@@ -630,7 +698,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
@@ -642,7 +710,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
@@ -754,14 +822,18 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                self._dump_python_libs()
                 if len(e.args) > 0 and (
                     "You have reached the quota limit of trial data usage" in str(e.args[0])
                     or "Current user hasn't access to trial features" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
                     if not silent:
+                        show_status_error()
+                        self._dump_python_libs()
                         self.__display_slack_community_link()
                     raise e
             finally:
@@ -1235,6 +1307,8 @@ class FeaturesEnricher(TransformerMixin):
         self.__cached_sampled_datasets = None
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
+
+        self._validate_binary_observations(validated_y)
 
         self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
@@ -2092,6 +2166,13 @@ class FeaturesEnricher(TransformerMixin):
 
         return search_keys
 
+    def _validate_binary_observations(self, y):
+        task_type = self.model_task_type or define_task(y, self.logger, silent=True)
+        if task_type == ModelTaskType.BINARY and _num_samples(y) < 1000:
+            msg = bundle.get("binary_small_dataset")
+            self.logger.warning(msg)
+            print(msg)
+
     def _dump_python_libs(self):
         try:
             python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
@@ -2122,6 +2203,13 @@ class FeaturesEnricher(TransformerMixin):
             )
         except (ImportError, NameError):
             print(f"{link_text} at {slack_community_link}")
+
+    def _show_error(self, msg):
+        try:
+            _ = get_ipython()  # type: ignore
+            print(Format.RED + Format.BOLD + msg + Format.END)
+        except (ImportError, NameError):
+            print(msg)
 
     def dump_input(
         self,
