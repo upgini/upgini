@@ -198,6 +198,7 @@ class SearchCustomization(BaseModel):
     maxFeatures: Optional[int]
     returnScores: Optional[bool]
     runtimeParameters: Optional[RuntimeParameters]
+    metricsCalculation: Optional[bool]
 
     def __repr__(self):
         return (
@@ -207,7 +208,8 @@ class SearchCustomization(BaseModel):
             f"importance threshold: {self.importanceThreshold}, "
             f"max features: {self.maxFeatures}, "
             f"return scores: {self.returnScores}, "
-            f"runtimeParameters: {self.runtimeParameters}"
+            f"runtimeParameters: {self.runtimeParameters}, "
+            f"metricsCalculation: {self.metricsCalculation}"
         )
 
 

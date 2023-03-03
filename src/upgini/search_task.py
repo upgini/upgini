@@ -176,6 +176,7 @@ class SearchTask:
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
+        metrics_calculation: bool = False,
         silent_mode: bool = False,
     ) -> "SearchTask":
         return validation_dataset.validation(
@@ -185,6 +186,7 @@ class SearchTask:
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
+            metrics_calculation=metrics_calculation,
             silent_mode=silent_mode,
         )
 
