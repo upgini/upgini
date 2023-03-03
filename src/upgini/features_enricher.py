@@ -8,7 +8,7 @@ import tempfile
 import time
 import uuid
 import zlib
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,12 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import UpginiConnectionError, ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import (
+    UPGINI_API_KEY,
+    LoggerFactory,
+    get_rest_client,
+    show_status_error,
+)
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -126,6 +131,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
         logs_enabled: bool = True,
+        **kwargs,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
         try:
@@ -139,6 +145,11 @@ class FeaturesEnricher(TransformerMixin):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
+
+        if len(kwargs) > 0:
+            msg = f"WARNING: Unsupported arguments: {kwargs}"
+            self.logger.warning(msg)
+            print(msg)
 
         validate_version(self.logger)
 
@@ -199,7 +210,7 @@ class FeaturesEnricher(TransformerMixin):
         self.df_with_original_index: Optional[pd.DataFrame] = None
         self.country_added = False
         self.fit_generated_features: List[str] = []
-        self.fit_dropped_features: List[str] = []
+        self.fit_dropped_features: Set[str] = set()
         self.fit_search_keys = search_keys
         self.warning_counter = WarningCounter()
         self.X: Optional[pd.DataFrame] = None
@@ -214,13 +225,14 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
         estimator: Optional[Any] = None,
         scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        **kwargs,
     ):
         """Fit to data.
 
@@ -256,6 +268,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start fit")
 
             try:
@@ -289,7 +310,11 @@ class FeaturesEnricher(TransformerMixin):
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
+                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -301,7 +326,7 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List],
         eval_set: Optional[List[tuple]] = None,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -309,6 +334,7 @@ class FeaturesEnricher(TransformerMixin):
         calculate_metrics: Optional[bool] = None,
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
+        **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
 
@@ -354,7 +380,17 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start fit_transform")
+
             try:
                 self.X = X
                 self.y = y
@@ -390,7 +426,12 @@ class FeaturesEnricher(TransformerMixin):
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    return None
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
+                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -412,13 +453,15 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
-        *,
+        *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
+        metrics_calculation: bool = False,
         silent_mode=False,
+        **kwargs,
     ) -> pd.DataFrame:
         """Transform `X`.
 
@@ -448,6 +491,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             self.logger.info("Start transform")
             try:
                 if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
@@ -470,6 +522,7 @@ class FeaturesEnricher(TransformerMixin):
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
+                    metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
                 )
                 self.logger.info("Transform finished successfully")
@@ -489,9 +542,15 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
                     return None
-                else:
+                elif isinstance(e, ValidationError):
                     self._dump_python_libs()
-                    self.__display_slack_community_link()
+                    self._show_error(str(e))
+                    return None
+                else:
+                    if not silent_mode:
+                        show_status_error()
+                        self._dump_python_libs()
+                        self.__display_slack_community_link()
                     raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
@@ -506,7 +565,10 @@ class FeaturesEnricher(TransformerMixin):
 
     def calculate_metrics(
         self,
-        *,
+        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
+        y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
+        eval_set: Optional[List[tuple]] = None,
+        *args,
         scoring: Union[Callable, str, None] = None,
         cv: Union[BaseCrossValidator, CVType, None] = None,
         estimator=None,
@@ -515,11 +577,21 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         trace_id: Optional[str] = None,
         silent: bool = False,
+        **kwargs,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
 
         Parameters
         ----------
+        X: pandas.DataFrame of shape (n_samples, n_features), optional (default=None)
+            Input samples. If not passed then X from fit will be used
+
+        y: array-like of shape (n_samples,), optional (default=None)
+            Target values. If X not passed then y from fit will be used
+
+        eval_set: List[tuple], optional (default=None)
+            List of pairs (X, y) for validation. If X not passed then eval_set from fit will be used
+
         scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
@@ -545,6 +617,15 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            if len(args) > 0:
+                msg = f"WARNING: Unsupported positional arguments: {args}"
+                self.logger.warning(msg)
+                print(msg)
+            if len(kwargs) > 0:
+                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                self.logger.warning(msg)
+                print(msg)
+
             try:
                 self.logger.info(
                     f"Start calculating metrics\nscoring: {scoring}\n"
@@ -562,11 +643,8 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
 
-                if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
-                    msg = bundle.get("metrics_with_trial_features")
-                    self.logger.warn(msg)
-                    print(msg)
-                    return None
+                if X is not None and y is None:
+                    raise ValidationError("X passed without y")
 
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
@@ -575,7 +653,7 @@ class FeaturesEnricher(TransformerMixin):
                     return None
 
                 prepared_data = self._prepare_data_for_metrics(
-                    trace_id, exclude_features_sources, importance_threshold, max_features
+                    trace_id, X, y, eval_set, exclude_features_sources, importance_threshold, max_features
                 )
                 if prepared_data is None:
                     return None
@@ -605,7 +683,9 @@ class FeaturesEnricher(TransformerMixin):
                         date_series = validated_X[date_column] if date_column is not None else None
                         _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
 
-                    wrapper = EstimatorWrapper.create(estimator, self.logger, model_task_type, _cv, scoring)
+                    wrapper = EstimatorWrapper.create(
+                        estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
+                    )
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
 
@@ -618,7 +698,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
@@ -630,7 +710,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
@@ -657,8 +737,8 @@ class FeaturesEnricher(TransformerMixin):
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
                     # validation dataset and calculate final metric (and uplift)
                     # max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
-                    if self.eval_set is not None:
-                        for idx, _ in enumerate(self.eval_set):
+                    if len(fitting_eval_set_dict) > 0:
+                        for idx in fitting_eval_set_dict.keys():
                             # eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
 
                             (
@@ -742,14 +822,18 @@ class FeaturesEnricher(TransformerMixin):
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
                 self.logger.exception(error_message)
-                self._dump_python_libs()
                 if len(e.args) > 0 and (
                     "You have reached the quota limit of trial data usage" in str(e.args[0])
                     or "Current user hasn't access to trial features" in str(e.args[0])
                 ):
                     self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                elif isinstance(e, ValidationError):
+                    self._dump_python_libs()
+                    self._show_error(str(e))
                 else:
                     if not silent:
+                        show_status_error()
+                        self._dump_python_libs()
                         self.__display_slack_community_link()
                     raise e
             finally:
@@ -793,26 +877,65 @@ class FeaturesEnricher(TransformerMixin):
 
         return extended_X, search_keys
 
+    def _is_input_same_as_fit(
+        self,
+        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
+        y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
+        eval_set: Optional[List[tuple]] = None,
+    ) -> Tuple:
+        if X is None:
+            return True, self.X, self.y, self.eval_set
+
+        checked_eval_set = []
+        for eval_pair in eval_set or []:
+            if not is_frames_equal(X, eval_pair[0]):
+                checked_eval_set.append(eval_pair)
+
+        if (
+            X is self.X
+            and y is self.y
+            and (
+                (checked_eval_set == [] and self.eval_set == [])
+                or (
+                    len(checked_eval_set) == len(self.eval_set)
+                    and all(
+                        [
+                            eval_x is self_eval_x and eval_y is self_eval_y
+                            for ((eval_x, eval_y), (self_eval_x, self_eval_y)) in zip(checked_eval_set, self.eval_set)
+                        ]
+                    )
+                )
+            )
+        ):
+            return True, self.X, self.y, self.eval_set
+        else:
+            self.logger.info("Passed X, y and eval_set that differs from passed on fit. Transform will be used")
+            return False, X, y, checked_eval_set
+
     def _prepare_data_for_metrics(
         self,
         trace_id: str,
+        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
+        y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
+        eval_set: Optional[List[tuple]] = None,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
     ):
-        validated_X = self._validate_X(self.X)
-        validated_y = self._validate_y(validated_X, self.y)
+        is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
+        validated_X = self._validate_X(X)
+        validated_y = self._validate_y(validated_X, y)
 
-        self.__log_debug_information(self.X, self.y, self.eval_set, exclude_features_sources=exclude_features_sources)
+        self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
         eval_set_sampled_dict = dict()
 
-        if self.__cached_sampled_datasets is not None:
+        if self.__cached_sampled_datasets is not None and is_input_same_as_fit:
             self.logger.info("Cached enriched dataset found - use it")
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
             if exclude_features_sources:
                 enriched_X = enriched_X.drop(columns=[c for c in exclude_features_sources if c in enriched_X.columns])
-        elif not self.imbalanced and not exclude_features_sources:
+        elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             search_keys = self.fit_search_keys
 
@@ -832,13 +955,13 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
             self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
 
-            if self.eval_set is not None:
-                if len(enriched_eval_sets) != len(self.eval_set):
+            if eval_set is not None:
+                if len(enriched_eval_sets) != len(eval_set):
                     raise ValidationError(
-                        bundle.get("metrics_eval_set_count_diff").format(len(enriched_eval_sets), len(self.eval_set))
+                        bundle.get("metrics_eval_set_count_diff").format(len(enriched_eval_sets), len(eval_set))
                     )
 
-                for idx in range(len(self.eval_set)):
+                for idx in range(len(eval_set)):
                     enriched_eval_X = enriched_eval_sets[idx + 1].drop(columns=TARGET)
                     eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
                     eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
@@ -846,15 +969,15 @@ class FeaturesEnricher(TransformerMixin):
 
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
         else:
-            self.logger.info("Dataset is imbalanced or exclude_features_sources was passed. Run transform")
+            self.logger.info("Dataset is imbalanced or exclude_features_sources or X was passed. Run transform")
             print(bundle.get("prepare_data_for_metrics"))
-            if self.eval_set is not None:
+            if eval_set is not None:
                 self.logger.info("Transform with eval_set")
                 # concatenate X and eval_set with eval_set_index
                 df_with_eval_set_index = validated_X.copy()
                 df_with_eval_set_index[TARGET] = validated_y
                 df_with_eval_set_index[EVAL_SET_INDEX] = 0
-                for idx, eval_pair in enumerate(self.eval_set):
+                for idx, eval_pair in enumerate(eval_set):
                     eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
                     eval_df_with_index = eval_x.copy()
                     eval_df_with_index[TARGET] = eval_y
@@ -877,7 +1000,7 @@ class FeaturesEnricher(TransformerMixin):
                 X_sampled, search_keys = self._extend_x(X_sampled)
                 y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
                 eval_set_sampled_dict = dict()
-                for idx in range(len(self.eval_set)):
+                for idx in range(len(eval_set)):
                     eval_x_sampled = (
                         df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)]
                         .copy()
@@ -896,6 +1019,7 @@ class FeaturesEnricher(TransformerMixin):
                     exclude_features_sources=exclude_features_sources,
                     silent_mode=True,
                     trace_id=trace_id,
+                    metrics_calculation=True,
                 )
                 if enriched is None:
                     return None
@@ -903,7 +1027,7 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
                 enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
 
-                for idx in range(len(self.eval_set)):
+                for idx in range(len(eval_set)):
                     enriched_eval_x = enriched[enriched[EVAL_SET_INDEX] == (idx + 1)].copy()
                     enriched_eval_x.drop(columns=EVAL_SET_INDEX, inplace=True)
                     eval_x_sampled, eval_y_sampled = eval_set_sampled_dict[idx]
@@ -925,7 +1049,11 @@ class FeaturesEnricher(TransformerMixin):
                 df.drop(columns=TARGET, inplace=True)
 
                 enriched_X = self.transform(
-                    df, exclude_features_sources=exclude_features_sources, silent_mode=True, trace_id=trace_id
+                    df,
+                    exclude_features_sources=exclude_features_sources,
+                    silent_mode=True,
+                    trace_id=trace_id,
+                    metrics_calculation=True,
                 )
                 if enriched_X is None:
                     return None
@@ -933,7 +1061,9 @@ class FeaturesEnricher(TransformerMixin):
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
         client_features = [
-            c for c in X_sampled.columns.to_list() if c not in (list(search_keys.keys()) + self.fit_dropped_features)
+            c
+            for c in X_sampled.columns.to_list()
+            if c not in (list(search_keys.keys()) + list(self.fit_dropped_features))
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
@@ -998,23 +1128,21 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float],
         max_features: Optional[int],
+        metrics_calculation: bool = False,
         silent_mode: bool = False,
     ) -> pd.DataFrame:
         with MDC(trace_id=trace_id):
             if self._search_task is None:
                 raise NotFittedError(bundle.get("transform_unfitted_enricher"))
 
-            if self.X is not None and not is_frames_same_schema(X, self.X):
-                try:
-                    self.logger.warning(
-                        f"Schema of fitting X:\n{self.X.columns.to_list()}\n"
-                        f"schema of X passed on transform:\n{X.columns.to_list()}"
-                    )
-                except Exception:
-                    pass
-                raise ValidationError(bundle.get("dataset_transform_diff_fit"))
-
             validated_X = self._validate_X(X, is_transform=True)
+
+            columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
+            if len(columns_to_drop) > 0:
+                msg = bundle.get("x_contains_enriching_columns").format(columns_to_drop)
+                self.logger.warning(msg)
+                print(msg)
+                validated_X = validated_X.drop(columns=columns_to_drop)
 
             self.__log_debug_information(X, exclude_features_sources=exclude_features_sources)
 
@@ -1092,6 +1220,7 @@ class FeaturesEnricher(TransformerMixin):
                 extract_features=True,
                 runtime_parameters=self.runtime_parameters,
                 exclude_features_sources=exclude_features_sources,
+                metrics_calculation=metrics_calculation,
                 silent_mode=silent_mode,
             )
 
@@ -1179,6 +1308,8 @@ class FeaturesEnricher(TransformerMixin):
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
 
+        self._validate_binary_observations(validated_y)
+
         self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
         self.fit_search_keys = self.search_keys.copy()
@@ -1208,6 +1339,7 @@ class FeaturesEnricher(TransformerMixin):
             msg = bundle.get("unsupported_index_column")
             self.logger.info(msg)
             print(msg)
+            self.fit_dropped_features.add(DEFAULT_INDEX)
             df.drop(columns=DEFAULT_INDEX, inplace=True)
 
         df = self.__add_country_code(df, self.fit_search_keys)
@@ -1233,11 +1365,12 @@ class FeaturesEnricher(TransformerMixin):
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
-        self.fit_dropped_features = FeaturesValidator(self.logger).validate(df, features_columns, self.warning_counter)
-        df = df.drop(columns=self.fit_dropped_features)
+        features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns, self.warning_counter)
+        self.fit_dropped_features.update(features_to_drop)
+        df = df.drop(columns=features_to_drop)
 
         if email_converted_to_hem:
-            self.fit_dropped_features.append(email_column)
+            self.fit_dropped_features.add(email_column)
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
@@ -1304,13 +1437,6 @@ class FeaturesEnricher(TransformerMixin):
         if not self.warning_counter.has_warnings():
             self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
 
-        if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
-            if calculate_metrics is not None and calculate_metrics:
-                msg = bundle.get("metrics_with_trial_features")
-                self.logger.warn(msg)
-                print(msg)
-            return
-
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
@@ -1334,7 +1460,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys_with_autodetection = {**self.search_keys, **self.autodetected_search_keys}
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
-    def _validate_X(self, X, is_transform=False) -> Tuple[pd.DataFrame, Dict]:
+    def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
         if _num_samples(X) == 0:
             raise ValidationError(bundle.get("x_is_empty"))
 
@@ -1651,7 +1777,7 @@ class FeaturesEnricher(TransformerMixin):
     def __add_country_code(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
         self.country_added = False
 
-        if self.country_code and SearchKey.COUNTRY not in search_keys.values():
+        if self.country_code is not None and SearchKey.COUNTRY not in search_keys.values():
             self.logger.info(f"Add COUNTRY column with {self.country_code} value")
             df[COUNTRY] = self.country_code
             search_keys[COUNTRY] = SearchKey.COUNTRY
@@ -1841,7 +1967,10 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(bundle.get("unsupported_search_key_type").format(type(column_id)))
 
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
-                raise ValidationError(bundle.get("search_key_country_and_country_code"))
+                msg = bundle.get("search_key_country_and_country_code")
+                self.logger.warning(msg)
+                print(msg)
+                self.country_code = None
 
             if not self.__is_registered and meaning_type in SearchKey.personal_keys():
                 msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
@@ -1920,15 +2049,16 @@ class FeaturesEnricher(TransformerMixin):
                 _ = get_ipython()  # type: ignore
 
                 print(Format.GREEN + Format.BOLD + msg + Format.END)
-                if bundle.get("quality_metrics_uplift_header") in metrics.columns:
-                    metrics = metrics.copy()
-                    try:
-                        baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
-                        metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
-                            metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
-                        ).round(2)
-                    except Exception:
-                        pass
+                # TODO for roc_auc calculate GINI and GINI %
+                # if bundle.get("quality_metrics_uplift_header") in metrics.columns:
+                #     metrics = metrics.copy()
+                #     try:
+                #         baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
+                #         metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
+                #             metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
+                #         ).round(2)
+                #     except Exception:
+                #         pass
                 display(metrics)
             except (ImportError, NameError):
                 print(msg)
@@ -2036,6 +2166,13 @@ class FeaturesEnricher(TransformerMixin):
 
         return search_keys
 
+    def _validate_binary_observations(self, y):
+        task_type = self.model_task_type or define_task(y, self.logger, silent=True)
+        if task_type == ModelTaskType.BINARY and _num_samples(y) < 1000:
+            msg = bundle.get("binary_small_dataset")
+            self.logger.warning(msg)
+            print(msg)
+
     def _dump_python_libs(self):
         try:
             python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
@@ -2055,6 +2192,7 @@ class FeaturesEnricher(TransformerMixin):
             from IPython.display import HTML, display
 
             _ = get_ipython()  # type: ignore
+            self.logger.warning(link_text)
             print(link_text)
             display(
                 HTML(
@@ -2065,6 +2203,13 @@ class FeaturesEnricher(TransformerMixin):
             )
         except (ImportError, NameError):
             print(f"{link_text} at {slack_community_link}")
+
+    def _show_error(self, msg):
+        try:
+            _ = get_ipython()  # type: ignore
+            print(Format.RED + Format.BOLD + msg + Format.END)
+        except (ImportError, NameError):
+            print(msg)
 
     def dump_input(
         self,

@@ -275,7 +275,6 @@ class _RestClient:
             self._syncronized_refresh_access_token()
             return request()
         except HttpError as e:
-            self.show_status_error()
             if e.status_code == 429 and try_number == 0:
                 time.sleep(random.randint(1, 10))
                 return self._with_unauth_retry(request, 1)
@@ -288,18 +287,6 @@ class _RestClient:
                 raise ValidationError(bundle.get("concurrent_request"))
             else:
                 raise e
-
-    @staticmethod
-    def show_status_error():
-        try:
-            response = requests.get("https://api.github.com/repos/upgini/upgini/contents/error_status.txt")
-            if response.status_code == requests.codes.ok:
-                js = response.json()
-                content = base64.b64decode(js["content"]).decode("utf-8")
-                if len(content) > 0 and not content.isspace():
-                    print(content)
-        except Exception:
-            pass
 
     @staticmethod
     def meaning_type_by_name(name: str, metadata: FileMetadata) -> Optional[FileColumnMeaningType]:
@@ -861,3 +848,15 @@ class LoggerFactory:
         self._loggers[key] = upgini_logger
 
         return upgini_logger
+
+
+def show_status_error():
+    try:
+        response = requests.get("https://api.github.com/repos/upgini/upgini/contents/error_status.txt")
+        if response.status_code == requests.codes.ok:
+            js = response.json()
+            content = base64.b64decode(js["content"]).decode("utf-8")
+            if len(content) > 0 and not content.isspace():
+                print(content)
+    except Exception:
+        pass

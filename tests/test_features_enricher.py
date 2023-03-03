@@ -9,7 +9,6 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
-from upgini.errors import ValidationError
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -370,11 +369,11 @@ def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size").format(1000, 500)):
-        enricher.fit(train_features.head(1000), train_target.head(500))
+    enricher.fit(train_features.head(1000), train_target.head(500))
+    assert enricher._search_task is None
 
-    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size_eval_set").format(1000, 500)):
-        enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
+    enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
+    assert enricher._search_task is None
 
 
 def test_features_enricher_with_numpy(requests_mock: Mocker):

@@ -274,7 +274,9 @@ class Dataset(pd.DataFrame):
                 do_without_pandas_limits(print_dups_sample)
                 msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_sample)
                 self.logger.warning(msg)
-                raise ValidationError(msg)
+                print(msg)
+                self.drop_duplicates(subset=unique_columns, keep=False, inplace=True)
+                self.logger.info(f"Dataset shape after clean invalid target duplicates: {self.shape}")
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
@@ -809,6 +811,7 @@ class Dataset(pd.DataFrame):
         max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
+        metrics_calculation: Optional[bool] = False
     ) -> SearchCustomization:
         # self.logger.info("Constructing search customization")
         search_customization = SearchCustomization(
@@ -818,6 +821,7 @@ class Dataset(pd.DataFrame):
             maxFeatures=max_features,
             returnScores=return_scores,
             runtimeParameters=runtime_parameters,
+            metricsCalculation=metrics_calculation,
         )
         if filter_features:
             if [
@@ -898,6 +902,7 @@ class Dataset(pd.DataFrame):
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
+        metrics_calculation: bool = False,
         silent_mode: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
@@ -906,7 +911,10 @@ class Dataset(pd.DataFrame):
 
         file_metadata = self.__construct_metadata(exclude_features_sources=exclude_features_sources)
         search_customization = self.__construct_search_customization(
-            return_scores, extract_features, runtime_parameters=runtime_parameters
+            return_scores,
+            extract_features,
+            runtime_parameters=runtime_parameters,
+            metrics_calculation=metrics_calculation,
         )
 
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
