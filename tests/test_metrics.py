@@ -679,8 +679,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    with pytest.raises(Exception, match=bundle.get("metrics_unfitted_enricher")):
-        enricher.calculate_metrics()
+    assert enricher.calculate_metrics() is None
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
 
@@ -941,8 +940,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    with pytest.raises(Exception, match=bundle.get("metrics_unfitted_enricher")):
-        enricher.calculate_metrics()
+    assert enricher.calculate_metrics() is None
 
     enriched_X = enricher.fit_transform(X, y, eval_set)
 
