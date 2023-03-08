@@ -4,7 +4,7 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-from lightgbm import LGBMClassifier
+from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
@@ -149,8 +149,6 @@ class EstimatorWrapper:
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 try:
-                    from lightgbm import LGBMClassifier, LGBMRegressor  # type: ignore
-
                     if isinstance(estimator, LGBMClassifier) or isinstance(estimator, LGBMRegressor):
                         estimator = LightGBMWrapper(**kwargs)
                     else:

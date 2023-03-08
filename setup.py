@@ -35,7 +35,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.100"
+version = "1.1.101"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -79,6 +79,7 @@ try:
             "fastparquet>=0.7.1",
             "python-json-logger>=2.0.2",
             "catboost>=1.0.3",
+            "lightgbm>=3.3.2",
         ],
         project_urls={
             "Bug Reports": "https://github.com/upgini/upgini/issues",
