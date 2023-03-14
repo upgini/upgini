@@ -2224,7 +2224,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _validate_binary_observations(self, y):
         task_type = self.model_task_type or define_task(y, self.logger, silent=True)
-        if task_type == ModelTaskType.BINARY and _num_samples(y) < 1000:
+        if task_type == ModelTaskType.BINARY and (y.value_counts() < 1000).any():
             msg = bundle.get("binary_small_dataset")
             self.logger.warning(msg)
             print(msg)
