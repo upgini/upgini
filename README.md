@@ -15,7 +15,7 @@ enriches your ML pipeline with only the relevant features</b> </p>
  </p>
 <p align=center>
 <a href="/LICENSE"><img alt="BSD-3 license" src="https://img.shields.io/badge/license-BSD--3%20Clause-green"></a>
-<a href="https://www.python.org/downloads/release/python-380/"><img alt="Python 3.8" src="https://img.shields.io/badge/python_version-3.8-red?logo=python&logoColor=white"></a>
+<a href="https://pypi.org/project/upgini/"><img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/upgini"></a>
 <a href="https://pypi.org/project/upgini/"><img alt="PyPI" src="https://img.shields.io/pypi/v/upgini?label=Release"></a>
 <a href="https://pypistats.org/packages/upgini"><img alt="Downloads from pypistats" src="https://pepy.tech/badge/upgini"></a>
 <a href="https://4mlg.short.gy/join-upgini-community"><img alt="Upgini slack community" src="https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"></a>

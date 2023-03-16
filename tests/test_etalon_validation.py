@@ -5,6 +5,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.testing import assert_frame_equal
 
 from upgini import Dataset, FileColumnMeaningType
 from upgini.errors import ValidationError
@@ -454,3 +455,40 @@ def test_time_cutoff_from_timestamp():
     converter = DateTimeSearchKeyConverter("date")
     with pytest.raises(Exception, match="Unsupported type of date column date.*"):
         converter.convert(df)
+
+
+def test_time_cutoff_with_different_timezones():
+    df = pd.DataFrame({
+        "date": [
+            "2018-01-02 00:00:00+02:00",
+            "2021-05-26 00:00:00+03:00",
+            "2018-03-20 00:00:00+02:00",
+            "2018-01-29 00:00:00+02:00",
+            "2018-02-12 00:00:00+02:00",
+            "2018-10-02 00:00:00+03:00",
+            "2019-09-18 00:00:00+03:00",
+            "2022-03-09 00:00:00+02:00",
+            "2022-06-02 00:00:00+03:00",
+            "2021-09-27 00:00:00+03:00"
+        ]
+    })
+    df["date"] = pd.to_datetime(df["date"])
+    converter = DateTimeSearchKeyConverter("date")
+    dataset = converter.convert(df)
+
+    expected_df = pd.DataFrame({
+        "date": [
+            "2018-01-02",
+            "2021-05-26",
+            "2018-03-20",
+            "2018-01-29",
+            "2018-02-12",
+            "2018-10-02",
+            "2019-09-18",
+            "2022-03-09",
+            "2022-06-02",
+            "2021-09-27"
+        ]
+    })
+    expected_df = converter.convert(expected_df)
+    assert_frame_equal(dataset, expected_df)
