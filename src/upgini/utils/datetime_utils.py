@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 from dateutil.relativedelta import relativedelta
+import datetime
 
 from upgini.errors import ValidationError
 
@@ -29,6 +30,8 @@ class DateTimeSearchKeyConverter:
 
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
+        if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
+            df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
         if is_string_dtype(df[self.date_column]):
             try:
                 df[self.date_column] = pd.to_datetime(df[self.date_column], format=self.date_format)

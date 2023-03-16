@@ -36,6 +36,11 @@ CATBOOST_PARAMS = {
 
 LIGHTGBM_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
+    "num_leaves": 16,
+    "max_depth": 4,
+    "n_estimators": 150,
+    "learning_rate": 0.05,
+    "min_child_weight": 1
 }
 
 N_FOLDS = 5
