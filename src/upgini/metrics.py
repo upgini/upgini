@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -40,7 +40,7 @@ LIGHTGBM_PARAMS = {
     "max_depth": 4,
     "n_estimators": 150,
     "learning_rate": 0.05,
-    "min_child_weight": 1
+    "min_child_weight": 1,
 }
 
 N_FOLDS = 5
@@ -129,6 +129,7 @@ class EstimatorWrapper:
         cv: BaseCrossValidator,
         X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
+        cat_features: Optional[List[str]] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -149,8 +150,13 @@ class EstimatorWrapper:
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
-            kwargs["estimator"] = estimator
+            estimator_copy = estimator.copy()
+            kwargs["estimator"] = estimator_copy
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
+                if cat_features is not None:
+                    estimator_copy.set_params(cat_features=[
+                        X.columns.get_loc(cat_feature) for cat_feature in cat_features
+                    ])
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 try:
@@ -197,6 +203,15 @@ class CatBoostWrapper(EstimatorWrapper):
             else:
                 X = X.drop(columns=name)
         cat_features_idx = [X.columns.get_loc(c) for c in unique_cat_features]
+        if (
+            hasattr(self.estimator, "get_param")
+            and hasattr(self.estimator, "_init_params")
+            and self.estimator.get_param("cat_features") is not None
+        ):
+            cat_features_set = set(cat_features_idx)
+            cat_features_set.update(self.estimator.get_param("cat_features"))
+            cat_features_idx = list(cat_features_set)
+            del self.estimator._init_params["cat_features"]
 
         params.update({"cat_features": cat_features_idx})
         return X, y, params

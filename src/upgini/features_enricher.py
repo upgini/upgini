@@ -653,6 +653,18 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(msg)
                     return None
 
+                if (
+                    estimator is not None
+                    and hasattr(estimator, "get_param")
+                    and estimator.get_param("cat_features") is not None
+                ):
+                    cat_features = estimator.get_param("cat_features")
+                    if len(cat_features) > 0 and isinstance(cat_features[0], int):
+                        effectiveX = X or self.X
+                        cat_features = [effectiveX.columns[i] for i in cat_features]
+                else:
+                    cat_features = None
+
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id, X, y, eval_set, exclude_features_sources, importance_threshold, max_features
                 )
@@ -699,7 +711,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring, cat_features
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
@@ -711,7 +723,7 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
+                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring, cat_features
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:

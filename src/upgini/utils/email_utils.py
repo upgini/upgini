@@ -10,7 +10,7 @@ from upgini.metadata import SearchKey
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 
-EMAIL_REGEX = re.compile(r'([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+')
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
 
 
 class EmailSearchKeyDetector(BaseSearchKeyDetector):
@@ -19,6 +19,8 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
         if not is_string_dtype(column):
+            return False
+        if not column.astype("string").str.contains("@").any():
             return False
 
         all_count = len(column)
