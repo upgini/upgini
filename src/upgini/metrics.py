@@ -14,6 +14,7 @@ from sklearn.metrics._regression import (
     mean_squared_error,
 )
 from sklearn.model_selection import BaseCrossValidator, cross_validate
+from copy import deepcopy
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -150,7 +151,10 @@ class EstimatorWrapper:
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
-            estimator_copy = estimator.copy()
+            if hasattr(estimator, "copy"):
+                estimator_copy = estimator.copy()
+            else:
+                estimator_copy = deepcopy(estimator)
             kwargs["estimator"] = estimator_copy
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
                 if cat_features is not None:
