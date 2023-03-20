@@ -391,6 +391,6 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
 def _is_too_many_categorical_values(X: pd.DataFrame) -> bool:
     many_values_features_count = 0
     for f in _get_cat_features(X):
-        if X[f].nunique() > 100:
+        if X[f].astype("string").nunique() > 100:
             many_values_features_count += 1
     return many_values_features_count >= 2

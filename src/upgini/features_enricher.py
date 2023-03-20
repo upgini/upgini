@@ -639,8 +639,8 @@ class FeaturesEnricher(TransformerMixin):
                 if (
                     self._search_task is None
                     or self._search_task.initial_max_hit_rate_v2() is None
-                    or self.X is None
-                    or self.y is None
+                    or (self.X is None and X is None)
+                    or (self.y is None and y is None)
                 ):
                     raise ValidationError(bundle.get("metrics_unfitted_enricher"))
 
