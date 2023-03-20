@@ -9,7 +9,6 @@ from pandas.api.types import is_string_dtype
 from upgini.metadata import SearchKey
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
-
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
 
 
@@ -24,11 +23,7 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
             return False
 
         all_count = len(column)
-        is_email_count = len(
-            column.loc[
-                column.astype("string").str.fullmatch(EMAIL_REGEX)
-            ]
-        )
+        is_email_count = len(column.loc[column.astype("string").str.fullmatch(EMAIL_REGEX)])
         return is_email_count / all_count > 0.1
 
 
