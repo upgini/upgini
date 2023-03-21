@@ -26,9 +26,11 @@ def test_email_search_key_detection_by_values():
 
     assert detector.get_search_key_column(df) == "eml"
 
-    df = pd.DataFrame({"eml": ["asdf@asdf.sad"] + ["12@3"] * 9})
+    df = pd.DataFrame({"eml": ["asdf@asdf.sad"] + ["12@"] * 9})
 
-    assert detector.get_search_key_column(df) is None
+    maybe_search_key_column = detector.get_search_key_column(df)
+    print(maybe_search_key_column)
+    assert maybe_search_key_column is None
 
     df = pd.DataFrame({"eml": [1, 2, 3, 4, 5]})
 

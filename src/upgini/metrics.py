@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from sklearn.metrics._regression import (
     mean_squared_error,
 )
 from sklearn.model_selection import BaseCrossValidator, cross_validate
+from copy import deepcopy
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -40,7 +41,7 @@ LIGHTGBM_PARAMS = {
     "max_depth": 4,
     "n_estimators": 150,
     "learning_rate": 0.05,
-    "min_child_weight": 1
+    "min_child_weight": 1,
 }
 
 N_FOLDS = 5
@@ -129,6 +130,7 @@ class EstimatorWrapper:
         cv: BaseCrossValidator,
         X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
+        cat_features: Optional[List[str]] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -149,8 +151,16 @@ class EstimatorWrapper:
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
-            kwargs["estimator"] = estimator
+            if hasattr(estimator, "copy"):
+                estimator_copy = estimator.copy()
+            else:
+                estimator_copy = deepcopy(estimator)
+            kwargs["estimator"] = estimator_copy
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
+                if cat_features is not None:
+                    estimator_copy.set_params(cat_features=[
+                        X.columns.get_loc(cat_feature) for cat_feature in cat_features
+                    ])
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 try:
@@ -197,6 +207,15 @@ class CatBoostWrapper(EstimatorWrapper):
             else:
                 X = X.drop(columns=name)
         cat_features_idx = [X.columns.get_loc(c) for c in unique_cat_features]
+        if (
+            hasattr(self.estimator, "get_param")
+            and hasattr(self.estimator, "_init_params")
+            and self.estimator.get_param("cat_features") is not None
+        ):
+            cat_features_set = set(cat_features_idx)
+            cat_features_set.update(self.estimator.get_param("cat_features"))
+            cat_features_idx = list(cat_features_set)
+            del self.estimator._init_params["cat_features"]
 
         params.update({"cat_features": cat_features_idx})
         return X, y, params
@@ -376,6 +395,6 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
 def _is_too_many_categorical_values(X: pd.DataFrame) -> bool:
     many_values_features_count = 0
     for f in _get_cat_features(X):
-        if X[f].nunique() > 100:
+        if X[f].astype("string").nunique() > 100:
             many_values_features_count += 1
     return many_values_features_count >= 2

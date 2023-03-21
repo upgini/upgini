@@ -44,6 +44,7 @@ class DataSourcePublisher:
         exclude_columns: Optional[List[str]] = None,
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
+        features_for_embeddings: Optional[List[str]] = None,
     ) -> str:
         trace_id = str(uuid.uuid4())
 
@@ -65,6 +66,7 @@ class DataSourcePublisher:
                     "excludeColumns": exclude_columns,
                     "hashFeatureNames": hash_feature_names,
                     "snapshotFrequencyDays": snapshot_frequency_days,
+                    "featuresForEmbeddings": features_for_embeddings,
                 }
                 self.logger.info(f"Start registering data table {request}")
 
