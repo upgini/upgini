@@ -285,6 +285,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.y = y
                 checked_eval_set = []
                 for eval_pair in eval_set or []:
+                    if len(eval_pair) != 2:
+                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
                     if not is_frames_equal(X, eval_pair[0]):
                         checked_eval_set.append(eval_pair)
                 self.eval_set = checked_eval_set
@@ -397,6 +399,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.y = y
                 checked_eval_set = []
                 for eval_pair in eval_set or []:
+                    if len(eval_pair) != 2:
+                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
                     if not is_frames_equal(X, eval_pair[0]):
                         checked_eval_set.append(eval_pair)
                 self.eval_set = checked_eval_set
@@ -901,6 +905,8 @@ class FeaturesEnricher(TransformerMixin):
 
         checked_eval_set = []
         for eval_pair in eval_set or []:
+            if len(eval_pair) != 2:
+                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
             if not is_frames_equal(X, eval_pair[0]):
                 checked_eval_set.append(eval_pair)
 
