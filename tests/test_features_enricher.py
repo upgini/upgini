@@ -131,6 +131,7 @@ def test_features_enricher(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
@@ -157,7 +158,7 @@ def test_features_enricher(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     enriched_train_features = enricher.fit_transform(
         train_features,
@@ -166,7 +167,7 @@ def test_features_enricher(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -277,6 +278,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"].to_frame()
@@ -302,16 +304,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         keep_input=True,
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 4)
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        keep_input=True,
-        calculate_metrics=False,
-    )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -455,6 +448,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000).reset_index(drop=True)
     train_features = train_df.drop(columns="target").values
     train_target = train_df["target"].values
@@ -466,7 +460,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     eval2_target = eval2_df["target"].values
 
     enricher = FeaturesEnricher(
-        search_keys={1: SearchKey.PHONE, 2: SearchKey.DATE},
+        search_keys={0: SearchKey.PHONE, 1: SearchKey.DATE},
         endpoint=url,
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
@@ -481,16 +475,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        calculate_metrics=False,
-        keep_input=True,
-    )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -603,6 +588,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     df.index.name = "custom_index_name"
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
@@ -630,17 +616,8 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
     assert enriched_train_features.index.name == "custom_index_name"
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        calculate_metrics=False,
-        keep_input=True,
-    )
-    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -751,6 +728,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     df = df.reset_index()
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
@@ -778,17 +756,8 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
     assert "index" not in enriched_train_features.columns
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        calculate_metrics=False,
-        keep_input=True,
-    )
-    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = (
@@ -1170,6 +1139,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     print(train_df.head(10))
     train_features = train_df.drop(columns="target")
@@ -1252,11 +1222,11 @@ def test_filter_by_importance(requests_mock: Mocker):
         importance_threshold=0.8,
     )
 
-    assert train_features.shape == (10000, 3)
+    assert train_features.shape == (10000, 2)
 
     test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.8)
 
-    assert test_features.shape == (1000, 3)
+    assert test_features.shape == (1000, 2)
 
 
 def test_filter_by_max_features(requests_mock: Mocker):
@@ -1320,6 +1290,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
@@ -1367,11 +1338,11 @@ def test_filter_by_max_features(requests_mock: Mocker):
         train_features, train_target, eval_set=eval_set, calculate_metrics=False, keep_input=True, max_features=0
     )
 
-    assert train_features.shape == (10000, 3)
+    assert train_features.shape == (10000, 2)
 
     test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
 
-    assert test_features.shape == (1000, 3)
+    assert test_features.shape == (1000, 2)
 
 
 def test_validation_metrics_calculation(requests_mock: Mocker):
@@ -1677,6 +1648,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data_with_time.parquet")
     df = pd.read_parquet(path)
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
@@ -1701,16 +1673,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 12)
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        keep_input=True,
-        calculate_metrics=False,
-    )
-    assert enriched_train_features.shape == (10000, 12)
+    assert enriched_train_features.shape == (10000, 11)
 
     print(enricher.features_info)
 

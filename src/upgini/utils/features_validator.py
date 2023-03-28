@@ -3,7 +3,7 @@ from logging import Logger
 from typing import List, Optional
 
 import pandas as pd
-from pandas.api.types import is_integer_dtype, is_string_dtype, is_object_dtype
+from pandas.api.types import is_object_dtype  # , is_integer_dtype, is_string_dtype
 from upgini.resource_bundle import bundle
 from upgini.utils.warning_counter import WarningCounter
 
@@ -20,7 +20,7 @@ class FeaturesValidator:
         one_hot_encoded_features = []
         empty_or_constant_features = []
         high_cardinality_features = []
-        count = len(df)
+        # count = len(df)
 
         for f in features:
             column = df[f]
@@ -35,9 +35,9 @@ class FeaturesValidator:
                     empty_or_constant_features.append(f)
                 continue
 
-            if (is_string_dtype(column) or is_integer_dtype(column)) and column.nunique() / count >= 0.9:
-                high_cardinality_features.append(f)
-                continue
+            # if (is_string_dtype(column) or is_integer_dtype(column)) and column.nunique() / count >= 0.9:
+            #     high_cardinality_features.append(f)
+            #     continue
 
         if one_hot_encoded_features:
             msg = bundle.get("one_hot_encoded_features").format(one_hot_encoded_features)
