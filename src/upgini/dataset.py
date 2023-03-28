@@ -59,6 +59,7 @@ class Dataset(pd.DataFrame):
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 3500
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
+    MAX_STRING_FEATURE_LENGTH = 350
 
     _metadata = [
         "dataset_name",
@@ -218,13 +219,13 @@ class Dataset(pd.DataFrame):
             self.columns_renaming[new_column] = str(column)
 
     def __validate_too_long_string_values(self):
-        """Check that string values less than 400 characters"""
+        """Check that string values less than 350 characters"""
         # self.logger.info("Validate too long string values")
         for col in self.columns:
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
-                if max_length > 400:
-                    raise ValidationError(bundle.get("dataset_too_long_column_name").format(col, max_length))
+                if max_length > self.MAX_STRING_FEATURE_LENGTH:
+                    self[col] = self[col].astype("str").str.slice(self.MAX_STRING_FEATURE_LENGTH)
 
     def __clean_duplicates(self, silent_mode: bool = False):
         """Clean DataSet from full duplicates."""
