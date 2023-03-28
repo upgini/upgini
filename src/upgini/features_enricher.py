@@ -1216,10 +1216,24 @@ class FeaturesEnricher(TransformerMixin):
                     combined_search_keys.append(subset)
 
             # Don't pass features in backend on transform
+            original_features_for_transform = None
             if len(non_keys_columns) > 0:
-                df_without_features = df.drop(columns=non_keys_columns)
-            else:
-                df_without_features = df
+                # Pass only features that need for transform
+                features_for_transform = self._search_task.get_features_for_transform()
+                if features_for_transform is not None and len(features_for_transform) > 0:
+                    file_metadata = self._search_task.get_file_metadata(trace_id)
+                    original_features_for_transform = [
+                        c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
+                    ]
+                    non_keys_columns = [c for c in non_keys_columns if c not in original_features_for_transform]
+
+                    runtime_parameters = self.runtime_parameters or RuntimeParameters(properties={})
+                    runtime_properties = runtime_parameters.properties or {}
+                    runtime_properties["features_for_embeddings"] = ",".join(features_for_transform)
+                    runtime_parameters.properties = runtime_properties
+                    self.runtime_parameters = runtime_parameters
+
+            df_without_features = df.drop(columns=non_keys_columns)
 
             dataset = Dataset(
                 "sample_" + str(uuid.uuid4()),
@@ -1243,6 +1257,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
                 if len(exclude_features_sources) == 0:
                     exclude_features_sources = None
+
             validation_task = self._search_task.validation(
                 trace_id,
                 dataset,
