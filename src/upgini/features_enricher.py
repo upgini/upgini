@@ -435,6 +435,7 @@ class FeaturesEnricher(TransformerMixin):
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
+                    return None
                 else:
                     show_status_error()
                     self._dump_python_libs()
