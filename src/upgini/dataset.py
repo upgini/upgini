@@ -40,7 +40,6 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
-from upgini.utils.display_utils import do_without_pandas_limits
 from upgini.utils.target_utils import correct_string_target
 from upgini.utils.warning_counter import WarningCounter
 
@@ -252,28 +251,12 @@ class Dataset(pd.DataFrame):
             unique_columns.remove(target_column)
             marked_duplicates = self.duplicated(subset=unique_columns, keep=False)
             if marked_duplicates.sum() > 0:
-                dups_sample: pd.DataFrame = (
-                    self[marked_duplicates].sort_values(by=self.columns.to_list()).head(5).copy()
-                )
-                dups_sample.drop(columns=SYSTEM_RECORD_ID, inplace=True)
-                if EVAL_SET_INDEX in dups_sample.columns:
-                    dups_sample.drop(columns=EVAL_SET_INDEX, inplace=True)
-                for c in dups_sample.columns:
-                    if c in self.columns_renaming.keys():
-                        dups_sample.rename(columns={c: self.columns_renaming[c]}, inplace=True)
+                dups_indices = self[marked_duplicates].index.to_list()
                 nrows_after_tgt_dedup = len(self.drop_duplicates(subset=unique_columns))
                 num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
                 share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
 
-                print(bundle.get("duplicates_sample"))
-                self.logger.warning(bundle.get("duplicates_sample"))
-
-                def print_dups_sample():
-                    print(dups_sample)
-                    self.logger.warning(dups_sample)
-
-                do_without_pandas_limits(print_dups_sample)
-                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_sample)
+                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
                 self.logger.warning(msg)
                 print(msg)
                 self.drop_duplicates(subset=unique_columns, keep=False, inplace=True)
@@ -591,7 +574,6 @@ class Dataset(pd.DataFrame):
         all_valid_status = bundle.get("validation_all_valid_status")
         some_invalid_status = bundle.get("validation_some_invalid_status")
         all_invalid_status = bundle.get("validation_all_invalid_status")
-        drop_message = bundle.get("validation_drop_message")
         all_valid_message = bundle.get("validation_all_valid_message")
         invalid_message = bundle.get("validation_invalid_message")
 
@@ -607,16 +589,15 @@ class Dataset(pd.DataFrame):
             valid_share = self[f"{col}_is_valid"].sum() / nrows
             original_col_name = self.columns_renaming[col]
             validation_stats[original_col_name] = {}
-            optional_drop_message = drop_message if col in mandatory_columns else ""
             if valid_share == 1:
                 valid_status = all_valid_status
                 valid_message = all_valid_message
             elif 0 < valid_share < 1:
                 valid_status = some_invalid_status
-                valid_message = invalid_message.format(100 * (1 - valid_share), optional_drop_message, invalid_values)
+                valid_message = invalid_message.format(100 * (1 - valid_share), invalid_values)
             else:
                 valid_status = all_invalid_status
-                valid_message = invalid_message.format(100 * (1 - valid_share), optional_drop_message, invalid_values)
+                valid_message = invalid_message.format(100 * (1 - valid_share), invalid_values)
             validation_stats[original_col_name]["valid_status"] = valid_status
             validation_stats[original_col_name]["valid_message"] = valid_message
 

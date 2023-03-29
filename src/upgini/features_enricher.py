@@ -699,7 +699,9 @@ class FeaturesEnricher(TransformerMixin):
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
-                        _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
+                        _cv = CVConfig(
+                            _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold()
+                        ).get_cv()
 
                     wrapper = EstimatorWrapper.create(
                         estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
