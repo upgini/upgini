@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_string_dtype
+from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
@@ -693,13 +694,17 @@ class FeaturesEnricher(TransformerMixin):
                         self.warning_counter.increment()
                         return None
 
+                    self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
+
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
 
                     _cv = cv or self.cv
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
-                        _cv = CVConfig(_cv, date_series, self.random_state).get_cv()
+                        _cv = CVConfig(
+                            _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold()
+                        ).get_cv()
 
                     wrapper = EstimatorWrapper.create(
                         estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
@@ -856,6 +861,18 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
+
+    def _check_train_and_eval_target_distribution(self, y, eval_set_dict):
+        uneven_distribution = False
+        for eval_set in eval_set_dict.values():
+            _, eval_y, _, _ = eval_set
+            res = ks_2samp(y, eval_y)
+            if res[1] < 0.05:
+                uneven_distribution = True
+        if uneven_distribution:
+            msg = bundle.get("uneven_eval_target_distribution")
+            print(msg)
+            self.logger.warning(msg)
 
     def _has_features_with_commercial_schema(
         self, commercial_schema: str, exclude_features_sources: Optional[List[str]]

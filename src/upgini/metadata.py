@@ -178,6 +178,7 @@ class ProviderTaskMetadataV2(BaseModel):
     eval_set_metrics: Optional[List[ModelEvalSet]]
     zero_hit_rate_search_keys: Optional[List[str]]
     features_used_for_embeddings: Optional[List[str]]
+    shuffle_kfold: Optional[bool]
 
 
 class FeaturesFilter(BaseModel):

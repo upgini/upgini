@@ -156,6 +156,14 @@ class SearchTask:
 
         return list(features_for_transform)
 
+    def get_shuffle_kfold(self) -> Optional[bool]:
+        if self.provider_metadata_v2 is None:
+            return None
+
+        for meta in self.provider_metadata_v2:
+            if meta.shuffle_kfold is not None:
+                return meta.shuffle_kfold
+
     @staticmethod
     def _get_provider_summaries(summary: SearchTaskSummary) -> List[ProviderTaskSummary]:
         if summary.status in {

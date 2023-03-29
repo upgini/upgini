@@ -8,7 +8,13 @@ from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 
 class CVConfig:
-    def __init__(self, cv_type: Union[CVType, str, None], date_column: Optional[pd.Series], random_state=None):
+    def __init__(
+        self,
+        cv_type: Union[CVType, str, None],
+        date_column: Optional[pd.Series],
+        random_state=None,
+        shuffle_kfold: Optional[bool] = None,
+    ):
         if cv_type is None:
             self.cv_type = CVType.k_fold
         elif isinstance(cv_type, str):
@@ -18,11 +24,12 @@ class CVConfig:
         else:
             raise Exception(f"Unexcpected type of cv_type: {type(cv_type)}")
 
-        self.shuffle_kfold: Optional[bool] = None
+        self.shuffle_kfold: Optional[bool] = shuffle_kfold
         self.test_size: Optional[float] = None
         if self.cv_type == CVType.k_fold:
             self.n_folds = 5
-            self.shuffle_kfold = date_column is None or is_constant(date_column)
+            if self.shuffle_kfold is None:
+                self.shuffle_kfold = date_column is None or is_constant(date_column)
         elif self.cv_type == CVType.time_series or cv_type == CVType.blocked_time_series:
             self.n_folds = 10
             self.test_size = 0.2
