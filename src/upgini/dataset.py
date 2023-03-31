@@ -224,7 +224,7 @@ class Dataset(pd.DataFrame):
             if is_string_dtype(self[col]):
                 max_length: int = self[col].astype("str").str.len().max()
                 if max_length > self.MAX_STRING_FEATURE_LENGTH:
-                    self[col] = self[col].astype("str").str.slice(self.MAX_STRING_FEATURE_LENGTH)
+                    self[col] = self[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
 
     def __clean_duplicates(self, silent_mode: bool = False):
         """Clean DataSet from full duplicates."""
