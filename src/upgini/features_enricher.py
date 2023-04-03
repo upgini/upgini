@@ -1221,18 +1221,6 @@ class FeaturesEnricher(TransformerMixin):
             if email_converted_to_hem:
                 non_keys_columns.append(email_column)
 
-            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[sorted(search_keys.keys())].values]  # type: ignore
-            meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-
-            df = df.reset_index(drop=True)
-            system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
-            df_with_original_index = df[system_columns_with_original_index].copy()
-
-            combined_search_keys = []
-            for L in range(1, len(search_keys.keys()) + 1):
-                for subset in itertools.combinations(search_keys.keys(), L):
-                    combined_search_keys.append(subset)
-
             # Don't pass features in backend on transform
             original_features_for_transform = None
             if len(non_keys_columns) > 0:
@@ -1250,6 +1238,20 @@ class FeaturesEnricher(TransformerMixin):
                     runtime_properties["features_for_embeddings"] = ",".join(features_for_transform)
                     runtime_parameters.properties = runtime_properties
                     self.runtime_parameters = runtime_parameters
+
+            columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
+
+            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[columns_for_system_record_id].values]  # type: ignore
+            meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+
+            df = df.reset_index(drop=True)
+            system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
+            df_with_original_index = df[system_columns_with_original_index].copy()
+
+            combined_search_keys = []
+            for L in range(1, len(search_keys.keys()) + 1):
+                for subset in itertools.combinations(search_keys.keys(), L):
+                    combined_search_keys.append(subset)
 
             df_without_features = df.drop(columns=non_keys_columns)
 
