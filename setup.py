@@ -35,7 +35,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.109"
+version = "1.1.110"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -72,7 +72,7 @@ try:
         install_requires=[
             "python-dateutil>=2.8.0",
             "requests>=2.8.0",
-            "pandas>=1.1.0",
+            "pandas>=1.1.0,<2.0.0",
             "numpy>=1.19.0",
             "scikit-learn>=1.0.1",
             "pydantic>=1.8.2",
