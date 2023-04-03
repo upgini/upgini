@@ -509,6 +509,10 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start transform")
             try:
+                if len(self.feature_names_) == 0:
+                    self.logger.warning("There is not important features for transform. Return input as transformed")
+                    return X
+
                 if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
                     msg = bundle.get("transform_with_trial_features")
                     self.logger.warn(msg)
