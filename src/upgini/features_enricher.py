@@ -131,6 +131,8 @@ class FeaturesEnricher(TransformerMixin):
         random_state: int = 42,
         cv: Optional[CVType] = None,
         detect_missing_search_keys: bool = True,
+        generate_features: Optional[List[str]] = None,
+        round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
         **kwargs,
     ):
@@ -203,8 +205,24 @@ class FeaturesEnricher(TransformerMixin):
             if self.runtime_parameters is None:
                 self.runtime_parameters = RuntimeParameters()
             if self.runtime_parameters.properties is None:
-                self.runtime_parameters.properties = {}
+                self.runtime_parameters.properties = dict()
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
+        if generate_features is not None:
+            if len(generate_features) > 1:
+                msg = bundle.get("too_many_generate_features")
+                self.logger.error(msg)
+                raise ValidationError(msg)
+            self.generate_features = generate_features
+            runtime_parameters = self.runtime_parameters or RuntimeParameters()
+            runtime_properties = runtime_parameters.properties or dict()
+            runtime_parameters["generate_features"] = ",".join(generate_features)
+            if round_embeddings is not None:
+                if not isinstance(round_embeddings, int) or round_embeddings < 0:
+                    msg = bundle.get("invalid_round_embeddings")
+                    self.logger.error(msg)
+                    raise ValidationError(msg)
+                self.round_embeddings = round_embeddings
+                runtime_properties["round_embeddings"] = round_embeddings
 
         self.passed_features: List[str] = []
         self.feature_names_ = []
@@ -1295,7 +1313,7 @@ class FeaturesEnricher(TransformerMixin):
             def enrich():
                 res, _ = self.__enrich(
                     df_with_original_index,
-                    validation_task.get_all_validation_raw_features(trace_id),
+                    validation_task.get_all_validation_raw_features(trace_id, metrics_calculation),
                     validated_X,
                     is_transform=True,
                 )
