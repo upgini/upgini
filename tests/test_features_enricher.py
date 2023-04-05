@@ -1791,84 +1791,88 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
         _RestClient.initial_search_v2 = original_initial_search
 
 
-# def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
-#     pd.set_option("display.max_columns", 1000)
-#     url = "http://fake_url2"
+def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
 
-#     mock_default_requests(requests_mock, url)
+    mock_default_requests(requests_mock, url)
 
-#     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/valid_data.parquet")
-#     df = pd.read_parquet(path)
-#     df.drop(columns="SystemRecordId_473310000", inplace=True)
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
+    eval1_path = os.path.join(base_dir, "test_data/binary/initial_eval1_imbalanced.parquet")
+    eval2_path = os.path.join(base_dir, "test_data/binary/initial_eval2_imbalanced.parquet")
+    initial_train_df = pd.read_parquet(train_path)
 
-#     if (df.phone_num < 10_000_000).any():
-#         raise Exception("Oops")
+    initial_eval1_df = pd.read_parquet(eval1_path)
+    initial_eval2_df = pd.read_parquet(eval2_path)
 
-#     train_df_zero = df[df["target"] == 0].sample(n=7000)
-#     train_df_one = df[df["target"] == 1].sample(n=1000)
-#     initial_train_df = pd.concat([train_df_zero, train_df_one], axis=0)
+    from upgini.dataset import Dataset
 
-#     from upgini.dataset import Dataset
+    Dataset.MIN_SAMPLE_THRESHOLD = 7_000
 
-#     Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
 
-#     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
-#     enricher = FeaturesEnricher(
-#         search_keys=search_keys,
-#         endpoint=url,
-#         api_key="fake_api_key",
-#         date_format="%Y-%m-%d",
-#         logs_enabled=False,
-#     )
+    result_wrapper = DataFrameWrapper()
 
-#     result_wrapper = DataFrameWrapper()
+    def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
+        result_wrapper.df = pd.read_parquet(file_path)
+        raise TestException()
 
-#     def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
-#         result_wrapper.df = pd.read_parquet(file_path)
-#         raise TestException()
+    original_initial_search = _RestClient.initial_search_v2
+    _RestClient.initial_search_v2 = mocked_initial_search
 
-#     _RestClient.initial_search_v2 = mocked_initial_search
+    try:
+        expected_result_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalanced.parquet"
+        )
 
-#     expected_result_path = os.path.join(
-#         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalance.parquet"
-#     )
+        expected_result_df = (
+            pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+        )
 
-#     expected_result_df = (
-#         pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
-#     )
+        def test(n_shuffles: int):
+            train_df = initial_train_df.copy()
+            for _ in range(n_shuffles):
+                train_df = initial_train_df.sample(frac=1).reset_index(drop=True)
+            train_features = train_df.drop(columns="target")
+            train_target = train_df["target"]
+            eval1_df = initial_eval1_df.copy()
+            for _ in range(n_shuffles):
+                eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
+            eval1_features = eval1_df.drop(columns="target")
+            eval1_target = eval1_df["target"]
+            eval2_df = initial_eval2_df.copy()
+            for _ in range(n_shuffles):
+                eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
+            eval2_features = eval2_df.drop(columns="target")
+            eval2_target = eval2_df["target"]
+            eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-#     def test(n_shuffles: int):
-#         train_df = initial_train_df
-#         for _ in range(n_shuffles):
-#             train_df = initial_train_df.sample(frac=1).reset_index(drop=True)
-#         train_features = train_df.drop(columns="target")
-#         train_target = train_df["target"]
-#         eval1_df = df[10000:11000]
-#         for _ in range(n_shuffles):
-#             eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
-#         eval1_features = eval1_df.drop(columns="target")
-#         eval1_target = eval1_df["target"]
-#         eval2_df = df[11000:12000]
-#         for _ in range(n_shuffles):
-#             eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
-#         eval2_features = eval2_df.drop(columns="target")
-#         eval2_target = eval2_df["target"]
-#         eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
+            try:
+                enricher.fit(train_features, train_target, eval_set, calculate_metrics=False)
+            except TestException:
+                pass
 
-#         try:
-#             enricher.fit(train_features, train_target, eval_set, calculate_metrics=False)
-#         except TestException:
-#             pass
+            actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+            print("Actual result df:")
+            print(actual_result_df)
+            print("Expected result df:")
+            print(expected_result_df)
 
-#         actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-#         if not actual_result_df.equals(expected_result_df):
-#             actual_result_df.to_parquet("/Users/nikolaytoroptsev/Downloads/actual.parquet")
-#             expected_result_df.to_parquet("/Users/nikolaytoroptsev/Downloads/expected.parquet")
+            assert_frame_equal(actual_result_df, expected_result_df)
 
-#         assert_frame_equal(actual_result_df, expected_result_df)
-
-#     for i in range(5):
-#         test(i)
+        for i in range(5):
+            print(f"Run {i} iteration")
+            test(i)
+    finally:
+        _RestClient.initial_search_v2 = original_initial_search
 
 
 class DataFrameWrapper:
