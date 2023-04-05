@@ -3,7 +3,7 @@ import logging
 import numbers
 import os
 import pickle
-import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -208,14 +208,14 @@ class FeaturesEnricher(TransformerMixin):
                 self.runtime_parameters.properties = dict()
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
         if generate_features is not None:
-            if len(generate_features) > 1:
+            if len(generate_features) > 2:
                 msg = bundle.get("too_many_generate_features")
                 self.logger.error(msg)
                 raise ValidationError(msg)
             self.generate_features = generate_features
             runtime_parameters = self.runtime_parameters or RuntimeParameters()
             runtime_properties = runtime_parameters.properties or dict()
-            runtime_parameters["generate_features"] = ",".join(generate_features)
+            runtime_properties["generate_features"] = ",".join(generate_features)
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = bundle.get("invalid_round_embeddings")
@@ -223,6 +223,8 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(msg)
                 self.round_embeddings = round_embeddings
                 runtime_properties["round_embeddings"] = round_embeddings
+            runtime_parameters.properties = runtime_properties
+            self.runtime_parameters = runtime_parameters
 
         self.passed_features: List[str] = []
         self.feature_names_ = []
@@ -2306,10 +2308,10 @@ class FeaturesEnricher(TransformerMixin):
 
     def _dump_python_libs(self):
         try:
-            python_version_result = subprocess.run(["python", "-V"], stdout=subprocess.PIPE)
-            python_version = python_version_result.stdout.decode("utf-8")
-            result = subprocess.run(["pip", "freeze"], stdout=subprocess.PIPE)
-            libs = result.stdout.decode("utf-8")
+            from pip._internal.operations.freeze import freeze
+
+            python_version = sys.version
+            libs = list(freeze(local_only=True))
             self.logger.warning(f"User python {python_version} libs versions:\n{libs}")
         except Exception:
             self.logger.exception("Failed to dump python libs")
