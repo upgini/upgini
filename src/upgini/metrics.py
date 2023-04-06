@@ -300,7 +300,15 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             scoring = get_scorer("neg_" + scoring)
             multiplier = -1
         else:
-            raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(SCORERS.keys())))
+            supported_metrics = set(SCORERS.keys())
+            neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
+            supported_metrics.update(neg_metrics)
+            supported_metrics.update([
+                "mean_squared_log_error", "MSLE", "msle",
+                "root_mean_squared_log_error", "RMSLE", "rmsle",
+                "root_mean_squared_error", "RMSE", "rmse"
+            ])
+            raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
     elif hasattr(scoring, "__name__"):
         metric_name = scoring.__name__
     else:
