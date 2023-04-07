@@ -164,6 +164,8 @@ class FeaturesEnricher(TransformerMixin):
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self.feature_names_ = []
+        self.feature_importances_ = []
         self.search_id = search_id
         if search_id:
             search_task = SearchTask(
@@ -227,8 +229,6 @@ class FeaturesEnricher(TransformerMixin):
             self.runtime_parameters = runtime_parameters
 
         self.passed_features: List[str] = []
-        self.feature_names_ = []
-        self.feature_importances_ = []
         self.df_with_original_index: Optional[pd.DataFrame] = None
         self.country_added = False
         self.fit_generated_features: List[str] = []
