@@ -30,10 +30,10 @@ class Spinner:
         self.stop = True
         if self.thread is not None:
             self.thread.join()
-        if exc_value is not None:
-            print(f"Failed: {exc_value}")
-        else:
-            print(self.ok_msg)
+        # if exc_value is not None:
+        #     print(f"Failed: {exc_value}")
+        # else:
+        #     print(self.ok_msg)
 
     def ok(self, msg: str):
         self.ok_msg = msg
