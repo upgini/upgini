@@ -2441,20 +2441,6 @@ def is_frames_equal(first, second) -> bool:
         return first == second
 
 
-def is_frames_same_schema(fit_df, transform_df) -> bool:
-    if isinstance(fit_df, pd.DataFrame) and isinstance(transform_df, pd.DataFrame):
-        diff = set(fit_df.columns).difference(transform_df.columns)
-        return len(diff) == 0 or diff.issubset(
-            [EVAL_SET_INDEX, EmailSearchKeyConverter.DOMAIN_COLUMN_NAME, EmailSearchKeyConverter.HEM_COLUMN_NAME]
-        )
-    elif isinstance(fit_df, pd.Series) and isinstance(transform_df, pd.Series):
-        return fit_df.name == transform_df.name
-    elif isinstance(fit_df, np.ndarray) and isinstance(transform_df, np.ndarray):
-        return fit_df.shape[1] == transform_df.shape[1]
-    else:
-        return False
-
-
 def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
     if isinstance(df, pd.DataFrame):
         return df.drop_duplicates()
