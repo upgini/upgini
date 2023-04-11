@@ -189,7 +189,7 @@ class FeaturesFilter(BaseModel):
 
 
 class RuntimeParameters(BaseModel):
-    properties: Optional[Dict[str, str]]
+    properties: Dict[str, str] = dict()
 
 
 class SearchCustomization(BaseModel):

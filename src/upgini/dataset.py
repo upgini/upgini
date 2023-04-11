@@ -793,7 +793,7 @@ class Dataset(pd.DataFrame):
         max_features: Optional[int] = None,
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
-        metrics_calculation: Optional[bool] = False
+        metrics_calculation: Optional[bool] = False,
     ) -> SearchCustomization:
         # self.logger.info("Constructing search customization")
         search_customization = SearchCustomization(
@@ -822,6 +822,32 @@ class Dataset(pd.DataFrame):
 
         return search_customization
 
+    def _rename_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
+        if (
+            runtime_parameters is not None
+            and runtime_parameters.properties is not None
+            and "generate_features" in runtime_parameters.properties
+        ):
+            generate_features = runtime_parameters.properties["generate_features"].split(",")
+            renamed_generate_features = []
+            for f in generate_features:
+                for new_column, orig_column in self.columns_renaming.items():
+                    if f == orig_column:
+                        renamed_generate_features.append(new_column)
+            runtime_parameters.properties["generate_features"] = ",".join(renamed_generate_features)
+
+        return runtime_parameters
+
+    def _clean_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
+        if (
+            runtime_parameters is not None
+            and runtime_parameters.properties is not None
+            and "generate_features" in runtime_parameters.properties
+        ):
+            del runtime_parameters.properties["generate_features"]
+
+        return runtime_parameters
+
     def search(
         self,
         trace_id: str,
@@ -837,6 +863,8 @@ class Dataset(pd.DataFrame):
         if self.etalon_def is None:
             self.validate()
         file_metrics = FileMetrics()
+
+        runtime_parameters = self._rename_generate_features(runtime_parameters)
 
         file_metadata = self.__construct_metadata(exclude_features_sources)
         search_customization = self.__construct_search_customization(
@@ -890,6 +918,8 @@ class Dataset(pd.DataFrame):
         if self.etalon_def is None:
             self.validate(validate_target=False, silent_mode=silent_mode)
         file_metrics = FileMetrics()
+
+        runtime_parameters = self._clean_generate_features(runtime_parameters)
 
         file_metadata = self.__construct_metadata(exclude_features_sources=exclude_features_sources)
         search_customization = self.__construct_search_customization(

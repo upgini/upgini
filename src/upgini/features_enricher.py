@@ -64,6 +64,9 @@ from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
 
+EMPTY_RUNTIME_PARAMETERS = RuntimeParameters()
+
+
 class FeaturesEnricher(TransformerMixin):
     """Retrieve external features via Upgini that are most relevant to predict your target.
 
@@ -126,7 +129,7 @@ class FeaturesEnricher(TransformerMixin):
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
         shared_datasets: Optional[List[str]] = None,
-        runtime_parameters: Optional[RuntimeParameters] = None,
+        runtime_parameters: RuntimeParameters = EMPTY_RUNTIME_PARAMETERS,
         date_format: Optional[str] = None,
         random_state: int = 42,
         cv: Optional[CVType] = None,
@@ -197,17 +200,9 @@ class FeaturesEnricher(TransformerMixin):
         self.detect_missing_search_keys = detect_missing_search_keys
         self.cv = cv
         if cv is not None:
-            if self.runtime_parameters is None:
-                self.runtime_parameters = RuntimeParameters()
-            if self.runtime_parameters.properties is None:
-                self.runtime_parameters.properties = {}
             self.runtime_parameters.properties["cv_type"] = cv.name
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
-            if self.runtime_parameters is None:
-                self.runtime_parameters = RuntimeParameters()
-            if self.runtime_parameters.properties is None:
-                self.runtime_parameters.properties = dict()
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
         if generate_features is not None:
             if len(generate_features) > 2:
@@ -215,18 +210,14 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.error(msg)
                 raise ValidationError(msg)
             self.generate_features = generate_features
-            runtime_parameters = self.runtime_parameters or RuntimeParameters()
-            runtime_properties = runtime_parameters.properties or dict()
-            runtime_properties["generate_features"] = ",".join(generate_features)
+            self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = bundle.get("invalid_round_embeddings")
                     self.logger.error(msg)
                     raise ValidationError(msg)
                 self.round_embeddings = round_embeddings
-                runtime_properties["round_embeddings"] = round_embeddings
-            runtime_parameters.properties = runtime_properties
-            self.runtime_parameters = runtime_parameters
+                self.runtime_parameters.properties["round_embeddings"] = round_embeddings
 
         self.passed_features: List[str] = []
         self.df_with_original_index: Optional[pd.DataFrame] = None
@@ -1181,6 +1172,9 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
+    def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
+        return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
+
     def __inner_transform(
         self,
         trace_id,
@@ -1247,6 +1241,7 @@ class FeaturesEnricher(TransformerMixin):
 
             # Don't pass features in backend on transform
             original_features_for_transform = None
+            runtime_parameters = self._get_copy_of_runtime_parameters()
             if len(non_keys_columns) > 0:
                 # Pass only features that need for transform
                 features_for_transform = self._search_task.get_features_for_transform()
@@ -1257,11 +1252,7 @@ class FeaturesEnricher(TransformerMixin):
                     ]
                     non_keys_columns = [c for c in non_keys_columns if c not in original_features_for_transform]
 
-                    runtime_parameters = self.runtime_parameters or RuntimeParameters(properties={})
-                    runtime_properties = runtime_parameters.properties or {}
-                    runtime_properties["features_for_embeddings"] = ",".join(features_for_transform)
-                    runtime_parameters.properties = runtime_properties
-                    self.runtime_parameters = runtime_parameters
+                    runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
@@ -1306,7 +1297,7 @@ class FeaturesEnricher(TransformerMixin):
                 trace_id,
                 dataset,
                 extract_features=True,
-                runtime_parameters=self.runtime_parameters,
+                runtime_parameters=runtime_parameters,
                 exclude_features_sources=exclude_features_sources,
                 metrics_calculation=metrics_calculation,
                 silent_mode=silent_mode,
@@ -1529,7 +1520,7 @@ class FeaturesEnricher(TransformerMixin):
         self._search_task = dataset.search(
             trace_id,
             extract_features=True,
-            runtime_parameters=self.runtime_parameters,
+            runtime_parameters=self._get_copy_of_runtime_parameters(),
             exclude_features_sources=exclude_features_sources,
         )
 
