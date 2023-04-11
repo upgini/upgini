@@ -405,6 +405,20 @@ We validate and clean search initialization dataset under the hood:
  - check inconsistent labels  - rows with the same features and keys but different labels, we remove them and make a note on share of row duplicates;  
  -  remove columns with zero variance  - we treat any non **search key** column in search dataset as a feature, so columns with zero variance will be removed
 
+ ### Automated feature generation with Large Language Models' data augmentation
+ If you have natural language text columns in your training dataset, you can use them to generate additional embedding features at runtime. This will help to improve the performance of your machine learning model.
+
+Please note that you can only use a maximum of two columns for this purpose. To use this feature, you need to pass the columns as arguments to the generate_features parameter of the constructor.
+
+Here's an example of how to use the FeaturesEnricher class to generate features from the "description" and "summary" columns:
+ ```python
+ enricher = FeaturesEnricher(
+  search_keys={"date": SearchKey.DATE},
+  generate_features=["description", "summary"]
+ )
+ ```
+ With this code, you'll be able to generate additional features from the "description" and "summary" columns of your dataset, which can help improve the accuracy of your machine learning model.
+
 ### ❔ Supervised ML tasks detection
 We detect ML task under the hood based on label column values. Currently we support:  
   - ModelTaskType.BINARY
