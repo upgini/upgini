@@ -64,9 +64,6 @@ from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
 
-EMPTY_RUNTIME_PARAMETERS = RuntimeParameters()
-
-
 class FeaturesEnricher(TransformerMixin):
     """Retrieve external features via Upgini that are most relevant to predict your target.
 
@@ -129,7 +126,7 @@ class FeaturesEnricher(TransformerMixin):
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
         shared_datasets: Optional[List[str]] = None,
-        runtime_parameters: RuntimeParameters = EMPTY_RUNTIME_PARAMETERS,
+        runtime_parameters: Optional[RuntimeParameters] = None,
         date_format: Optional[str] = None,
         random_state: int = 42,
         cv: Optional[CVType] = None,
@@ -194,7 +191,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.exception(f"Failed to find search_id: {search_id}")
                     raise e
 
-        self.runtime_parameters = runtime_parameters
+        self.runtime_parameters = runtime_parameters or RuntimeParameters()
         self.date_format = date_format
         self.random_state = random_state
         self.detect_missing_search_keys = detect_missing_search_keys
