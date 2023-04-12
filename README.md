@@ -79,17 +79,17 @@
 #### 📊 Total: **239 countries** and **up to 41 years** of history
 |Data scource|Countries|History, years|# sources for ensemble|Update|Search keys|API Key required
 |--|--|--|--|--|--|--|
-|Historical weather & Climate normals | 68 |22|1|Monthly|date, country, postal/ZIP code|No
-|Location/Places/POI/Area/Proximity information from OpenStreetMap | 221 |2|1|Monthly|date, country, postal/ZIP code|No
-|International holidays & events, Workweek calendar| 232 |22|1|Monthly|date, country|No
-|Consumer Confidence index| 44 |22|1|Monthly|date, country|No
-|World economic indicators|191 |41|1|Monthly|date, country|No
-|Markets data|-|17|1|Monthly|date, datetime|No
+|Historical weather & Climate normals | 68 |22|-|Monthly|date, country, postal/ZIP code|No
+|Location/Places/POI/Area/Proximity information from OpenStreetMap | 221 |2|-|Monthly|date, country, postal/ZIP code|No
+|International holidays & events, Workweek calendar| 232 |22|-|Monthly|date, country|No
+|Consumer Confidence index| 44 |22|-|Monthly|date, country|No
+|World economic indicators|191 |41|-|Monthly|date, country|No
+|Markets data|-|17|-|Monthly|date, datetime|No
 |World mobile network coverage |167|-|3|Monthly|country, postal/ZIP code|No
 |World demographic data |90|-|2|Annual|country, postal/ZIP code|No
 |World house prices |44|-|3|Annual|country, postal/ZIP code|No
-|Public social media profile data |104|-|Monthly|date, email/HEM, phone |Yes
-|Car ownership data and Parking statistics|3|-|1|Annual|country, postal/ZIP code, email/HEM, phone|Yes
+|Public social media profile data |104|-|-|Monthly|date, email/HEM, phone |Yes
+|Car ownership data and Parking statistics|3|-|-|Annual|country, postal/ZIP code, email/HEM, phone|Yes
 |Geolocation profile for phone & IPv4 & email|239|-|6|Monthly|date, email/HEM, phone, IPv4|Yes
 |🔜 Email/WWW domain profile|-|-|-|-
 
