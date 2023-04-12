@@ -1,9 +1,9 @@
 
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> -->
-<h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>
-<p align="center"> <b>Automatically searches through thousands of ready-to-use features from public and community data sources and</br>
-enriches your ML pipeline with only the relevant features</b> </p>
+<!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>--> 
+<h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Intelligent data search engine for Machine Learning</h2>
+<p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>optimized for ML apps with LLMs and other neural networks</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
@@ -27,19 +27,18 @@ enriches your ML pipeline with only the relevant features</b> </p>
 [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
-**Upgini** is a Python data enrichment library that automatically finds only relevant features to improve performance of ML model. It searches through thousands of features and data sources, including public datasets and scraped data shared by Data science community. Save your time on external data search and engineering, just use your labeled dataset to initiate search and Upgini will do the rest.  
+**Upgini** is an intelligent data search engine with a python library that automatically finds only relevant features to improve performance of ML model. It searches through thousands of features and data sources, including public datasets, scraped data shared by Data science community and premium data providers. Save your time on external data search and engineering - reuse your labeled training dataset to initiate search and Upgini will do the rest.  
 
-**Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search tools for external data blocks massive adoption of external features in ML pipelines.    
-We want radically simplify features search and delivery to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
+**Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search and enrichment tools for external data blocks massive adoption of external features in ML pipelines. We want radically simplify features search and enrichment to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 
-**Mission:** Democratize access to data sources for data science community.
-
+**Mission:** Democratize access to data sources for data science community.   
 
 ## 🚀 Awesome features
 ⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement  
+⭐️ Data source optimizations for ML apps to *"squeeze" maximum information for models* out of the source data: automated feature generation with Large Language Models' data augmentation, RNNs, GraphNN; multiple data source ensembling  
+⭐️ Iterative search with *automatic search key augmentation* from all connected sources. If you are missing any search keys in your search request, Upgini will try to find those keys to broaden the search across all available data sources.   
 ⭐️ Calculate *accuracy metrics and uplifts* after enrichment existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
-⭐️ Curated and updated data sources, including public datasets and community-shared data  
 ⭐️ Easy to use - single request to enrich training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
 <table>
   <tr>
@@ -72,25 +71,26 @@ We want radically simplify features search and delivery to make external data a 
 
 ## 🌎 Connected data sources and coverage
 
-- **Public data** : public sector, academic institutions, other sources through open data portals  
-- **Community shared data**: royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data.
+- **Public data** : public sector, academic institutions, other sources through open data portals. Curated and updated by the Upgini team  
+- **Community shared data**: royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data  
+- **Premium data providers**: commercial data sources verified by the Upgini team in real-world use cases  
 
-👉 **Details on  datasets and features are** [here](https://upgini.com/#data_sources) 
+👉 [**Details on  datasets and features**](https://upgini.com/#data_sources) 
 #### 📊 Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|Update|Search keys|API Key required
-|--|--|--|--|--|--|
-|Historical weather & Climate normals | 68 |22|Monthly|date, country, postal/ZIP code|No
-|Location/Places/POI/Area information from OpenStreetMap | 221 |2|Monthly|date, country, postal/ZIP code|No
-|International holidays & events, Workweek calendar| 232 |22|Monthly|date, country|No
-|Consumer Confidence index| 44 |22|Monthly|date, country|No
-|World economic indicators|191 |41|Monthly|date, country|No
-|Markets data|-|17|Monthly|date, datetime|No
-|World mobile network coverage |167|-|Monthly|country, postal/ZIP code|No
-|World demographic data |90|-|Annual|country, postal/ZIP code|No
-|World house prices |44|-|Annual|country, postal/ZIP code|No
+|Data scource|Countries|History, years|# sources for ensemble|Update|Search keys|API Key required
+|--|--|--|--|--|--|--|
+|Historical weather & Climate normals | 68 |22|1|Monthly|date, country, postal/ZIP code|No
+|Location/Places/POI/Area/Proximity information from OpenStreetMap | 221 |2|1|Monthly|date, country, postal/ZIP code|No
+|International holidays & events, Workweek calendar| 232 |22|1|Monthly|date, country|No
+|Consumer Confidence index| 44 |22|1|Monthly|date, country|No
+|World economic indicators|191 |41|1|Monthly|date, country|No
+|Markets data|-|17|1|Monthly|date, datetime|No
+|World mobile network coverage |167|-|3|Monthly|country, postal/ZIP code|No
+|World demographic data |90|-|2|Annual|country, postal/ZIP code|No
+|World house prices |44|-|3|Annual|country, postal/ZIP code|No
 |Public social media profile data |104|-|Monthly|date, email/HEM, phone |Yes
-|Car ownership data and Parking statistics|3|-|Annual|country, postal/ZIP code, email/HEM, phone|Yes
-|Geolocation profile for phone & IPv4 & email|239|-|Monthly|date, email/HEM, phone, IPv4|Yes
+|Car ownership data and Parking statistics|3|-|1|Annual|country, postal/ZIP code, email/HEM, phone|Yes
+|Geolocation profile for phone & IPv4 & email|239|-|6|Monthly|date, email/HEM, phone, IPv4|Yes
 |🔜 Email/WWW domain profile|-|-|-|-
 
 ❓**Know other useful data sources for machine learning?** [Give us a hint and we'll add it for free](https://forms.gle/pH99gb5hPxBEfNdR7).  
@@ -405,20 +405,6 @@ We validate and clean search initialization dataset under the hood:
  - check inconsistent labels  - rows with the same features and keys but different labels, we remove them and make a note on share of row duplicates;  
  -  remove columns with zero variance  - we treat any non **search key** column in search dataset as a feature, so columns with zero variance will be removed
 
- ### Automated feature generation with Large Language Models' data augmentation
- If you have natural language text columns in your training dataset, you can use them to generate additional embedding features at runtime. This will help to improve the performance of your machine learning model.
-
-Please note that you can only use a maximum of two columns for this purpose. To use this feature, you need to pass the columns as arguments to the generate_features parameter of the constructor.
-
-Here's an example of how to use the FeaturesEnricher class to generate features from the "description" and "summary" columns:
- ```python
- enricher = FeaturesEnricher(
-  search_keys={"date": SearchKey.DATE},
-  generate_features=["description", "summary"]
- )
- ```
- With this code, you'll be able to generate additional features from the "description" and "summary" columns of your dataset, which can help improve the accuracy of your machine learning model.
-
 ### ❔ Supervised ML tasks detection
 We detect ML task under the hood based on label column values. Currently we support:  
   - ModelTaskType.BINARY
@@ -601,6 +587,26 @@ enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator,
 
 ## ✅ More tips-and-tricks
 
+###  🤖 Automated feature generation from columns in a search dataset  
+
+If a training dataset has a text column, you can generate additional embeddings from it using instructed embeddings generation with LLMs and data augmentation from external sources, just like Upgini does for all records from connected data sources.
+
+For most cases, this gives better results than direct embeddings generation from a text field. Currently, Upgini has two LLMs connected to a search engine - GPT-3.5 from OpenAI and GPT-J.
+
+To use this feature, pass the column names as arguments to the `generate_features` parameter. You can use up to 2 columns.
+
+Here's an example for generating features from the "description" and "summary" columns:
+
+```python
+enricher = FeaturesEnricher(
+    search_keys={"date": SearchKey.DATE},
+    generate_features=["description", "summary"]
+)
+```
+
+With this code, Upgini will generate LLM embeddings from text columns and then check them for predictive power for your ML task.
+
+Finally, Upgini will return a dataset enriched by only relevant components of LLM embeddings.
 
 ### Find features only give accuracy gain to existing data in the ML model
 
@@ -652,9 +658,9 @@ enricher = FeaturesEnricher(
 enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
 ```
 
-### Exclude features sources from fit, transform and calculation of metrics
+### Exclude premium data sources from fit, transform and metrics calculation
 
-`fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with parameter `exclude_features_sources` that allows to exclude Trial or Paid features that cannot be used for enrichment or calculation of metrics:
+`fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with parameter `exclude_features_sources` that allows to exclude Trial or Paid features from Premium data sources:
 ```python
 enricher = FeaturesEnricher(
   search_keys={"subscription_activation_date": SearchKey.DATE}
@@ -687,6 +693,7 @@ enricher.fit(X, y)
 |Enrichment with **date/datetime, postal/ZIP code and country keys**  | Yes |  Yes |
 |Enrichment with **phone number, hashed email/HEM and IP-address keys**  | No |  Yes |
 |Email notification on **search task completion** | No |  Yes |
+|Automated **feature generation with LLMs** from columns in a search dataset| Yes, *till 12/05/23* | Yes |
 |Email notification on **new data source activation** 🔜 | No |  Yes |
 
 ## 👩🏻‍💻 How to share data/features with a community ?
