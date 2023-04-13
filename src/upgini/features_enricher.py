@@ -9,6 +9,7 @@ import time
 import uuid
 import zlib
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+import gc
 
 import numpy as np
 import pandas as pd
@@ -698,6 +699,8 @@ class FeaturesEnricher(TransformerMixin):
                     search_keys,
                 ) = prepared_data
 
+                gc.collect()
+
                 print(bundle.get("metrics_start"))
                 with Spinner():
                     if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
@@ -1267,6 +1270,9 @@ class FeaturesEnricher(TransformerMixin):
 
             df_without_features = df.drop(columns=non_keys_columns)
 
+            del df
+            gc.collect()
+
             dataset = Dataset(
                 "sample_" + str(uuid.uuid4()),
                 df=df_without_features,  # type: ignore
@@ -1299,6 +1305,9 @@ class FeaturesEnricher(TransformerMixin):
                 metrics_calculation=metrics_calculation,
                 silent_mode=silent_mode,
             )
+
+            del df_without_features, dataset
+            gc.collect()
 
             def enrich():
                 res, _ = self.__enrich(
@@ -1429,7 +1438,6 @@ class FeaturesEnricher(TransformerMixin):
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
-        eval_X_by_id = dict()
         if eval_set is not None and len(eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
             for idx, eval_pair in enumerate(eval_set):
@@ -1437,7 +1445,6 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df = pd.concat([eval_X, eval_y], axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df])
-                eval_X_by_id[idx + 1] = eval_X
 
         if DEFAULT_INDEX in df.columns:
             msg = bundle.get("unsupported_index_column")
@@ -1553,6 +1560,10 @@ class FeaturesEnricher(TransformerMixin):
             if calculate_metrics is not None
             else (len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD)
         )
+
+        del df, validated_X, validated_y, dataset
+        gc.collect()
+
         if calculate_metrics:
             self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
 
