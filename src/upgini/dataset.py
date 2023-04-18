@@ -58,7 +58,7 @@ class Dataset(pd.DataFrame):
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 3500
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
-    MAX_STRING_FEATURE_LENGTH = 350
+    MAX_STRING_FEATURE_LENGTH = 24573
 
     _metadata = [
         "dataset_name",
