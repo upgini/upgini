@@ -27,7 +27,7 @@
 [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
-**Upgini** is an intelligent data search engine with a python library that automatically finds only relevant features to improve performance of ML model. It searches through thousands of features and external data sources, including public datasets, scraped data shared by Data science community and premium data providers. Save your time on external data search and engineering - reuse your labeled training dataset to initiate search and Upgini will do the rest.  
+**Upgini** is an intelligent data search engine with a python library that automatically finds only relevant features to improve performance of ML model. It searches through thousands of external features and data sources, including public datasets, scraped data shared by Data science community and premium data providers. Save your time on external data search and feature engineering - reuse your labeled training dataset to initiate search and Upgini will do the rest.  
 
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient search and enrichment tools for external data blocks massive adoption of external features in ML pipelines. We want radically simplify features search and enrichment to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 
