@@ -202,6 +202,7 @@ class FeaturesEnricher(TransformerMixin):
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
+        self.generate_features: Optional[List[str]] = None
         if generate_features is not None:
             if len(generate_features) > 2:
                 msg = bundle.get("too_many_generate_features")
@@ -1420,6 +1421,14 @@ class FeaturesEnricher(TransformerMixin):
         self.__cached_sampled_datasets = None
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
+
+        if self.generate_features is not None and len(self.generate_features) > 0:
+            x_columns = list(validated_X.columns)
+            for gen_feature in self.generate_features:
+                if gen_feature not in x_columns:
+                    msg = bundle.get("missing_generate_feature").format(gen_feature, x_columns)
+                    print(msg)
+                    self.logger.warning(msg)
 
         self._validate_binary_observations(validated_y)
 
