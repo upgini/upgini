@@ -1421,6 +1421,14 @@ class FeaturesEnricher(TransformerMixin):
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
 
+        if self.generate_features is not None and len(self.generate_features) > 0:
+            x_columns = list(validated_X.columns)
+            for gen_feature in self.generate_features:
+                if gen_feature not in x_columns:
+                    msg = bundle.get("missing_generate_feature").format(gen_feature, x_columns)
+                    print(msg)
+                    self.logger.warning(msg)
+
         self._validate_binary_observations(validated_y)
 
         self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)

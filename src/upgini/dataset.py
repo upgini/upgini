@@ -243,9 +243,9 @@ class Dataset(pd.DataFrame):
         if share_full_dedup > 0:
             msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
             self.logger.warning(msg)
-            if not silent_mode:
-                print(msg)
-            self.warning_counter.increment()
+            # if not silent_mode:
+            #     print(msg)
+            # self.warning_counter.increment()
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
