@@ -202,6 +202,7 @@ class FeaturesEnricher(TransformerMixin):
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
+        self.generate_features: Optional[List[str]] = None
         if generate_features is not None:
             if len(generate_features) > 2:
                 msg = bundle.get("too_many_generate_features")
