@@ -1361,7 +1361,7 @@ class FeaturesEnricher(TransformerMixin):
             return excluded_features[feature_name_header].values.tolist()
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
-        if len(search_keys) == 0:
+        if len(search_keys) == 0 and self.country_code is None:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
                 raise ValidationError(bundle.get("search_key_differ_from_fit"))
