@@ -40,6 +40,7 @@ class DataSourcePublisher:
         self,
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
+        secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
         date_format: Optional[str] = None,
         exclude_columns: Optional[List[str]] = None,
         hash_feature_names=False,
@@ -68,6 +69,8 @@ class DataSourcePublisher:
                     "snapshotFrequencyDays": snapshot_frequency_days,
                     "featuresForEmbeddings": features_for_embeddings,
                 }
+                if secondary_search_keys is not None:
+                    request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
