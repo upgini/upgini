@@ -21,7 +21,6 @@ from upgini.resource_bundle import bundle
 
 from .utils import (
     mock_default_requests,
-    mock_get_features_meta,
     mock_get_metadata,
     mock_get_task_metadata_v2,
     mock_initial_search,
@@ -108,13 +107,6 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             "rowsCount": 30505,
         },
     )
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[],
-        etalon_features=[{"name": "score", "importance": 0.368092, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -176,7 +168,11 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     sampled_X = sampled_Xy.drop(columns="target")
     sampled_y = sampled_Xy["target"]
     enricher._FeaturesEnricher__cached_sampled_datasets = (
-        sampled_X, sampled_y, enriched_X, {0: (eval_set[0][0], enriched_eval_x, eval_set[0][1])}, search_keys
+        sampled_X,
+        sampled_y,
+        enriched_X,
+        {0: (eval_set[0][0], enriched_eval_x, eval_set[0][1])},
+        search_keys,
     )
 
     metrics = enricher.calculate_metrics()
@@ -299,7 +295,7 @@ def test_default_metric_binary(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
@@ -428,7 +424,7 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
@@ -467,13 +463,6 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -482,14 +471,14 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
                     name="feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
@@ -556,7 +545,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
@@ -594,13 +583,6 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -609,14 +591,14 @@ def test_catboost_metric_binary(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
                     name="feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
@@ -681,7 +663,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
 
     assert enricher.calculate_metrics() is None
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
@@ -706,7 +688,134 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     assert metrics_df.loc[eval_2_segment, uplift] == approx(0.007147)
 
 
-@pytest.mark.skip()
+def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.0,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.5},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="ads",
+                    source="etalon",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="cat_feature2",
+                    type="categorical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.2,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=99.0,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
+
+    df = pd.read_csv(os.path.join(FIXTURE_DIR, "input_with_cat.csv"))
+    df_train = df[0:500]
+    X = df_train[["phone", "feature1", "cat_feature2"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "feature1", "cat_feature2"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "feature1", "cat_feature2"]]
+    eval_y_2 = eval_2["target"]
+    eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+    )
+
+    assert enricher.calculate_metrics() is None
+
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
+
+    assert len(enriched_X) == len(X)
+
+    estimator = CatBoostClassifier(random_seed=42, verbose=False, cat_features=[2])
+    metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
+    assert metrics_df is not None
+    print(metrics_df)
+
+    assert metrics_df.loc[train_segment, rows_header] == 500
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.544209)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.561991)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.017782)
+
+    assert metrics_df.loc[eval_1_segment, rows_header] == 250
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.470984)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.511388)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.040404)
+
+    assert metrics_df.loc[eval_2_segment, rows_header] == 250
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.493811)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.476242)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.017569)
+
+
+# @pytest.mark.skip()
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -722,13 +831,6 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -737,14 +839,14 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
                     name="feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
@@ -809,10 +911,9 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    with pytest.raises(Exception, match=bundle.get("metrics_unfitted_enricher")):
-        enricher.calculate_metrics()
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    assert enricher.calculate_metrics(scoring="mean_absolute_persentage_error") is None
 
     assert len(enriched_X) == len(X)
 
@@ -825,19 +926,19 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     print(metrics_df)
 
     assert metrics_df.loc[train_segment, rows_header] == 500
-    assert metrics_df.loc[train_segment, baseline_mae] == approx(0.4980)  # Investigate same values
-    assert metrics_df.loc[train_segment, enriched_mae] == approx(0.5140)
-    assert metrics_df.loc[train_segment, uplift] == approx(-0.0160)
+    assert metrics_df.loc[train_segment, baseline_mae] == approx(0.4940)
+    assert metrics_df.loc[train_segment, enriched_mae] == approx(0.4940)
+    assert metrics_df.loc[train_segment, uplift] == approx(-0.0)
 
     assert metrics_df.loc[eval_1_segment, rows_header] == 250
-    assert metrics_df.loc[eval_1_segment, baseline_mae] == approx(0.4904)
-    assert metrics_df.loc[eval_1_segment, enriched_mae] == approx(0.4576)
-    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.0328)
+    assert metrics_df.loc[eval_1_segment, baseline_mae] == approx(0.4672)
+    assert metrics_df.loc[eval_1_segment, enriched_mae] == approx(0.4736)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(-0.0064)
 
     assert metrics_df.loc[eval_2_segment, rows_header] == 250
-    assert metrics_df.loc[eval_2_segment, baseline_mae] == approx(0.4744)
-    assert metrics_df.loc[eval_2_segment, enriched_mae] == approx(0.5032)
-    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.0288)
+    assert metrics_df.loc[eval_2_segment, baseline_mae] == approx(0.4928)
+    assert metrics_df.loc[eval_2_segment, enriched_mae] == approx(0.4744)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(0.0184)
 
 
 def test_rf_metric_rmse(requests_mock: Mocker):
@@ -855,13 +956,6 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -870,14 +964,14 @@ def test_rf_metric_rmse(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
                     name="feature1",
-                    type="NUMERIC",
+                    type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
@@ -942,7 +1036,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
 
     assert enricher.calculate_metrics() is None
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
@@ -981,13 +1075,6 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "ads_feature1", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "feature1", "importance": 0.1, "matchedInPercent": 100.0, "valueType": "NUMERIC"}],
-    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1069,7 +1156,7 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    enriched_X = enricher.fit_transform(X, y, eval_set)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
     assert len(enriched_X) == len(X)
 
