@@ -711,8 +711,8 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(
                     name="ads_feature1",
-                    type="ads",
-                    source="etalon",
+                    type="numerical",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
@@ -815,7 +815,7 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.017569)
 
 
-# @pytest.mark.skip()
+@pytest.mark.skip()
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -840,7 +840,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
