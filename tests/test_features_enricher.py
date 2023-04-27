@@ -9,6 +9,7 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.dataset import Dataset
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -170,6 +171,122 @@ def test_features_enricher(requests_mock: Mocker):
     assert enriched_train_features.shape == (10000, 3)
 
     metrics = enricher.calculate_metrics()
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 1
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
+
+
+def test_saved_features_enricher(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        search_id=search_task_id,
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.transform(
+        train_features,
+    )
+    print(enriched_train_features)
+    assert enriched_train_features.shape == (10000, 3)
+
+    metrics = enricher.calculate_metrics(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+    )
     expected_metrics = (
         pd.DataFrame(
             {
@@ -1791,6 +1908,75 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
         _RestClient.initial_search_v2 = original_initial_search
 
 
+def test_imbalanced_dataset(requests_mock: Mocker):
+    pd.set_option("display.max_columns", 1000)
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="ads_feature", type="numeric", source="ads", hit_rate=100.0, shap_value=0.9),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=8000, max_hit_count=8000, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+            eval_set_metrics=[],
+        ),
+    )
+    path_to_mock_features = os.path.join(base_dir, "test_data/binary/features_imbalanced.parquet")
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
+    train_df = pd.read_parquet(train_path)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+
+    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
+
+    try:
+        enricher.fit(train_features, train_target, calculate_metrics=False)
+
+        print(enricher.get_features_info)
+
+        metrics = enricher.calculate_metrics()
+
+        print(metrics)
+
+        assert metrics.loc["Train", "Rows"] == 8000
+        assert metrics.loc["Train", "Enriched roc_auc"] == 0.5
+    finally:
+        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+
+
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
@@ -1806,8 +1992,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
     initial_eval1_df = pd.read_parquet(eval1_path)
     initial_eval2_df = pd.read_parquet(eval2_path)
 
-    from upgini.dataset import Dataset
-
+    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
     Dataset.MIN_SAMPLE_THRESHOLD = 7_000
 
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
@@ -1873,6 +2058,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
             test(i)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
+        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
 
 class DataFrameWrapper:

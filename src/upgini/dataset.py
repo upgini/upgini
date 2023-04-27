@@ -654,6 +654,9 @@ class Dataset(pd.DataFrame):
             except (ImportError, NameError):
                 print(df_stats)
 
+        if len(self) == 0:
+            raise ValidationError(bundle.get("all_search_keys_invalid"))
+
     def __validate_meaning_types(self, validate_target: bool):
         # self.logger.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
