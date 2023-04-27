@@ -206,7 +206,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features.parquet"
     )
 
     mock_default_requests(requests_mock, url)
@@ -1915,10 +1915,12 @@ def test_imbalanced_dataset(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
+        validation_search_task_id,
         hit_rate=0.0,
         auc=0.0,
         uplift=0.0,
@@ -1942,7 +1944,6 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     )
     path_to_mock_features = os.path.join(base_dir, "test_data/binary/features_imbalanced.parquet")
 
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
