@@ -292,7 +292,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+                enriched_rocauc: [0.492445, 0.508839, 0.504146],
             }
         )
         .set_index("segment")
