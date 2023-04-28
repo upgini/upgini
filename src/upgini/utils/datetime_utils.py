@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Optional
 
 import numpy as np
@@ -17,6 +18,8 @@ DATE_FORMATS = [
     "%m.%d.%y",
     "%m.%d.%Y"
 ]
+
+DATETIME_PATTERN = r"^[\d\s\.\-:]+$"
 
 
 class DateTimeSearchKeyConverter:
@@ -37,12 +40,25 @@ class DateTimeSearchKeyConverter:
         else:
             return i
 
+    @staticmethod
+    def clean_date(s: Optional[str]):
+        if s is None or len(s.strip()) == 0:
+            return None
+        if not re.match(DATETIME_PATTERN, s):
+            return None
+        return s
+
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
+        if len(df) == 0:
+            return df
+
         df = df.copy()
         if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
-        if is_string_dtype(df[self.date_column]):
-            df.loc[~df[self.date_column].str.match("^[\\d.-]+$"), self.date_column] = None
+        elif isinstance(df[self.date_column].values[0], datetime.date):
+            df[self.date_column] = pd.to_datetime(df[self.date_column])
+        elif is_string_dtype(df[self.date_column]):
+            df[self.date_column] = df[self.date_column].apply(self.clean_date)
             df[self.date_column] = self.parse_date(df)
         elif is_period_dtype(df[self.date_column]):
             df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
