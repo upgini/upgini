@@ -1968,8 +1968,6 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     try:
         enricher.fit(train_features, train_target, calculate_metrics=False)
 
-        print(enricher.get_features_info)
-
         metrics = enricher.calculate_metrics()
 
         print(metrics)
