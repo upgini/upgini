@@ -34,6 +34,7 @@ jobs:
       #       pip3 install --upgrade pip
       #       sudo apt upgrade && sudo apt update
       #       sudo apt install tox
+      - run: pip install tox
       - run:
           no_output_timeout: 60m
           name: Run tox
