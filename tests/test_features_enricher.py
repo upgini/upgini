@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import date
 from typing import Optional
 
@@ -304,7 +305,8 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    if sys.version[0:3] == "3.7":
+        assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 

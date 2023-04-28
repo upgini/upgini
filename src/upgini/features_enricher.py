@@ -1229,7 +1229,6 @@ class FeaturesEnricher(TransformerMixin):
                 df.drop(columns=DEFAULT_INDEX, inplace=True)
                 validated_X.drop(columns=DEFAULT_INDEX, inplace=True)
 
-            self.__check_string_dates(validated_X, search_keys)
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
@@ -1453,8 +1452,6 @@ class FeaturesEnricher(TransformerMixin):
         df = pd.concat([validated_X, validated_y], axis=1)
 
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
-
-        self.__check_string_dates(df, self.fit_search_keys)
 
         df = self.__correct_target(df)
 
@@ -1887,14 +1884,6 @@ class FeaturesEnricher(TransformerMixin):
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
-
-    def __check_string_dates(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]):
-        for column, search_key in search_keys.items():
-            if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(df[column]):
-                if self.date_format is None or len(self.date_format) == 0:
-                    msg = bundle.get("date_string_without_format").format(column)
-                    self.logger.warning(msg)
-                    raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
         target = df[self.TARGET_NAME]

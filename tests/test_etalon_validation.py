@@ -492,3 +492,33 @@ def test_time_cutoff_with_different_timezones():
     })
     expected_df = converter.convert(expected_df)
     assert_frame_equal(dataset, expected_df)
+
+
+def test_date_in_diff_formats():
+    expected_df = pd.DataFrame({"date": [1673481600000, 1676246400000, 1680220800000, None]})
+    expected_df.date = expected_df.date.astype("Int64")
+
+    df = pd.DataFrame({"date": ["12.01.23", "13.02.23", "31.03.23", "Date is not available"]})
+    converter = DateTimeSearchKeyConverter("date")
+    converted_df = converter.convert(df)
+    assert_frame_equal(converted_df, expected_df)
+
+    df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "03.31.23", "Date is not available"]})
+    converter = DateTimeSearchKeyConverter("date")
+    converted_df = converter.convert(df)
+    assert_frame_equal(converted_df, expected_df)
+
+    df = pd.DataFrame({"date": ["2023-01-12", "2023-02-13", "2023-03-31", "Date is not available"]})
+    converter = DateTimeSearchKeyConverter("date")
+    converted_df = converter.convert(df)
+    assert_frame_equal(converted_df, expected_df)
+
+    df = pd.DataFrame({"date": ["01.12.2023", "02.13.2023", "03.31.2023", "Date is not available"]})
+    converter = DateTimeSearchKeyConverter("date")
+    converted_df = converter.convert(df)
+    assert_frame_equal(converted_df, expected_df)
+
+    df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "13.13.23"]})
+    converter = DateTimeSearchKeyConverter("date")
+    with pytest.raises(Exception, match="Failed to parse date.*"):
+        converted_df = converter.convert(df)

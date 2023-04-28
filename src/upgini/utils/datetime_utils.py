@@ -10,6 +10,15 @@ import datetime
 from upgini.errors import ValidationError
 
 
+DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%d.%m.%y",
+    "%d.%m.%Y",
+    "%m.%d.%y",
+    "%m.%d.%Y"
+]
+
+
 class DateTimeSearchKeyConverter:
     def __init__(self, date_column: str, date_format: Optional[str] = None, logger: Optional[logging.Logger] = None):
         self.date_column = date_column
@@ -33,10 +42,8 @@ class DateTimeSearchKeyConverter:
         if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
         if is_string_dtype(df[self.date_column]):
-            try:
-                df[self.date_column] = pd.to_datetime(df[self.date_column], format=self.date_format)
-            except ValueError as e:
-                raise ValidationError(e)
+            df.loc[~df[self.date_column].str.match("^[\\d.-]+$"), self.date_column] = None
+            df[self.date_column] = self.parse_date(df)
         elif is_period_dtype(df[self.date_column]):
             df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
         elif is_numeric_dtype(df[self.date_column]):
@@ -69,6 +76,23 @@ class DateTimeSearchKeyConverter:
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 
         return df
+
+    def parse_date(self, df: pd.DataFrame):
+        if self.date_format is not None:
+            try:
+                return pd.to_datetime(df[self.date_column], format=self.date_format)
+            except ValueError as e:
+                raise ValidationError(e)
+        else:
+            for date_format in DATE_FORMATS:
+                try:
+                    return pd.to_datetime(df[self.date_column], format=date_format)
+                except ValueError:
+                    pass
+            raise ValidationError(
+                f"Failed to parse date in column `{self.date_column}`. "
+                "Try to pass explicit date format in date_format argument of FeaturesEnricher constructor"
+                )
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
