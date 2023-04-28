@@ -4,7 +4,7 @@ version: 2.1
 jobs:
   toxify:
     docker:
-      - image: fkrull/multi-python #mikicz/tox
+      - image: dhermes/python-multi #mikicz/tox
     parallelism: 1
 
     resource_class: medium
