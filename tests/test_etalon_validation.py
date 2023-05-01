@@ -63,9 +63,9 @@ def test_string_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
-    assert dataset["ip"].dtype == "Int64"
-    assert dataset["ip"].iloc[0] == 3232235777
-    assert dataset["ip"].isnull().sum() == 2
+    assert dataset.data["ip"].dtype == "Int64"
+    assert dataset.data["ip"].iloc[0] == 3232235777
+    assert dataset.data["ip"].isnull().sum() == 2
 
 
 def test_python_ip_to_int_conversion():
@@ -79,8 +79,8 @@ def test_python_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
-    assert dataset["ip"].dtype == "Int64"
-    assert dataset["ip"].iloc[0] == 3232235777
+    assert dataset.data["ip"].dtype == "Int64"
+    assert dataset.data["ip"].iloc[0] == 3232235777
 
 
 def test_int_ip_to_int_conversion():
@@ -94,7 +94,7 @@ def test_int_ip_to_int_conversion():
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
     dataset._Dataset__convert_ip()
-    assert dataset["ip"].iloc[0] == 3232235777
+    assert dataset.data["ip"].iloc[0] == 3232235777
 
 
 def test_string_date_to_timestamp_convertion():
@@ -205,9 +205,9 @@ def test_imbalanced_target():
     dataset.task_type = ModelTaskType.MULTICLASS
     dataset._Dataset__resample()
     assert len(dataset) == 400
-    value_counts = dataset["target"].value_counts()
+    value_counts = dataset.data["target"].value_counts()
     assert len(value_counts) == 4
-    for label in dataset["target"].unique():
+    for label in dataset.data["target"].unique():
         assert value_counts[label] == 100
 
 
@@ -258,9 +258,9 @@ def test_iso_code_normalization():
     dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {"iso_code": FileColumnMeaningType.COUNTRY}
     dataset._Dataset__normalize_iso_code()
-    assert dataset.loc[0, "iso_code"] == "RU"
-    assert dataset.loc[1, "iso_code"] == "GB"
-    assert dataset.loc[2, "iso_code"] == "GB"
+    assert dataset.data.loc[0, "iso_code"] == "RU"
+    assert dataset.data.loc[1, "iso_code"] == "GB"
+    assert dataset.data.loc[2, "iso_code"] == "GB"
 
 
 def test_postal_code_normalization():
@@ -268,8 +268,8 @@ def test_postal_code_normalization():
     dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
     dataset._Dataset__normalize_postal_code()
-    assert dataset.loc[0, "postal_code"] == "AB0123"
-    assert dataset.loc[1, "postal_code"] == "1233948"
+    assert dataset.data.loc[0, "postal_code"] == "AB0123"
+    assert dataset.data.loc[1, "postal_code"] == "1233948"
 
 
 def test_number_postal_code_normalization():
@@ -277,8 +277,8 @@ def test_number_postal_code_normalization():
     dataset = Dataset("test321", df=df)  # type: ignore
     dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
     dataset._Dataset__normalize_postal_code()
-    assert dataset.loc[0, "postal_code"] == "103305"
-    assert dataset.loc[1, "postal_code"] == "111222"
+    assert dataset.data.loc[0, "postal_code"] == "103305"
+    assert dataset.data.loc[1, "postal_code"] == "111222"
 
 
 def test_old_dates_drop():
@@ -458,38 +458,42 @@ def test_time_cutoff_from_timestamp():
 
 
 def test_time_cutoff_with_different_timezones():
-    df = pd.DataFrame({
-        "date": [
-            "2018-01-02 00:00:00+02:00",
-            "2021-05-26 00:00:00+03:00",
-            "2018-03-20 00:00:00+02:00",
-            "2018-01-29 00:00:00+02:00",
-            "2018-02-12 00:00:00+02:00",
-            "2018-10-02 00:00:00+03:00",
-            "2019-09-18 00:00:00+03:00",
-            "2022-03-09 00:00:00+02:00",
-            "2022-06-02 00:00:00+03:00",
-            "2021-09-27 00:00:00+03:00"
-        ]
-    })
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2018-01-02 00:00:00+02:00",
+                "2021-05-26 00:00:00+03:00",
+                "2018-03-20 00:00:00+02:00",
+                "2018-01-29 00:00:00+02:00",
+                "2018-02-12 00:00:00+02:00",
+                "2018-10-02 00:00:00+03:00",
+                "2019-09-18 00:00:00+03:00",
+                "2022-03-09 00:00:00+02:00",
+                "2022-06-02 00:00:00+03:00",
+                "2021-09-27 00:00:00+03:00",
+            ]
+        }
+    )
     df["date"] = pd.to_datetime(df["date"])
     converter = DateTimeSearchKeyConverter("date")
     dataset = converter.convert(df)
 
-    expected_df = pd.DataFrame({
-        "date": [
-            "2018-01-02",
-            "2021-05-26",
-            "2018-03-20",
-            "2018-01-29",
-            "2018-02-12",
-            "2018-10-02",
-            "2019-09-18",
-            "2022-03-09",
-            "2022-06-02",
-            "2021-09-27"
-        ]
-    })
+    expected_df = pd.DataFrame(
+        {
+            "date": [
+                "2018-01-02",
+                "2021-05-26",
+                "2018-03-20",
+                "2018-01-29",
+                "2018-02-12",
+                "2018-10-02",
+                "2019-09-18",
+                "2022-03-09",
+                "2022-06-02",
+                "2021-09-27",
+            ]
+        }
+    )
     expected_df = converter.convert(expected_df)
     assert_frame_equal(dataset, expected_df)
 
@@ -522,3 +526,50 @@ def test_date_in_diff_formats():
     converter = DateTimeSearchKeyConverter("date")
     with pytest.raises(Exception, match="Failed to parse date.*"):
         converted_df = converter.convert(df)
+
+
+def test_columns_renaming():
+    df1 = pd.DataFrame(
+        {
+            "date": ["2020-01-01"],
+            "feature1": [123],
+        }
+    )
+
+    df2 = pd.DataFrame(
+        {
+            "feature1": [123],
+        }
+    )
+
+    df = pd.concat([df1, df2], axis=1)
+
+    dataset = Dataset(
+        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)], endpoint="fake.url"
+    )
+    dataset._Dataset__rename_columns()
+    print(dataset)
+    assert set(dataset.data.columns.to_list()) == {"date_aa4bpw", "feature1_aa4bpw", "feature1_aa4bpw_0"}
+
+
+def test_too_long_columns():
+    too_long_column_name = "columnname" * 260
+    df = pd.DataFrame(
+        {
+            "date": ["2020-01-01"],
+            too_long_column_name: [123],
+        }
+    )
+
+    dataset = Dataset(
+        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)], endpoint="fake.url"
+    )
+    dataset._Dataset__rename_columns()
+    print(dataset)
+    assert set(dataset.data.columns.to_list()) == {
+        "date_aa4bpw",
+        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
+        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
+        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
+        "columnname_aa4bpw",
+    }

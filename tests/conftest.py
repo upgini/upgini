@@ -10,18 +10,18 @@ def etalon():
     d = 1577836800000
     data = pd.DataFrame(
         [
-            [d, 33333333, 0, 0.5],
-            [d, 33333333, 0, 0.5],
-            [d, 44444444, 1, None],
-            [d, 55555555, None, 0.5],
-            [d, 66666666, None, 0.5],
-            [None, 77777777, 1, 0.5],
-            [None, 88888888, 1, 0.5],
-            [d, 99999999, np.Inf, 0.5],
-            [d, 11111111, np.NaN, 0.5],
-            [None, None, None, None],
+            [0, d, 33333333, 0, 0.5],
+            [1, d, 33333333, 0, 0.5],
+            [2, d, 44444444, 1, None],
+            [3, d, 55555555, None, 0.5],
+            [4, d, 66666666, None, 0.5],
+            [5, None, 77777777, 1, 0.5],
+            [6, None, 88888888, 1, 0.5],
+            [7, d, 99999999, np.Inf, 0.5],
+            [8, d, 11111111, np.NaN, 0.5],
+            [9, None, None, None, None],
         ],
-        columns=["timestamp", "msisdn", "target", "score"],
+        columns=["system_record_id", "timestamp", "msisdn", "target", "score"],
     )
 
     definition = {

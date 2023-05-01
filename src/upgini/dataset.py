@@ -44,7 +44,7 @@ from upgini.utils.target_utils import correct_string_target
 from upgini.utils.warning_counter import WarningCounter
 
 
-class Dataset(pd.DataFrame):
+class Dataset:  # (pd.DataFrame):
     MIN_ROWS_COUNT = 100
     MAX_ROWS = 300_000
     FIT_SAMPLE_ROWS = 200_000
@@ -60,27 +60,27 @@ class Dataset(pd.DataFrame):
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
     MAX_STRING_FEATURE_LENGTH = 24573
 
-    _metadata = [
-        "dataset_name",
-        "description",
-        "meaning_types",
-        "search_keys",
-        "ignore_columns",
-        "hierarchical_group_keys",
-        "hierarchical_subgroup_keys",
-        "date_format",
-        "random_state",
-        "task_type",
-        "initial_data",
-        "file_upload_id",
-        "etalon_def",
-        "endpoint",
-        "api_key",
-        "columns_renaming",
-        "sampled",
-        "logger",
-        "warning_counter",
-    ]
+    # _metadata = [
+    #     "dataset_name",
+    #     "description",
+    #     "meaning_types",
+    #     "search_keys",
+    #     "ignore_columns",
+    #     "hierarchical_group_keys",
+    #     "hierarchical_subgroup_keys",
+    #     "date_format",
+    #     "random_state",
+    #     "task_type",
+    #     "initial_data",
+    #     "file_upload_id",
+    #     "etalon_def",
+    #     "endpoint",
+    #     "api_key",
+    #     "columns_renaming",
+    #     "sampled",
+    #     "logger",
+    #     "warning_counter",
+    # ]
 
     def __init__(
         self,
@@ -112,7 +112,7 @@ class Dataset(pd.DataFrame):
         else:
             raise ValueError(bundle.get("dataset_dataframe_or_path_empty"))
         if isinstance(data, pd.DataFrame):
-            super(Dataset, self).__init__(data)  # type: ignore
+            self.data = data
         elif isinstance(data, pd.io.parsers.TextFileReader):  # type: ignore
             raise ValueError(bundle.get("dataset_dataframe_iterator"))
         else:
@@ -126,7 +126,6 @@ class Dataset(pd.DataFrame):
         self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
-        self.initial_data = data.copy()
         self.file_upload_id: Optional[str] = None
         self.etalon_def: Optional[Dict[str, str]] = None
         self.endpoint = endpoint
@@ -140,6 +139,9 @@ class Dataset(pd.DataFrame):
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
         self.warning_counter = warning_counter or WarningCounter()
+
+    def __len__(self):
+        return len(self.data) if self.data is not None else None
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
@@ -165,11 +167,11 @@ class Dataset(pd.DataFrame):
         return self.etalon_def
 
     def __validate_min_rows_count(self):
-        if self.shape[0] < self.MIN_ROWS_COUNT:
+        if len(self.data) < self.MIN_ROWS_COUNT:
             raise ValidationError(bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
 
     def __validate_max_row_count(self):
-        if len(self) > self.MAX_ROWS:
+        if len(self.data) > self.MAX_ROWS:
             raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
 
     def __rename_columns(self):
@@ -177,9 +179,10 @@ class Dataset(pd.DataFrame):
         suffix = resolve_api_token(self.api_key)[:6]
         new_columns = []
         dup_counter = 0
-        for column in self.columns:
+        for column in self.data.columns:
             if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID]:
                 self.columns_renaming[column] = column
+                new_columns.append(column)
                 continue
 
             new_column = str(column)
@@ -208,7 +211,8 @@ class Dataset(pd.DataFrame):
                 dup_counter += 1
             new_columns.append(new_column)
 
-            self.rename(columns={column: new_column}, inplace=True)
+            # self.data.columns.values[col_idx] = new_column
+            # self.rename(columns={column: new_column}, inplace=True)
             self.meaning_types = {
                 (new_column if key == str(column) else key): value for key, value in self.meaning_types_checked.items()
             }
@@ -216,29 +220,30 @@ class Dataset(pd.DataFrame):
                 tuple(new_column if key == str(column) else key for key in keys) for keys in self.search_keys_checked
             ]
             self.columns_renaming[new_column] = str(column)
+        self.data.columns = new_columns
 
     def __validate_too_long_string_values(self):
-        """Check that string values less than 350 characters"""
+        """Check that string values less than maximum characters for LLM"""
         # self.logger.info("Validate too long string values")
-        for col in self.columns:
-            if is_string_dtype(self[col]):
-                max_length: int = self[col].astype("str").str.len().max()
+        for col in self.data.columns:
+            if is_string_dtype(self.data[col]):
+                max_length: int = self.data[col].astype("str").str.len().max()
                 if max_length > self.MAX_STRING_FEATURE_LENGTH:
-                    self[col] = self[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
+                    self.data[col] = self.data[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
 
     def __clean_duplicates(self, silent_mode: bool = False):
         """Clean DataSet from full duplicates."""
         # self.logger.info("Clean full duplicates")
-        nrows = len(self)
+        nrows = len(self.data)
         if nrows == 0:
             return
         # Remove absolute duplicates (exclude system_record_id)
-        unique_columns = self.columns.tolist()
+        unique_columns = self.data.columns.tolist()
         unique_columns.remove(SYSTEM_RECORD_ID)
-        self.logger.info(f"Dataset shape before clean duplicates: {self.shape}")
-        self.drop_duplicates(subset=unique_columns, inplace=True)
-        self.logger.info(f"Dataset shape after clean duplicates: {self.shape}")
-        nrows_after_full_dedup = len(self)
+        self.logger.info(f"Dataset shape before clean duplicates: {self.data.shape}")
+        self.data.drop_duplicates(subset=unique_columns, inplace=True)
+        self.logger.info(f"Dataset shape after clean duplicates: {self.data.shape}")
+        nrows_after_full_dedup = len(self.data)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
             msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
@@ -249,43 +254,44 @@ class Dataset(pd.DataFrame):
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if target_column is not None:
             unique_columns.remove(target_column)
-            marked_duplicates = self.duplicated(subset=unique_columns, keep=False)
+            marked_duplicates = self.data.duplicated(subset=unique_columns, keep=False)
             if marked_duplicates.sum() > 0:
-                dups_indices = self[marked_duplicates].index.to_list()
-                nrows_after_tgt_dedup = len(self.drop_duplicates(subset=unique_columns))
+                dups_indices = self.data[marked_duplicates].index.to_list()
+                nrows_after_tgt_dedup = len(self.data.drop_duplicates(subset=unique_columns))
                 num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
                 share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
 
                 msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
                 self.logger.warning(msg)
-                print(msg)
-                self.drop_duplicates(subset=unique_columns, keep=False, inplace=True)
-                self.logger.info(f"Dataset shape after clean invalid target duplicates: {self.shape}")
+                if not silent_mode:
+                    print(msg)
+                self.data.drop_duplicates(subset=unique_columns, keep=False, inplace=True)
+                self.logger.info(f"Dataset shape after clean invalid target duplicates: {self.data.shape}")
 
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
         # self.logger.info("Converting bool to int")
-        for col in self.columns:
-            if is_bool(self[col]):
-                self[col] = self[col].astype("Int64")
+        for col in self.data.columns:
+            if is_bool(self.data[col]):
+                self.data[col] = self.data[col].astype("Int64")
 
     def __convert_float16(self):
         """Convert float16 to float"""
         # self.logger.info("Converting float16 to float")
-        for col in self.columns:
-            if is_float_dtype(self[col]):
-                self[col] = self[col].astype("float64")
+        for col in self.data.columns:
+            if is_float_dtype(self.data[col]):
+                self.data[col] = self.data[col].astype("float64")
 
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
         # self.logger.info("Correct decimal commas")
-        tmp = self.head(10)
+        tmp = self.data.head(10)
         # all columns with sep="," will have dtype == 'object', i.e string
         # sep="." will be casted to numeric automatically
         cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
         for col in cls_to_check:
             if tmp[col].astype("string").str.match("^[0-9]+,[0-9]*$").any():
-                self[col] = self[col].astype("string").str.replace(",", ".").astype(np.float64)
+                self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
     def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
@@ -297,16 +303,16 @@ class Dataset(pd.DataFrame):
     def __convert_ip(self):
         """Convert ip address to int"""
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
-        if ip is not None and ip in self.columns:
+        if ip is not None and ip in self.data.columns:
             # self.logger.info("Convert ip address to int")
-            self[ip] = self[ip].apply(self.__ip_to_int).astype("Int64")
+            self.data[ip] = self.data[ip].apply(self.__ip_to_int).astype("Int64")
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
-        if iso_code is not None and iso_code in self.columns:
+        if iso_code is not None and iso_code in self.data.columns:
             # self.logger.info("Normalize iso code column")
-            self[iso_code] = (
-                self[iso_code]
+            self.data[iso_code] = (
+                self.data[iso_code]
                 .astype("string")
                 .str.upper()
                 .str.replace(r"[^A-Z]", "", regex=True)
@@ -315,14 +321,14 @@ class Dataset(pd.DataFrame):
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
-        if postal_code is not None and postal_code in self.columns:
+        if postal_code is not None and postal_code in self.data.columns:
             # self.logger.info("Normalize postal code")
 
-            if is_float_dtype(self[postal_code]):
-                self[postal_code] = self[postal_code].astype("Int64").astype("string")
+            if is_float_dtype(self.data[postal_code]):
+                self.data[postal_code] = self.data[postal_code].astype("Int64").astype("string")
 
-            self[postal_code] = (
-                self[postal_code]
+            self.data[postal_code] = (
+                self.data[postal_code]
                 .astype("string")
                 .str.upper()
                 .str.replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
@@ -334,12 +340,12 @@ class Dataset(pd.DataFrame):
             FileColumnMeaningType.DATETIME.value
         )
         if date_column is not None:
-            old_subset = self[self[date_column] < self.MIN_SUPPORTED_DATE_TS]
+            old_subset = self.data[self.data[date_column] < self.MIN_SUPPORTED_DATE_TS]
             if len(old_subset) > 0:
-                self.logger.info(f"df before dropping old rows: {self.shape}")
-                self.drop(index=old_subset.index, inplace=True)  # type: ignore
-                self.logger.info(f"df after dropping old rows: {self.shape}")
-                if len(self) == 0:
+                self.logger.info(f"df before dropping old rows: {self.data.shape}")
+                self.data.drop(index=old_subset.index, inplace=True)  # type: ignore
+                self.logger.info(f"df after dropping old rows: {self.data.shape}")
+                if len(self.data) == 0:
                     raise ValidationError(bundle.get("dataset_all_dates_old"))
                 else:
                     msg = bundle.get("dataset_drop_old_dates")
@@ -350,14 +356,14 @@ class Dataset(pd.DataFrame):
 
     def __drop_ignore_columns(self):
         """Drop ignore columns"""
-        columns_to_drop = list(set(self.columns) & set(self.ignore_columns))
+        columns_to_drop = list(set(self.data.columns) & set(self.ignore_columns))
         if len(columns_to_drop) > 0:
             # self.logger.info(f"Dropping ignore columns: {self.ignore_columns}")
-            self.drop(columns_to_drop, axis=1, inplace=True)
+            self.data.drop(columns_to_drop, axis=1, inplace=True)
 
     def __target_value(self) -> pd.Series:
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-        target: pd.Series = self[target_column]
+        target: pd.Series = self.data[target_column]
         # clean target from nulls
         target.dropna(inplace=True)
         if is_numeric_dtype(target):
@@ -370,7 +376,7 @@ class Dataset(pd.DataFrame):
     def __validate_target(self):
         # self.logger.info("Validating target")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-        target = self[target_column]
+        target = self.data[target_column]
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -387,21 +393,21 @@ class Dataset(pd.DataFrame):
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target):
                 try:
-                    target = self[target_column].astype("category").cat.codes
+                    target = self.data[target_column].astype("category").cat.codes
                 except Exception:
                     self.logger.exception("Failed to cast target to category codes for multiclass task type")
                     raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
-                    self[target_column] = self[target_column].astype("float")
+                    self.data[target_column] = self.data[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for regression task type")
                     raise ValidationError(bundle.get("dataset_invalid_regression_target").format(target.dtype))
         elif self.task_type == ModelTaskType.TIMESERIES:
             if not is_float_dtype(target):
                 try:
-                    self[target_column] = self[target_column].astype("float")
+                    self.data[target_column] = self.data[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for timeseries task type")
                     raise ValidationError(bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
@@ -409,10 +415,10 @@ class Dataset(pd.DataFrame):
     def __resample(self):
         # self.logger.info("Resampling etalon")
         # Resample imbalanced target. Only train segment (without eval_set)
-        if EVAL_SET_INDEX in self.columns:
-            train_segment = self[self[EVAL_SET_INDEX] == 0]
+        if EVAL_SET_INDEX in self.data.columns:
+            train_segment = self.data[self.data[EVAL_SET_INDEX] == 0]
         else:
-            train_segment = self
+            train_segment = self.data
 
         if self.task_type == ModelTaskType.MULTICLASS or (
             self.task_type == ModelTaskType.BINARY and len(train_segment) > self.MIN_SAMPLE_THRESHOLD
@@ -477,35 +483,35 @@ class Dataset(pd.DataFrame):
                     new_x, _ = sampler.fit_resample(X, target)  # type: ignore
                     resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
 
-                self._update_inplace(resampled_data)
-                self.logger.info(f"Shape after rebalance resampling: {self.shape}")
+                self.data = resampled_data
+                self.logger.info(f"Shape after rebalance resampling: {self.data.shape}")
                 self.imbalanced = True
 
         # Resample over fit threshold
-        if not self.imbalanced and EVAL_SET_INDEX in self.columns:
+        if not self.imbalanced and EVAL_SET_INDEX in self.data.columns:
             sample_threshold = self.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
             sample_rows = self.FIT_SAMPLE_WITH_EVAL_SET_ROWS
         else:
             sample_threshold = self.FIT_SAMPLE_THRESHOLD
             sample_rows = self.FIT_SAMPLE_ROWS
 
-        if len(self) > sample_threshold:
+        if len(self.data) > sample_threshold:
             self.logger.info(
-                f"Etalon has size {len(self)} more than threshold {sample_threshold} "
+                f"Etalon has size {len(self.data)} more than threshold {sample_threshold} "
                 f"and will be downsampled to {sample_rows}"
             )
             resampled_data = self.sample(n=sample_rows, random_state=self.random_state)
-            self._update_inplace(resampled_data)
-            self.logger.info(f"Shape after threshold resampling: {self.shape}")
+            self.data = resampled_data
+            self.logger.info(f"Shape after threshold resampling: {self.data.shape}")
 
     def __convert_phone(self):
         """Convert phone/msisdn to int"""
         # self.logger.info("Convert phone to int")
         msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
         country_column = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
-        if msisdn_column is not None and msisdn_column in self.columns:
-            normalizer = PhoneNormalizer(self, msisdn_column, country_column)
-            self[msisdn_column] = normalizer.normalize()
+        if msisdn_column is not None and msisdn_column in self.data.columns:
+            normalizer = PhoneNormalizer(self.data, msisdn_column, country_column)
+            self.data[msisdn_column] = normalizer.normalize()
 
     def __features(self):
         return [
@@ -517,9 +523,9 @@ class Dataset(pd.DataFrame):
 
         removed_features = []
         for f in self.__features():
-            if is_datetime(self[f]) or is_period_dtype(self[f]):
+            if is_datetime(self.data[f]) or is_period_dtype(self.data[f]):
                 removed_features.append(f)
-                self.drop(columns=f, inplace=True)
+                self.data.drop(columns=f, inplace=True)
                 del self.meaning_types_checked[f]
 
         if removed_features:
@@ -539,8 +545,8 @@ class Dataset(pd.DataFrame):
         # self.logger.info("Convert features to supported data types")
 
         for f in self.__features():
-            if not is_numeric_dtype(self[f]):
-                self[f] = self[f].astype("string")
+            if not is_numeric_dtype(self.data[f]):
+                self.data[f] = self.data[f].astype("string")
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
@@ -558,7 +564,7 @@ class Dataset(pd.DataFrame):
                 raise ValidationError(bundle.get("dataset_empty_target"))
 
             # if self.task_type != ModelTaskType.MULTICLASS:
-            #     self[target] = self[target].apply(pd.to_numeric, errors="coerce")
+            #     self.data[target] = self.data[target].apply(pd.to_numeric, errors="coerce")
 
         keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
         mandatory_columns = [target]
@@ -566,10 +572,10 @@ class Dataset(pd.DataFrame):
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
 
-        nrows = len(self)
+        nrows = len(self.data)
         validation_stats = {}
-        self["valid_keys"] = 0
-        self["valid_mandatory"] = True
+        self.data["valid_keys"] = 0
+        self.data["valid_mandatory"] = True
 
         all_valid_status = bundle.get("validation_all_valid_status")
         some_invalid_status = bundle.get("validation_some_invalid_status")
@@ -578,15 +584,15 @@ class Dataset(pd.DataFrame):
         invalid_message = bundle.get("validation_invalid_message")
 
         for col in columns_to_validate:
-            self[f"{col}_is_valid"] = ~self[col].isnull()
+            self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
             if validate_target and target is not None and col == target:
-                self.loc[self[target] == np.Inf, f"{col}_is_valid"] = False
+                self.data.loc[self.data[target] == np.Inf, f"{col}_is_valid"] = False
 
             if col in mandatory_columns:
-                self["valid_mandatory"] = self["valid_mandatory"] & self[f"{col}_is_valid"]
+                self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]
 
-            invalid_values = list(self.loc[self[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
-            valid_share = self[f"{col}_is_valid"].sum() / nrows
+            invalid_values = list(self.data.loc[self.data[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
+            valid_share = self.data[f"{col}_is_valid"].sum() / nrows
             original_col_name = self.columns_renaming[col]
             validation_stats[original_col_name] = {}
             if valid_share == 1:
@@ -602,16 +608,16 @@ class Dataset(pd.DataFrame):
             validation_stats[original_col_name]["valid_message"] = valid_message
 
             if col in keys_to_validate:
-                self["valid_keys"] = self["valid_keys"] + self[f"{col}_is_valid"]
-            self.drop(columns=f"{col}_is_valid", inplace=True)
+                self.data["valid_keys"] = self.data["valid_keys"] + self.data[f"{col}_is_valid"]
+            self.data.drop(columns=f"{col}_is_valid", inplace=True)
 
-        self["is_valid"] = self["valid_keys"] > 0
-        self["is_valid"] = self["is_valid"] & self["valid_mandatory"]
-        self.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
+        self.data["is_valid"] = self.data["valid_keys"] > 0
+        self.data["is_valid"] = self.data["is_valid"] & self.data["valid_mandatory"]
+        self.data.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
 
-        drop_idx = self[self["is_valid"] != 1].index  # type: ignore
-        self.drop(index=drop_idx, inplace=True)  # type: ignore
-        self.drop(columns=["is_valid"], inplace=True)
+        drop_idx = self.data[self.data["is_valid"] != 1].index  # type: ignore
+        self.data.drop(index=drop_idx, inplace=True)  # type: ignore
+        self.data.drop(columns=["is_valid"], inplace=True)
 
         if not silent_mode:
             df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
@@ -654,7 +660,7 @@ class Dataset(pd.DataFrame):
             except (ImportError, NameError):
                 print(df_stats)
 
-        if len(self) == 0:
+        if len(self.data) == 0:
             raise ValidationError(bundle.get("all_search_keys_invalid"))
 
     def __validate_meaning_types(self, validate_target: bool):
@@ -662,13 +668,12 @@ class Dataset(pd.DataFrame):
         if self.meaning_types is None or len(self.meaning_types) == 0:
             raise ValueError(bundle.get("dataset_missing_meaning_types"))
 
-        if SYSTEM_RECORD_ID not in self.columns:
-            self[SYSTEM_RECORD_ID] = self.apply(lambda row: hash(tuple(row)), axis=1)
-            self.meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+        if SYSTEM_RECORD_ID not in self.data.columns:
+            raise ValueError("Internal error")
 
         for column in self.meaning_types:
-            if column not in self.columns:
-                raise ValueError(bundle.get("dataset_missing_meaning_column").format(column, self.columns))
+            if column not in self.data.columns:
+                raise ValueError(bundle.get("dataset_missing_meaning_column").format(column, self.data.columns))
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
             raise ValueError(bundle.get("dataset_missing_target"))
 
@@ -678,8 +683,8 @@ class Dataset(pd.DataFrame):
             raise ValueError(bundle.get("dataset_missing_search_keys"))
         for keys_group in self.search_keys:
             for key in keys_group:
-                if key not in self.columns:
-                    showing_columns = set(self.columns) - SYSTEM_COLUMNS
+                if key not in self.data.columns:
+                    showing_columns = set(self.data.columns) - SYSTEM_COLUMNS
                     raise ValidationError(bundle.get("dataset_missing_search_key_column").format(key, showing_columns))
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
@@ -733,7 +738,7 @@ class Dataset(pd.DataFrame):
     def __construct_metadata(self, exclude_features_sources: Optional[List[str]] = None) -> FileMetadata:
         # self.logger.info("Constructing dataset metadata")
         columns = []
-        for index, (column_name, column_type) in enumerate(zip(self.columns, self.dtypes)):
+        for index, (column_name, column_type) in enumerate(zip(self.data.columns, self.data.dtypes)):
             if column_name not in self.ignore_columns:
                 if column_name in self.meaning_types_checked:
                     meaning_type = self.meaning_types_checked[column_name]
@@ -748,8 +753,8 @@ class Dataset(pd.DataFrame):
                     FileColumnMeaningType.IP_ADDRESS,
                 }:
                     min_max_values = NumericInterval(
-                        minValue=self[column_name].astype("Int64").min(),
-                        maxValue=self[column_name].astype("Int64").max(),
+                        minValue=self.data[column_name].astype("Int64").min(),
+                        maxValue=self.data[column_name].astype("Int64").max(),
                     )
                 else:
                     min_max_values = None
@@ -966,7 +971,7 @@ class Dataset(pd.DataFrame):
 
     def prepare_uploading_file(self, base_path: str) -> str:
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
-        self.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
+        self.data.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
