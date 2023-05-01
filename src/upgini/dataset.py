@@ -60,28 +60,6 @@ class Dataset:  # (pd.DataFrame):
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
     MAX_STRING_FEATURE_LENGTH = 24573
 
-    # _metadata = [
-    #     "dataset_name",
-    #     "description",
-    #     "meaning_types",
-    #     "search_keys",
-    #     "ignore_columns",
-    #     "hierarchical_group_keys",
-    #     "hierarchical_subgroup_keys",
-    #     "date_format",
-    #     "random_state",
-    #     "task_type",
-    #     "initial_data",
-    #     "file_upload_id",
-    #     "etalon_def",
-    #     "endpoint",
-    #     "api_key",
-    #     "columns_renaming",
-    #     "sampled",
-    #     "logger",
-    #     "warning_counter",
-    # ]
-
     def __init__(
         self,
         dataset_name: str,
@@ -142,6 +120,10 @@ class Dataset:  # (pd.DataFrame):
 
     def __len__(self):
         return len(self.data) if self.data is not None else None
+
+    @property
+    def columns(self):
+        return self.data.columns if self.data is not None else None
 
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
