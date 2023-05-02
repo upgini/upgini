@@ -2105,6 +2105,7 @@ def test_email_search_key(requests_mock: Mocker):
     ):
         self.validate()
         columns = self.columns.to_list()
+        print(columns)
         assert "email" not in columns
         assert "email_domain" in columns
         assert "hashed_email" in columns
