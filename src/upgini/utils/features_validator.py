@@ -28,7 +28,9 @@ class FeaturesValidator:
                 column = column.astype("string")
             value_counts = column.value_counts(dropna=False, normalize=True)
             most_frequent_percent = value_counts.iloc[0]
-            if most_frequent_percent >= 0.99:
+            if len(value_counts) == 1:
+                empty_or_constant_features.append(f)
+            elif most_frequent_percent >= 0.99:
                 if set(value_counts.index.to_list()) == {0, 1}:
                     one_hot_encoded_features.append(f)
                 else:
