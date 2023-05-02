@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
+from requests_mock import NoMockAddress
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
@@ -2344,37 +2345,44 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
     df = pd.DataFrame(
         {
-            "date": ["2021-01-01", "2021-01-01", "2023-01-01", "2023-01-01"],
-            "feature": [11, 11, 12, 13],
+            "date": ["2021-01-01", "2021-01-02", "2023-01-01", "2023-01-02"],
+            "feature": [11, 10, 12, 13],
             "target": [0, 1, 0, 1],
         }
     )
 
-    enricher.fit(
-        df.drop(columns="target"),
-        df["target"],
-        [(df.drop(columns="target"), df["target"])],
-        "unsupported_positional_argument",
-        unsupported_key_argument=False)
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+    Dataset.MIN_ROWS_COUNT = 3
+    try:
+        with pytest.raises(NoMockAddress):
+            enricher.fit(
+                df.drop(columns="target"),
+                df["target"],
+                [(df.drop(columns="target"), df["target"])],
+                "unsupported_positional_argument",
+                unsupported_key_argument=False)
 
-    enricher.fit_transform(
-        df.drop(columns="target"),
-        df["target"],
-        [(df.drop(columns="target"), df["target"])],
-        "unsupported_positional_argument",
-        unsupported_key_argument=False)
+        with pytest.raises(NoMockAddress):
+            enricher.fit_transform(
+                df.drop(columns="target"),
+                df["target"],
+                [(df.drop(columns="target"), df["target"])],
+                "unsupported_positional_argument",
+                unsupported_key_argument=False)
 
-    enricher.transform(
-        df.drop(columns="target"),
-        "unsupported_positional_argument",
-        unsupported_key_argument=False)
+        enricher.transform(
+            df.drop(columns="target"),
+            "unsupported_positional_argument",
+            unsupported_key_argument=False)
 
-    enricher.calculate_metrics(
-        df.drop(columns="target"),
-        df["target"],
-        [(df.drop(columns="target"), df["target"])],
-        "unsupported_positional_argument",
-        unsupported_key_argument=False)
+        enricher.calculate_metrics(
+            df.drop(columns="target"),
+            df["target"],
+            [(df.drop(columns="target"), df["target"])],
+            "unsupported_positional_argument",
+            unsupported_key_argument=False)
+    finally:
+        Dataset.MIN_ROWS_COUNT = original_min_rows
 
 
 class DataFrameWrapper:
