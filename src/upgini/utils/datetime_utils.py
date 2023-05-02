@@ -42,11 +42,14 @@ class DateTimeSearchKeyConverter:
 
     @staticmethod
     def clean_date(s: Optional[str]):
-        if s is None or len(s.strip()) == 0:
+        try:
+            if s is None or len(str(s).strip()) == 0:
+                return None
+            if not re.match(DATETIME_PATTERN, str(s)):
+                return None
+            return s
+        except Exception:
             return None
-        if not re.match(DATETIME_PATTERN, s):
-            return None
-        return s
 
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         if len(df) == 0:

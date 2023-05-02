@@ -2329,6 +2329,54 @@ def test_diff_target_dups(requests_mock: Mocker):
         Dataset.MIN_ROWS_COUNT = original_min_rows
 
 
+def test_unsupported_arguments(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        unsupported_argument="some_value"
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2021-01-01", "2023-01-01", "2023-01-01"],
+            "feature": [11, 11, 12, 13],
+            "target": [0, 1, 0, 1],
+        }
+    )
+
+    enricher.fit(
+        df.drop(columns="target"),
+        df["target"],
+        [(df.drop(columns="target"), df["target"])],
+        "unsupported_positional_argument",
+        unsupported_key_argument=False)
+
+    enricher.fit_transform(
+        df.drop(columns="target"),
+        df["target"],
+        [(df.drop(columns="target"), df["target"])],
+        "unsupported_positional_argument",
+        unsupported_key_argument=False)
+
+    enricher.transform(
+        df.drop(columns="target"),
+        "unsupported_positional_argument",
+        unsupported_key_argument=False)
+
+    enricher.calculate_metrics(
+        df.drop(columns="target"),
+        df["target"],
+        [(df.drop(columns="target"), df["target"])],
+        "unsupported_positional_argument",
+        unsupported_key_argument=False)
+
+
 class DataFrameWrapper:
     def __init__(self):
         self.df = None
