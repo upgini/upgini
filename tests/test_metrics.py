@@ -773,19 +773,22 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
-    df = pd.read_csv(os.path.join(FIXTURE_DIR, "input_with_cat.csv"))
+    df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input_with_cat.parquet"))
     df_train = df[0:500]
-    X = df_train[["phone", "feature1", "cat_feature2"]]
+    X = df_train[["phone", "country", "feature1", "cat_feature2"]]
     y = df_train["target"]
     eval_1 = df[500:750]
     eval_2 = df[750:1000]
-    eval_X_1 = eval_1[["phone", "feature1", "cat_feature2"]]
+    eval_X_1 = eval_1[["phone", "country", "feature1", "cat_feature2"]]
     eval_y_1 = eval_1["target"]
-    eval_X_2 = eval_2[["phone", "feature1", "cat_feature2"]]
+    eval_X_2 = eval_2[["phone", "country", "feature1", "cat_feature2"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
+        search_keys={"phone": SearchKey.PHONE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
     )
 
     assert enricher.calculate_metrics() is None
@@ -794,25 +797,25 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    estimator = CatBoostClassifier(random_seed=42, verbose=False, cat_features=[2])
+    estimator = CatBoostClassifier(random_seed=42, verbose=False, cat_features=[1, 3])
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
     assert metrics_df is not None
     print(metrics_df)
 
     assert metrics_df.loc[train_segment, rows_header] == 500
-    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.544209)
-    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.561991)
-    assert metrics_df.loc[train_segment, uplift] == approx(0.017782)
+    assert metrics_df.loc[train_segment, baseline_rocauc] == approx(0.526613)
+    assert metrics_df.loc[train_segment, enriched_rocauc] == approx(0.529911)
+    assert metrics_df.loc[train_segment, uplift] == approx(0.003298)
 
     assert metrics_df.loc[eval_1_segment, rows_header] == 250
-    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.470984)
-    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.511388)
-    assert metrics_df.loc[eval_1_segment, uplift] == approx(0.040404)
+    assert metrics_df.loc[eval_1_segment, baseline_rocauc] == approx(0.445772)
+    assert metrics_df.loc[eval_1_segment, enriched_rocauc] == approx(0.424637)
+    assert metrics_df.loc[eval_1_segment, uplift] == approx(-0.021136)
 
     assert metrics_df.loc[eval_2_segment, rows_header] == 250
-    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.493811)
-    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.476242)
-    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.017569)
+    assert metrics_df.loc[eval_2_segment, baseline_rocauc] == approx(0.484650)
+    assert metrics_df.loc[eval_2_segment, enriched_rocauc] == approx(0.483402)
+    assert metrics_df.loc[eval_2_segment, uplift] == approx(-0.001248)
 
 
 @pytest.mark.skip()

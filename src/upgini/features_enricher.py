@@ -1,3 +1,4 @@
+import gc
 import itertools
 import logging
 import numbers
@@ -9,7 +10,6 @@ import time
 import uuid
 import zlib
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-import gc
 
 import numpy as np
 import pandas as pd
@@ -674,6 +674,8 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link(msg)
                     return None
 
+                cat_features = None
+                search_keys_for_metrics = []
                 if (
                     estimator is not None
                     and hasattr(estimator, "get_param")
@@ -683,11 +685,22 @@ class FeaturesEnricher(TransformerMixin):
                     if len(cat_features) > 0 and isinstance(cat_features[0], int):
                         effectiveX = X or self.X
                         cat_features = [effectiveX.columns[i] for i in cat_features]
-                else:
-                    cat_features = None
+                        for cat_feature in cat_features:
+                            if cat_feature in self.search_keys:
+                                if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                                    search_keys_for_metrics.append(cat_feature)
+                                else:
+                                    raise ValidationError(bundle.get("cat_feature_search_key").format(cat_feature))
 
                 prepared_data = self._prepare_data_for_metrics(
-                    trace_id, X, y, eval_set, exclude_features_sources, importance_threshold, max_features
+                    trace_id,
+                    X,
+                    y,
+                    eval_set,
+                    exclude_features_sources,
+                    importance_threshold,
+                    max_features,
+                    search_keys_for_metrics,
                 )
                 if prepared_data is None:
                     return None
@@ -975,6 +988,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        search_keys_for_metrics: Optional[List[str]] = None,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         validated_X = self._validate_X(X)
@@ -1126,10 +1140,11 @@ class FeaturesEnricher(TransformerMixin):
 
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
+        excluding_search_keys = list(search_keys.keys())
+        if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
+            excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
         client_features = [
-            c
-            for c in X_sampled.columns.to_list()
-            if c not in (list(search_keys.keys()) + list(self.fit_dropped_features))
+            c for c in X_sampled.columns.to_list() if c not in (excluding_search_keys + list(self.fit_dropped_features))
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
@@ -1799,7 +1814,6 @@ class FeaturesEnricher(TransformerMixin):
                 return df[:10]
 
         def print_datasets_sample():
-
             self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{sample(X)}")
             if y is not None:
                 self.logger.info(f"First 10 rows of the y with shape {_num_samples(y)}:\n{sample(y)}")
