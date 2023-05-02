@@ -1,14 +1,17 @@
 import os
+import sys
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
+from requests_mock import NoMockAddress
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.dataset import Dataset
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -188,6 +191,123 @@ def test_features_enricher(requests_mock: Mocker):
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+    print(enricher.features_info)
+
+    assert enricher.feature_names_ == ["feature"]
+    assert enricher.feature_importances_ == [10.1]
+    assert len(enricher.features_info) == 1
+    first_feature_info = enricher.features_info.iloc[0]
+    assert first_feature_info[feature_name_header] == "feature"
+    assert first_feature_info[shap_value_header] == 10.1
+
+
+def test_saved_features_enricher(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    pd.set_option("display.max_columns", 1000)
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    # mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        search_id=search_task_id,
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.transform(
+        train_features,
+    )
+    print(enriched_train_features)
+    assert enriched_train_features.shape == (10000, 3)
+
+    metrics = enricher.calculate_metrics(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+    )
+    expected_metrics = (
+        pd.DataFrame(
+            {
+                "segment": [train_segment, eval_1_segment, eval_2_segment],
+                rows_header: [10000, 1000, 1000],
+                enriched_rocauc: [0.492445, 0.508839, 0.504146],
+            }
+        )
+        .set_index("segment")
+        .rename_axis("")
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    if sys.version[0:3] == "3.7":
+        assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
@@ -854,6 +974,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=5319, max_hit_count=5266, hit_rate=0.99, hit_rate_percent=99.0
             ),
+            features_used_for_embeddings=["cos_3_freq_w_sun_"],
         ),
     )
     path_to_mock_features = os.path.join(
@@ -887,7 +1008,6 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             {
                 "segment": [train_segment],
                 rows_header: [5319],
-                # match_rate_header: [99.0],
                 baseline_rocauc: [0.501952],
                 enriched_rocauc: [0.504399],
                 uplift: [0.002448],
@@ -904,19 +1024,69 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
+    features_info = enricher.get_features_info()
+    print(features_info)
 
     assert enricher.feature_names_ == ["f_feature123"]
     assert enricher.feature_importances_ == [0.9]
-    assert len(enricher.features_info) == 2
-    first_feature_info = enricher.features_info.iloc[0]
+    assert len(features_info) == 2
+    first_feature_info = features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "f_feature123"
     assert first_feature_info[shap_value_header] == 0.9
     assert first_feature_info[hitrate_header] == 99.0
-    second_feature_info = enricher.features_info.iloc[1]
+    second_feature_info = features_info.iloc[1]
     assert second_feature_info[feature_name_header] == "cos(3,freq=W-SUN)"
     assert second_feature_info[shap_value_header] == 0.1
     assert second_feature_info[hitrate_header] == 100.0
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    original_validation = Dataset.validation
+
+    def wrapped_validation(
+        self,
+        trace_id: str,
+        initial_search_task_id: str,
+        return_scores: bool = True,
+        extract_features: bool = False,
+        runtime_parameters: Optional[RuntimeParameters] = None,
+        exclude_features_sources: Optional[List[str]] = None,
+        metrics_calculation: bool = False,
+        silent_mode: bool = False,
+    ):
+        assert "cos(3,freq=W-SUN)" in self.data.columns
+        assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun_"
+        return original_validation(
+            self,
+            trace_id,
+            initial_search_task_id,
+            return_scores,
+            extract_features,
+            runtime_parameters,
+            exclude_features_sources,
+            metrics_calculation,
+            silent_mode,
+        )
+
+    Dataset.validation = wrapped_validation
+
+    try:
+        transformed = enricher.transform(train_features)
+        print(transformed)
+    finally:
+        Dataset.validation = original_validation
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
@@ -1163,38 +1333,9 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
 
-    # assert enricher.enriched_X is not None
-    # assert len(enricher.enriched_X) == 10000
-    # assert enricher.enriched_X.columns.to_list() == ["SystemRecordId_473310000", "phone_num", "rep_date"]
-    # assert enricher.enriched_eval_set is not None
-    # assert len(enricher.enriched_eval_set) == 2000
-    # assert enricher.enriched_eval_set.columns.to_list() == [
-    #     "SystemRecordId_473310000",
-    #     "phone_num",
-    #     "rep_date",
-    #     "eval_set_index"
-    # ]
-
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
 
-    # expected_metrics = (
-    #     pd.DataFrame(
-    #         {
-    #             "segment": [train_segment, eval_1_segment, eval_2_segment],
-    #             rows_header: [10000, 1000, 1000],
-    #             baseline_rocauc: [0.5, 0.5, 0.5],
-    #         }
-    #     )
-    #     .set_index("segment")
-    #     .rename_axis("")
-    # )
-    # print("Expected metrics: ")
-    # print(expected_metrics)
-    # print("Actual metrics: ")
-    # print(metrics)
-
     assert metrics is None
-    # assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_summary(
@@ -1791,6 +1932,74 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
         _RestClient.initial_search_v2 = original_initial_search
 
 
+def test_imbalanced_dataset(requests_mock: Mocker):
+    pd.set_option("display.max_columns", 1000)
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="ads_feature", type="numeric", source="ads", hit_rate=100.0, shap_value=0.9),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=8000, max_hit_count=8000, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+            eval_set_metrics=[],
+        ),
+    )
+    path_to_mock_features = os.path.join(base_dir, "test_data/binary/features_imbalanced.parquet")
+
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
+    train_df = pd.read_parquet(train_path)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+
+    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+    )
+
+    try:
+        enricher.fit(train_features, train_target, calculate_metrics=False)
+
+        metrics = enricher.calculate_metrics()
+
+        print(metrics)
+
+        assert metrics.loc["Train", "Rows"] == 8000
+        assert metrics.loc["Train", "Enriched roc_auc"] == 0.5
+    finally:
+        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+
+
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
@@ -1806,8 +2015,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
     initial_eval1_df = pd.read_parquet(eval1_path)
     initial_eval2_df = pd.read_parquet(eval2_path)
 
-    from upgini.dataset import Dataset
-
+    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
     Dataset.MIN_SAMPLE_THRESHOLD = 7_000
 
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
@@ -1873,6 +2081,308 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
             test(i)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
+        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+
+
+def test_email_search_key(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"email": SearchKey.EMAIL},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame({"email": ["test1@gmail.com", "test2@mail.com", "test3@yahoo.com"], "target": [0, 1, 0]})
+    original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        columns = self.columns.to_list()
+        print(columns)
+        assert "email_fake_a" not in columns
+        assert "email_domain_fake_a" in columns
+        assert "hashed_email_fake_a" in columns
+        assert "email_one_domain_fake_a" in columns
+        assert {"hashed_email_fake_a", "email_one_domain_fake_a"} == {
+            sk for sublist in self.search_keys for sk in sublist
+        }
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
+
+
+def test_composit_index_search_key(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"country": SearchKey.COUNTRY, "postal_code": SearchKey.POSTAL_CODE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {"country": ["GB", "EC", "US"], "postal_code": ["103305", "504938", "293049"], "target": [0, 1, 0]}
+    )
+    df.set_index(["country", "postal_code"])
+    original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        assert "country_fake_a" in self.columns
+        assert "postal_code_fake_a" in self.columns
+        assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
+
+
+def test_search_keys_autodetection(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {
+            "country": ["EC", "GB", "US"],
+            "postal_code": ["103305", "504938", "293049"],
+            "phone": ["9992223311", "28376283746", "283764736"],
+            "eml": ["test@mail.ru", "test2@gmail.com", "test3@yahoo.com"],
+            "date": ["2021-01-01", "2022-01-01", "2023-01-01"],
+            "target": [0, 1, 0],
+        }
+    )
+    original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        columns = self.columns.to_list()
+        assert "eml_fake_a" not in columns
+        assert "email_domain_fake_a" in columns
+        assert {
+            "country_fake_a",
+            "postal_code_fake_a",
+            "phone_fake_a",
+            "hashed_email_fake_a",
+            "email_one_domain_fake_a",
+            "date_fake_a",
+        } == {sk for sublist in self.search_keys for sk in sublist}
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
+
+
+def test_numbers_with_comma(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2022-01-01", "2023-01-01"],
+            "feature": ["12,5", "34,2", "45,7"],
+            "target": [0, 1, 0],
+        }
+    )
+    original_search = Dataset.search
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        assert self.data["feature_fake_a"].dtype == "float64"
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_rows
+
+
+def test_diff_target_dups(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2021-01-01", "2023-01-01", "2023-01-01"],
+            "feature": [11, 11, 12, 13],
+            "target": [0, 1, 0, 1],
+        }
+    )
+    original_search = Dataset.search
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        assert len(self.data) == 2
+        print(self.data)
+        assert self.data.loc[2, "date_fake_a"] == 1672531200000
+        assert self.data.loc[2, "feature_fake_a"] == 12
+        assert self.data.loc[2, "target"] == 0
+        assert self.data.loc[3, "date_fake_a"] == 1672531200000
+        assert self.data.loc[3, "feature_fake_a"] == 13
+        assert self.data.loc[3, "target"] == 1
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_rows
+
+
+def test_unsupported_arguments(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        unsupported_argument="some_value"
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2021-01-02", "2023-01-01", "2023-01-02"],
+            "feature": [11, 10, 12, 13],
+            "target": [0, 1, 0, 1],
+        }
+    )
+
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+    Dataset.MIN_ROWS_COUNT = 3
+    try:
+        with pytest.raises(NoMockAddress):
+            enricher.fit(
+                df.drop(columns="target"),
+                df["target"],
+                [(df.drop(columns="target"), df["target"])],
+                "unsupported_positional_argument",
+                unsupported_key_argument=False)
+
+        with pytest.raises(NoMockAddress):
+            enricher.fit_transform(
+                df.drop(columns="target"),
+                df["target"],
+                [(df.drop(columns="target"), df["target"])],
+                "unsupported_positional_argument",
+                unsupported_key_argument=False)
+
+        enricher.transform(
+            df.drop(columns="target"),
+            "unsupported_positional_argument",
+            unsupported_key_argument=False)
+
+        enricher.calculate_metrics(
+            df.drop(columns="target"),
+            df["target"],
+            [(df.drop(columns="target"), df["target"])],
+            "unsupported_positional_argument",
+            unsupported_key_argument=False)
+    finally:
+        Dataset.MIN_ROWS_COUNT = original_min_rows
 
 
 class DataFrameWrapper:

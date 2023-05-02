@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Optional
 
 import numpy as np
@@ -8,6 +9,17 @@ from dateutil.relativedelta import relativedelta
 import datetime
 
 from upgini.errors import ValidationError
+
+
+DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%d.%m.%y",
+    "%d.%m.%Y",
+    "%m.%d.%y",
+    "%m.%d.%Y"
+]
+
+DATETIME_PATTERN = r"^[\d\s\.\-:]+$"
 
 
 class DateTimeSearchKeyConverter:
@@ -28,15 +40,29 @@ class DateTimeSearchKeyConverter:
         else:
             return i
 
+    @staticmethod
+    def clean_date(s: Optional[str]):
+        try:
+            if s is None or len(str(s).strip()) == 0:
+                return None
+            if not re.match(DATETIME_PATTERN, str(s)):
+                return None
+            return s
+        except Exception:
+            return None
+
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
+        if len(df) == 0:
+            return df
+
         df = df.copy()
         if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
-        if is_string_dtype(df[self.date_column]):
-            try:
-                df[self.date_column] = pd.to_datetime(df[self.date_column], format=self.date_format)
-            except ValueError as e:
-                raise ValidationError(e)
+        elif isinstance(df[self.date_column].values[0], datetime.date):
+            df[self.date_column] = pd.to_datetime(df[self.date_column])
+        elif is_string_dtype(df[self.date_column]):
+            df[self.date_column] = df[self.date_column].apply(self.clean_date)
+            df[self.date_column] = self.parse_date(df)
         elif is_period_dtype(df[self.date_column]):
             df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
         elif is_numeric_dtype(df[self.date_column]):
@@ -69,6 +95,23 @@ class DateTimeSearchKeyConverter:
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 
         return df
+
+    def parse_date(self, df: pd.DataFrame):
+        if self.date_format is not None:
+            try:
+                return pd.to_datetime(df[self.date_column], format=self.date_format)
+            except ValueError as e:
+                raise ValidationError(e)
+        else:
+            for date_format in DATE_FORMATS:
+                try:
+                    return pd.to_datetime(df[self.date_column], format=date_format)
+                except ValueError:
+                    pass
+            raise ValidationError(
+                f"Failed to parse date in column `{self.date_column}`. "
+                "Try to pass explicit date format in date_format argument of FeaturesEnricher constructor"
+                )
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:

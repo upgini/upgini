@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
+from upgini.resource_bundle import bundle
 
 from upgini.metadata import SearchKey
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
@@ -72,6 +73,10 @@ class EmailSearchKeyConverter:
         df = df.copy()
         if self.hem_column is None:
             df[self.HEM_COLUMN_NAME] = df[self.email_column].apply(self._email_to_hem)
+            if df[self.HEM_COLUMN_NAME].isna().all():
+                msg = bundle.get("all_emails_invalid").format(self.email_column)
+                print(msg)
+                self.logger.warning(msg)
             self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
             self.email_converted_to_hem = True
 

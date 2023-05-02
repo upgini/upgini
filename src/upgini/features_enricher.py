@@ -120,7 +120,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __init__(
         self,
-        search_keys: Dict[str, SearchKey],
+        search_keys: Optional[Dict[str, SearchKey]] = None,
         country_code: Optional[str] = None,
         model_task_type: Optional[ModelTaskType] = None,
         api_key: Optional[str] = None,
@@ -157,7 +157,7 @@ class FeaturesEnricher(TransformerMixin):
 
         validate_version(self.logger)
 
-        self.search_keys = search_keys
+        self.search_keys = search_keys or dict()
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
         self.model_task_type = model_task_type
@@ -281,11 +281,11 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
-                msg = f"WARNING: Unsupported positional arguments: {args}"
+                msg = f"WARNING: Unsupported positional arguments for fit: {args}"
                 self.logger.warning(msg)
                 print(msg)
             if len(kwargs) > 0:
-                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                msg = f"WARNING: Unsupported named arguments for fit: {kwargs}"
                 self.logger.warning(msg)
                 print(msg)
 
@@ -395,11 +395,11 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
-                msg = f"WARNING: Unsupported positional arguments: {args}"
+                msg = f"WARNING: Unsupported positional arguments for fit_transform: {args}"
                 self.logger.warning(msg)
                 print(msg)
             if len(kwargs) > 0:
-                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                msg = f"WARNING: Unsupported named arguments for fit_transform: {kwargs}"
                 self.logger.warning(msg)
                 print(msg)
 
@@ -509,11 +509,11 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
-                msg = f"WARNING: Unsupported positional arguments: {args}"
+                msg = f"WARNING: Unsupported positional arguments for transform: {args}"
                 self.logger.warning(msg)
                 print(msg)
             if len(kwargs) > 0:
-                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                msg = f"WARNING: Unsupported named arguments for transform: {kwargs}"
                 self.logger.warning(msg)
                 print(msg)
 
@@ -639,11 +639,11 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
-                msg = f"WARNING: Unsupported positional arguments: {args}"
+                msg = f"WARNING: Unsupported positional arguments for calculate_metrics: {args}"
                 self.logger.warning(msg)
                 print(msg)
             if len(kwargs) > 0:
-                msg = f"WARNING: Unsupported named arguments: {kwargs}"
+                msg = f"WARNING: Unsupported named arguments for calculate_metrics: {kwargs}"
                 self.logger.warning(msg)
                 print(msg)
 
@@ -658,7 +658,8 @@ class FeaturesEnricher(TransformerMixin):
 
                 if (
                     self._search_task is None
-                    or self._search_task.initial_max_hit_rate_v2() is None
+                    or self._search_task.provider_metadata_v2 is None
+                    or len(self._search_task.provider_metadata_v2) == 0
                     or (self.X is None and X is None)
                     or (self.y is None and y is None)
                 ):
@@ -988,6 +989,18 @@ class FeaturesEnricher(TransformerMixin):
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
             if exclude_features_sources:
                 enriched_X = enriched_X.drop(columns=[c for c in exclude_features_sources if c in enriched_X.columns])
+        elif len(self.feature_importances_) == 0:
+            self.logger.info("No external features selected. So use only input datasets for metrics calculation")
+            X_sampled, search_keys = self._extend_x(validated_X)
+            y_sampled = validated_y
+            enriched_X = validated_X
+            if eval_set is not None:
+                for idx in range(len(eval_set)):
+                    eval_X_sampled, _ = self._extend_x(eval_set[idx + 1][0])
+                    eval_y_sampled = eval_set[idx + 1][1]
+                    enriched_eval_X = eval_X_sampled
+                    eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+            self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
         elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             search_keys = self.fit_search_keys
@@ -1216,7 +1229,6 @@ class FeaturesEnricher(TransformerMixin):
                 df.drop(columns=DEFAULT_INDEX, inplace=True)
                 validated_X.drop(columns=DEFAULT_INDEX, inplace=True)
 
-            self.__check_string_dates(validated_X, search_keys)
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
@@ -1440,8 +1452,6 @@ class FeaturesEnricher(TransformerMixin):
         df = pd.concat([validated_X, validated_y], axis=1)
 
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
-
-        self.__check_string_dates(df, self.fit_search_keys)
 
         df = self.__correct_target(df)
 
@@ -1745,7 +1755,10 @@ class FeaturesEnricher(TransformerMixin):
                 sort_columns.append(search_keys_hash)
                 Xy[search_keys_hash] = [hash_row(row) for row in Xy[sorted(other_search_keys)].values]
 
-            Xy = Xy.sort_values(by=sort_columns).reset_index(drop=True)
+            if len(sort_columns) > 0:
+                Xy = Xy.sort_values(by=sort_columns).reset_index(drop=True)
+            else:
+                Xy = Xy.sort_index()
 
             drop_columns = [TARGET]
             if search_keys_hash in Xy.columns:
@@ -1871,14 +1884,6 @@ class FeaturesEnricher(TransformerMixin):
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
-
-    def __check_string_dates(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]):
-        for column, search_key in search_keys.items():
-            if search_key in [SearchKey.DATE, SearchKey.DATETIME] and is_string_dtype(df[column]):
-                if self.date_format is None or len(self.date_format) == 0:
-                    msg = bundle.get("date_string_without_format").format(column)
-                    self.logger.warning(msg)
-                    raise ValidationError(msg)
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
         target = df[self.TARGET_NAME]

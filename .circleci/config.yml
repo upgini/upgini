@@ -4,13 +4,13 @@ version: 2.1
 jobs:
   toxify:
     docker:
-      - image: mikicz/tox
+      - image: dhermes/python-multi #mikicz/tox
     parallelism: 1
 
     resource_class: medium
 
     # working_directory: /mnt/ramdisk
-    working_directory: ~/upgini
+    working_directory: /root/upgini
 
     steps:
       - checkout
@@ -34,6 +34,7 @@ jobs:
       #       pip3 install --upgrade pip
       #       sudo apt upgrade && sudo apt update
       #       sudo apt install tox
+      - run: pip install tox
       - run:
           no_output_timeout: 60m
           name: Run tox

@@ -29,6 +29,7 @@ def etalon_search_keys():
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
 def test_categorical_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
+    df = df.reset_index().rename(columns={"index": "system_record_id"})
     converter = DateTimeSearchKeyConverter("rep_date")
     df = converter.convert(df)
     ds = Dataset(

@@ -27,6 +27,7 @@ class ListingType(Enum):
 class DataSourcePublisher:
 
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
+    DEFAULT_GENERATE_EMBEDDINGS = []
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):
         self._rest_client = get_rest_client(endpoint, api_key)
@@ -45,7 +46,7 @@ class DataSourcePublisher:
         exclude_columns: Optional[List[str]] = None,
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
-        features_for_embeddings: Optional[List[str]] = None,
+        features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
     ) -> str:
         trace_id = str(uuid.uuid4())
 
