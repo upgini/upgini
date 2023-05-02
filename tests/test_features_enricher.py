@@ -2097,6 +2097,7 @@ def test_email_search_key(requests_mock: Mocker):
 
     df = pd.DataFrame({"email": ["test1@gmail.com", "test2@mail.com", "test3@yahoo.com"], "target": [0, 1, 0]})
     original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
 
     def mock_search(
         self,
@@ -2106,14 +2107,17 @@ def test_email_search_key(requests_mock: Mocker):
         self.validate()
         columns = self.columns.to_list()
         print(columns)
-        assert "email" not in columns
-        assert "email_domain" in columns
-        assert "hashed_email" in columns
-        assert "email_one_domain" in columns
-        assert {"hashed_email", "email_one_domain"} == {sk for sublist in self.search_keys for sk in sublist}
+        assert "email_fake_a" not in columns
+        assert "email_domain_fake_a" in columns
+        assert "hashed_email_fake_a" in columns
+        assert "email_one_domain_fake_a" in columns
+        assert {"hashed_email_fake_a", "email_one_domain_fake_a"} == {
+            sk for sublist in self.search_keys for sk in sublist
+        }
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
@@ -2123,6 +2127,7 @@ def test_email_search_key(requests_mock: Mocker):
         assert e.args[0] == bundle.get("missing_features_meta")
     finally:
         Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
 
 
 def test_composit_index_search_key(requests_mock: Mocker):
@@ -2142,6 +2147,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
     )
     df.set_index(["country", "postal_code"])
     original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
 
     def mock_search(
         self,
@@ -2155,6 +2161,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
@@ -2164,6 +2171,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         assert e.args[0] == bundle.get("missing_features_meta")
     finally:
         Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
 
 
 def test_search_keys_autodetection(requests_mock: Mocker):
@@ -2189,6 +2197,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         }
     )
     original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
 
     def mock_search(
         self,
@@ -2197,14 +2206,20 @@ def test_search_keys_autodetection(requests_mock: Mocker):
     ):
         self.validate()
         columns = self.columns.to_list()
-        assert "eml" not in columns
-        assert "email_domain" in columns
-        assert {"country", "postal_code", "phone", "hashed_email", "email_one_domain", "date"} == {
-            sk for sublist in self.search_keys for sk in sublist
-        }
+        assert "eml_fake_a" not in columns
+        assert "email_domain_fake_a" in columns
+        assert {
+            "country_fake_a",
+            "postal_code_fake_a",
+            "phone_fake_a",
+            "hashed_email_fake_a",
+            "email_one_domain_fake_a",
+            "date_fake_a",
+        } == {sk for sublist in self.search_keys for sk in sublist}
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
@@ -2214,6 +2229,104 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         assert e.args[0] == bundle.get("missing_features_meta")
     finally:
         Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
+
+
+def test_numbers_with_comma(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2022-01-01", "2023-01-01"],
+            "feature": ["12,5", "34,2", "45,7"],
+            "target": [0, 1, 0],
+        }
+    )
+    original_search = Dataset.search
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        assert self.data["feature_fake_a"].dtype == "float64"
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_rows
+
+
+def test_diff_target_dups(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": ["2021-01-01", "2021-01-01", "2023-01-01", "2023-01-01"],
+            "feature": [11, 11, 12, 13],
+            "target": [0, 1, 0, 1],
+        }
+    )
+    original_search = Dataset.search
+    original_min_rows = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(
+        self,
+        *args,
+        **kwargs,
+    ):
+        self.validate()
+        assert len(self.data) == 2
+        print(self.data)
+        assert self.data.loc[2, "date_fake_a"] == 1672531200000
+        assert self.data.loc[2, "feature_fake_a"] == 12
+        assert self.data.loc[2, "target"] == 0
+        assert self.data.loc[3, "date_fake_a"] == 1672531200000
+        assert self.data.loc[3, "feature_fake_a"] == 13
+        assert self.data.loc[3, "target"] == 1
+        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+    except AssertionError:
+        raise
+    except Exception as e:
+        assert e.args[0] == bundle.get("missing_features_meta")
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_rows
 
 
 class DataFrameWrapper:

@@ -203,6 +203,7 @@ class Dataset:  # (pd.DataFrame):
             ]
             self.columns_renaming[new_column] = str(column)
         self.data.columns = new_columns
+        self.etalon_def = None
 
     def __validate_too_long_string_values(self):
         """Check that string values less than maximum characters for LLM"""
