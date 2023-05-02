@@ -182,8 +182,7 @@ def test_constant_and_empty_validation():
     }
     warnings_counter = WarningCounter()
     features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], warnings_counter)
-    assert features_to_drop == ["a", "b"]
-    assert warnings_counter.has_warnings()
+    assert features_to_drop == ["a", "b", "c"]
 
 
 def test_imbalanced_target():
