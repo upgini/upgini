@@ -19,3 +19,5 @@ pytest-datafiles
 pytest-timeout
 requests-mock
 unittest-xml-reporting
+pytest-parallel
+py

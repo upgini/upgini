@@ -6,7 +6,7 @@ import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype, is_string_dtype, is_integer_dtype
 from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
 from sklearn.metrics._regression import (
     _check_reg_targets,
@@ -81,6 +81,15 @@ class EstimatorWrapper:
                 X[c] = X[c].astype(float)
             else:
                 X[c] = X[c].astype(str)
+
+        # Remove high cardinality columns
+        row_count = X.shape[0]
+        columns_cardinality = [
+            i
+            for i in X
+            if (is_string_dtype(X[i]) or is_integer_dtype(X[i])) and (X[i].nunique() / row_count >= 0.9)
+        ]
+        X = X.drop(columns=columns_cardinality)
 
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
