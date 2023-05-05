@@ -2464,8 +2464,10 @@ def is_frames_equal(first, second) -> bool:
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
-    else:
+    elif type(first) == type(second):
         return first == second
+    else:
+        raise ValidationError(bundle.get("x_and_eval_x_diff_types").format(type(first), type(second)))
 
 
 def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
