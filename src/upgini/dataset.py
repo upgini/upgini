@@ -483,7 +483,7 @@ class Dataset:  # (pd.DataFrame):
                 f"Etalon has size {len(self.data)} more than threshold {sample_threshold} "
                 f"and will be downsampled to {sample_rows}"
             )
-            resampled_data = self.sample(n=sample_rows, random_state=self.random_state)
+            resampled_data = self.data.sample(n=sample_rows, random_state=self.random_state)
             self.data = resampled_data
             self.logger.info(f"Shape after threshold resampling: {self.data.shape}")
 

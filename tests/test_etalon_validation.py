@@ -572,3 +572,93 @@ def test_too_long_columns():
         "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
         "columnname_aa4bpw",
     }
+
+
+def test_downsampling_binary():
+    df = pd.DataFrame(
+        {
+            "system_record_id": [0, 1, 2, 3, 4, 5],
+            "date": [1673481600000, 1673481700000, 1673481800000, 1673481900000, 1673482000000, 1673482100000],
+            "feature1": [123, 321, 456, 654, 987, 474],
+            "target": [0, 0, 0, 1, 0, 1],
+            "eval_set_index": [0, 0, 0, 0, 1, 1],
+        }
+    )
+
+    meaning_types = {
+        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
+        "date": FileColumnMeaningType.DATE,
+        "feature1": FileColumnMeaningType.FEATURE,
+        "target": FileColumnMeaningType.TARGET,
+        "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
+    }
+    dataset = Dataset(
+        "tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url"
+    )
+    dataset.task_type = ModelTaskType.BINARY
+
+    old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
+    old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
+    old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
+    old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
+    Dataset.MIN_SAMPLE_THRESHOLD = 3
+    Dataset.MIN_TARGET_CLASS_ROWS = 1
+    Dataset.IMBALANCE_THESHOLD = 0.6
+    Dataset.FIT_SAMPLE_THRESHOLD = 1
+    Dataset.FIT_SAMPLE_ROWS = 1
+
+    try:
+        dataset._Dataset__resample()
+        assert len(dataset.data) == 1
+    finally:
+        Dataset.MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
+        Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
+        Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
+        Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
+        Dataset.FIT_SAMPLE_ROWS = old_fit_sample_rows
+
+
+def test_downsampling_multiclass():
+    df = pd.DataFrame(
+        {
+            "system_record_id": [0, 1, 2, 3, 4, 5],
+            "date": [1673481600000, 1673481700000, 1673481800000, 1673481900000, 1673482000000, 1673482100000],
+            "feature1": [123, 321, 456, 654, 987, 474],
+            "target": [0, 1, 2, 2, 0, 1],
+            "eval_set_index": [0, 0, 0, 0, 1, 1],
+        }
+    )
+
+    meaning_types = {
+        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
+        "date": FileColumnMeaningType.DATE,
+        "feature1": FileColumnMeaningType.FEATURE,
+        "target": FileColumnMeaningType.TARGET,
+        "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
+    }
+    dataset = Dataset(
+        "tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url"
+    )
+    dataset.task_type = ModelTaskType.MULTICLASS
+
+    old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
+    old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
+    old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
+    old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
+    Dataset.MIN_SAMPLE_THRESHOLD = 3
+    Dataset.MIN_TARGET_CLASS_ROWS = 1
+    Dataset.IMBALANCE_THESHOLD = 0.8
+    Dataset.FIT_SAMPLE_THRESHOLD = 1
+    Dataset.FIT_SAMPLE_ROWS = 1
+
+    try:
+        dataset._Dataset__resample()
+        assert len(dataset.data) == 1
+    finally:
+        Dataset.MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
+        Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
+        Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
+        Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
+        Dataset.FIT_SAMPLE_ROWS = old_fit_sample_rows
