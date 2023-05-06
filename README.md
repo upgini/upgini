@@ -7,8 +7,8 @@
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
-    <a href="https://upgini.com/">Upgini.com</a> |
-    <a href="https://profile.upgini.com">Sign In</a> |
+    <!--<a href="https://upgini.com/">Upgini.com</a> |-->
+    <a href="https://profile.upgini.com">Register / Sign In</a> |
     <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
     <a href="https://4mlg.short.gy/join-upgini-community">Slack Community</a> |
     <a href="https://forms.gle/pH99gb5hPxBEfNdR7"><strong>Propose new Data source</strong></a>
