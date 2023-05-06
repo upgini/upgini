@@ -2,7 +2,7 @@
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>--> 
-<h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Intelligent data search engine for Machine Learning</h2>
+<h2 align="center"> <a href="https://upgini.com/">Upgini • Intelligent data search engine for Machine Learning</a></h2>
 <p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>optimized for ML models with LLMs and other neural networks</b> </p>
 <p align="center">
 	<br />
