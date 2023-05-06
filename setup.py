@@ -41,7 +41,7 @@ try:
     setup(
         name="upgini",
         version=version,
-        description="Intelligent data search library for Machine Learning applications",
+        description="Intelligent data search & enrichment for Machine Learning",
         long_description=(here / "README.md").read_text(encoding="utf-8"),
         long_description_content_type="text/markdown",
         url="https://upgini.com/",
