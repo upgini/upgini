@@ -1010,8 +1010,8 @@ class FeaturesEnricher(TransformerMixin):
             enriched_X = validated_X
             if eval_set is not None:
                 for idx in range(len(eval_set)):
-                    eval_X_sampled, _ = self._extend_x(eval_set[idx + 1][0])
-                    eval_y_sampled = eval_set[idx + 1][1]
+                    eval_X_sampled, _ = self._extend_x(eval_set[idx][0])
+                    eval_y_sampled = eval_set[idx][1]
                     enriched_eval_X = eval_X_sampled
                     eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
             self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
