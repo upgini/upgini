@@ -1977,10 +1977,16 @@ class FeaturesEnricher(TransformerMixin):
 
         if is_transform:
             index_name = X.index.name
+            renamed_column = None
+            if index_name in X.columns:
+                renamed_column = f"{index_name}_renamed"
+                X = X.rename(columns={index_name: renamed_column})
             result_train = pd.concat([X.reset_index(), result_train_features.reset_index(drop=True)], axis=1).set_index(
                 index_name or DEFAULT_INDEX
             )
             result_train.index.name = index_name
+            if renamed_column is not None:
+                result_train = result_train.rename(columns={renamed_column: index_name})
         else:
             result_train = result_train_features
 
