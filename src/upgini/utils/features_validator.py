@@ -3,7 +3,7 @@ from logging import Logger
 from typing import List, Optional
 
 import pandas as pd
-from pandas.api.types import is_object_dtype  # , is_integer_dtype, is_string_dtype
+from pandas.api.types import is_object_dtype, is_integer_dtype, is_string_dtype
 from upgini.resource_bundle import bundle
 from upgini.utils.warning_counter import WarningCounter
 
@@ -53,3 +53,13 @@ class FeaturesValidator:
             self.logger.warning(msg)
 
         return empty_or_constant_features
+
+    @staticmethod
+    def find_high_cardinality(df: pd.DataFrame):
+        # Remove high cardinality columns
+        row_count = df.shape[0]
+        return [
+            i
+            for i in df
+            if (is_string_dtype(df[i]) or is_integer_dtype(df[i])) and (df[i].nunique() / row_count >= 0.9)
+        ]

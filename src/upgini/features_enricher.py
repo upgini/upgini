@@ -576,13 +576,13 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
 
-            if self.country_added and COUNTRY in result.columns:
-                result = result.drop(columns=COUNTRY)
+            if self.country_added:
+                result = drop_existing_columns(result, COUNTRY)
 
             if keep_input:
                 return result
             else:
-                return result.drop(columns=[c for c in X.columns if c in result.columns])
+                return drop_existing_columns(result, X.columns)
 
     def calculate_metrics(
         self,
@@ -1002,7 +1002,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Cached enriched dataset found - use it")
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
             if exclude_features_sources:
-                enriched_X = enriched_X.drop(columns=[c for c in exclude_features_sources if c in enriched_X.columns])
+                enriched_X = drop_existing_columns(enriched_X, exclude_features_sources)
         elif len(self.feature_importances_) == 0:
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             X_sampled, search_keys = self._extend_x(validated_X)
@@ -1024,7 +1024,7 @@ class FeaturesEnricher(TransformerMixin):
                 self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
             )
 
-            enriched_X = enriched_Xy.drop(columns=TARGET)
+            enriched_X = drop_existing_columns(enriched_Xy, TARGET)
             x_columns = [
                 c for c in validated_X.columns.to_list() + self.fit_generated_features if c in enriched_X.columns
             ]
@@ -1042,7 +1042,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
 
                 for idx in range(len(eval_set)):
-                    enriched_eval_X = enriched_eval_sets[idx + 1].drop(columns=TARGET)
+                    enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
                     eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
                     eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
                     eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
@@ -1160,6 +1160,11 @@ class FeaturesEnricher(TransformerMixin):
         fitting_X = X_sorted[client_features].copy()
         fitting_enriched_X = enriched_X_sorted[client_features + existing_filtered_enriched_features].copy()
 
+        # Detect and drop high cardinality columns in train
+        columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
+        fitting_X = drop_existing_columns(fitting_X, columns_with_high_cardinality)
+        fitting_enriched_X = drop_existing_columns(fitting_enriched_X, columns_with_high_cardinality)
+
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
@@ -1171,6 +1176,11 @@ class FeaturesEnricher(TransformerMixin):
             fitting_enriched_eval_X = enriched_eval_X_sorted[
                 client_features + existing_filtered_enriched_features
             ].copy()
+
+            # Drop high cardinality columns in eval set
+            fitting_eval_X = drop_existing_columns(fitting_eval_X, columns_with_high_cardinality)
+            fitting_enriched_eval_X = drop_existing_columns(fitting_enriched_eval_X, columns_with_high_cardinality)
+
             fitting_eval_set_dict[idx] = (
                 fitting_eval_X,
                 eval_y_sorted,
@@ -2487,3 +2497,14 @@ def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
 
 def hash_row(row) -> int:
     return zlib.crc32(str(row).encode())
+
+
+def drop_existing_columns(df: pd.DataFrame, columns_to_drop: Union[List[str], str]) -> pd.DataFrame:
+    if isinstance(columns_to_drop, str):
+        columns_to_drop = [columns_to_drop] if columns_to_drop in df.columns else []
+    elif hasattr(columns_to_drop, "__iter__"):
+        columns_to_drop = [c for c in columns_to_drop if c in df.columns]
+    else:
+        return df
+
+    return df.drop(columns=columns_to_drop)

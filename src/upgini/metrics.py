@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -6,7 +7,7 @@ import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
-from pandas.api.types import is_numeric_dtype, is_string_dtype, is_integer_dtype
+from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
 from sklearn.metrics._regression import (
     _check_reg_targets,
@@ -14,7 +15,6 @@ from sklearn.metrics._regression import (
     mean_squared_error,
 )
 from sklearn.model_selection import BaseCrossValidator, cross_validate
-from copy import deepcopy
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -81,15 +81,6 @@ class EstimatorWrapper:
                 X[c] = X[c].astype(float)
             else:
                 X[c] = X[c].astype(str)
-
-        # Remove high cardinality columns
-        row_count = X.shape[0]
-        columns_cardinality = [
-            i
-            for i in X
-            if (is_string_dtype(X[i]) or is_integer_dtype(X[i])) and (X[i].nunique() / row_count >= 0.9)
-        ]
-        X = X.drop(columns=columns_cardinality)
 
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
@@ -167,9 +158,9 @@ class EstimatorWrapper:
             kwargs["estimator"] = estimator_copy
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
                 if cat_features is not None:
-                    estimator_copy.set_params(cat_features=[
-                        X.columns.get_loc(cat_feature) for cat_feature in cat_features
-                    ])
+                    estimator_copy.set_params(
+                        cat_features=[X.columns.get_loc(cat_feature) for cat_feature in cat_features]
+                    )
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 try:
@@ -312,11 +303,19 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
             supported_metrics = set(SCORERS.keys())
             neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
             supported_metrics.update(neg_metrics)
-            supported_metrics.update([
-                "mean_squared_log_error", "MSLE", "msle",
-                "root_mean_squared_log_error", "RMSLE", "rmsle",
-                "root_mean_squared_error", "RMSE", "rmse"
-            ])
+            supported_metrics.update(
+                [
+                    "mean_squared_log_error",
+                    "MSLE",
+                    "msle",
+                    "root_mean_squared_log_error",
+                    "RMSLE",
+                    "rmsle",
+                    "root_mean_squared_error",
+                    "RMSE",
+                    "rmse",
+                ]
+            )
             raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
     elif hasattr(scoring, "__name__"):
         metric_name = scoring.__name__
