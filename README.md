@@ -36,7 +36,7 @@
 ## 🚀 Awesome features
 ⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement  
 ⭐️ Data source optimizations for ML tasks to *"squeeze" maximum information for models* out of the source data: automated feature generation with Large Language Models' data augmentation, RNNs, GraphNN; multiple data source ensembling  
-⭐️ Iterative search with *automatic search key augmentation* from all connected sources. If you are missing any search keys in your search request, Upgini will try to find those keys to broaden the search across all available data sources.   
+⭐️ *Automatic search key augmentation* from all connected sources. If you do not have all search keys in your search request, such as postal/zip code, Upgini will try to add those keys based on the provided set of search keys. This will broaden the search across all available data sources   
 ⭐️ Calculate *accuracy metrics and uplifts* after enrichment existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
 ⭐️ Easy to use - single request to enrich training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
