@@ -53,7 +53,6 @@ from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_seri
 from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
-    ipython_available,
 )
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
@@ -2037,7 +2036,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
 
             internal_provider = feature_meta.data_provider or ""
-            if feature_meta.data_provider and ipython_available():
+            if feature_meta.data_provider:
                 provider = (
                     f"<a href='{feature_meta.data_provider_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
@@ -2047,7 +2046,7 @@ class FeaturesEnricher(TransformerMixin):
                 provider = internal_provider
 
             internal_source = feature_meta.data_source or ""
-            if feature_meta.data_source and ipython_available():
+            if feature_meta.data_source:
                 source = (
                     f"<a href='{feature_meta.data_source_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
@@ -2057,7 +2056,7 @@ class FeaturesEnricher(TransformerMixin):
                 source = internal_source
 
             internal_feature_name = feature_meta.name
-            if feature_meta.doc_link and ipython_available():
+            if feature_meta.doc_link:
                 feature_name = (
                     f"<a href='{feature_meta.doc_link}' "
                     "target='_blank' rel='noopener noreferrer'>"
@@ -2257,7 +2256,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.warning_counter.increment()
         except (ImportError, NameError):
             print(msg)
-            print(self.features_info.head(60))
+            print(self._internal_features_info)
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:

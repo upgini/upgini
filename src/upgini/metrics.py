@@ -89,7 +89,7 @@ class EstimatorWrapper:
         joined = joined[joined[y.name].notna()]
         joined = joined.reset_index(drop=True)
         X = joined.drop(columns=y.name)
-        y = joined[y.name].values
+        y = np.array(list(joined[y.name].values))
         return X, y, {}
 
     def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray):
