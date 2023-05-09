@@ -82,15 +82,6 @@ class EstimatorWrapper:
             else:
                 X[c] = X[c].astype(str)
 
-        # Remove high cardinality columns
-        row_count = X.shape[0]
-        columns_cardinality = [
-            i
-            for i in X
-            if (is_string_dtype(X[i]) or is_integer_dtype(X[i])) and (X[i].nunique() / row_count >= 0.9)
-        ]
-        X = X.drop(columns=columns_cardinality)
-
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
 
