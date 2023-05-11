@@ -9,7 +9,6 @@ import sys
 import tempfile
 import time
 import uuid
-import zlib
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -1314,7 +1313,7 @@ class FeaturesEnricher(TransformerMixin):
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
-            df[SYSTEM_RECORD_ID] = [hash(tuple(row)) for row in df[columns_for_system_record_id].values]  # type: ignore
+            df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id])
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             df = df.reset_index(drop=True)
@@ -1812,7 +1811,7 @@ class FeaturesEnricher(TransformerMixin):
 
             if len(other_search_keys) > 0:
                 sort_columns.append(search_keys_hash)
-                Xy[search_keys_hash] = [hash_row(row) for row in Xy[sorted(other_search_keys)].values]
+                Xy[search_keys_hash] = pd.util.hash_pandas_object(Xy[sorted(other_search_keys)])
 
             if len(sort_columns) > 0:
                 Xy = Xy.sort_values(by=sort_columns).reset_index(drop=True)
@@ -1925,7 +1924,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys_hash = "search_keys_hash"
             if len(other_search_keys) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = [hash_row(row) for row in df[sorted(other_search_keys)].values]
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[sorted(other_search_keys)])
 
             df = df.sort_values(by=sort_columns)
 
@@ -2536,10 +2535,6 @@ def drop_duplicates(df: Union[pd.DataFrame, np.ndarray]) -> pd.DataFrame:
         return pd.DataFrame(df).drop_duplicates()
     else:
         return df
-
-
-def hash_row(row) -> int:
-    return zlib.crc32(str(row).encode())
 
 
 def drop_existing_columns(df: pd.DataFrame, columns_to_drop: Union[List[str], str]) -> pd.DataFrame:

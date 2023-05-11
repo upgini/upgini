@@ -1,5 +1,4 @@
 import os
-import sys
 from datetime import date
 from typing import List, Optional
 
@@ -398,7 +397,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.492445, 0.508839, 0.504146],
+                enriched_rocauc: [0.487777, 0.504004, 0.526702],
             }
         )
         .set_index("segment")
@@ -410,8 +409,8 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    if sys.version[0:3] == "3.7":
-        assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    # if sys.version[0:3] == "3.7":
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
 
