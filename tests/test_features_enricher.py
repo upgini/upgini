@@ -12,6 +12,7 @@ from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
 from upgini.dataset import Dataset
+from upgini.errors import ValidationError
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -1345,10 +1346,22 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
 
-    with pytest.raises(Exception):
-        FeaturesEnricher(
-            search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL}, endpoint=url, logs_enabled=False
-        )
+    df = pd.DataFrame(
+        {
+            "phone": ["1234567890", "2345678901", "3456789012"],
+            "email": ["test1@gmail.com", "test2@gmail.com", "test3@gmail.com"],
+            "target": [0, 1, 0],
+        }
+    )
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE, "email": SearchKey.EMAIL},
+        endpoint=url,
+        logs_enabled=False,
+        raise_validation_error=True,
+    )
+    with pytest.raises(ValidationError):
+        enricher.fit_transform(df.drop(columns="target"), df.target)
 
 
 def test_filter_by_importance(requests_mock: Mocker):
@@ -2443,7 +2456,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         logs_enabled=False,
-        unsupported_argument="some_value"
+        unsupported_argument="some_value",
     )
 
     df = pd.DataFrame(
@@ -2463,7 +2476,8 @@ def test_unsupported_arguments(requests_mock: Mocker):
                 df["target"],
                 [(df.drop(columns="target"), df["target"])],
                 "unsupported_positional_argument",
-                unsupported_key_argument=False)
+                unsupported_key_argument=False,
+            )
 
         with pytest.raises(NoMockAddress):
             enricher.fit_transform(
@@ -2471,19 +2485,18 @@ def test_unsupported_arguments(requests_mock: Mocker):
                 df["target"],
                 [(df.drop(columns="target"), df["target"])],
                 "unsupported_positional_argument",
-                unsupported_key_argument=False)
+                unsupported_key_argument=False,
+            )
 
-        enricher.transform(
-            df.drop(columns="target"),
-            "unsupported_positional_argument",
-            unsupported_key_argument=False)
+        enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
         enricher.calculate_metrics(
             df.drop(columns="target"),
             df["target"],
             [(df.drop(columns="target"), df["target"])],
             "unsupported_positional_argument",
-            unsupported_key_argument=False)
+            unsupported_key_argument=False,
+        )
     finally:
         Dataset.MIN_ROWS_COUNT = original_min_rows
 
