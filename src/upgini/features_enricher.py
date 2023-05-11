@@ -137,6 +137,7 @@ class FeaturesEnricher(TransformerMixin):
         generate_features: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
+        raise_validation_error: bool = False,
         **kwargs,
     ):
         self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
@@ -233,6 +234,7 @@ class FeaturesEnricher(TransformerMixin):
         self.autodetected_search_keys: Dict[str, SearchKey] = {}
         self.imbalanced = False
         self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
+        self.raise_validation_error = raise_validation_error
 
     def fit(
         self,
@@ -329,6 +331,8 @@ class FeaturesEnricher(TransformerMixin):
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
+                    if self.raise_validation_error:
+                        raise e
                 else:
                     show_status_error()
                     self._dump_python_libs()
@@ -448,6 +452,8 @@ class FeaturesEnricher(TransformerMixin):
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
+                    if self.raise_validation_error:
+                        raise e
                     return None
                 else:
                     show_status_error()
@@ -562,6 +568,8 @@ class FeaturesEnricher(TransformerMixin):
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
+                    if self.raise_validation_error:
+                        raise e
                     return None
                 else:
                     if not silent_mode:
@@ -879,6 +887,8 @@ class FeaturesEnricher(TransformerMixin):
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
+                    if self.raise_validation_error:
+                        raise e
                 else:
                     if not silent:
                         show_status_error()
@@ -2181,6 +2191,7 @@ class FeaturesEnricher(TransformerMixin):
                 if not silent_mode:
                     self.warning_counter.increment()
                     print(msg)
+
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
                 if x[column_name].isnull().all() or (
@@ -2190,6 +2201,11 @@ class FeaturesEnricher(TransformerMixin):
 
         if self.detect_missing_search_keys:
             valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, is_demo_dataset, silent_mode)
+
+        if all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
+            msg = bundle.get("unregistered_only_personal_keys")
+            self.logger.warning(msg + f" Provided search keys: {search_keys}")
+            raise ValidationError(msg)
 
         if SearchKey.CUSTOM_KEY in valid_search_keys.values():
             custom_keys = [column for column, key in valid_search_keys.items() if key == SearchKey.CUSTOM_KEY]
