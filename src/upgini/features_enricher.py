@@ -1,4 +1,5 @@
 import gc
+import hashlib
 import itertools
 import logging
 import numbers
@@ -50,10 +51,7 @@ from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
-from upgini.utils.display_utils import (
-    display_html_dataframe,
-    do_without_pandas_limits,
-)
+from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -62,6 +60,11 @@ from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
+
+DEMO_DATASET_HASHES = [
+    "7e5021c352037b0970696c04e6d467aa95da0e5a414a2483fe8c415ea653fb97",  # demo_salary fit
+    "7fb8b3513b2840fa994b47508b4b9adabcb64007753fc87dfa8e6110868e01a5",  # demo_salary transform
+    ]
 
 
 class FeaturesEnricher(TransformerMixin):
@@ -522,12 +525,6 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.warning(bundle.get("no_important_features_for_transform"))
                     return X
 
-                if self._has_trial_features(exclude_features_sources) and not self.__is_registered:
-                    msg = bundle.get("transform_with_trial_features")
-                    self.logger.warn(msg)
-                    print(msg)
-                    return None
-
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("transform_with_paid_features")
                     self.logger.warn(msg)
@@ -920,9 +917,9 @@ class FeaturesEnricher(TransformerMixin):
     def _has_paid_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
 
-    def _extend_x(self, x: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
+    def _extend_x(self, x: pd.DataFrame, is_demo_dataset: bool) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
         search_keys = self.search_keys.copy()
-        search_keys = self.__prepare_search_keys(x, search_keys, silent_mode=True)
+        search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, silent_mode=True)
 
         extended_X = x.copy()
         generated_features = []
@@ -989,6 +986,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         search_keys_for_metrics: Optional[List[str]] = None,
     ):
+        is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
@@ -1004,12 +1002,12 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_X = drop_existing_columns(enriched_X, exclude_features_sources)
         elif len(self.feature_importances_) == 0:
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
-            X_sampled, search_keys = self._extend_x(validated_X)
+            X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset)
             y_sampled = validated_y
             enriched_X = validated_X
             if eval_set is not None:
                 for idx in range(len(eval_set)):
-                    eval_X_sampled, _ = self._extend_x(eval_set[idx][0])
+                    eval_X_sampled, _ = self._extend_x(eval_set[idx][0], is_demo_dataset)
                     eval_y_sampled = eval_set[idx][1]
                     enriched_eval_X = eval_X_sampled
                     eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
@@ -1076,7 +1074,7 @@ class FeaturesEnricher(TransformerMixin):
                     .copy()
                     .drop(columns=[EVAL_SET_INDEX, TARGET])
                 )
-                X_sampled, search_keys = self._extend_x(X_sampled)
+                X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
                 y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
                 eval_set_sampled_dict = dict()
                 for idx in range(len(eval_set)):
@@ -1085,7 +1083,7 @@ class FeaturesEnricher(TransformerMixin):
                         .copy()
                         .drop(columns=[EVAL_SET_INDEX, TARGET])
                     )
-                    eval_x_sampled, _ = self._extend_x(eval_x_sampled)
+                    eval_x_sampled, _ = self._extend_x(eval_x_sampled, is_demo_dataset)
                     eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
                         TARGET
                     ]
@@ -1122,7 +1120,7 @@ class FeaturesEnricher(TransformerMixin):
                     df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
 
                 X_sampled = df.copy().drop(columns=TARGET)
-                X_sampled, search_keys = self._extend_x(X_sampled)
+                X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
                 y_sampled = df.copy()[TARGET]
 
                 df.drop(columns=TARGET, inplace=True)
@@ -1230,6 +1228,19 @@ class FeaturesEnricher(TransformerMixin):
 
             validated_X = self._validate_X(X, is_transform=True)
 
+            is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
+
+            if (
+                self._has_trial_features(exclude_features_sources)
+                and not metrics_calculation
+                and not self.__is_registered
+                and not is_demo_dataset
+            ):
+                msg = bundle.get("transform_with_trial_features")
+                self.logger.warn(msg)
+                print(msg)
+                return None
+
             columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
             if len(columns_to_drop) > 0:
                 msg = bundle.get("x_contains_enriching_columns").format(columns_to_drop)
@@ -1240,7 +1251,7 @@ class FeaturesEnricher(TransformerMixin):
             self.__log_debug_information(X, exclude_features_sources=exclude_features_sources)
 
             search_keys = self.search_keys.copy()
-            search_keys = self.__prepare_search_keys(validated_X, search_keys, silent_mode=silent_mode)
+            search_keys = self.__prepare_search_keys(validated_X, search_keys, is_demo_dataset, silent_mode=silent_mode)
 
             df = validated_X.copy()
 
@@ -1428,11 +1439,15 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 raise ValidationError(msg)
 
-        non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
-        if not self.__is_registered and len(set(key_types).intersection(non_personal_keys)) == 0:
-            msg = bundle.get("unregistered_only_personal_keys")
-            self.logger.warning(msg + f" Provided search keys: {key_types}")
-            raise ValidationError(msg)
+        # non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
+        # if (
+        #     not self.__is_registered
+        #     and not is_demo_dataset
+        #     and len(set(key_types).intersection(non_personal_keys)) == 0
+        # ):
+        #     msg = bundle.get("unregistered_only_personal_keys")
+        #     self.logger.warning(msg + f" Provided search keys: {key_types}")
+        #     raise ValidationError(msg)
 
     @property
     def __is_registered(self) -> bool:
@@ -1455,8 +1470,19 @@ class FeaturesEnricher(TransformerMixin):
         self.warning_counter.reset()
         self.df_with_original_index = None
         self.__cached_sampled_datasets = None
+
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
+        validated_eval_set = (
+            [self._validate_eval_set_pair(validated_X, eval_pair) for eval_pair in eval_set]
+            if eval_set is not None
+            else None
+        )
+        is_demo_dataset = hash_input(validated_X, validated_y, validated_eval_set) in DEMO_DATASET_HASHES
+        if (is_demo_dataset):
+            msg = bundle.get("demo_dataset_info")
+            self.logger.info(msg)
+            print(msg)
 
         if self.generate_features is not None and len(self.generate_features) > 0:
             x_columns = list(validated_X.columns)
@@ -1470,10 +1496,10 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
-        self.fit_search_keys = self.search_keys.copy()
-        self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys)
-
         df = pd.concat([validated_X, validated_y], axis=1)
+
+        self.fit_search_keys = self.search_keys.copy()
+        self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys, is_demo_dataset)
 
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
 
@@ -1481,10 +1507,9 @@ class FeaturesEnricher(TransformerMixin):
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
 
-        if eval_set is not None and len(eval_set) > 0:
+        if validated_eval_set is not None and len(validated_eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
-            for idx, eval_pair in enumerate(eval_set):
-                eval_X, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+            for idx, (eval_X, eval_y) in enumerate(validated_eval_set):
                 eval_df = pd.concat([eval_X, eval_y], axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df])
@@ -2116,7 +2141,9 @@ class FeaturesEnricher(TransformerMixin):
         filtered_importance_names, _ = zip(*filtered_importances)
         return list(filtered_importance_names)
 
-    def __prepare_search_keys(self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False):
+    def __prepare_search_keys(
+        self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], is_demo_dataset: bool, silent_mode=False
+    ):
         valid_search_keys = {}
         if (
             SearchKey.IP_RANGE_FROM in search_keys.values()
@@ -2126,6 +2153,7 @@ class FeaturesEnricher(TransformerMixin):
             or SearchKey.EMAIL_ONE_DOMAIN in search_keys.values()
         ):
             raise ValidationError(bundle.get("unsupported_search_key"))
+
         for column_id, meaning_type in search_keys.items():
             column_name = None
             if isinstance(column_id, str):
@@ -2147,7 +2175,7 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
                 self.country_code = None
 
-            if not self.__is_registered and meaning_type in SearchKey.personal_keys():
+            if not self.__is_registered and not is_demo_dataset and meaning_type in SearchKey.personal_keys():
                 msg = bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
@@ -2161,7 +2189,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(bundle.get("empty_search_key").format(column_name))
 
         if self.detect_missing_search_keys:
-            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, silent_mode)
+            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, is_demo_dataset, silent_mode)
 
         if SearchKey.CUSTOM_KEY in valid_search_keys.values():
             custom_keys = [column for column, key in valid_search_keys.items() if key == SearchKey.CUSTOM_KEY]
@@ -2283,7 +2311,7 @@ class FeaturesEnricher(TransformerMixin):
         return self.__filtered_importance_names(importance_threshold, max_features)
 
     def __detect_missing_search_keys(
-        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], silent_mode=False
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], is_demo_dataset: bool, silent_mode=False
     ) -> Dict[str, SearchKey]:
         sample = df.head(100)
 
@@ -2308,7 +2336,7 @@ class FeaturesEnricher(TransformerMixin):
         if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None and maybe_key not in search_keys.keys():
-                if self.__is_registered:
+                if self.__is_registered or is_demo_dataset:
                     search_keys[maybe_key] = SearchKey.EMAIL
                     self.autodetected_search_keys[maybe_key] = SearchKey.EMAIL
                     self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
@@ -2325,7 +2353,7 @@ class FeaturesEnricher(TransformerMixin):
         if SearchKey.PHONE not in search_keys.values():
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None and maybe_key not in search_keys.keys():
-                if self.__is_registered:
+                if self.__is_registered or is_demo_dataset:
                     search_keys[maybe_key] = SearchKey.PHONE
                     self.autodetected_search_keys[maybe_key] = SearchKey.PHONE
                     self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
@@ -2507,3 +2535,19 @@ def drop_existing_columns(df: pd.DataFrame, columns_to_drop: Union[List[str], st
         return df
 
     return df.drop(columns=columns_to_drop)
+
+
+def hash_input(X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[List[Tuple]] = None) -> str:
+    hashed_objects = []
+    try:
+        hashed_objects.append(pd.util.hash_pandas_object(X).values)
+        if y is not None:
+            hashed_objects.append(pd.util.hash_pandas_object(y).values)
+        if eval_set is not None:
+            for eval_X, eval_y in eval_set:
+                hashed_objects.append(pd.util.hash_pandas_object(eval_X).values)
+                hashed_objects.append(pd.util.hash_pandas_object(eval_y).values)
+        common_hash = hashlib.sha256(np.concatenate(hashed_objects)).hexdigest()
+        return common_hash
+    except Exception:
+        return ""
