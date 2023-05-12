@@ -1313,7 +1313,7 @@ class FeaturesEnricher(TransformerMixin):
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
-            df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id])
+            df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False)
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             df = df.reset_index(drop=True)
@@ -1801,7 +1801,6 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
-            sort_columns = []
             date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
@@ -1811,7 +1810,7 @@ class FeaturesEnricher(TransformerMixin):
 
             if len(other_search_keys) > 0:
                 sort_columns.append(search_keys_hash)
-                Xy[search_keys_hash] = pd.util.hash_pandas_object(Xy[sorted(other_search_keys)])
+                Xy[search_keys_hash] = pd.util.hash_pandas_object(Xy[sorted(other_search_keys)], index=False)
 
             if len(sort_columns) > 0:
                 Xy = Xy.sort_values(by=sort_columns).reset_index(drop=True)
@@ -1924,7 +1923,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys_hash = "search_keys_hash"
             if len(other_search_keys) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[sorted(other_search_keys)])
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[sorted(other_search_keys)], index=False)
 
             df = df.sort_values(by=sort_columns)
 
@@ -2551,13 +2550,13 @@ def drop_existing_columns(df: pd.DataFrame, columns_to_drop: Union[List[str], st
 def hash_input(X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[List[Tuple]] = None) -> str:
     hashed_objects = []
     try:
-        hashed_objects.append(pd.util.hash_pandas_object(X).values)
+        hashed_objects.append(pd.util.hash_pandas_object(X, index=False).values)
         if y is not None:
-            hashed_objects.append(pd.util.hash_pandas_object(y).values)
+            hashed_objects.append(pd.util.hash_pandas_object(y, index=False).values)
         if eval_set is not None:
             for eval_X, eval_y in eval_set:
-                hashed_objects.append(pd.util.hash_pandas_object(eval_X).values)
-                hashed_objects.append(pd.util.hash_pandas_object(eval_y).values)
+                hashed_objects.append(pd.util.hash_pandas_object(eval_X, index=False).values)
+                hashed_objects.append(pd.util.hash_pandas_object(eval_y, index=False).values)
         common_hash = hashlib.sha256(np.concatenate(hashed_objects)).hexdigest()
         return common_hash
     except Exception:

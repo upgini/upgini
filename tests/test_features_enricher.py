@@ -397,7 +397,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.487777, 0.504004, 0.526702],
+                enriched_rocauc: [0.507052, 0.485257, 0.491804],
             }
         )
         .set_index("segment")
@@ -409,7 +409,6 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(metrics)
 
     assert metrics is not None
-    # if sys.version[0:3] == "3.7":
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     print(enricher.features_info)
@@ -1705,13 +1704,6 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1780,9 +1772,9 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     mock_features = pd.read_parquet(path_to_mock_features)
     converter = DateTimeSearchKeyConverter("rep_date")
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
-    mock_features["system_record_id"] = [
-        hash(tuple(row)) for row in df_with_eval_set_index_with_date[sorted(search_keys.keys())].values
-    ]
+    mock_features["system_record_id"] = pd.util.hash_pandas_object(
+        df_with_eval_set_index_with_date[sorted(search_keys.keys())].reset_index(drop=True), index=False
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
     enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)
