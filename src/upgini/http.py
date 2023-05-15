@@ -11,6 +11,7 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
+import pandas as pd
 
 import requests
 from pydantic import BaseModel
@@ -354,6 +355,9 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
+            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
+
             with open(file_path, "rb") as file:
                 files = {
                     "metadata": (
@@ -428,6 +432,9 @@ class _RestClient:
                 md5_hash.update(content)
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+
+            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
                 files = {
@@ -779,16 +786,20 @@ class BackendLogHandler(logging.Handler):
     def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
-        if "ip" in get_track_metrics().keys():
-            self.hostname = get_track_metrics()["ip"]
-        else:
-            self.hostname = "0.0.0.0"
+        self.track_metrics = None
+        self.hostname = None
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
+                if self.track_metrics is None:
+                    self.track_metrics = get_track_metrics()
+                    if "ip" in self.track_metrics.keys():
+                        self.hostname = self.track_metrics["ip"]
+                    else:
+                        self.hostname = "0.0.0.0"
                 text = self.format(record)
-                tags = get_track_metrics()
+                tags = self.track_metrics
                 tags["version"] = __version__
                 self.rest_client.send_log_event(
                     LogEvent(

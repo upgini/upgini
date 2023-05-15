@@ -61,9 +61,9 @@ from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
 DEMO_DATASET_HASHES = [
-    "7e5021c352037b0970696c04e6d467aa95da0e5a414a2483fe8c415ea653fb97",  # demo_salary fit
-    "7fb8b3513b2840fa994b47508b4b9adabcb64007753fc87dfa8e6110868e01a5",  # demo_salary transform
-    ]
+    "7c354d1b1794c53ac7d7e5a2f2574568b660ca9159bc0d2aca9c7127ebcea2f7",  # demo_salary fit
+    "2519c9077c559f8975fdcdb5c50e9daae8d50b1d8a3ec72296c65ea7276f8812",  # demo_salary transform
+]
 
 
 class FeaturesEnricher(TransformerMixin):
@@ -1313,7 +1313,9 @@ class FeaturesEnricher(TransformerMixin):
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
-            df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False)
+            df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
+                "Float64"
+            )
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
             df = df.reset_index(drop=True)
@@ -1488,10 +1490,11 @@ class FeaturesEnricher(TransformerMixin):
             else None
         )
         is_demo_dataset = hash_input(validated_X, validated_y, validated_eval_set) in DEMO_DATASET_HASHES
-        if (is_demo_dataset):
+        if is_demo_dataset:
             msg = bundle.get("demo_dataset_info")
             self.logger.info(msg)
-            print(msg)
+            if not self.__is_registered:
+                print(msg)
 
         if self.generate_features is not None and len(self.generate_features) > 0:
             x_columns = list(validated_X.columns)
