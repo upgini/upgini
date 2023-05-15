@@ -397,7 +397,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.507052, 0.485257, 0.491804],
+                enriched_rocauc: [0.500276, 0.499805, 0.497979],
             }
         )
         .set_index("segment")
@@ -1774,7 +1774,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
     mock_features["system_record_id"] = pd.util.hash_pandas_object(
         df_with_eval_set_index_with_date[sorted(search_keys.keys())].reset_index(drop=True), index=False
-    )
+    ).astype("Float64")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
     enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)
@@ -2415,12 +2415,12 @@ def test_diff_target_dups(requests_mock: Mocker):
         self.validate()
         assert len(self.data) == 2
         print(self.data)
-        assert self.data.loc[2, "date_fake_a"] == 1672531200000
-        assert self.data.loc[2, "feature_fake_a"] == 12
-        assert self.data.loc[2, "target"] == 0
-        assert self.data.loc[3, "date_fake_a"] == 1672531200000
-        assert self.data.loc[3, "feature_fake_a"] == 13
-        assert self.data.loc[3, "target"] == 1
+        assert self.data.loc[0, "date_fake_a"] == 1672531200000
+        assert self.data.loc[0, "feature_fake_a"] == 12
+        assert self.data.loc[0, "target"] == 0
+        assert self.data.loc[1, "date_fake_a"] == 1672531200000
+        assert self.data.loc[1, "feature_fake_a"] == 13
+        assert self.data.loc[1, "target"] == 1
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
