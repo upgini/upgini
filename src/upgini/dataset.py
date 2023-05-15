@@ -718,6 +718,8 @@ class Dataset:  # (pd.DataFrame):
 
         self.__validate_max_row_count()
 
+        self.data = self.data.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
+
     def __construct_metadata(self, exclude_features_sources: Optional[List[str]] = None) -> FileMetadata:
         # self.logger.info("Constructing dataset metadata")
         columns = []

@@ -142,6 +142,7 @@ class FileMetadata(BaseModel):
     taskType: Optional[ModelTaskType]
     rowsCount: Optional[int]
     checksumMD5: Optional[str]
+    digest: Optional[str]
 
 
 class FeaturesMetadataV2(BaseModel):
