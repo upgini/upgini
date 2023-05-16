@@ -11,8 +11,8 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
-import pandas as pd
 
+import pandas as pd
 import requests
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
@@ -355,7 +355,9 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            digest_sha256 = hashlib.sha256(
+                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="pyarrow")).values
+            ).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -433,7 +435,9 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            digest_sha256 = hashlib.sha256(
+                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="pyarrow")).values
+            ).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
