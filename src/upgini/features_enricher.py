@@ -934,10 +934,10 @@ class FeaturesEnricher(TransformerMixin):
             ]
         else:
             filtered_features_info = self.features_info
-        return list(filtered_features_info.loc(
+        return list(filtered_features_info.loc[
             filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema,
             bundle.get("features_info_name"),
-        ).values)
+        ].values)
 
     def _has_trial_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.TRIAL.value, exclude_features_sources)
