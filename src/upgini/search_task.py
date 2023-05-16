@@ -231,7 +231,7 @@ class SearchTask:
             gzip_file_name = "{0}/features.parquet".format(tmp_dir)
             with open(gzip_file_name, "wb") as gzip_file:
                 gzip_file.write(gzip_file_content)
-            return pd.read_parquet(gzip_file_name, engine="pyarrow")
+            return pd.read_parquet(gzip_file_name)
 
     def get_all_initial_raw_features(self, trace_id: str, metrics_calculation: bool = False) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
