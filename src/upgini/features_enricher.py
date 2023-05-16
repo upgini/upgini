@@ -139,15 +139,16 @@ class FeaturesEnricher(TransformerMixin):
         raise_validation_error: bool = False,
         **kwargs,
     ):
-        self.api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
         try:
-            self.rest_client = get_rest_client(endpoint, self.api_key)
+            self.rest_client = get_rest_client(endpoint, self._api_key)
         except UpginiConnectionError as e:
             print(e)
             return
 
+        self.logs_enabled = logs_enabled
         if logs_enabled:
-            self.logger = LoggerFactory().get_logger(endpoint, self.api_key)
+            self.logger = LoggerFactory().get_logger(endpoint, self._api_key)
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
@@ -174,7 +175,7 @@ class FeaturesEnricher(TransformerMixin):
             search_task = SearchTask(
                 search_id,
                 endpoint=self.endpoint,
-                api_key=self.api_key,
+                api_key=self._api_key,
             )
 
             print(bundle.get("search_by_task_id_start"))
@@ -234,6 +235,16 @@ class FeaturesEnricher(TransformerMixin):
         self.imbalanced = False
         self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
         self.raise_validation_error = raise_validation_error
+
+    def _get_api_key(self):
+        return self._api_key
+
+    def _set_api_key(self, api_key: str):
+        self._api_key = api_key
+        if self.logs_enabled:
+            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key)
+
+    api_key = property(_get_api_key, _set_api_key)
 
     def fit(
         self,
@@ -912,13 +923,21 @@ class FeaturesEnricher(TransformerMixin):
     def _has_features_with_commercial_schema(
         self, commercial_schema: str, exclude_features_sources: Optional[List[str]]
     ) -> bool:
+        return len(self._get_features_with_commercial_schema(commercial_schema, exclude_features_sources)) > 0
+
+    def _get_features_with_commercial_schema(
+        self, commercial_schema: str, exclude_features_sources: Optional[List[str]]
+    ) -> List[str]:
         if exclude_features_sources:
             filtered_features_info = self.features_info[
                 ~self.features_info[bundle.get("features_info_name")].isin(exclude_features_sources)
             ]
         else:
             filtered_features_info = self.features_info
-        return (filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema).any()
+        return list(filtered_features_info.loc(
+            filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema,
+            bundle.get("features_info_name"),
+        ).values)
 
     def _has_trial_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.TRIAL.value, exclude_features_sources)
@@ -1248,7 +1267,6 @@ class FeaturesEnricher(TransformerMixin):
                 msg = bundle.get("transform_with_trial_features")
                 self.logger.warn(msg)
                 print(msg)
-                return None
 
             columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
             if len(columns_to_drop) > 0:
