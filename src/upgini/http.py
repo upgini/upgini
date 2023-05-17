@@ -32,7 +32,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.resource_bundle import bundle
-from upgini.utils.track_info import get_track_metrics
+from upgini.utils.track_info import get_track_metrics_with_timeout
 
 try:
     from importlib_metadata import version
@@ -49,6 +49,7 @@ except ImportError:
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
 DEMO_API_KEY: str = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
+TRACK_METRICS_TIMEOUT_SECONDS: int = 10
 
 refresh_token_lock = threading.Lock()
 
@@ -355,9 +356,7 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(
-                pd.util.hash_pandas_object(pd.read_parquet(file_path)).values
-            ).hexdigest()
+            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -376,7 +375,11 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
-                files["tracking"] = ("tracking.json", dumps(get_track_metrics()).encode(), "application/json")
+                files["tracking"] = (
+                    "tracking.json",
+                    dumps(get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)).encode(),
+                    "application/json",
+                )
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
 
                 return self._send_post_file_req_v2(
@@ -435,9 +438,7 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(
-                pd.util.hash_pandas_object(pd.read_parquet(file_path)).values
-            ).hexdigest()
+            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -456,7 +457,11 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
-                files["tracking"] = ("ide", dumps(get_track_metrics()).encode(), "application/json")
+                files["tracking"] = (
+                    "ide",
+                    dumps(get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)).encode(),
+                    "application/json",
+                )
 
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
 
@@ -797,7 +802,7 @@ class BackendLogHandler(logging.Handler):
         def task():
             try:
                 if self.track_metrics is None:
-                    self.track_metrics = get_track_metrics()
+                    self.track_metrics = get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)
                     if "ip" in self.track_metrics.keys():
                         self.hostname = self.track_metrics["ip"]
                     else:

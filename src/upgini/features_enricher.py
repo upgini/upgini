@@ -590,13 +590,14 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
 
-            if self.country_added:
-                result = drop_existing_columns(result, COUNTRY)
+            if result is not None:
+                if self.country_added:
+                    result = drop_existing_columns(result, COUNTRY)
 
-            if keep_input:
-                return result
-            else:
-                return drop_existing_columns(result, X.columns)
+                if keep_input:
+                    return result
+                else:
+                    return drop_existing_columns(result, X.columns)
 
     def calculate_metrics(
         self,

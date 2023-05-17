@@ -6,6 +6,7 @@ from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
 from uuid import getnode
+from concurrent import futures
 
 from requests import get, post
 
@@ -43,6 +44,17 @@ def _get_execution_ide() -> str:
         return "binder"
     else:
         return "other"
+
+
+def get_track_metrics_with_timeout(timeout_seconds: int = 10) -> dict:
+    with futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(get_track_metrics)
+        try:
+            result = future.result(timeout_seconds)
+            return result
+        except futures.TimeoutError:
+            future.cancel()
+            return dict()
 
 
 @lru_cache()
