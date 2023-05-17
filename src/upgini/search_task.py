@@ -59,8 +59,8 @@ class SearchTask:
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(bundle.get("polling_search_task").format(self.search_task_id))
-        if is_demo_api_key(self.api_key):
-            print(bundle.get("polling_unregister_information"))
+            if is_demo_api_key(self.api_key):
+                print(bundle.get("polling_unregister_information"))
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
 
         try:

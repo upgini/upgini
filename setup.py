@@ -35,7 +35,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.131"
+version = "1.1.132"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -77,7 +77,7 @@ try:
             "numpy>=1.19.0",
             "scikit-learn>=1.0.1",
             "pydantic>=1.8.2",
-            "fastparquet>=0.7.1",
+            "fastparquet>=0.8.1",
             "python-json-logger>=2.0.2",
             "catboost>=1.0.3",
             "lightgbm>=3.3.2",
