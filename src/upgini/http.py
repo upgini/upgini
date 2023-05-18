@@ -356,7 +356,9 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            digest_sha256 = hashlib.sha256(
+                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
+            ).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -438,7 +440,9 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(pd.util.hash_pandas_object(pd.read_parquet(file_path)).values).hexdigest()
+            digest_sha256 = hashlib.sha256(
+                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
+            ).hexdigest()
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -801,7 +805,7 @@ class BackendLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
-                if self.track_metrics is None:
+                if self.track_metrics is None or len(self.track_metrics) == 0:
                     self.track_metrics = get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)
                     if "ip" in self.track_metrics.keys():
                         self.hostname = self.track_metrics["ip"]

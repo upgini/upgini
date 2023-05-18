@@ -2,9 +2,9 @@ import os
 import re
 import socket
 import sys
-from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
+from typing import Optional
 from uuid import getnode
 from concurrent import futures
 
@@ -46,28 +46,38 @@ def _get_execution_ide() -> str:
         return "other"
 
 
+track_metrics: Optional[dict] = None
+
+
 def get_track_metrics_with_timeout(timeout_seconds: int = 10) -> dict:
-    with futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(get_track_metrics)
-        try:
-            result = future.result(timeout_seconds)
-            return result
-        except futures.TimeoutError:
-            future.cancel()
-            return dict()
+    global track_metrics
+    if track_metrics is not None:
+        return track_metrics
+
+    try:
+        with futures.ProcessPoolExecutor() as executor:
+            future = executor.submit(get_track_metrics)
+            try:
+                track_metrics = future.result(timeout_seconds)
+                return track_metrics
+            except futures.TimeoutError:
+                executor.shutdown(wait=False)
+                return dict()
+    except Exception:
+        return dict()
 
 
-@lru_cache()
 def get_track_metrics() -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
     ident_res = "https://api.ipify.org"
+
     try:
-        track["ip"] = get(ident_res).text
-        track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         track["hostname"] = socket.gethostname()
         track["whoami"] = getuser()
     except Exception as e:
+        track["hostname"] = "localhost"
+        track["whoami"] = "root"
         track["err"] = str(e)
     # get real info depending on ide
 
@@ -128,5 +138,11 @@ def get_track_metrics() -> dict:
             track["err"] = str(e)
             track["ip"] = "0.0.0.0"
             track["visitorId"] = "None"
+    else:
+        try:
+            track["ip"] = get(ident_res).text
+            track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
+        except Exception as e:
+            track["err"] = str(e)
 
     return track
