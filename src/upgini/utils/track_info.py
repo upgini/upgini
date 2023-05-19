@@ -88,26 +88,35 @@ def get_track_metrics() -> dict:
 
             display(
                 Javascript(
-                    f"""
-                        window.clientIP =
-                            fetch("{ident_res}")
-                            .then(response => response.text())
-                            .then(data => data);
-                        const fpPromise = import('https://openfpcdn.io/fingerprintjs/v3')
+                    """
+                        window.visitorId = import('https://openfpcdn.io/fingerprintjs/v3')
                             .then(FingerprintJS => FingerprintJS.load())
-                        window.visitorId =
-                            fpPromise
                             .then(fp => fp.get())
-                            .then(result => result.visitorId)
+                            .then(result => result.visitorId);
                     """
                 )
             )
-            track["ip"] = output.eval_js("window.clientIP")
-            track["visitorId"] = output.eval_js("window.visitorId")
+            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=5)
+        except Exception as e:
+            track["err"] = str(e)
+            track["visitorId"] = "None"
+        try:
+            from google.colab import output  # type: ignore
+            from IPython.display import Javascript, display
+
+            display(
+                Javascript(
+                    f"""
+                        window.clientIP = fetch("{ident_res}")
+                            .then(response => response.text())
+                            .then(data => data);
+                    """
+                )
+            )
+            track["ip"] = output.eval_js("window.clientIP", timeout_sec=5)
         except Exception as e:
             track["err"] = str(e)
             track["ip"] = "0.0.0.0"
-            track["visitorId"] = "None"
 
     elif track["ide"] == "binder":
         try:
@@ -127,7 +136,7 @@ def get_track_metrics() -> dict:
                 "Content-type": "application/json",
                 "X-Kaggle-Authorization": f"Bearer {jwt_token}",
             }
-            with post(url, headers=headers, json={"Label": "api-key"}, timeout=3) as resp:
+            with post(url, headers=headers, json={"Label": "api-key"}, timeout=5) as resp:
                 err = resp.json()["errors"][0]
                 match = re.search(".*\\s(\\d{5,})\\s.*", err)
                 if match:
@@ -140,7 +149,7 @@ def get_track_metrics() -> dict:
             track["visitorId"] = "None"
     else:
         try:
-            track["ip"] = get(ident_res).text
+            track["ip"] = get(ident_res, timeout=5).text
             track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
