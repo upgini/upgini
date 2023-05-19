@@ -96,9 +96,9 @@
 ❓**Know other useful data sources for machine learning?** [Give us a hint and we'll add it for free](https://forms.gle/pH99gb5hPxBEfNdR7).  
 
 
-## :briefcase: Tutorials
+## 💼 Tutorials
 
-###  Search of relevant external features & Automated feature generation for Salary predicton task (use as a template)
+###  [Search of relevant external features & Automated feature generation for Salary predicton task (use as a template)](https://github.com/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb)
 
 * The goal is to predict salary for data science job postning based on information about employer and job description.
 * Following this guide, you'll learn how to **search & auto generate new relevant features with Upgini library**
@@ -113,7 +113,7 @@ Run [Feature search & generation notebook](https://github.com/upgini/upgini/blob
 &nbsp;
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->
-### :question: [Simple sales prediction for retail stores](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
+### ❓ [Simple sales prediction for retail stores](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 
 * The goal is to **predict future sales of different goods in stores** based on a 5-year history of sales.     
 * Kaggle Competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only) is a product sales forecasting. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). 
@@ -127,23 +127,23 @@ Run [Simple sales prediction for retail stores](https://github.com/upgini/upgini
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->    
 
-### :question: [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### ❓ [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
 * The goal is **accuracy improvement for TOP1 winning Kaggle solution** from new relevant external features & data.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
-### :question: [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
+### ❓ [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
 
 * **Save time on feature search and engineering**. Use ready-to-use external features and data sources to maximize overall AutoML accuracy, right out of the box.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 * Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
 
-### :question: [How to improve accuracy of Multivariate Time Series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
+### ❓ [How to improve accuracy of Multivariate Time Series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
 
 * The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when a component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [RMSLE](https://www.kaggle.com/code/carlmcbrideellis/store-sales-using-the-average-of-the-last-16-days#Note-regarding-calculating-the-average). 
 
-### :question: [How to speed up feature engineering hypothesis tests with ready-to-use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
+### ❓ [How to speed up feature engineering hypothesis tests with ready-to-use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
 
 *  **Save time on external data wrangling and feature calculation code** for hypothesis tests. The key challenge here is a time-dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As a result, special data enrichment strategy is used.   
 * [Kaggle Competition](https://www.kaggle.com/competitions/amex-default-prediction) is a credit default prediction, evaluation metric is [normalized Gini coefficient](https://www.kaggle.com/competitions/amex-default-prediction/discussion/327464).
