@@ -222,20 +222,6 @@ class SearchTask:
         if self.provider_metadata_v2 is not None:
             return max([meta.hit_rate_metrics.hit_rate_percent for meta in self.provider_metadata_v2])
 
-    @staticmethod
-    def _download_features_file(
-        endpoint: Optional[str], api_key: Optional[str], trace_id: str, features_id: str, metrics_calculation: bool
-    ) -> pd.DataFrame:
-        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        gzip_file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
-            trace_id, features_id, metrics_calculation
-        )
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            gzip_file_name = "{0}/features.parquet".format(tmp_dir)
-            with open(gzip_file_name, "wb") as gzip_file:
-                gzip_file.write(gzip_file_content)
-            return pd.read_parquet(gzip_file_name)
-
     def get_all_initial_raw_features(self, trace_id: str, metrics_calculation: bool = False) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
         return _get_all_initial_raw_features_cached(
@@ -264,7 +250,7 @@ class SearchTask:
         return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id, trace_id)
 
 
-@lru_cache
+@lru_cache()
 def _get_all_initial_raw_features_cached(
     endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation: bool
 ) -> Optional[pd.DataFrame]:
@@ -289,7 +275,7 @@ def _get_all_initial_raw_features_cached(
     return result_df
 
 
-@lru_cache
+@lru_cache()
 def _get_all_validation_raw_features_cached(
     endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation=False
 ) -> Optional[pd.DataFrame]:
@@ -301,7 +287,7 @@ def _get_all_validation_raw_features_cached(
     for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
         if feature_block["searchType"] == "VALIDATION":
             features_id = feature_block["adsSearchTaskFeaturesId"]
-            features_df = _download_features_file(trace_id, features_id, metrics_calculation)
+            features_df = _download_features_file(endpoint, api_key, trace_id, features_id, metrics_calculation)
             if result_df is None:
                 result_df = features_df
             else:
