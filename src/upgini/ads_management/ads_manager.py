@@ -10,7 +10,7 @@ class AdsManager:
 
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
 
-    def __init__(self, api_key: str, backend_url: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, backend_url: Optional[str] = None):
         self.api_key = api_key
         self.backend_url = backend_url
         self.rc = get_rest_client(self.backend_url, self.api_key)

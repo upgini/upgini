@@ -92,6 +92,23 @@ class EstimatorWrapper:
         y = np.array(list(joined[y.name].values))
         return X, y, {}
 
+    def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        for c in X.columns:
+            if is_numeric_dtype(X[c]):
+                X[c] = X[c].astype(float)
+            else:
+                X[c] = X[c].astype(str)
+
+        if not isinstance(y, pd.Series):
+            raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
+
+        joined = pd.concat([X, y], axis=1)
+        joined = joined[joined[y.name].notna()]
+        joined = joined.reset_index(drop=True)
+        X = joined.drop(columns=y.name)
+        y = np.array(list(joined[y.name].values))
+        return X, y, {}
+
     def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray):
         X, y, fit_params = self._prepare_to_fit(X, y)
 
@@ -115,7 +132,7 @@ class EstimatorWrapper:
         return np.mean(metrics_by_fold) * self.multiplier
 
     def calculate_metric(self, X: pd.DataFrame, y: np.ndarray) -> float:
-        X, y, _ = self._prepare_to_fit(X, y)
+        X, y, _ = self._prepare_to_calculate(X, y)
         metrics = []
         for est in self.cv_estimators:
             metrics.append(self.scorer(est, X, y))
@@ -193,31 +210,42 @@ class CatBoostWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
     ):
         super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        self.cat_features = None
+        self.cat_features_idx = None
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        cat_features = _get_cat_features(X)
-        X[cat_features] = X[cat_features].astype("string").fillna("").astype(str)
-        unique_cat_features = []
-        # TODO try to remove this condition because now we remove constant features earlier
-        for name in cat_features:
-            # Remove constant categorical features
-            if X[name].nunique() > 1:
-                unique_cat_features.append(name)
-            else:
-                X = X.drop(columns=name)
-        cat_features_idx = [X.columns.get_loc(c) for c in unique_cat_features]
+        self.cat_features = _get_cat_features(X)
+        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        # unique_cat_features = []
+        # # TODO try to remove this condition because now we remove constant features earlier
+        # for name in cat_features:
+        #     # Remove constant categorical features
+        #     if X[name].nunique() > 1:
+        #         unique_cat_features.append(name)
+        #     else:
+        #         X = X.drop(columns=name)
+        # cat_features_idx = [X.columns.get_loc(c) for c in unique_cat_features]
+        self.cat_features_idx = [X.columns.get_loc(c) for c in self.cat_features]
         if (
             hasattr(self.estimator, "get_param")
             and hasattr(self.estimator, "_init_params")
             and self.estimator.get_param("cat_features") is not None
         ):
-            cat_features_set = set(cat_features_idx)
+            cat_features_set = set(self.cat_features_idx)
             cat_features_set.update(self.estimator.get_param("cat_features"))
-            cat_features_idx = list(cat_features_set)
+            self.cat_features_idx = list(cat_features_set)
             del self.estimator._init_params["cat_features"]
 
-        params.update({"cat_features": cat_features_idx})
+        params.update({"cat_features": self.cat_features_idx})
+        return X, y, params
+
+    def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        X, y, params = super()._prepare_to_calculate(X, y)
+        if self.cat_features is not None:
+            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        if self.cat_features_idx is not None:
+            params.update({"cat_features": self.cat_features_idx})
         return X, y, params
 
 
@@ -232,16 +260,27 @@ class LightGBMWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
     ):
         super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        self.cat_features = None
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        cat_features = _get_cat_features(X)
-        X[cat_features] = X[cat_features].astype("string").fillna("").astype(str)
-        for feature in cat_features:
+        self.cat_features = _get_cat_features(X)
+        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        for feature in self.cat_features:
             X[feature] = X[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
             y = correct_string_target(y)
 
+        return X, y, params
+
+    def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        X, y, params = super()._prepare_to_calculate(X, y)
+        if self.cat_features is not None:
+            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+            for feature in self.cat_features:
+                X[feature] = X[feature].astype("category").cat.codes
+        if not is_numeric_dtype(y):
+            y = correct_string_target(y)
         return X, y, params
 
 
@@ -256,16 +295,30 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
     ):
         super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        self.cat_features = None
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
-        cat_features = _get_cat_features(X)
-        num_features = [col for col in X.columns if col not in cat_features]
+        self.cat_features = _get_cat_features(X)
+        num_features = [col for col in X.columns if col not in self.cat_features]
         X[num_features] = X[num_features].fillna(-999)
-        X[cat_features] = X[cat_features].astype("string").fillna("").astype(str)
+        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
         # TODO use one-hot encoding if cardinality is less 50
-        for feature in cat_features:
+        for feature in self.cat_features:
             X[feature] = X[feature].astype("category").cat.codes
+        if not is_numeric_dtype(y):
+            y = correct_string_target(y)
+        return X, y, params
+
+    def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        X, y, params = super()._prepare_to_calculate(X, y)
+        if self.cat_features is not None:
+            num_features = [col for col in X.columns if col not in self.cat_features]
+            X[num_features] = X[num_features].fillna(-999)
+            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+            # TODO use one-hot encoding if cardinality is less 50
+            for feature in self.cat_features:
+                X[feature] = X[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
             y = correct_string_target(y)
         return X, y, params
