@@ -935,10 +935,12 @@ class FeaturesEnricher(TransformerMixin):
             ]
         else:
             filtered_features_info = self.features_info
-        return list(filtered_features_info.loc[
-            filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema,
-            bundle.get("features_info_name"),
-        ].values)
+        return list(
+            filtered_features_info.loc[
+                filtered_features_info[bundle.get("features_info_commercial_schema")] == commercial_schema,
+                bundle.get("features_info_name"),
+            ].values
+        )
 
     def _has_trial_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.TRIAL.value, exclude_features_sources)
@@ -2175,14 +2177,16 @@ class FeaturesEnricher(TransformerMixin):
         self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], is_demo_dataset: bool, silent_mode=False
     ):
         valid_search_keys = {}
-        if (
-            SearchKey.IP_RANGE_FROM in search_keys.values()
-            or SearchKey.IP_RANGE_TO in search_keys.values()
-            or SearchKey.MSISDN_RANGE_FROM in search_keys.values()
-            or SearchKey.MSISDN_RANGE_TO in search_keys.values()
-            or SearchKey.EMAIL_ONE_DOMAIN in search_keys.values()
-        ):
-            raise ValidationError(bundle.get("unsupported_search_key"))
+        unsupported_search_keys = {
+            SearchKey.IP_RANGE_FROM,
+            SearchKey.IP_RANGE_TO,
+            SearchKey.MSISDN_RANGE_FROM,
+            SearchKey.MSISDN_RANGE_TO,
+            # SearchKey.EMAIL_ONE_DOMAIN,
+        }
+        passed_unsupported_search_keys = unsupported_search_keys.intersection(search_keys.values())
+        if len(passed_unsupported_search_keys) > 0:
+            raise ValidationError(bundle.get("unsupported_search_key").format(passed_unsupported_search_keys))
 
         for column_id, meaning_type in search_keys.items():
             column_name = None
