@@ -96,7 +96,7 @@ def get_track_metrics() -> dict:
                     """
                 )
             )
-            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=5)
+            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=10)
         except Exception as e:
             track["err"] = str(e)
             track["visitorId"] = "None"
@@ -113,7 +113,7 @@ def get_track_metrics() -> dict:
                     """
                 )
             )
-            track["ip"] = output.eval_js("window.clientIP", timeout_sec=5)
+            track["ip"] = output.eval_js("window.clientIP", timeout_sec=10)
         except Exception as e:
             track["err"] = str(e)
             track["ip"] = "0.0.0.0"
@@ -136,7 +136,7 @@ def get_track_metrics() -> dict:
                 "Content-type": "application/json",
                 "X-Kaggle-Authorization": f"Bearer {jwt_token}",
             }
-            with post(url, headers=headers, json={"Label": "api-key"}, timeout=5) as resp:
+            with post(url, headers=headers, json={"Label": "api-key"}, timeout=10) as resp:
                 err = resp.json()["errors"][0]
                 match = re.search(".*\\s(\\d{5,})\\s.*", err)
                 if match:
@@ -149,7 +149,7 @@ def get_track_metrics() -> dict:
             track["visitorId"] = "None"
     else:
         try:
-            track["ip"] = get(ident_res, timeout=5).text
+            track["ip"] = get(ident_res, timeout=10).text
             track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)

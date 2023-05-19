@@ -222,9 +222,12 @@ class SearchTask:
         if self.provider_metadata_v2 is not None:
             return max([meta.hit_rate_metrics.hit_rate_percent for meta in self.provider_metadata_v2])
 
-    def _download_features_file(self, trace_id: str, features_id: str, metrics_calculation: bool) -> pd.DataFrame:
+    @staticmethod
+    def _download_features_file(
+        endpoint: Optional[str], api_key: Optional[str], trace_id: str, features_id: str, metrics_calculation: bool
+    ) -> pd.DataFrame:
         time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        gzip_file_content = get_rest_client(self.endpoint, self.api_key).get_search_features_file_v2(
+        gzip_file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
             trace_id, features_id, metrics_calculation
         )
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -235,31 +238,9 @@ class SearchTask:
 
     def get_all_initial_raw_features(self, trace_id: str, metrics_calculation: bool = False) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
-        return self._get_all_initial_raw_features(trace_id, self.search_task_id, metrics_calculation)
-
-    @lru_cache()
-    def _get_all_initial_raw_features(
-        self, trace_id: str, search_task_id: str, metrics_calculation: bool
-    ) -> Optional[pd.DataFrame]:
-        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
-            trace_id, search_task_id, metrics_calculation
+        return _get_all_initial_raw_features_cached(
+            self.endpoint, self.api_key, trace_id, self.search_task_id, metrics_calculation
         )
-        result_df = None
-        for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
-            if feature_block["searchType"] == "INITIAL":
-                features_id = feature_block["adsSearchTaskFeaturesId"]
-                features_df = self._download_features_file(trace_id, features_id, metrics_calculation)
-                if result_df is None:
-                    result_df = features_df
-                else:
-                    result_df = pd.merge(result_df, features_df, how="outer", on=SYSTEM_RECORD_ID)
-
-        if result_df is not None:
-            for column in result_df.columns:
-                if column.startswith("etalon_"):
-                    result_df.rename(columns={column: column[7:]}, inplace=True)
-        return result_df
 
     def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:
         if self.provider_metadata_v2 is not None:
@@ -275,27 +256,69 @@ class SearchTask:
 
     def get_all_validation_raw_features(self, trace_id: str, metrics_calculation=False) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
-        return self._get_all_validation_raw_features(trace_id, self.search_task_id, metrics_calculation)
-
-    @lru_cache()
-    def _get_all_validation_raw_features(
-        self, trace_id: str, search_task_id: str, metrics_calculation=False
-    ) -> Optional[pd.DataFrame]:
-        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-        features_response = get_rest_client(self.endpoint, self.api_key).get_search_features_v2(
-            trace_id, search_task_id, metrics_calculation
+        return _get_all_validation_raw_features_cached(
+            self.endpoint, self.api_key, trace_id, self.search_task_id, metrics_calculation
         )
-        result_df = None
-        for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
-            if feature_block["searchType"] == "VALIDATION":
-                features_id = feature_block["adsSearchTaskFeaturesId"]
-                features_df = self._download_features_file(trace_id, features_id, metrics_calculation)
-                if result_df is None:
-                    result_df = features_df
-                else:
-                    result_df = pd.merge(result_df, features_df, how="outer", on=SYSTEM_RECORD_ID)
-
-        return result_df
 
     def get_file_metadata(self, trace_id: str) -> FileMetadata:
         return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id, trace_id)
+
+
+@lru_cache
+def _get_all_initial_raw_features_cached(
+    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation: bool
+) -> Optional[pd.DataFrame]:
+    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    features_response = get_rest_client(endpoint, api_key).get_search_features_v2(
+        trace_id, search_task_id, metrics_calculation
+    )
+    result_df = None
+    for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
+        if feature_block["searchType"] == "INITIAL":
+            features_id = feature_block["adsSearchTaskFeaturesId"]
+            features_df = _download_features_file(endpoint, api_key, trace_id, features_id, metrics_calculation)
+            if result_df is None:
+                result_df = features_df
+            else:
+                result_df = pd.merge(result_df, features_df, how="outer", on=SYSTEM_RECORD_ID)
+
+    if result_df is not None:
+        for column in result_df.columns:
+            if column.startswith("etalon_"):
+                result_df.rename(columns={column: column[7:]}, inplace=True)
+    return result_df
+
+
+@lru_cache
+def _get_all_validation_raw_features_cached(
+    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation=False
+) -> Optional[pd.DataFrame]:
+    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    features_response = get_rest_client(endpoint, api_key).get_search_features_v2(
+        trace_id, search_task_id, metrics_calculation
+    )
+    result_df = None
+    for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
+        if feature_block["searchType"] == "VALIDATION":
+            features_id = feature_block["adsSearchTaskFeaturesId"]
+            features_df = _download_features_file(trace_id, features_id, metrics_calculation)
+            if result_df is None:
+                result_df = features_df
+            else:
+                result_df = pd.merge(result_df, features_df, how="outer", on=SYSTEM_RECORD_ID)
+
+    return result_df
+
+
+def _download_features_file(
+    endpoint: Optional[str], api_key: Optional[str], trace_id: str, features_id: str, metrics_calculation: bool
+) -> pd.DataFrame:
+    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    gzip_file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
+        trace_id, features_id, metrics_calculation
+    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        gzip_file_name = "{0}/features.parquet".format(tmp_dir)
+        with open(gzip_file_name, "wb") as gzip_file:
+            gzip_file.write(gzip_file_content)
+        return pd.read_parquet(gzip_file_name)
