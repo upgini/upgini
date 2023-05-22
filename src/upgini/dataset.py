@@ -40,7 +40,6 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
-from upgini.utils.target_utils import correct_string_target
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -444,9 +443,6 @@ class Dataset:  # (pd.DataFrame):
                 self.logger.warning(msg)
                 print(msg)
                 self.warning_counter.increment()
-
-                # if not is_numeric_dtype(target):
-                #     target = correct_string_target(target)
 
                 train_segment = train_segment.copy().sort_values(by=SYSTEM_RECORD_ID)
                 if self.task_type == ModelTaskType.MULTICLASS:
