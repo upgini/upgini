@@ -445,11 +445,30 @@ class Dataset:  # (pd.DataFrame):
                 print(msg)
                 self.warning_counter.increment()
 
-                if not is_numeric_dtype(target):
-                    target = correct_string_target(target)
+                # if not is_numeric_dtype(target):
+                #     target = correct_string_target(target)
 
                 train_segment = train_segment.copy().sort_values(by=SYSTEM_RECORD_ID)
-                if self.task_type == ModelTaskType.BINARY and min_class_count < self.MIN_SAMPLE_THRESHOLD / 2:
+                if self.task_type == ModelTaskType.MULTICLASS:
+                    # Sort classes by rows count and find 25% quantile class
+                    classes = target.value_counts().index
+                    quantile25_idx = int(0.75 * len(classes))
+                    quantile25_class = classes[quantile25_idx]
+                    count_of_quantile25_class = len(target[target == quantile25_class])
+                    msg = bundle.get("imbalance_multiclass").format(quantile25_class, count_of_quantile25_class)
+                    self.logger.warning(msg)
+                    print(msg)
+                    # 25% and lower classes will stay as is. Higher classes will be downsampled
+                    parts = []
+                    for class_idx in range(quantile25_idx):
+                        sampled = train_segment[train_segment[target_column] == classes[class_idx]].sample(
+                            n=count_of_quantile25_class
+                        )
+                        parts.append(sampled)
+                    for class_idx in range(quantile25_idx, len(classes)):
+                        parts.append(train_segment[train_segment[target_column] == classes[class_idx]])
+                    resampled_data = pd.concat(parts)
+                elif self.task_type == ModelTaskType.BINARY and min_class_count < self.MIN_SAMPLE_THRESHOLD / 2:
                     minority_class = train_segment[train_segment[target_column] == min_class_value]
                     majority_class = train_segment[train_segment[target_column] != min_class_value]
                     sampled_majority_class = majority_class.sample(

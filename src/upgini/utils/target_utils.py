@@ -1,5 +1,5 @@
 import logging
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,9 @@ def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, n
         return pd.Series(y).astype(str).astype("category").cat.codes.values
 
 
-def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> ModelTaskType:
+def define_task(y: pd.Series, logger: Optional[logging.Logger] = None, silent: bool = False) -> ModelTaskType:
+    if logger is None:
+        logger = logging.getLogger()
     target = y.dropna()
     if is_numeric_dtype(target):
         target = target.loc[np.isfinite(target)]
@@ -26,11 +28,15 @@ def define_task(y: pd.Series, logger: logging.Logger, silent: bool = False) -> M
     if len(target) == 0:
         raise ValidationError(bundle.get("empty_target"))
     target_items = target.nunique()
+    if target_items == 1:
+        raise ValidationError(bundle.get("dataset_constant_target"))
     target_ratio = target_items / len(target)
-    if (target_items > 50 or (target_items > 2 and target_ratio > 0.2)) and is_numeric_dtype(target):
-        task = ModelTaskType.REGRESSION
-    elif target_items <= 2:
+    if target_items == 2:
         task = ModelTaskType.BINARY
+    elif (target.dtype.kind == "f" and np.any(target != target.astype(int))) or (
+        is_numeric_dtype(target) and (target_items > 50 or target_ratio > 0.2)
+    ):
+        task = ModelTaskType.REGRESSION
     else:
         task = ModelTaskType.MULTICLASS
     logger.info(f"Detected task type: {task}")
