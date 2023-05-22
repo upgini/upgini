@@ -35,6 +35,21 @@ CATBOOST_PARAMS = {
     "allow_writing_files": False,
 }
 
+CATBOOST_MULTICLASS_PARAMS = {
+    "n_estimators": 250,
+    "learning_rate": 0.25,
+    "max_depth": 3,
+    "border_count": 15,
+    "max_ctr_complexity": 1,
+    "loss_function": "MultiClass",
+    "subsample": 0.5,
+    "bootstrap_type": "Bernoulli",
+    "rsm": 0.1,
+    "verbose": False,
+    "random_state": DEFAULT_RANDOM_STATE,
+    "allow_writing_files": False,
+}
+
 LIGHTGBM_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
     "num_leaves": 16,
@@ -158,11 +173,10 @@ class EstimatorWrapper:
             "target_type": target_type,
         }
         if estimator is None:
-            if target_type in [ModelTaskType.MULTICLASS, ModelTaskType.BINARY]:
-                if target_type == ModelTaskType.MULTICLASS and _is_too_many_categorical_values(X):
-                    estimator = LightGBMWrapper(LGBMClassifier(**LIGHTGBM_PARAMS), **kwargs)
-                else:
-                    estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
+            if target_type == ModelTaskType.MULTICLASS:
+                estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_MULTICLASS_PARAMS), **kwargs)
+            elif target_type == ModelTaskType.BINARY:
+                estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
                 estimator = CatBoostWrapper(CatBoostRegressor(**CATBOOST_PARAMS), **kwargs)
             else:

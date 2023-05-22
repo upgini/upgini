@@ -107,6 +107,7 @@ class FeaturesEnricher(TransformerMixin):
     TARGET_NAME = "target"
     RANDOM_STATE = 42
     CALCULATE_METRICS_THRESHOLD = 50_000_000
+    CALCULATE_METRICS_MIN_THRESHOLD = 500
     EMPTY_FEATURES_INFO = pd.DataFrame(
         columns=[
             bundle.get("features_info_provider"),
@@ -543,7 +544,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("transform_with_paid_features")
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                     self.__display_slack_community_link(msg)
                     return None
 
@@ -685,7 +686,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                     self.__display_slack_community_link(msg)
                     return None
 
@@ -1268,7 +1269,7 @@ class FeaturesEnricher(TransformerMixin):
                 and not is_demo_dataset
             ):
                 msg = bundle.get("transform_with_trial_features")
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 print(msg)
 
             columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
@@ -1652,15 +1653,20 @@ class FeaturesEnricher(TransformerMixin):
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 self.__display_slack_community_link(msg)
             return None
 
-        calculate_metrics = (
-            calculate_metrics
-            if calculate_metrics is not None
-            else (len(dataset) * len(dataset.columns) < self.CALCULATE_METRICS_THRESHOLD)
-        )
+        if calculate_metrics is None:
+            if len(dataset) < self.CALCULATE_METRICS_MIN_THRESHOLD:
+                msg = bundle.get("too_small_for_metrics")
+                self.logger.warning(msg)
+                calculate_metrics = False
+            elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
+                self.logger.warning("Too big dataset for automatic metrics calculation")
+                calculate_metrics = False
+            else:
+                calculate_metrics = True
 
         del df, validated_X, validated_y, dataset
         gc.collect()

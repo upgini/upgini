@@ -77,6 +77,9 @@ class EmailSearchKeyConverter:
                 msg = bundle.get("all_emails_invalid").format(self.email_column)
                 print(msg)
                 self.logger.warning(msg)
+                df = df.drop(columns=self.HEM_COLUMN_NAME)
+                del self.search_keys[self.email_column]
+                return df
             self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
             self.email_converted_to_hem = True
 
