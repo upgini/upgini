@@ -22,12 +22,7 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import UpginiConnectionError, ValidationError
-from upgini.http import (
-    UPGINI_API_KEY,
-    LoggerFactory,
-    get_rest_client,
-    show_status_error,
-)
+from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -345,7 +340,6 @@ class FeaturesEnricher(TransformerMixin):
                     if self.raise_validation_error:
                         raise e
                 else:
-                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -467,7 +461,6 @@ class FeaturesEnricher(TransformerMixin):
                         raise e
                     return None
                 else:
-                    show_status_error()
                     self._dump_python_libs()
                     self.__display_slack_community_link()
                     raise e
@@ -584,7 +577,6 @@ class FeaturesEnricher(TransformerMixin):
                     return None
                 else:
                     if not silent_mode:
-                        show_status_error()
                         self._dump_python_libs()
                         self.__display_slack_community_link()
                     raise e
@@ -903,7 +895,6 @@ class FeaturesEnricher(TransformerMixin):
                         raise e
                 else:
                     if not silent:
-                        show_status_error()
                         self._dump_python_libs()
                         self.__display_slack_community_link()
                     raise e

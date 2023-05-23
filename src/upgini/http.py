@@ -272,6 +272,7 @@ class _RestClient:
                 time.sleep(10)
                 return self._with_unauth_retry(request)
             else:
+                show_status_error()
                 raise e
         except UnauthorizedError:
             self._syncronized_refresh_access_token()
@@ -281,13 +282,15 @@ class _RestClient:
                 time.sleep(random.randint(1, 10))
                 return self._with_unauth_retry(request, try_number + 1)
             elif e.status_code == 400 and "MD5Exception".lower() in e.message.lower() and try_number < 3:
-                print(bundle.get("upload_file_checksum_fail").format(e.message))
+                # TODO send log
+                # print(bundle.get("upload_file_checksum_fail").format(e.message))
                 return self._with_unauth_retry(request, try_number + 1)
             elif e.status_code == 403:
                 raise ValidationError(bundle.get("access_denied"))
             elif "more than one concurrent search request" in e.message.lower():
                 raise ValidationError(bundle.get("concurrent_request"))
             else:
+                show_status_error()
                 raise e
 
     @staticmethod
