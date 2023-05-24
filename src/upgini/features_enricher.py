@@ -1649,7 +1649,9 @@ class FeaturesEnricher(TransformerMixin):
             return None
 
         if calculate_metrics is None:
-            if len(dataset) < self.CALCULATE_METRICS_MIN_THRESHOLD:
+            if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
+                [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
+            ):
                 msg = bundle.get("too_small_for_metrics")
                 self.logger.warning(msg)
                 calculate_metrics = False
