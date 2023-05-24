@@ -15,6 +15,7 @@ from upgini.errors import ValidationError
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
+    ModelTaskType,
     FeaturesMetadataV2,
     HitRateMetrics,
     ModelEvalSet,
@@ -1337,6 +1338,122 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeValue1" in str(transform_req.body)
 
     assert transformed.shape == (10000, 4)
+
+
+def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
+    pd.set_option("mode.chained_assignment", "raise")
+    url = "http://fake_url2"
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_features_meta(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="feature",
+                    type="NUMERIC",
+                    source="ads",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                    commercial_schema="Trial",
+                    data_provider="Upgini",
+                    data_provider_link="https://upgini.com",
+                    data_source="Community shared",
+                    data_source_link="https://upgini.com",
+                ),
+                FeaturesMetadataV2(
+                    name="SystemRecordId_473310000", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=1.0
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000]
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"]
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        date_format="%Y-%m-%d",
+        endpoint=url,
+        api_key="fake_api_key",
+        loss="poisson",
+        model_task_type=ModelTaskType.REGRESSION,
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        calculate_metrics=False,
+    )
+
+    fit_req = None
+    initial_search_url = url + "/public/api/v2/search/initial"
+    for elem in requests_mock.request_history:
+        if elem.url == initial_search_url:
+            fit_req = elem
+
+    assert fit_req is not None
+    assert "lightgbm_params_preselection.objective" in str(fit_req.body)
+    assert "lightgbm_params_base.objective" in str(fit_req.body)
+    assert "lightgbm_params_segment.objective" in str(fit_req.body)
+    assert "poisson" in str(fit_req.body)
 
 
 def test_search_with_only_personal_keys(requests_mock: Mocker):
