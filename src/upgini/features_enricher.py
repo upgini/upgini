@@ -128,6 +128,7 @@ class FeaturesEnricher(TransformerMixin):
         date_format: Optional[str] = None,
         random_state: int = 42,
         cv: Optional[CVType] = None,
+        loss: Optional[str] = None,
         detect_missing_search_keys: bool = True,
         generate_features: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
@@ -198,6 +199,8 @@ class FeaturesEnricher(TransformerMixin):
         self.cv = cv
         if cv is not None:
             self.runtime_parameters.properties["cv_type"] = cv.name
+        self.loss = loss
+
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
@@ -735,7 +738,6 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
-
                     _cv = cv or self.cv
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
@@ -1531,6 +1533,39 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__correct_target(df)
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
+
+        if self.loss is not None:
+            supported_loss_reg = [
+                "regression",
+                "regression_l1",
+                "huber",
+                "poisson",
+                "quantile",
+                "mape",
+                "mean_absolute_percentage_error",
+                "gamma",
+                "tweedie",
+            ]
+            supported_loss_binary = ["binary"]
+            supported_loss_multi_clf = ["multiclass", "multiclassova", "multiclass_ova", "ova", "ovr"]
+            use_custom_loss = (
+                True
+                if (
+                    (model_task_type == ModelTaskType.REGRESSION)
+                    and (self.loss in supported_loss_reg)
+                    or (model_task_type == ModelTaskType.BINARY)
+                    and (self.loss in supported_loss_binary)
+                    or (model_task_type == ModelTaskType.MULTICLASS)
+                    and (self.loss in supported_loss_multi_clf)
+                )
+                else False
+            )
+
+            if use_custom_loss:
+                pass
+            else:
+                msg = f"Loss '{self.loss}' is not supported for {model_task_type}"
+                self.logger.warning(msg)
 
         if validated_eval_set is not None and len(validated_eval_set) > 0:
             df[EVAL_SET_INDEX] = 0
