@@ -72,7 +72,7 @@ class EstimatorWrapper:
         multiplier: int,
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
-        add_params: Optional[Dict[str, Any]] = {},
+        add_params: Optional[Dict[str, Any]] = None,
     ):
         self.estimator = estimator
         self.scorer = scorer
@@ -165,7 +165,7 @@ class EstimatorWrapper:
         X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
         cat_features: Optional[List[str]] = None,
-        add_params: Optional[Dict[str, Any]] = {},
+        add_params: Optional[Dict[str, Any]] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -404,8 +404,8 @@ def _get_cat_features(X: pd.DataFrame) -> List[str]:
 
 def _get_add_params(input_params, add_params):
     output_params = dict(input_params)
-    for k, v in add_params.items():
-        output_params[k] = v
+    if add_params is not None:
+        output_params.update(add_params)
 
     return output_params
 

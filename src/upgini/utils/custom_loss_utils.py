@@ -1,6 +1,7 @@
 from upgini.metadata import ModelTaskType, RuntimeParameters
 from typing import Optional, Dict, Any
 import logging
+from upgini.resource_bundle import bundle
 
 
 def get_runtime_params_custom_loss(
@@ -42,11 +43,13 @@ def get_runtime_params_custom_loss(
             runtime_parameters.properties["lightgbm_params_preselection.objective"] = loss
             runtime_parameters.properties["lightgbm_params_base.objective"] = loss
             runtime_parameters.properties["lightgbm_params_segment.objective"] = loss
-            msg = f"Using loss '{loss}' for feature selection"
-            logger.warning(msg)
+            msg = bundle.get("loss_selection_info").format(loss)
+            logger.info(msg)
+            print(msg)
         else:
-            msg = f"Loss '{loss}' is not supported for feature selection with {model_task_type}"
+            msg = bundle.get("loss_selection_warn").format(loss, model_task_type)
             logger.warning(msg)
+            print(msg)
 
     return runtime_parameters
 
@@ -95,10 +98,12 @@ def get_additional_params_custom_loss(
             elif model_task_type == ModelTaskType.MULTICLASS:
                 output_params["loss_function"] = calculation_loss_multi_clf_map[loss]
 
-            msg = f"Using loss '{loss}' for metrics calculation"
-            logger.warning(msg)
+            msg = bundle.get("loss_calc_metrics_info").format(loss)
+            logger.info(msg)
+            print(msg)
         else:
-            msg = f"Loss '{loss}' is not supported for metrics calculation with {model_task_type}"
+            msg = bundle.get("loss_calc_metrics_warn").format(loss, model_task_type)
             logger.warning(msg)
+            print(msg)
 
     return output_params

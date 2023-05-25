@@ -202,9 +202,7 @@ class FeaturesEnricher(TransformerMixin):
         self.cv = cv
         if cv is not None:
             self.runtime_parameters.properties["cv_type"] = cv.name
-        self.loss = loss
-        if loss is not None:
-            self.loss = self.loss.lower()
+        self.loss = loss.lower() if loss is not None else None
 
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
