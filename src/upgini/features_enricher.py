@@ -54,6 +54,7 @@ from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
+from upgini.utils.custom_loss_utils import get_runtime_params_custom_loss, get_additional_params_custom_loss
 
 DEMO_DATASET_HASHES = [
     "7c354d1b1794c53ac7d7e5a2f2574568b660ca9159bc0d2aca9c7127ebcea2f7",  # demo_salary fit
@@ -95,6 +96,9 @@ class FeaturesEnricher(TransformerMixin):
         Type of cross validation: CVType.k_fold, CVType.time_series, CVType.blocked_time_series.
         Default cross validation is k-fold for regressions and stratified k-fold for classifications.
 
+    loss: str, optional (default=None)
+        Custom loss function to use for feature selection and metrics calculation.
+
     shared_datasets: list of str, optional (default=None)
         List of private shared dataset ids for custom search
     """
@@ -128,6 +132,7 @@ class FeaturesEnricher(TransformerMixin):
         date_format: Optional[str] = None,
         random_state: int = 42,
         cv: Optional[CVType] = None,
+        loss: Optional[str] = None,
         detect_missing_search_keys: bool = True,
         generate_features: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
@@ -155,7 +160,6 @@ class FeaturesEnricher(TransformerMixin):
             print(msg)
 
         validate_version(self.logger)
-
         self.search_keys = search_keys or dict()
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
@@ -198,6 +202,8 @@ class FeaturesEnricher(TransformerMixin):
         self.cv = cv
         if cv is not None:
             self.runtime_parameters.properties["cv_type"] = cv.name
+        self.loss = loss.lower() if loss is not None else None
+
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
@@ -735,7 +741,6 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
-
                     _cv = cv or self.cv
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
@@ -754,12 +759,22 @@ class FeaturesEnricher(TransformerMixin):
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
                     baseline_estimator = None
+                    custom_loss_add_params = get_additional_params_custom_loss(
+                        self.loss, model_task_type, logger=self.logger
+                    )
                     if fitting_X.shape[1] > 0:
                         self.logger.info(
                             f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring, cat_features
+                            estimator,
+                            self.logger,
+                            model_task_type,
+                            _cv,
+                            fitting_enriched_X,
+                            scoring,
+                            cat_features,
+                            add_params=custom_loss_add_params,
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
 
@@ -771,7 +786,14 @@ class FeaturesEnricher(TransformerMixin):
                             f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
-                            estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring, cat_features
+                            estimator,
+                            self.logger,
+                            model_task_type,
+                            _cv,
+                            fitting_enriched_X,
+                            scoring,
+                            cat_features,
+                            add_params=custom_loss_add_params,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         if etalon_metric is not None:
@@ -1531,6 +1553,9 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__correct_target(df)
 
         model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
+        self.runtime_parameters = get_runtime_params_custom_loss(
+            self.loss, model_task_type, self.runtime_parameters, self.logger
+        )
 
         if validated_eval_set is not None and len(validated_eval_set) > 0:
             df[EVAL_SET_INDEX] = 0

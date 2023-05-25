@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -72,6 +72,7 @@ class EstimatorWrapper:
         multiplier: int,
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
+        add_params: Optional[Dict[str, Any]] = None,
     ):
         self.estimator = estimator
         self.scorer = scorer
@@ -79,6 +80,7 @@ class EstimatorWrapper:
         self.multiplier = multiplier
         self.cv = cv
         self.target_type = target_type
+        self.add_params = add_params
         self.cv_estimators = None
 
     def fit(self, X: pd.DataFrame, y: np.ndarray, **kwargs):
@@ -163,6 +165,7 @@ class EstimatorWrapper:
         X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
         cat_features: Optional[List[str]] = None,
+        add_params: Optional[Dict[str, Any]] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -174,11 +177,14 @@ class EstimatorWrapper:
         }
         if estimator is None:
             if target_type == ModelTaskType.MULTICLASS:
-                estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_MULTICLASS_PARAMS), **kwargs)
+                params = _get_add_params(CATBOOST_MULTICLASS_PARAMS, add_params)
+                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                estimator = CatBoostWrapper(CatBoostClassifier(**CATBOOST_PARAMS), **kwargs)
+                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                estimator = CatBoostWrapper(CatBoostRegressor(**CATBOOST_PARAMS), **kwargs)
+                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
@@ -394,6 +400,14 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
 
 def _get_cat_features(X: pd.DataFrame) -> List[str]:
     return [c for c in X.columns if not is_numeric_dtype(X[c])]
+
+
+def _get_add_params(input_params, add_params):
+    output_params = dict(input_params)
+    if add_params is not None:
+        output_params.update(add_params)
+
+    return output_params
 
 
 def _ext_root_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutput="uniform_average"):
