@@ -59,7 +59,7 @@ class DateTimeSearchKeyConverter:
         if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
         elif isinstance(df[self.date_column].values[0], datetime.date):
-            df[self.date_column] = pd.to_datetime(df[self.date_column])
+            df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
         elif is_string_dtype(df[self.date_column]):
             df[self.date_column] = df[self.date_column].apply(self.clean_date)
             df[self.date_column] = self.parse_date(df)
