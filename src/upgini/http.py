@@ -32,7 +32,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.resource_bundle import bundle
-from upgini.utils.track_info import get_track_metrics_with_timeout
+from upgini.utils.track_info import get_track_metrics
 
 try:
     from importlib_metadata import version
@@ -382,7 +382,7 @@ class _RestClient:
                     )
                 files["tracking"] = (
                     "tracking.json",
-                    dumps(get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)).encode(),
+                    dumps(get_track_metrics()).encode(),
                     "application/json",
                 )
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
@@ -466,7 +466,7 @@ class _RestClient:
                     )
                 files["tracking"] = (
                     "ide",
-                    dumps(get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)).encode(),
+                    dumps(get_track_metrics()).encode(),
                     "application/json",
                 )
 
@@ -809,7 +809,7 @@ class BackendLogHandler(logging.Handler):
         def task():
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
-                    self.track_metrics = get_track_metrics_with_timeout(TRACK_METRICS_TIMEOUT_SECONDS)
+                    self.track_metrics = get_track_metrics()
                     if "ip" in self.track_metrics.keys():
                         self.hostname = self.track_metrics["ip"]
                     else:
