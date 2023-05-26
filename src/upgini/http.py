@@ -185,9 +185,11 @@ class _RestClient:
     SEARCH_MODELS_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/models/{0}"
     SEARCH_SCORES_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}"
     SEARCH_FEATURES_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/rawfeatures/{0}?metricsCalculation={1}"
+    SEARCH_TARGET_OUTLIERS_URI_FMT = SERVICE_ROOT_V2 + "search/target-outliers/{0}"
     SEARCH_MODEL_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/models/{0}/file"
     SEARCH_SCORES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}/file"
     SEARCH_FEATURES_FILE_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/rawfeatures/{0}/file?metricsCalculation={1}"
+    SEARCH_TARGET_OUTLIERS_FILE_URI_FMT = SERVICE_ROOT_V2 + "search/target-outliers/{0}/file"
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
     SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
@@ -536,8 +538,16 @@ class _RestClient:
         api_path = self.SEARCH_FEATURES_URI_FMT_V2.format(search_task_id, str(metrics_calculation).lower())
         return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
-    def get_search_features_file_v2(self, trace_id: str, ads_features_id: str, metrics_calculation: bool):
+    def get_search_features_file_v2(self, trace_id: str, ads_features_id: str, metrics_calculation: bool) -> bytes:
         api_path = self.SEARCH_FEATURES_FILE_URI_FMT_V2.format(ads_features_id, str(metrics_calculation).lower())
+        return self._with_unauth_retry(lambda: self._send_get_file_req(api_path, trace_id))
+
+    def get_search_target_outliners(self, trace_id: str, search_task_id: str):
+        api_path = self.SEARCH_TARGET_OUTLIERS_URI_FMT.format(search_task_id)
+        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+
+    def get_search_target_outliners_file(self, trace_id: str, ads_target_outliers_id: str) -> bytes:
+        api_path = self.SEARCH_TARGET_OUTLIERS_FILE_URI_FMT.format(ads_target_outliers_id)
         return self._with_unauth_retry(lambda: self._send_get_file_req(api_path, trace_id))
 
     def upload_user_ads(self, file_path: str, metadata: FileMetadata):
