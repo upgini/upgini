@@ -45,7 +45,7 @@ def _get_execution_ide() -> str:
         return "other"
 
 
-@lru_cache
+@lru_cache()
 def get_track_metrics() -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
