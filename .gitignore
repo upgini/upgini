@@ -147,3 +147,4 @@ publish.sh
 catboost_info/
 build/
 playgroung.ipynb
+fingerprint.js

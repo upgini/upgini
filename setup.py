@@ -35,7 +35,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.139"
+version = "1.1.140"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -68,7 +68,7 @@ try:
         keywords=["data science", "machine learning", "data mining", "automl", "data search"],
         package_dir={"": "src"},
         packages=find_packages(where="src"),
-        package_data={"": ["strings.properties"]},
+        package_data={"": ["strings.properties", "fingerprint.js"]},
         python_requires=">=3.7,<3.11",
         install_requires=[
             "python-dateutil>=2.8.0",

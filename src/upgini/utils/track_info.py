@@ -1,12 +1,11 @@
+from functools import lru_cache
 import os
 import re
 import socket
 import sys
 from getpass import getuser
 from hashlib import sha256
-from typing import Optional
 from uuid import getnode
-from concurrent import futures
 
 from requests import get, post
 
@@ -46,27 +45,7 @@ def _get_execution_ide() -> str:
         return "other"
 
 
-track_metrics: Optional[dict] = None
-
-
-def get_track_metrics_with_timeout(timeout_seconds: int = 10) -> dict:
-    global track_metrics
-    if track_metrics is not None:
-        return track_metrics
-
-    try:
-        with futures.ProcessPoolExecutor() as executor:
-            future = executor.submit(get_track_metrics)
-            try:
-                track_metrics = future.result(timeout_seconds)
-                return track_metrics
-            except futures.TimeoutError:
-                executor.shutdown(wait=False)
-                return dict()
-    except Exception:
-        return dict()
-
-
+@lru_cache
 def get_track_metrics() -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
@@ -86,8 +65,22 @@ def get_track_metrics() -> dict:
             from google.colab import output  # type: ignore
             from IPython.display import Javascript, display
 
+            # path_to_script = Path(__file__).parent.parent.resolve() / "fingerprint.js"
+            # with open(path_to_script) as f:
+            #     js_content = f.read()
+            # print(f"JS loaded. Length: {len(js_content)}")
+
             display(
                 Javascript(
+                    # """
+                    #     async function loadModuleFromString(code) {
+                    #         const blob = new Blob([code], { type: 'application/javascript' });
+                    #         const url = URL.createObjectURL(blob);
+                    #         const module = await import(url);
+                    #         URL.revokeObjectURL(url); // Clean URL-object after module load
+                    #         return module;
+                    #     }
+                    #     window.visitorId = loadModuleFromString(""" + js_content + """)
                     """
                         window.visitorId = import('https://openfpcdn.io/fingerprintjs/v3')
                             .then(FingerprintJS => FingerprintJS.load())
@@ -96,7 +89,7 @@ def get_track_metrics() -> dict:
                     """
                 )
             )
-            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=10)
+            track["visitorId"] = output.eval_js("visitorId", timeout_sec=10)
         except Exception as e:
             track["err"] = str(e)
             track["visitorId"] = "None"
