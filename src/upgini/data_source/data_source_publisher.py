@@ -42,6 +42,7 @@ class DataSourcePublisher:
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
         secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
+        sort_column: Optional[str] = None,
         date_format: Optional[str] = None,
         exclude_columns: Optional[List[str]] = None,
         hash_feature_names=False,
@@ -72,6 +73,8 @@ class DataSourcePublisher:
                 }
                 if secondary_search_keys is not None:
                     request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
+                if sort_column is not None:
+                    request["sortColumn"] = sort_column
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
