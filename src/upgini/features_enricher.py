@@ -1852,7 +1852,10 @@ class FeaturesEnricher(TransformerMixin):
             date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
-            Xy = pd.concat([X, y], axis=1)
+            # Xy = pd.concat([X, y], axis=1)
+            Xy = X.copy()
+            Xy[TARGET] = y
+
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in Xy.columns])
             search_keys_hash = "search_keys_hash"
 
