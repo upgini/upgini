@@ -6,7 +6,7 @@
 <p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>optimized for ML models with LLMs and other neural networks</b> </p>
 <p align="center">
 	<br />
-    <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb"><strong>Quick Start in Colab »</strong></a> |
+    <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb"><strong>Quick Start in Colab »</strong></a> |
     <!--<a href="https://upgini.com/">Upgini.com</a> |-->
     <a href="https://profile.upgini.com">Register / Sign In</a> |
     <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
