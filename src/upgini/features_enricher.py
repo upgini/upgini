@@ -43,6 +43,10 @@ from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils.country_utils import CountrySearchKeyDetector
+from upgini.utils.custom_loss_utils import (
+    get_additional_params_custom_loss,
+    get_runtime_params_custom_loss,
+)
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
 from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits
@@ -54,7 +58,6 @@ from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
-from upgini.utils.custom_loss_utils import get_runtime_params_custom_loss, get_additional_params_custom_loss
 
 DEMO_DATASET_HASHES = [
     "7c354d1b1794c53ac7d7e5a2f2574568b660ca9159bc0d2aca9c7127ebcea2f7",  # demo_salary fit
@@ -1061,9 +1064,29 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             search_keys = self.fit_search_keys
 
+            rows_to_drop = None
+            task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
+            if task_type == ModelTaskType.REGRESSION:
+                target_outliers_df = self._search_task.get_target_outliers(trace_id)
+                if len(target_outliers_df) > 0:
+                    rows_to_drop = pd.merge(
+                        self.df_with_original_index,
+                        target_outliers_df,
+                        left_on=SYSTEM_RECORD_ID,
+                        right_on=SYSTEM_RECORD_ID,
+                        how="inner",
+                    )
+                    top_outliers = (
+                        rows_to_drop.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
+                    )
+                    msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers)
+                    print(msg)
+                    self.logger.warning(msg)
+
             enriched_Xy, enriched_eval_sets = self.__enrich(
                 self.df_with_original_index,
                 self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
+                rows_to_drop=rows_to_drop,
             )
 
             enriched_X = drop_existing_columns(enriched_Xy, TARGET)
@@ -2031,6 +2054,7 @@ class FeaturesEnricher(TransformerMixin):
         result_features: Optional[pd.DataFrame],
         X: Optional[pd.DataFrame] = None,
         is_transform=False,
+        rows_to_drop: Optional[pd.DataFrame] = None,
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
@@ -2054,6 +2078,11 @@ class FeaturesEnricher(TransformerMixin):
             right_on=SYSTEM_RECORD_ID,
             how="left" if is_transform else "inner",
         )
+
+        if rows_to_drop is not None:
+            print(f"Before dropping target outliers size: {len(result_features)}")
+            result_features = result_features[~result_features[SYSTEM_RECORD_ID].isin(rows_to_drop[SYSTEM_RECORD_ID])]
+            print(f"After dropping target outliers size: {len(result_features)}")
 
         result_eval_sets = dict()
         if not is_transform and EVAL_SET_INDEX in result_features.columns:

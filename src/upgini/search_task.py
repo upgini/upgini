@@ -228,6 +228,10 @@ class SearchTask:
             self.endpoint, self.api_key, trace_id, self.search_task_id, metrics_calculation
         )
 
+    def get_target_outliers(self, trace_id: str) -> Optional[pd.DataFrame]:
+        self._check_finished_initial_search()
+        return _get_target_outliers_cached(self.endpoint, self.api_key, trace_id, self.search_task_id)
+
     def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:
         if self.provider_metadata_v2 is not None:
             hit_rate_dict = {}
@@ -296,15 +300,41 @@ def _get_all_validation_raw_features_cached(
     return result_df
 
 
+@lru_cache()
+def _get_target_outliers_cached(
+    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str
+) -> pd.DataFrame:
+    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    target_outliers_response = get_rest_client(endpoint, api_key).get_search_target_outliners(trace_id, search_task_id)
+    result_df = None
+    for dto in target_outliers_response["adsSearchTaskTargetOutliersDTO"]:
+        target_outliers_id = dto["adsSearchTaskTargetOutliersId"]
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+        file_content = get_rest_client(endpoint, api_key).get_search_target_outliners_file(trace_id, target_outliers_id)
+        target_outliers_df = _read_parquet(file_content, "target_outliers.parquet")
+        if result_df is None:
+            result_df = target_outliers_df
+        else:
+            # TODO another strategy of merge
+            pass
+            # result_df = pd.merge(result_df, target_outliers_df, how="outer", on=SYSTEM_RECORD_ID)
+
+    return result_df
+
+
 def _download_features_file(
     endpoint: Optional[str], api_key: Optional[str], trace_id: str, features_id: str, metrics_calculation: bool
 ) -> pd.DataFrame:
     time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-    gzip_file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
+    file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
         trace_id, features_id, metrics_calculation
     )
+    return _read_parquet(file_content)
+
+
+def _read_parquet(file_content: bytes, file_name: str = "features.parquet"):
     with tempfile.TemporaryDirectory() as tmp_dir:
-        gzip_file_name = "{0}/features.parquet".format(tmp_dir)
-        with open(gzip_file_name, "wb") as gzip_file:
-            gzip_file.write(gzip_file_content)
-        return pd.read_parquet(gzip_file_name)
+        tmp_file_name = f"{tmp_dir}/{file_name}"
+        with open(tmp_file_name, "wb") as gzip_file:
+            gzip_file.write(file_content)
+        return pd.read_parquet(tmp_file_name)
