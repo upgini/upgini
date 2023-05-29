@@ -49,6 +49,7 @@ from upgini.utils.display_utils import display_html_dataframe, do_without_pandas
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
+from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.target_utils import define_task
@@ -979,6 +980,9 @@ class FeaturesEnricher(TransformerMixin):
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
             extended_X = converter.convert(extended_X)
             generated_features.extend(converter.generated_features)
+        if self.country_code is None and SearchKey.COUNTRY not in search_keys.values():
+            converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
+            extended_X = converter.convert(extended_X)
         generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
         return extended_X, search_keys
@@ -1324,6 +1328,9 @@ class FeaturesEnricher(TransformerMixin):
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
                 email_converted_to_hem = converter.email_converted_to_hem
+            if self.country_code is None and SearchKey.COUNTRY not in search_keys.values():
+                converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
+                df = converter.convert(df)
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
@@ -1587,6 +1594,9 @@ class FeaturesEnricher(TransformerMixin):
             df = converter.convert(df)
             self.fit_generated_features.extend(converter.generated_features)
             email_converted_to_hem = converter.email_converted_to_hem
+        if self.country_code is None and SearchKey.COUNTRY not in self.fit_search_keys.values():
+            converter = IpToCountrySearchKeyConverter(self.fit_search_keys, self.logger)
+            df = converter.convert(df)
 
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
         if email_converted_to_hem:
@@ -1941,21 +1951,21 @@ class FeaturesEnricher(TransformerMixin):
 
     @staticmethod
     def _get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
-        date_columns = [col for col, t in search_keys.items() if t in [SearchKey.DATE, SearchKey.DATETIME]]
-        if len(date_columns) > 0:
-            return date_columns[0]
+        for col, t in search_keys.items():
+            if t in [SearchKey.DATE, SearchKey.DATETIME]:
+                return col
 
     @staticmethod
     def __get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
-        email_columns = [col for col, t in search_keys.items() if t == SearchKey.EMAIL]
-        if len(email_columns) > 0:
-            return email_columns[0]
+        for col, t in search_keys.items():
+            if t == SearchKey.EMAIL:
+                return col
 
     @staticmethod
     def __get_hem_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
-        hem_columns = [col for col, t in search_keys.items() if t == SearchKey.HEM]
-        if len(hem_columns) > 0:
-            return hem_columns[0]
+        for col, t in search_keys.items():
+            if t == SearchKey.HEM:
+                return col
 
     def __add_fit_system_record_id(
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey]
