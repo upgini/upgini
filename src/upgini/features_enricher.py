@@ -1065,7 +1065,8 @@ class FeaturesEnricher(TransformerMixin):
             search_keys = self.fit_search_keys
 
             rows_to_drop = None
-            if self.model_task_type == ModelTaskType.REGRESSION:
+            task_type = self.model_task_type or define_task(y, self.logger, silent=True)
+            if task_type == ModelTaskType.REGRESSION:
                 target_outliers_df = self._search_task.get_target_outliers(trace_id)
                 if len(target_outliers_df) > 0:
                     rows_to_drop = pd.merge(
