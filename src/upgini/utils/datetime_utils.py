@@ -117,7 +117,8 @@ class DateTimeSearchKeyConverter:
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
     try:
         if df[date_col].isnull().any():
-            print("All values are null")
+            print("There is null value in dates")
+            print(df[date_col])
             return False
 
         df = pd.to_datetime(df[date_col]).to_frame()
