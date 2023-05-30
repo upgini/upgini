@@ -52,7 +52,7 @@ feature_name_header = bundle.get("features_info_name")
 shap_value_header = bundle.get("features_info_shap")
 hitrate_header = bundle.get("features_info_hitrate")
 
-SearchTask.PROTECT_FROM_RATE_LIMIT = False
+# SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0.1
 pd.set_option("mode.chained_assignment", "raise")
 pd.set_option("display.max_columns", 1000)

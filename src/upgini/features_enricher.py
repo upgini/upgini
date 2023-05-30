@@ -260,6 +260,7 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        remove_outliers_calc_metrics: bool = True,
         **kwargs,
     ):
         """Fit to data.
@@ -292,6 +293,9 @@ class FeaturesEnricher(TransformerMixin):
         scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
+
+        remove_outliers_calc_metrics, optional (default=True)
+            If True then rows with target ouliers will be dropped on metrics calculation
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
@@ -329,6 +333,7 @@ class FeaturesEnricher(TransformerMixin):
                     scoring=scoring,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
+                    remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                 )
                 self.logger.info("Fit finished successfully")
             except Exception as e:
@@ -365,6 +370,7 @@ class FeaturesEnricher(TransformerMixin):
         calculate_metrics: Optional[bool] = None,
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
+        remove_outliers_calc_metrics: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -401,6 +407,9 @@ class FeaturesEnricher(TransformerMixin):
         scoring: string or callable, optional (default=None)
             A string or a scorer callable object / function with signature scorer(estimator, X, y).
             If None, the estimator's score method is used.
+
+        remove_outliers_calc_metrics, optional (default=True)
+            If True then rows with target ouliers will be dropped on metrics calculation
 
         Returns
         -------
@@ -448,6 +457,7 @@ class FeaturesEnricher(TransformerMixin):
                     estimator=estimator,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
+                    remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                 )
                 self.logger.info("Inner fit finished successfully")
             except Exception as e:
@@ -610,6 +620,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        remove_outliers_calc_metrics: bool = True,
         trace_id: Optional[str] = None,
         silent: bool = False,
         **kwargs,
@@ -642,6 +653,9 @@ class FeaturesEnricher(TransformerMixin):
 
         max_features: int, optional (default=None)
             Maximum number of most important features to select. If None, the number is unlimited.
+
+        remove_outliers_calc_metrics, optional (default=True)
+            If True then rows with target ouliers will be dropped on metrics calculation
 
         Returns
         -------
@@ -707,14 +721,15 @@ class FeaturesEnricher(TransformerMixin):
                                     raise ValidationError(bundle.get("cat_feature_search_key").format(cat_feature))
 
                 prepared_data = self._prepare_data_for_metrics(
-                    trace_id,
-                    X,
-                    y,
-                    eval_set,
-                    exclude_features_sources,
-                    importance_threshold,
-                    max_features,
-                    search_keys_for_metrics,
+                    trace_id=trace_id,
+                    X=X,
+                    y=y,
+                    eval_set=eval_set,
+                    exclude_features_sources=exclude_features_sources,
+                    importance_threshold=importance_threshold,
+                    max_features=max_features,
+                    remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    search_keys_for_metrics=search_keys_for_metrics,
                 )
                 if prepared_data is None:
                     return None
@@ -1036,6 +1051,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
+        remove_outliers_calc_metrics: bool = True,
         search_keys_for_metrics: Optional[List[str]] = None,
     ):
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -1073,15 +1089,20 @@ class FeaturesEnricher(TransformerMixin):
             if task_type == ModelTaskType.REGRESSION:
                 target_outliers_df = self._search_task.get_target_outliers(trace_id)
                 if target_outliers_df is not None and len(target_outliers_df) > 0:
-                    rows_to_drop = pd.merge(
+                    outliers = pd.merge(
                         self.df_with_original_index,
                         target_outliers_df,
                         left_on=SYSTEM_RECORD_ID,
                         right_on=SYSTEM_RECORD_ID,
                         how="inner",
                     )
-                    top_outliers = rows_to_drop.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
-                    msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers)
+                    top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
+                    if remove_outliers_calc_metrics:
+                        rows_to_drop = outliers
+                        not_msg = ""
+                    else:
+                        not_msg = "not "
+                    msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers, not_msg)
                     print(msg)
                     self.logger.warning(msg)
 
@@ -1544,6 +1565,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
+        remove_outliers_calc_metrics: bool,
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -1729,7 +1751,9 @@ class FeaturesEnricher(TransformerMixin):
         gc.collect()
 
         if calculate_metrics:
-            self.__show_metrics(scoring, estimator, importance_threshold, max_features, trace_id)
+            self.__show_metrics(
+                scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+            )
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -2345,6 +2369,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
+        remove_outliers_calc_metrics: bool,
         trace_id: str,
     ):
         metrics = self.calculate_metrics(
@@ -2352,6 +2377,7 @@ class FeaturesEnricher(TransformerMixin):
             estimator=estimator,
             importance_threshold=importance_threshold,
             max_features=max_features,
+            remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             trace_id=trace_id,
             silent=True,
         )

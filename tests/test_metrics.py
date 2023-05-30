@@ -52,7 +52,7 @@ baseline_mae = bundle.get("quality_metrics_baseline_header").format("mean_absolu
 enriched_mae = bundle.get("quality_metrics_enriched_header").format("mean_absolute_error")
 uplift = bundle.get("quality_metrics_uplift_header")
 
-SearchTask.PROTECT_FROM_RATE_LIMIT = False
+# SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0.1
 
 
