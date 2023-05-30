@@ -115,10 +115,11 @@ class DateTimeSearchKeyConverter:
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
+    logging.error("In the is_time_series")
     try:
         if df[date_col].isnull().any():
-            print("There is null value in dates")
-            print(df[date_col])
+            logging.error("There is null value in dates")
+            logging.error(df[date_col])
             return False
 
         df = pd.to_datetime(df[date_col]).to_frame()
@@ -133,6 +134,8 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
             # Univariate timeseries
             if value_counts.unique()[0] == 1:
                 df["shifted_date"] = df[date_col].shift(1)
+                logging.error("Check rel for unique dates")
+                logging.error(df)
                 # if dates cover full interval without gaps
                 return df.apply(rel, axis=1).nunique() == 1
 
@@ -140,14 +143,16 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
             df_with_unique_dates = df.drop_duplicates()
 
             df_with_unique_dates["shifted_date"] = df_with_unique_dates[date_col].shift(1)
-            print("Dataframe with shifted dates:")
-            print(df_with_unique_dates)
+            logging.error("Dataframe with shifted dates:")
+            logging.error(df_with_unique_dates)
             # if unique dates cover full interval without gaps
-            print("Diff in dates")
-            print(df_with_unique_dates.apply(rel, axis=1))
-            print(df_with_unique_dates.apply(rel, axis=1).nunique())
+            logging.error("Diff in dates")
+            logging.error(df_with_unique_dates.apply(rel, axis=1))
+            logging.error(df_with_unique_dates.apply(rel, axis=1).nunique())
             return df_with_unique_dates.apply(rel, axis=1).nunique() == 1
 
+        logging.error(f"value_counts.nunique() != 1: {value_counts.unique()}")
         return False
     except Exception:
+        logging.exception("Something goes wrong in is_time_series")
         return False
