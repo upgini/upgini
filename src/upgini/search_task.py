@@ -27,6 +27,8 @@ from upgini.spinner import Spinner
 
 class SearchTask:
     summary: Optional[SearchTaskSummary]
+    POLLING_DELAY_SECONDS = 5
+    PROTECT_FROM_RATE_LIMIT = True
 
     def __init__(
         self,
@@ -65,14 +67,15 @@ class SearchTask:
 
         try:
             with Spinner():
-                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+                if self.PROTECT_FROM_RATE_LIMIT:
+                    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
                     trace_id, search_task_id
                 )
                 while self.summary.status not in completed_statuses and (
                     not check_fit or "VALIDATION" not in self.summary.status
                 ):
-                    time.sleep(5)
+                    time.sleep(self.POLLING_DELAY_SECONDS)
                     self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
                         trace_id, search_task_id
                     )
@@ -85,7 +88,7 @@ class SearchTask:
                     ):
                         self.logger.error(f"No provider summaries for search {search_task_id}")
                         raise RuntimeError(bundle.get("no_one_provider_respond"))
-                    time.sleep(5)
+                    time.sleep(self.POLLING_DELAY_SECONDS)
         except KeyboardInterrupt as e:
             if not check_fit:
                 print(bundle.get("search_stopping"))
@@ -224,13 +227,22 @@ class SearchTask:
 
     def get_all_initial_raw_features(self, trace_id: str, metrics_calculation: bool = False) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
+        if self.PROTECT_FROM_RATE_LIMIT:
+            time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         return _get_all_initial_raw_features_cached(
-            self.endpoint, self.api_key, trace_id, self.search_task_id, metrics_calculation
+            self.endpoint,
+            self.api_key,
+            trace_id,
+            self.search_task_id,
+            metrics_calculation,
+            self.PROTECT_FROM_RATE_LIMIT,
         )
 
     def get_target_outliers(self, trace_id: str) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
-        return _get_target_outliers_cached(self.endpoint, self.api_key, trace_id, self.search_task_id)
+        return _get_target_outliers_cached(
+            self.endpoint, self.api_key, trace_id, self.search_task_id, self.PROTECT_FROM_RATE_LIMIT
+        )
 
     def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:
         if self.provider_metadata_v2 is not None:
@@ -247,7 +259,12 @@ class SearchTask:
     def get_all_validation_raw_features(self, trace_id: str, metrics_calculation=False) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
         return _get_all_validation_raw_features_cached(
-            self.endpoint, self.api_key, trace_id, self.search_task_id, metrics_calculation
+            self.endpoint,
+            self.api_key,
+            trace_id,
+            self.search_task_id,
+            metrics_calculation,
+            self.PROTECT_FROM_RATE_LIMIT,
         )
 
     def get_file_metadata(self, trace_id: str) -> FileMetadata:
@@ -256,9 +273,15 @@ class SearchTask:
 
 @lru_cache()
 def _get_all_initial_raw_features_cached(
-    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation: bool
+    endpoint: Optional[str],
+    api_key: Optional[str],
+    trace_id: str,
+    search_task_id: str,
+    metrics_calculation: bool,
+    protect_from_rate_limit: bool = True,
 ) -> Optional[pd.DataFrame]:
-    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    if protect_from_rate_limit:
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
     features_response = get_rest_client(endpoint, api_key).get_search_features_v2(
         trace_id, search_task_id, metrics_calculation
     )
@@ -266,6 +289,8 @@ def _get_all_initial_raw_features_cached(
     for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
         if feature_block["searchType"] == "INITIAL":
             features_id = feature_block["adsSearchTaskFeaturesId"]
+            if protect_from_rate_limit:
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
             features_df = _download_features_file(endpoint, api_key, trace_id, features_id, metrics_calculation)
             if result_df is None:
                 result_df = features_df
@@ -281,9 +306,15 @@ def _get_all_initial_raw_features_cached(
 
 @lru_cache()
 def _get_all_validation_raw_features_cached(
-    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str, metrics_calculation=False
+    endpoint: Optional[str],
+    api_key: Optional[str],
+    trace_id: str,
+    search_task_id: str,
+    metrics_calculation=False,
+    protect_from_rate_limit: bool = True,
 ) -> Optional[pd.DataFrame]:
-    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    if protect_from_rate_limit:
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
     features_response = get_rest_client(endpoint, api_key).get_search_features_v2(
         trace_id, search_task_id, metrics_calculation
     )
@@ -291,6 +322,8 @@ def _get_all_validation_raw_features_cached(
     for feature_block in features_response["adsSearchTaskFeaturesDTO"]:
         if feature_block["searchType"] == "VALIDATION":
             features_id = feature_block["adsSearchTaskFeaturesId"]
+            if protect_from_rate_limit:
+                time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
             features_df = _download_features_file(endpoint, api_key, trace_id, features_id, metrics_calculation)
             if result_df is None:
                 result_df = features_df
@@ -302,14 +335,20 @@ def _get_all_validation_raw_features_cached(
 
 @lru_cache()
 def _get_target_outliers_cached(
-    endpoint: Optional[str], api_key: Optional[str], trace_id: str, search_task_id: str
+    endpoint: Optional[str],
+    api_key: Optional[str],
+    trace_id: str,
+    search_task_id: str,
+    protect_from_rate_limit: bool = True,
 ) -> pd.DataFrame:
-    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+    if protect_from_rate_limit:
+        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
     target_outliers_response = get_rest_client(endpoint, api_key).get_search_target_outliners(trace_id, search_task_id)
     result_df = None
     for dto in target_outliers_response["adsSearchTaskTargetOutliersDTO"]:
         target_outliers_id = dto["adsSearchTaskTargetOutliersId"]
-        time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+        if protect_from_rate_limit:
+            time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         file_content = get_rest_client(endpoint, api_key).get_search_target_outliners_file(trace_id, target_outliers_id)
         target_outliers_df = _read_parquet(file_content, "target_outliers.parquet")
         if result_df is None:
@@ -325,7 +364,6 @@ def _get_target_outliers_cached(
 def _download_features_file(
     endpoint: Optional[str], api_key: Optional[str], trace_id: str, features_id: str, metrics_calculation: bool
 ) -> pd.DataFrame:
-    time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
     file_content = get_rest_client(endpoint, api_key).get_search_features_file_v2(
         trace_id, features_id, metrics_calculation
     )

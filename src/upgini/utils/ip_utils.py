@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 from requests import get
 from upgini.utils.track_info import get_track_metrics
+from upgini.resource_bundle import bundle
 
 from upgini.metadata import SearchKey
 
@@ -35,10 +36,14 @@ class IpToCountrySearchKeyConverter:
         track_metrics = get_track_metrics()
         if track_metrics is not None and "ip" in track_metrics and track_metrics["ip"] != "0.0.0.0":
             country_code = self._get_country_code(track_metrics["ip"])
-            self.logger.info(f"Add country code by user IP: {country_code}")
+            msg = bundle.get("country_auto_determined").format(country_code)
+            print(msg)
+            self.logger.info(msg)
             df["country_code"] = country_code
         else:
-            self.logger.info("Add default country code US")
+            msg = bundle.get("country_default_determined").format("US")
+            print(msg)
+            self.logger.info(msg)
             df["country_code"] = "US"
         self.search_keys["country_code"] = SearchKey.COUNTRY
         return df

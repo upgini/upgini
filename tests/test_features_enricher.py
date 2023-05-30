@@ -52,6 +52,11 @@ feature_name_header = bundle.get("features_info_name")
 shap_value_header = bundle.get("features_info_shap")
 hitrate_header = bundle.get("features_info_hitrate")
 
+SearchTask.PROTECT_FROM_RATE_LIMIT = False
+SearchTask.POLLING_DELAY_SECONDS = 0.1
+pd.set_option("mode.chained_assignment", "raise")
+pd.set_option("display.max_columns", 1000)
+
 
 def test_search_keys_validation(requests_mock: Mocker):
     url = "http://fake_url2"
@@ -71,8 +76,6 @@ def test_search_keys_validation(requests_mock: Mocker):
 
 
 def test_features_enricher(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -204,8 +207,6 @@ def test_features_enricher(requests_mock: Mocker):
 
 
 def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -307,8 +308,6 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
 
 
 def test_saved_features_enricher(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -423,8 +422,6 @@ def test_saved_features_enricher(requests_mock: Mocker):
 
 
 def test_features_enricher_with_demo_key(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -562,8 +559,6 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     mock_default_requests(requests_mock, url)
@@ -593,8 +588,6 @@ def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
 
 
 def test_features_enricher_with_numpy(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -733,8 +726,6 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
 
 
 def test_features_enricher_with_named_index(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -873,8 +864,6 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
 
 def test_features_enricher_with_index_column(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -1013,8 +1002,6 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     mock_default_requests(requests_mock, url)
@@ -1193,7 +1180,6 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
 
 
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
@@ -1341,7 +1327,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
@@ -1915,8 +1900,6 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
 
 
 def test_features_enricher_with_datetime(requests_mock: Mocker):
-    pd.set_option("mode.chained_assignment", "raise")
-    pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(

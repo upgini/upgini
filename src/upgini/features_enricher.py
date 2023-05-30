@@ -21,7 +21,7 @@ from sklearn.model_selection import BaseCrossValidator
 
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
-from upgini.errors import UpginiConnectionError, ValidationError
+from upgini.errors import ValidationError
 from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
@@ -145,11 +145,7 @@ class FeaturesEnricher(TransformerMixin):
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
-        try:
-            self.rest_client = get_rest_client(endpoint, self._api_key)
-        except UpginiConnectionError as e:
-            print(e)
-            return
+        self.rest_client = get_rest_client(endpoint, self._api_key)
 
         self.logs_enabled = logs_enabled
         if logs_enabled:
@@ -983,7 +979,11 @@ class FeaturesEnricher(TransformerMixin):
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
             extended_X = converter.convert(extended_X)
             generated_features.extend(converter.generated_features)
-        if self.country_code is None and SearchKey.COUNTRY not in search_keys.values():
+        if (
+            self.detect_missing_search_keys
+            and list(search_keys.values()) == [SearchKey.DATE]
+            and self.country_code is None
+        ):
             converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
             extended_X = converter.convert(extended_X)
         generated_features = [f for f in generated_features if f in self.fit_generated_features]
@@ -1072,7 +1072,7 @@ class FeaturesEnricher(TransformerMixin):
             task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
             if task_type == ModelTaskType.REGRESSION:
                 target_outliers_df = self._search_task.get_target_outliers(trace_id)
-                if len(target_outliers_df) > 0:
+                if target_outliers_df is not None and len(target_outliers_df) > 0:
                     rows_to_drop = pd.merge(
                         self.df_with_original_index,
                         target_outliers_df,
@@ -1080,9 +1080,7 @@ class FeaturesEnricher(TransformerMixin):
                         right_on=SYSTEM_RECORD_ID,
                         how="inner",
                     )
-                    top_outliers = (
-                        rows_to_drop.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
-                    )
+                    top_outliers = rows_to_drop.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
                     msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers)
                     print(msg)
                     self.logger.warning(msg)
@@ -1351,7 +1349,11 @@ class FeaturesEnricher(TransformerMixin):
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
                 email_converted_to_hem = converter.email_converted_to_hem
-            if self.country_code is None and SearchKey.COUNTRY not in search_keys.values():
+            if (
+                self.detect_missing_search_keys
+                and list(search_keys.values()) == [SearchKey.DATE]
+                and self.country_code is None
+            ):
                 converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
                 df = converter.convert(df)
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
@@ -1617,7 +1619,11 @@ class FeaturesEnricher(TransformerMixin):
             df = converter.convert(df)
             self.fit_generated_features.extend(converter.generated_features)
             email_converted_to_hem = converter.email_converted_to_hem
-        if self.country_code is None and SearchKey.COUNTRY not in self.fit_search_keys.values():
+        if (
+            self.detect_missing_search_keys
+            and list(self.fit_search_keys.values()) == [SearchKey.DATE]
+            and self.country_code is None
+        ):
             converter = IpToCountrySearchKeyConverter(self.fit_search_keys, self.logger)
             df = converter.convert(df)
 
