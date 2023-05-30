@@ -1,23 +1,16 @@
+import datetime
 import logging
 import re
 from typing import List, Optional
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 from dateutil.relativedelta import relativedelta
-import datetime
+from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 
 from upgini.errors import ValidationError
 
-
-DATE_FORMATS = [
-    "%Y-%m-%d",
-    "%d.%m.%y",
-    "%d.%m.%Y",
-    "%m.%d.%y",
-    "%m.%d.%Y"
-]
+DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%y", "%d.%m.%Y", "%m.%d.%y", "%m.%d.%Y"]
 
 DATETIME_PATTERN = r"^[\d\s\.\-:]+$"
 
@@ -111,13 +104,14 @@ class DateTimeSearchKeyConverter:
             raise ValidationError(
                 f"Failed to parse date in column `{self.date_column}`. "
                 "Try to pass explicit date format in date_format argument of FeaturesEnricher constructor"
-                )
+            )
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
     try:
         if df[date_col].isnull().any():
-            return False
+            raise Exception(f"There is null values in dates: {df[date_col]}")
+            # return False
 
         df = pd.to_datetime(df[date_col]).to_frame()
 
@@ -132,6 +126,8 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
             if value_counts.unique()[0] == 1:
                 df["shifted_date"] = df[date_col].shift(1)
                 # if dates cover full interval without gaps
+                if df.apply(rel, axis=1).nunique() != 1:
+                    raise Exception(f"Diff between dates is non unique: {df.apply(rel, axis=1).unique()}")
                 return df.apply(rel, axis=1).nunique() == 1
 
             # Multivariate timeseries
@@ -139,8 +135,14 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
 
             df_with_unique_dates["shifted_date"] = df_with_unique_dates[date_col].shift(1)
             # if unique dates cover full interval without gaps
+            if df_with_unique_dates.apply(rel, axis=1).nunique() != 1:
+                raise Exception(
+                    f"Diff between unique dates is non unique: {df_with_unique_dates.apply(rel, axis=1).unique()}"
+                )
             return df_with_unique_dates.apply(rel, axis=1).nunique() == 1
 
-        return False
-    except Exception:
-        return False
+        raise Exception(f"Value counts non unique: {value_counts.unique()}")
+        # return False
+    except Exception as e:
+        raise e
+        # return False
