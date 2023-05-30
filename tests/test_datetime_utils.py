@@ -66,6 +66,7 @@ def test_multivariate_timeseries_detection():
             ]
         }
     )
+    print("Start testing multivariate time series")
     assert is_time_series(df, "date")
 
     df = pd.DataFrame(
