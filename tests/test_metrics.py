@@ -18,6 +18,7 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
 )
 from upgini.resource_bundle import bundle
+from upgini.search_task import SearchTask
 
 from .utils import (
     mock_default_requests,
@@ -50,6 +51,9 @@ enriched_RMSLE = bundle.get("quality_metrics_enriched_header").format("RMSLE")
 baseline_mae = bundle.get("quality_metrics_baseline_header").format("mean_absolute_error")
 enriched_mae = bundle.get("quality_metrics_enriched_header").format("mean_absolute_error")
 uplift = bundle.get("quality_metrics_uplift_header")
+
+SearchTask.PROTECT_FROM_RATE_LIMIT = False
+SearchTask.POLLING_DELAY_SECONDS = 0.1
 
 
 def test_real_case_metric_binary(requests_mock: Mocker):

@@ -2,6 +2,8 @@ import pandas as pd
 
 from upgini.utils.datetime_utils import is_time_series
 
+pd.set_option("mode.chained_assignment", "raise")
+
 
 def test_univariate_timeseries_detection():
     df = pd.DataFrame({"date": ["1990-01-01", "1991-01-01", "1992-01-01", "1993-01-01", "1994-01-01"]})
