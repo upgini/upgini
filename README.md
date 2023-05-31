@@ -658,6 +658,23 @@ enricher.fit(
 - Same data schema as for search initialization dataset  
 - Pandas dataframe representation
 
+### Use custom loss function in feature selection & metrics calculation
+
+`FeaturesEnricher` can be initialized with additional string parameter `loss`. 
+Depending on ML-task, you can use the following loss functions:
+- `regression`: regression, regression_l1, huber, poisson, quantile, mape, gamma, tweedie;
+- `binary`: binary;
+- `multiclass`: multiclass, multiclassova.
+
+Usage example:
+```python
+enricher = FeaturesEnricher(
+	search_keys={"date": SearchKey.DATE},
+	loss="poisson",
+    	model_task_type=ModelTaskType.REGRESSION
+)
+enriched_dataframe.fit(X, y)
+```
 
 ### Return initial dataframe enriched with TOP external features by importance
 
