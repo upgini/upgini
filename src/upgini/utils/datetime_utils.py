@@ -110,8 +110,7 @@ class DateTimeSearchKeyConverter:
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
     try:
         if df[date_col].isnull().any():
-            raise Exception(f"There is null values in dates: {df[date_col]}")
-            # return False
+            return False
 
         df = pd.to_datetime(df[date_col]).to_frame()
 
@@ -126,23 +125,15 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
             if value_counts.unique()[0] == 1:
                 df["shifted_date"] = df[date_col].shift(1)
                 # if dates cover full interval without gaps
-                if df.apply(rel, axis=1).nunique() != 1:
-                    raise Exception(f"Diff between dates is non unique: {df.apply(rel, axis=1).unique()}")
                 return df.apply(rel, axis=1).nunique() == 1
 
             # Multivariate timeseries
-            df_with_unique_dates = df.drop_duplicates()
+            df_with_unique_dates = df.drop_duplicates().copy()
 
             df_with_unique_dates["shifted_date"] = df_with_unique_dates[date_col].shift(1)
             # if unique dates cover full interval without gaps
-            if df_with_unique_dates.apply(rel, axis=1).nunique() != 1:
-                raise Exception(
-                    f"Diff between unique dates is non unique: {df_with_unique_dates.apply(rel, axis=1).unique()}"
-                )
             return df_with_unique_dates.apply(rel, axis=1).nunique() == 1
 
-        raise Exception(f"Value counts non unique: {value_counts.unique()}")
-        # return False
-    except Exception as e:
-        raise e
-        # return False
+        return False
+    except Exception:
+        return False
