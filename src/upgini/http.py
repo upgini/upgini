@@ -820,7 +820,7 @@ class BackendLogHandler(logging.Handler):
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
                     self.track_metrics = get_track_metrics()
-                    self.hostname = self.track_metrics.get("ip", "0.0.0.0")
+                    self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
                 text = self.format(record)
                 tags = self.track_metrics
                 tags["version"] = __version__
