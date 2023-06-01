@@ -813,29 +813,25 @@ class BackendLogHandler(logging.Handler):
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
         self.track_metrics = None
-        self.hostname = None
+        self.hostname = "0.0.0.0"
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
                     self.track_metrics = get_track_metrics()
-                    if "ip" in self.track_metrics.keys():
-                        self.hostname = self.track_metrics["ip"]
-                    else:
-                        self.hostname = "0.0.0.0"
+                    self.hostname = self.track_metrics.get("ip", "0.0.0.0")
                 text = self.format(record)
                 tags = self.track_metrics
                 tags["version"] = __version__
-                self.rest_client.send_log_event(
-                    LogEvent(
-                        source="python",
-                        tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
-                        hostname=self.hostname,
-                        message=text,
-                        service="PyLib",
-                    )
+                log_event = LogEvent(
+                    source="python",
+                    tags=",".join([f"{k}:{v}" for k, v in tags.items()]),
+                    hostname=self.hostname,
+                    message=text,
+                    service="PyLib",
                 )
+                self.rest_client.send_log_event(log_event)
             except Exception:
                 pass
 
