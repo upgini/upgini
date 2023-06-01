@@ -666,6 +666,8 @@ Depending on ML-task, you can use the following loss functions:
 - `binary`: binary;
 - `multiclass`: multiclass, multiclassova.
 
+For instance, if your target variable has a Poisson distribution (count of events, number of customers in the shop and so on), you should try to use `loss="poisson"` to improve quality of feature selection and get better evaluation metrics. 
+
 Usage example:
 ```python
 enricher = FeaturesEnricher(
