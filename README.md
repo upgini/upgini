@@ -718,6 +718,18 @@ enricher = FeaturesEnricher(
 
 enricher.fit(X, y)
 ```
+
+## Turn off removing of target outliers
+Upgini detect rows with target outlier for regression tasks. By default such rows are dropped on metrics calculation. To turn off removing of target outlier rows use parameter `remove_outliers_calc_metrics=False` in fit, fit_transform or calculate_metrics methods:
+
+```python
+enricher = FeaturesEnricher(
+   search_keys={"date": SearchKey.DATE},
+)
+
+enricher.fit(X, y, remove_outliers_calc_metrics=False)
+```
+
 ## 🔑 Open up all capabilities of Upgini
 
 [Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features: 600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses
