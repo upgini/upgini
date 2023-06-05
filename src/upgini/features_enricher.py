@@ -260,7 +260,7 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        remove_outliers_calc_metrics: bool = True,
+        remove_outliers_calc_metrics: Optional[bool] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -370,7 +370,7 @@ class FeaturesEnricher(TransformerMixin):
         calculate_metrics: Optional[bool] = None,
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
-        remove_outliers_calc_metrics: bool = True,
+        remove_outliers_calc_metrics: Optional[bool] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -620,7 +620,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        remove_outliers_calc_metrics: bool = True,
+        remove_outliers_calc_metrics: Optional[bool] = None,
         trace_id: Optional[str] = None,
         silent: bool = False,
         **kwargs,
@@ -1051,7 +1051,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
-        remove_outliers_calc_metrics: bool = True,
+        remove_outliers_calc_metrics: Optional[bool] = None,
         search_keys_for_metrics: Optional[List[str]] = None,
     ):
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -1063,7 +1063,7 @@ class FeaturesEnricher(TransformerMixin):
 
         eval_set_sampled_dict = dict()
 
-        if self.__cached_sampled_datasets is not None and is_input_same_as_fit:
+        if self.__cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
             self.logger.info("Cached enriched dataset found - use it")
             X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
             if exclude_features_sources:
@@ -1097,7 +1097,7 @@ class FeaturesEnricher(TransformerMixin):
                         how="inner",
                     )
                     top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
-                    if remove_outliers_calc_metrics:
+                    if remove_outliers_calc_metrics is None or remove_outliers_calc_metrics is True:
                         rows_to_drop = outliers
                         not_msg = ""
                     else:
@@ -1565,7 +1565,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
-        remove_outliers_calc_metrics: bool,
+        remove_outliers_calc_metrics: Optional[bool],
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -2369,7 +2369,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any],
         importance_threshold: Optional[float],
         max_features: Optional[int],
-        remove_outliers_calc_metrics: bool,
+        remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
     ):
         metrics = self.calculate_metrics(
