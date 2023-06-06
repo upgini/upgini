@@ -321,7 +321,7 @@ class Dataset:  # (pd.DataFrame):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
         )
-        if date_column is not None:
+        if date_column is not None and is_numeric_dtype(self.data[date_column]):
             old_subset = self.data[self.data[date_column] < self.MIN_SUPPORTED_DATE_TS]
             if len(old_subset) > 0:
                 self.logger.info(f"df before dropping old rows: {self.data.shape}")
