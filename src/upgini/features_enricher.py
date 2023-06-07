@@ -2363,7 +2363,7 @@ class FeaturesEnricher(TransformerMixin):
                     print(msg)
                     self.logger.warning(msg)
                     self.warning_counter.increment()
-        
+
         self.logger.info(f"Prepared search keys: {valid_search_keys}")
 
         return valid_search_keys
