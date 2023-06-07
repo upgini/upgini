@@ -676,12 +676,17 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             try:
-                self.logger.info(
-                    f"Start calculating metrics\nscoring: {scoring}\n"
-                    f"cv: {cv}\n"
-                    f"estimator: {estimator}\n"
-                    f"importance_threshold: {importance_threshold}\n"
-                    f"max_features: {max_features}"
+                self.__log_debug_information(
+                    X,
+                    y,
+                    eval_set,
+                    exclude_features_sources=exclude_features_sources,
+                    cv=cv,
+                    importance_threshold=importance_threshold,
+                    max_features=max_features,
+                    scoring=scoring,
+                    estimator=estimator,
+                    remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                 )
 
                 if (
@@ -1058,8 +1063,6 @@ class FeaturesEnricher(TransformerMixin):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
-
-        self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
 
         eval_set_sampled_dict = dict()
 
@@ -1595,7 +1598,16 @@ class FeaturesEnricher(TransformerMixin):
 
         self._validate_binary_observations(validated_y)
 
-        self.__log_debug_information(X, y, eval_set, exclude_features_sources=exclude_features_sources)
+        self.__log_debug_information(
+            X,
+            y,
+            eval_set,
+            exclude_features_sources=exclude_features_sources,
+            calculate_metrics=calculate_metrics,
+            scoring=scoring,
+            estimator=estimator,
+            remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+        )
 
         df = pd.concat([validated_X, validated_y], axis=1)
 
@@ -1949,6 +1961,13 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
         exclude_features_sources: Optional[List[str]] = None,
+        calculate_metrics: Optional[bool] = None,
+        cv: Optional[Any] = None,
+        importance_threshold: Optional[Any] = None,
+        max_features: Optional[Any] = None,
+        scoring: Optional[Any] = None,
+        estimator: Optional[Any] = None,
+        remove_outliers_calc_metrics: Optional[bool] = None,
     ):
         resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
         self.logger.info(
@@ -1959,10 +1978,19 @@ class FeaturesEnricher(TransformerMixin):
             f"Endpoint: {self.endpoint}\n"
             f"Runtime parameters: {self.runtime_parameters}\n"
             f"Date format: {self.date_format}\n"
-            f"CV: {self.cv}\n"
+            f"CV: {cv}\n"
+            f"importance_threshold: {importance_threshold}\n"
+            f"max_features: {max_features}"
             f"Shared datasets: {self.shared_datasets}\n"
             f"Random state: {self.random_state}\n"
+            f"Generate features: {self.generate_features}\n"
+            f"Round embeddings: {self.round_embeddings}\n"
+            f"Detect missing search keys: {self.detect_missing_search_keys}\n"
             f"Exclude features sources: {exclude_features_sources}\n"
+            f"Calculate metrics: {calculate_metrics}\n"
+            f"Scoring: {scoring}\n"
+            f"Estimator: {estimator}\n"
+            f"Remove target outliers: {remove_outliers_calc_metrics}\n"
             f"Search id: {self.search_id}\n"
         )
 
