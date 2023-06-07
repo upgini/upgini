@@ -142,6 +142,7 @@ class FeaturesEnricher(TransformerMixin):
         round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
         raise_validation_error: bool = False,
+        exclude_columns: Optional[List[str]] = None,
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
@@ -236,6 +237,7 @@ class FeaturesEnricher(TransformerMixin):
         self.imbalanced = False
         self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
         self.raise_validation_error = raise_validation_error
+        self.exclude_columns = exclude_columns
 
     def _get_api_key(self):
         return self._api_key
@@ -1799,6 +1801,9 @@ class FeaturesEnricher(TransformerMixin):
         if not is_transform and not validated_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index"))
 
+        if self.exclude_columns is not None:
+            validated_X = drop_existing_columns(validated_X, self.exclude_columns)
+
         if TARGET in validated_X.columns:
             raise ValidationError(bundle.get("x_contains_reserved_column_name").format(TARGET))
         if not is_transform and EVAL_SET_INDEX in validated_X.columns:
@@ -1980,7 +1985,7 @@ class FeaturesEnricher(TransformerMixin):
                 f"Date format: {self.date_format}\n"
                 f"CV: {cv}\n"
                 f"importance_threshold: {importance_threshold}\n"
-                f"max_features: {max_features}"
+                f"max_features: {max_features}\n"
                 f"Shared datasets: {self.shared_datasets}\n"
                 f"Random state: {self.random_state}\n"
                 f"Generate features: {self.generate_features}\n"
@@ -1991,6 +1996,7 @@ class FeaturesEnricher(TransformerMixin):
                 f"Scoring: {scoring}\n"
                 f"Estimator: {estimator}\n"
                 f"Remove target outliers: {remove_outliers_calc_metrics}\n"
+                f"Exclude columns: {self.exclude_columns}\n"
                 f"Search id: {self.search_id}\n"
             )
 
