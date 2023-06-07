@@ -1632,7 +1632,10 @@ class FeaturesEnricher(TransformerMixin):
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             df = converter.convert(df)
+            self.logger.info(f"Date column after convertion: {df[date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
+        else:
+            self.logger.info("Input dataset hasn't date column")
         email_column = self.__get_email_column(self.fit_search_keys)
         hem_column = self.__get_hem_column(self.fit_search_keys)
         email_converted_to_hem = False
@@ -2360,6 +2363,8 @@ class FeaturesEnricher(TransformerMixin):
                     print(msg)
                     self.logger.warning(msg)
                     self.warning_counter.increment()
+        
+        self.logger.info(f"Prepared search keys: {valid_search_keys}")
 
         return valid_search_keys
 
