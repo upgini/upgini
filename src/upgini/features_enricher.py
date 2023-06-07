@@ -215,6 +215,7 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(msg)
             self.generate_features = generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
+            self.round_embeddings: Optional[int] = None
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = bundle.get("invalid_round_embeddings")
