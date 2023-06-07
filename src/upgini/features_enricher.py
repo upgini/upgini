@@ -678,9 +678,9 @@ class FeaturesEnricher(TransformerMixin):
 
             try:
                 self.__log_debug_information(
-                    X,
-                    y,
-                    eval_set,
+                    X or self.X,
+                    y or self.y,
+                    eval_set or self.eval_set,
                     exclude_features_sources=exclude_features_sources,
                     cv=cv,
                     importance_threshold=importance_threshold,
