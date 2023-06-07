@@ -208,6 +208,7 @@ class FeaturesEnricher(TransformerMixin):
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
         self.generate_features: Optional[List[str]] = None
+        self.round_embeddings: Optional[int] = None
         if generate_features is not None:
             if len(generate_features) > 2:
                 msg = bundle.get("too_many_generate_features")
@@ -215,7 +216,6 @@ class FeaturesEnricher(TransformerMixin):
                 raise ValidationError(msg)
             self.generate_features = generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
-            self.round_embeddings: Optional[int] = None
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = bundle.get("invalid_round_embeddings")
