@@ -676,11 +676,11 @@ class FeaturesEnricher(TransformerMixin):
 
             try:
                 self.__log_debug_information(
-                    X or self.X,
-                    y or self.y,
-                    eval_set or self.eval_set,
+                    X if X is not None else self.X,
+                    y if y is not None else self.y,
+                    eval_set if eval_set is not None else self.eval_set,
                     exclude_features_sources=exclude_features_sources,
-                    cv=cv,
+                    cv=cv if cv is not None else self.cv,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     scoring=scoring,
