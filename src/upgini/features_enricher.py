@@ -207,21 +207,19 @@ class FeaturesEnricher(TransformerMixin):
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
-        self.generate_features: Optional[List[str]] = None
-        self.round_embeddings: Optional[int] = None
+        self.generate_features = generate_features
+        self.round_embeddings = round_embeddings
         if generate_features is not None:
             if len(generate_features) > 2:
                 msg = bundle.get("too_many_generate_features")
                 self.logger.error(msg)
                 raise ValidationError(msg)
-            self.generate_features = generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = bundle.get("invalid_round_embeddings")
                     self.logger.error(msg)
                     raise ValidationError(msg)
-                self.round_embeddings = round_embeddings
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
 
         self.passed_features: List[str] = []
@@ -1970,51 +1968,57 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
     ):
-        resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
-        self.logger.info(
-            f"Search keys: {self.search_keys}\n"
-            f"Country code: {self.country_code}\n"
-            f"Model task type: {self.model_task_type}\n"
-            f"Api key presented?: {resolved_api_key is not None and resolved_api_key != ''}\n"
-            f"Endpoint: {self.endpoint}\n"
-            f"Runtime parameters: {self.runtime_parameters}\n"
-            f"Date format: {self.date_format}\n"
-            f"CV: {cv}\n"
-            f"importance_threshold: {importance_threshold}\n"
-            f"max_features: {max_features}"
-            f"Shared datasets: {self.shared_datasets}\n"
-            f"Random state: {self.random_state}\n"
-            f"Generate features: {self.generate_features}\n"
-            f"Round embeddings: {self.round_embeddings}\n"
-            f"Detect missing search keys: {self.detect_missing_search_keys}\n"
-            f"Exclude features sources: {exclude_features_sources}\n"
-            f"Calculate metrics: {calculate_metrics}\n"
-            f"Scoring: {scoring}\n"
-            f"Estimator: {estimator}\n"
-            f"Remove target outliers: {remove_outliers_calc_metrics}\n"
-            f"Search id: {self.search_id}\n"
-        )
+        try:
+            resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
+            self.logger.info(
+                f"Search keys: {self.search_keys}\n"
+                f"Country code: {self.country_code}\n"
+                f"Model task type: {self.model_task_type}\n"
+                f"Api key presented?: {resolved_api_key is not None and resolved_api_key != ''}\n"
+                f"Endpoint: {self.endpoint}\n"
+                f"Runtime parameters: {self.runtime_parameters}\n"
+                f"Date format: {self.date_format}\n"
+                f"CV: {cv}\n"
+                f"importance_threshold: {importance_threshold}\n"
+                f"max_features: {max_features}"
+                f"Shared datasets: {self.shared_datasets}\n"
+                f"Random state: {self.random_state}\n"
+                f"Generate features: {self.generate_features}\n"
+                f"Round embeddings: {self.round_embeddings}\n"
+                f"Detect missing search keys: {self.detect_missing_search_keys}\n"
+                f"Exclude features sources: {exclude_features_sources}\n"
+                f"Calculate metrics: {calculate_metrics}\n"
+                f"Scoring: {scoring}\n"
+                f"Estimator: {estimator}\n"
+                f"Remove target outliers: {remove_outliers_calc_metrics}\n"
+                f"Search id: {self.search_id}\n"
+            )
 
-        def sample(df):
-            if isinstance(df, pd.Series) or isinstance(df, pd.DataFrame):
-                return df.head(10)
-            else:
-                return df[:10]
+            def sample(df):
+                if isinstance(df, pd.Series) or isinstance(df, pd.DataFrame):
+                    return df.head(10)
+                else:
+                    return df[:10]
 
-        def print_datasets_sample():
-            self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{sample(X)}")
-            if y is not None:
-                self.logger.info(f"First 10 rows of the y with shape {_num_samples(y)}:\n{sample(y)}")
-            if eval_set is not None:
-                for idx, eval_pair in enumerate(eval_set):
-                    eval_X: pd.DataFrame = eval_pair[0]
-                    eval_y = eval_pair[1]
-                    self.logger.info(f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{sample(eval_X)}")
-                    self.logger.info(
-                        f"First 10 rows of the eval_y_{idx} with shape {_num_samples(eval_y)}:\n{sample(eval_y)}"
-                    )
+            def print_datasets_sample():
+                if X is not None:
+                    self.logger.info(f"First 10 rows of the X with shape {X.shape}:\n{sample(X)}")
+                if y is not None:
+                    self.logger.info(f"First 10 rows of the y with shape {_num_samples(y)}:\n{sample(y)}")
+                if eval_set is not None:
+                    for idx, eval_pair in enumerate(eval_set):
+                        eval_X: pd.DataFrame = eval_pair[0]
+                        eval_y = eval_pair[1]
+                        self.logger.info(
+                            f"First 10 rows of the eval_X_{idx} with shape {eval_X.shape}:\n{sample(eval_X)}"
+                        )
+                        self.logger.info(
+                            f"First 10 rows of the eval_y_{idx} with shape {_num_samples(eval_y)}:\n{sample(eval_y)}"
+                        )
 
-        do_without_pandas_limits(print_datasets_sample)
+            do_without_pandas_limits(print_datasets_sample)
+        except Exception:
+            self.logger.exception("Failed to log debug information")
 
     def __handle_index_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]
