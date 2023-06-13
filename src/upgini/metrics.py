@@ -126,7 +126,7 @@ class EstimatorWrapper:
         y = np.array(list(joined[y.name].values))
         return X, y, {}
 
-    def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray):
+    def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray) -> Optional[float]:
         X, y, fit_params = self._prepare_to_fit(X, y)
 
         if X.shape[1] == 0:

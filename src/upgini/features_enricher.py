@@ -785,7 +785,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
                     if fitting_X.shape[1] > 0:
                         self.logger.info(
-                            f"Calculate baseline {metric} on client features: {fitting_X.columns.to_list()}"
+                            f"Calculate baseline {metric} on train client features: {fitting_X.columns.to_list()}"
                         )
                         baseline_estimator = EstimatorWrapper.create(
                             estimator,
@@ -798,13 +798,15 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
+                        self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
                     # and calculate final metric (and uplift)
                     enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
                         self.logger.info(
-                            f"Calculate enriched {metric} on combined features: {fitting_enriched_X.columns.to_list()}"
+                            f"Calculate enriched {metric} on train combined "
+                            f"features: {fitting_enriched_X.columns.to_list()}"
                         )
                         enriched_estimator = EstimatorWrapper.create(
                             estimator,
@@ -817,6 +819,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
                         if etalon_metric is not None:
                             uplift = (enriched_metric - etalon_metric) * multiplier
                         else:
@@ -858,6 +861,9 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
                                 etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
+                                self.logger.info(
+                                    f"Baseline {metric} on eval set {idx + 1} client features: {etalon_eval_metric}"
+                                )
                             else:
                                 etalon_eval_metric = None
 
@@ -868,6 +874,9 @@ class FeaturesEnricher(TransformerMixin):
                                 )
                                 enriched_eval_metric = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_eval_y_sorted
+                                )
+                                self.logger.info(
+                                    f"Enriched {metric} on eval set {idx + 1} combined features: {enriched_eval_metric}"
                                 )
                             else:
                                 enriched_eval_metric = None
