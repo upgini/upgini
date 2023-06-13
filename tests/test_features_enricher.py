@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
-from requests_mock import NoMockAddress
 from requests_mock.mocker import Mocker
 
 from upgini import FeaturesEnricher, SearchKey
@@ -28,7 +27,6 @@ from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 from .utils import (
     mock_default_requests,
-    mock_get_features_meta,
     mock_get_metadata,
     mock_get_task_metadata_v2,
     mock_initial_and_validation_summary,
@@ -99,13 +97,13 @@ def test_features_enricher(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -230,13 +228,13 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -443,13 +441,13 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -580,11 +578,11 @@ def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.fit(train_features.head(1000), train_target.head(500))
-    assert enricher._search_task is None
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size").format(1000, 500)):
+        enricher.fit(train_features.head(1000), train_target.head(500))
 
-    enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
-    assert enricher._search_task is None
+    with pytest.raises(ValidationError, match=bundle.get("x_and_y_diff_size_eval_set").format(1000, 500)):
+        enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
 
 
 def test_features_enricher_with_numpy(requests_mock: Mocker):
@@ -609,13 +607,13 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -747,13 +745,13 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -885,13 +883,13 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1200,13 +1198,13 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1347,13 +1345,13 @@ def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1487,13 +1485,13 @@ def test_filter_by_importance(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1609,13 +1607,13 @@ def test_filter_by_max_features(requests_mock: Mocker):
         ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_features_meta(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-        etalon_features=[],
-    )
+    # mock_get_features_meta(
+    #     requests_mock,
+    #     url,
+    #     ads_search_task_id,
+    #     ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
+    #     etalon_features=[],
+    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1723,7 +1721,8 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher._search_task = search_task
     enricher._FeaturesEnricher__cached_sampled_datasets = (X, y, X, dict(), search_keys)
 
-    assert enricher.calculate_metrics() is None
+    with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
+        enricher.calculate_metrics()
 
 
 def test_handle_index_search_keys(requests_mock: Mocker):
@@ -2540,7 +2539,55 @@ def test_diff_target_dups(requests_mock: Mocker):
 def test_unsupported_arguments(requests_mock: Mocker):
     url = "http://fake_url2"
 
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+    )
     mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+        hit_rate=99.9,
+        auc=0.66,
+        uplift=0.1,
+        eval_set_metrics=[
+            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
+            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
+        ],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     enricher = FeaturesEnricher(
         search_keys={"date": SearchKey.DATE},
@@ -2561,23 +2608,23 @@ def test_unsupported_arguments(requests_mock: Mocker):
     original_min_rows = Dataset.MIN_ROWS_COUNT
     Dataset.MIN_ROWS_COUNT = 3
     try:
-        with pytest.raises(NoMockAddress):
-            enricher.fit(
-                df.drop(columns="target"),
-                df["target"],
-                [(df.drop(columns="target"), df["target"])],
-                "unsupported_positional_argument",
-                unsupported_key_argument=False,
-            )
+        # with pytest.raises(NoMockAddress):
+        enricher.fit(
+            df.drop(columns="target"),
+            df["target"],
+            [(df.drop(columns="target"), df["target"])],
+            "unsupported_positional_argument",
+            unsupported_key_argument=False,
+        )
 
-        with pytest.raises(NoMockAddress):
-            enricher.fit_transform(
-                df.drop(columns="target"),
-                df["target"],
-                [(df.drop(columns="target"), df["target"])],
-                "unsupported_positional_argument",
-                unsupported_key_argument=False,
-            )
+        # with pytest.raises(NoMockAddress):
+        enricher.fit_transform(
+            df.drop(columns="target"),
+            df["target"],
+            [(df.drop(columns="target"), df["target"])],
+            "unsupported_positional_argument",
+            unsupported_key_argument=False,
+        )
 
         enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
