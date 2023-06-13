@@ -141,7 +141,7 @@ class FeaturesEnricher(TransformerMixin):
         generate_features: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
-        raise_validation_error: bool = False,
+        raise_validation_error: bool = True,
         exclude_columns: Optional[List[str]] = None,
         **kwargs,
     ):

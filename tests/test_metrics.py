@@ -10,6 +10,7 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
 from upgini import FeaturesEnricher, SearchKey
+from upgini.errors import ValidationError
 from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
@@ -792,7 +793,8 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    assert enricher.calculate_metrics() is None
+    with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
+        enricher.calculate_metrics()
 
     enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
@@ -922,7 +924,8 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    assert enricher.calculate_metrics() is None
+    with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
+        enricher.calculate_metrics()
 
     enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
@@ -1168,7 +1171,8 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         search_keys={"phone": SearchKey.PHONE}, endpoint=url, api_key="fake_api_key", logs_enabled=False
     )
 
-    assert enricher.calculate_metrics() is None
+    with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
+        enricher.calculate_metrics()
 
     enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
