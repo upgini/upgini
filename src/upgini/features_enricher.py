@@ -1365,7 +1365,10 @@ class FeaturesEnricher(TransformerMixin):
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
                 df = converter.convert(df)
+                self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
+            else:
+                self.logger.info("Input dataset hasn't date column")
             email_column = self.__get_email_column(search_keys)
             hem_column = self.__get_hem_column(search_keys)
             email_converted_to_hem = False

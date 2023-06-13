@@ -87,6 +87,8 @@ class DateTimeSearchKeyConverter:
         df[self.date_column] = df[self.date_column].dt.floor("D").view(np.int64) // 1_000_000
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 
+        self.logger.info(f"Date after convertion to timestamp: {df[self.date_column]}")
+
         return df
 
     def parse_date(self, df: pd.DataFrame):
