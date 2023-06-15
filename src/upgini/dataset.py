@@ -278,7 +278,11 @@ class Dataset:  # (pd.DataFrame):
     @staticmethod
     def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
         try:
-            return int(ip_address(ip))
+            ip_addr = ip_address(ip)
+            if isinstance(ip_addr, IPv4Address):
+                return int(ip_addr)
+            else:
+                return None
         except Exception:
             return None
 
@@ -288,6 +292,8 @@ class Dataset:  # (pd.DataFrame):
         if ip is not None and ip in self.data.columns:
             # self.logger.info("Convert ip address to int")
             self.data[ip] = self.data[ip].apply(self.__ip_to_int).astype("Int64")
+            if self.data[ip].isnull().all():
+                raise ValidationError(f"All values of IPv4 column {ip} are invalid")
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
@@ -300,6 +306,8 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace(r"[^A-Z]", "", regex=True)
                 .str.replace("UK", "GB", regex=False)
             )
+            if (self.data[iso_code] == "").all():
+                raise ValidationError(f"All values of COUNTRY column `{iso_code}` are invalid")
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
@@ -316,6 +324,8 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
                 .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
+            if (self.data[postal_code] == "").all():
+                raise ValidationError(f"All values of POSTAL_CODE column `{postal_code}` are invalid")
 
     def __remove_old_dates(self, silent_mode: bool = False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
@@ -510,6 +520,8 @@ class Dataset:  # (pd.DataFrame):
         if msisdn_column is not None and msisdn_column in self.data.columns:
             normalizer = PhoneNormalizer(self.data, msisdn_column, country_column)
             self.data[msisdn_column] = normalizer.normalize()
+            if self.data[msisdn_column].isnull().all():
+                raise ValidationError(f"All values of PHONE column `{msisdn_column}` are invalid")
 
     def __features(self):
         return [

@@ -83,6 +83,18 @@ def test_python_ip_to_int_conversion():
     assert dataset.data["ip"].iloc[0] == 3232235777
 
 
+def test_ip_v6_conversion():
+    df = pd.DataFrame({
+        "ip": ["::cf:befe:525b"]
+    })
+    dataset = Dataset("test", df=df)
+    dataset.meaning_types = {
+        "ip": FileColumnMeaningType.IP_ADDRESS,
+    }
+    with pytest.raises(ValidationError, match="All values of IPv4 column ip are invalid"):
+        dataset._Dataset__convert_ip()
+
+
 def test_int_ip_to_int_conversion():
     df = pd.DataFrame(
         [
