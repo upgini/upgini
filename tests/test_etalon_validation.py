@@ -292,6 +292,24 @@ def test_number_postal_code_normalization():
     assert dataset.data.loc[1, "postal_code"] == "111222"
 
 
+def test_float_postal_code_normalization():
+    df = pd.DataFrame({"postal_code": [103305.0, 111222.0]})
+    dataset = Dataset("test321", df=df)  # type: ignore
+    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
+    dataset._Dataset__normalize_postal_code()
+    assert dataset.data.loc[0, "postal_code"] == "103305"
+    assert dataset.data.loc[1, "postal_code"] == "111222"
+
+
+def test_float_string_postal_code_normalization():
+    df = pd.DataFrame({"postal_code": ["103305.0", "111222.0"]})
+    dataset = Dataset("test321", df=df)  # type: ignore
+    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
+    dataset._Dataset__normalize_postal_code()
+    assert dataset.data.loc[0, "postal_code"] == "103305"
+    assert dataset.data.loc[1, "postal_code"] == "111222"
+
+
 def test_old_dates_drop():
     df = pd.DataFrame({"date": ["2020-01-01", "2005-05-02", "1999-12-31", None]})
     converter = DateTimeSearchKeyConverter("date")

@@ -314,7 +314,12 @@ class Dataset:  # (pd.DataFrame):
         if postal_code is not None and postal_code in self.data.columns:
             # self.logger.info("Normalize postal code")
 
-            if is_float_dtype(self.data[postal_code]):
+            if is_string_dtype(self.data[postal_code]):
+                try:
+                    self.data[postal_code] = self.data[postal_code].astype("Float64").astype("Int64").astype("string")
+                except Exception:
+                    pass
+            elif is_float_dtype(self.data[postal_code]):
                 self.data[postal_code] = self.data[postal_code].astype("Int64").astype("string")
 
             self.data[postal_code] = (
