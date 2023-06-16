@@ -91,7 +91,7 @@ def test_ip_v6_conversion():
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
-    with pytest.raises(ValidationError, match="All values of IPv4 column ip are invalid"):
+    with pytest.raises(ValidationError, match=bundle.get("invalid_ip").format("ip")):
         dataset._Dataset__convert_ip()
 
 
