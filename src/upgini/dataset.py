@@ -293,7 +293,7 @@ class Dataset:  # (pd.DataFrame):
             # self.logger.info("Convert ip address to int")
             self.data[ip] = self.data[ip].apply(self.__ip_to_int).astype("Int64")
             if self.data[ip].isnull().all():
-                raise ValidationError(f"All values of IPv4 column {ip} are invalid")
+                raise ValidationError(bundle.get("invalid_ip").format(ip))
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
@@ -307,7 +307,7 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace("UK", "GB", regex=False)
             )
             if (self.data[iso_code] == "").all():
-                raise ValidationError(f"All values of COUNTRY column `{iso_code}` are invalid")
+                raise ValidationError(bundle.get("invalid_country").format(iso_code))
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
@@ -330,7 +330,7 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
             if (self.data[postal_code] == "").all():
-                raise ValidationError(f"All values of POSTAL_CODE column `{postal_code}` are invalid")
+                raise ValidationError(bundle.get("invalid_postal_code").format(postal_code))
 
     def __remove_old_dates(self, silent_mode: bool = False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
