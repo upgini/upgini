@@ -5,8 +5,8 @@ import pandas as pd
 from requests import get
 
 from upgini.metadata import SearchKey
-from upgini.resource_bundle import bundle
-from upgini.utils.track_info import get_track_metrics
+# from upgini.resource_bundle import bundle
+# from upgini.utils.track_info import get_track_metrics
 
 
 class IpToCountrySearchKeyConverter:
@@ -34,18 +34,20 @@ class IpToCountrySearchKeyConverter:
             return None
 
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
-        track_metrics = get_track_metrics()
-        if (
-            track_metrics is not None
-            and "ip" in track_metrics
-            and track_metrics["ip"] is not None
-            and track_metrics["ip"] != "0.0.0.0"
-        ):
-            country_code = self._get_country_code(track_metrics["ip"])
-            msg = bundle.get("country_auto_determined").format(country_code)
-            print(msg)
-            self.logger.info(msg)
-            df["country_code"] = country_code
-            self.search_keys["country_code"] = SearchKey.COUNTRY
+        # TODO temporary turn off country detection
+
+        # track_metrics = get_track_metrics()
+        # if (
+        #     track_metrics is not None
+        #     and "ip" in track_metrics
+        #     and track_metrics["ip"] is not None
+        #     and track_metrics["ip"] != "0.0.0.0"
+        # ):
+        #     country_code = self._get_country_code(track_metrics["ip"])
+        #     msg = bundle.get("country_auto_determined").format(country_code)
+        #     print(msg)
+        #     self.logger.info(msg)
+        #     df["country_code"] = country_code
+        #     self.search_keys["country_code"] = SearchKey.COUNTRY
 
         return df
