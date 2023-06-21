@@ -870,7 +870,7 @@ class FeaturesEnricher(TransformerMixin):
                             if enriched_estimator is not None:
                                 self.logger.info(
                                     f"Calculate enriched {metric} on eval set {idx + 1} "
-                                    f"on client features: {enriched_eval_X_sorted.columns.to_list()}"
+                                    f"on combined features: {enriched_eval_X_sorted.columns.to_list()}"
                                 )
                                 enriched_eval_metric = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_eval_y_sorted
