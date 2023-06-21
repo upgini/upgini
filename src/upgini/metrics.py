@@ -62,6 +62,34 @@ LIGHTGBM_PARAMS = {
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
 
+NA_VALUES = [
+    "",
+    " ",
+    "   ",
+    "#n/a",
+    "#n/a n/a",
+    "#na",
+    "-1.#ind",
+    "-1.#qnan",
+    "-nan",
+    "1.#ind",
+    "1.#qnan",
+    "n/a",
+    "na",
+    "null",
+    "nan",
+    "n/a",
+    "nan",
+    "none",
+    "-",
+    "undefined",
+    "[[unknown]]",
+    "[not provided]",
+    "[unknown]",
+]
+
+NA_REPLACEMENT = "NA"
+
 
 class EstimatorWrapper:
     def __init__(
@@ -236,7 +264,7 @@ class CatBoostWrapper(EstimatorWrapper):
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         self.cat_features = _get_cat_features(X)
-        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        X = fill_na_cat_features(X, self.cat_features)
         # unique_cat_features = []
         # # TODO try to remove this condition because now we remove constant features earlier
         # for name in cat_features:
@@ -263,7 +291,7 @@ class CatBoostWrapper(EstimatorWrapper):
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_calculate(X, y)
         if self.cat_features is not None:
-            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+            X = fill_na_cat_features(X, self.cat_features)
         if self.cat_features_idx is not None:
             params.update({"cat_features": self.cat_features_idx})
         return X, y, params
@@ -285,7 +313,7 @@ class LightGBMWrapper(EstimatorWrapper):
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
         X, y, params = super()._prepare_to_fit(X, y)
         self.cat_features = _get_cat_features(X)
-        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        X = fill_na_cat_features(X, self.cat_features)
         for feature in self.cat_features:
             X[feature] = X[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
@@ -296,7 +324,7 @@ class LightGBMWrapper(EstimatorWrapper):
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_calculate(X, y)
         if self.cat_features is not None:
-            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+            X = fill_na_cat_features(X, self.cat_features)
             for feature in self.cat_features:
                 X[feature] = X[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
@@ -322,7 +350,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         self.cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in self.cat_features]
         X[num_features] = X[num_features].fillna(-999)
-        X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+        X = fill_na_cat_features(X, self.cat_features)
         # TODO use one-hot encoding if cardinality is less 50
         for feature in self.cat_features:
             X[feature] = X[feature].astype("category").cat.codes
@@ -335,7 +363,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         if self.cat_features is not None:
             num_features = [col for col in X.columns if col not in self.cat_features]
             X[num_features] = X[num_features].fillna(-999)
-            X[self.cat_features] = X[self.cat_features].astype("string").fillna("").astype(str)
+            X = fill_na_cat_features(X, self.cat_features)
             # TODO use one-hot encoding if cardinality is less 50
             for feature in self.cat_features:
                 X[feature] = X[feature].astype("category").cat.codes
@@ -487,6 +515,15 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
         multioutput=multioutput,
         squared=squared,
     )
+
+
+def fill_na_cat_features(df: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
+    for c in cat_features:
+        if c in df.columns:
+            df[c] = df[c].astype("string").fillna(NA_REPLACEMENT).astype(str)
+            na_filter = df[c].str.lower().isin(NA_VALUES)
+            df.loc[na_filter, c] = NA_REPLACEMENT
+    return df
 
 
 def _is_too_many_categorical_values(X: pd.DataFrame) -> bool:
