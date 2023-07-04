@@ -14,10 +14,10 @@ from upgini.errors import ValidationError
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
-    ModelTaskType,
     FeaturesMetadataV2,
     HitRateMetrics,
     ModelEvalSet,
+    ModelTaskType,
     ProviderTaskMetadataV2,
     RuntimeParameters,
 )
@@ -2386,6 +2386,48 @@ def test_search_keys_autodetection(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
 
+    search_task_id = "123"
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+        hit_rate=0.0,
+        auc=0.0,
+        uplift=0.0,
+        eval_set_metrics=[],
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1)],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+
     enricher = FeaturesEnricher(
         search_keys={"date": SearchKey.DATE},
         endpoint=url,
@@ -2395,7 +2437,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
 
     df = pd.DataFrame(
         {
-            "country": ["EC", "GB", "US"],
+            # "country": ["EC", "GB", "US"],
             "postal_code": ["103305", "504938", "293049"],
             "phone": ["9992223311", "28376283746", "283764736"],
             "eml": ["test@mail.ru", "test2@gmail.com", "test3@yahoo.com"],
@@ -2416,14 +2458,22 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         assert "eml_fake_a" not in columns
         assert "email_domain_fake_a" in columns
         assert {
-            "country_fake_a",
+            # "country_fake_a",
             "postal_code_fake_a",
             "phone_fake_a",
             "hashed_email_fake_a",
             "email_one_domain_fake_a",
             "date_fake_a",
         } == {sk for sublist in self.search_keys for sk in sublist}
-        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+        search_task = SearchTask(search_task_id, self, endpoint=url, api_key="fake_api_key")
+        search_task.provider_metadata_v2 = [
+            ProviderTaskMetadataV2(
+                features=[
+                    FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=100, shap_value=0.5)
+                ]
+            )
+        ]
+        return search_task
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
@@ -2437,6 +2487,44 @@ def test_search_keys_autodetection(requests_mock: Mocker):
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count
+
+    df["country"] = "GB"
+    # enricher.search_id = search_task_id
+
+    old_validation = Dataset.validation
+
+    def mock_validation(
+        self,
+        trace_id: str,
+        initial_search_task_id: str,
+        return_scores: bool = True,
+        extract_features: bool = False,
+        runtime_parameters: Optional[RuntimeParameters] = None,
+        exclude_features_sources: Optional[List[str]] = None,
+        metrics_calculation: bool = False,
+        silent_mode: bool = False,
+    ):
+        self.validate(validate_target=False)
+        assert {
+            # "country_fake_a",
+            "postal_code_fake_a",
+            "phone_fake_a",
+            "hashed_email_fake_a",
+            "email_one_domain_fake_a",
+            "date_fake_a",
+        } == {sk for sublist in self.search_keys for sk in sublist}
+        raise TestException()
+        # return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+
+    Dataset.validation = mock_validation
+
+    try:
+        enricher.transform(df.drop(columns="target"))
+        raise AssertionError("Should fail")
+    except TestException:
+        pass
+    finally:
+        Dataset.validation = old_validation
 
 
 def test_numbers_with_comma(requests_mock: Mocker):

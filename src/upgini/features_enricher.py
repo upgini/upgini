@@ -994,7 +994,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _extend_x(self, x: pd.DataFrame, is_demo_dataset: bool) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
         search_keys = self.search_keys.copy()
-        search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, silent_mode=True)
+        search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
 
         extended_X = x.copy()
         generated_features = []
@@ -1354,7 +1354,9 @@ class FeaturesEnricher(TransformerMixin):
             self.__log_debug_information(X, exclude_features_sources=exclude_features_sources)
 
             search_keys = self.search_keys.copy()
-            search_keys = self.__prepare_search_keys(validated_X, search_keys, is_demo_dataset, silent_mode=silent_mode)
+            search_keys = self.__prepare_search_keys(
+                validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
+            )
 
             df = validated_X.copy()
 
@@ -2324,7 +2326,12 @@ class FeaturesEnricher(TransformerMixin):
         return list(filtered_importance_names)
 
     def __prepare_search_keys(
-        self, x: pd.DataFrame, search_keys: Dict[str, SearchKey], is_demo_dataset: bool, silent_mode=False
+        self,
+        x: pd.DataFrame,
+        search_keys: Dict[str, SearchKey],
+        is_demo_dataset: bool,
+        is_transform=False,
+        silent_mode=False,
     ):
         valid_search_keys = {}
         unsupported_search_keys = {
@@ -2373,8 +2380,12 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     raise ValidationError(bundle.get("empty_search_key").format(column_name))
 
-        if self.detect_missing_search_keys:
-            valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, is_demo_dataset, silent_mode)
+        if self.detect_missing_search_keys and (
+            not is_transform or set(valid_search_keys.values()) != set(self.fit_search_keys.values())
+        ):
+            valid_search_keys = self.__detect_missing_search_keys(
+                x, valid_search_keys, is_demo_dataset, silent_mode, is_transform
+            )
 
         if all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
             msg = bundle.get("unregistered_only_personal_keys")
@@ -2505,11 +2516,19 @@ class FeaturesEnricher(TransformerMixin):
         return self.__filtered_importance_names(importance_threshold, max_features)
 
     def __detect_missing_search_keys(
-        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], is_demo_dataset: bool, silent_mode=False
+        self,
+        df: pd.DataFrame,
+        search_keys: Dict[str, SearchKey],
+        is_demo_dataset: bool,
+        silent_mode=False,
+        is_transform=False,
     ) -> Dict[str, SearchKey]:
         sample = df.head(100)
 
-        if SearchKey.POSTAL_CODE not in search_keys.values():
+        def check_need_detect(search_key: SearchKey):
+            return not is_transform or search_key in self.fit_search_keys.values()
+
+        if SearchKey.POSTAL_CODE not in search_keys.values() and check_need_detect(SearchKey.POSTAL_CODE):
             maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.POSTAL_CODE
@@ -2518,7 +2537,11 @@ class FeaturesEnricher(TransformerMixin):
                 if not silent_mode:
                     print(bundle.get("postal_code_detected").format(maybe_key))
 
-        if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
+        if (
+            SearchKey.COUNTRY not in search_keys.values()
+            and self.country_code is None
+            and check_need_detect(SearchKey.COUNTRY)
+        ):
             maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None:
                 search_keys[maybe_key] = SearchKey.COUNTRY
@@ -2527,7 +2550,11 @@ class FeaturesEnricher(TransformerMixin):
                 if not silent_mode:
                     print(bundle.get("country_detected").format(maybe_key))
 
-        if SearchKey.EMAIL not in search_keys.values() and SearchKey.HEM not in search_keys.values():
+        if (
+            SearchKey.EMAIL not in search_keys.values()
+            and SearchKey.HEM not in search_keys.values()
+            and check_need_detect(SearchKey.HEM)
+        ):
             maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None and maybe_key not in search_keys.keys():
                 if self.__is_registered or is_demo_dataset:
@@ -2544,7 +2571,7 @@ class FeaturesEnricher(TransformerMixin):
                         print(bundle.get("email_detected_not_registered").format(maybe_key))
                     self.warning_counter.increment()
 
-        if SearchKey.PHONE not in search_keys.values():
+        if SearchKey.PHONE not in search_keys.values() and check_need_detect(SearchKey.PHONE):
             maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
             if maybe_key is not None and maybe_key not in search_keys.keys():
                 if self.__is_registered or is_demo_dataset:
