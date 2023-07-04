@@ -1878,7 +1878,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if _num_samples(eval_X) == 0:
             raise ValidationError(bundle.get("eval_x_is_empty"))
-        if _num_samples(eval_X) == 0:
+        if _num_samples(eval_y) == 0:
             raise ValidationError(bundle.get("eval_y_is_empty"))
 
         if isinstance(eval_X, pd.DataFrame):
@@ -1897,7 +1897,10 @@ class FeaturesEnricher(TransformerMixin):
         if not validated_eval_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index_eval_set"))
         if validated_eval_X.columns.to_list() != X.columns.to_list():
-            raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
+            if set(validated_eval_X.columns.to_list()) == set(X.columns.to_list()):
+                validated_eval_X = validated_eval_X[X.columns.to_list()]
+            else:
+                raise ValidationError(bundle.get("eval_x_and_x_diff_shape"))
 
         if _num_samples(validated_eval_X) != _num_samples(eval_y):
             raise ValidationError(
