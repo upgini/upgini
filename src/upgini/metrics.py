@@ -8,7 +8,7 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
+from sklearn.metrics import get_scorer_names, check_scoring, get_scorer, make_scorer
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
@@ -385,6 +385,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
 
     multiplier = 1
     if isinstance(scoring, str):
+        available_scorers = get_scorer_names()
         metric_name = scoring
         if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
             scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
@@ -395,13 +396,13 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
         elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
             scoring = get_scorer("neg_root_mean_squared_error")
             multiplier = -1
-        elif scoring in SCORERS.keys():
+        elif scoring in available_scorers:
             scoring = get_scorer(scoring)
-        elif ("neg_" + scoring) in SCORERS.keys():
+        elif ("neg_" + scoring) in available_scorers:
             scoring = get_scorer("neg_" + scoring)
             multiplier = -1
         else:
-            supported_metrics = set(SCORERS.keys())
+            supported_metrics = set(available_scorers)
             neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
             supported_metrics.update(neg_metrics)
             supported_metrics.update(

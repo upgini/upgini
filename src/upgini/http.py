@@ -107,33 +107,22 @@ class SearchTaskResponse:
         self.created_at = response["createdAt"]
 
 
-class ModelEvalSet(BaseModel):
-    eval_set_index: int
-    hit_rate: float
-    uplift: Optional[float]
-    auc: Optional[float]
-    gini: Optional[float]
-    rmse: Optional[float]
-    accuracy: Optional[float]
+# class ModelEvalSet(BaseModel):
+#     eval_set_index: int
+#     hit_rate: float
+#     uplift: Optional[float]
+#     auc: Optional[float]
+#     gini: Optional[float]
+#     rmse: Optional[float]
+#     accuracy: Optional[float]
 
 
 class ProviderTaskSummary:
     def __init__(self, response: dict):
         self.ads_search_task_id = response["adsSearchTaskId"]
         self.search_task_id = response["searchTaskId"]
-        self.search_type = response["searchType"]
         self.status = response["taskStatus"]
-        self.provider_name = response["providerName"]
-        self.provider_id = response["providerId"]
         self.error_message = response.get("errorMessage")
-        self.metrics = {metric["code"]: metric["value"] for metric in response["providerQuality"]["metrics"]}
-        self.features_found_count = response["featuresFoundCount"]
-        if "evalSetMetrics" in response.keys() is not None:
-            self.eval_set_metrics = [ModelEvalSet.parse_obj(metrics) for metrics in response["evalSetMetrics"]]
-        else:
-            self.eval_set_metrics = None
-        # providerConfusionMatrix
-        # charts
 
 
 class SearchTaskSummary:
@@ -141,10 +130,10 @@ class SearchTaskSummary:
         self.search_task_id = response["searchTaskId"]
         self.file_upload_id = response["fileUploadTaskId"]
         self.status = response["searchTaskStatus"]
-        self.features_found = response["featuresFoundCount"]
-        self.providers_checked = response["providersCheckedCount"]
-        self.important_providers_count = response["importantProvidersCount"]
-        self.important_features_count = response["importantFeaturesCount"]
+        # self.features_found = response["featuresFoundCount"]
+        # self.providers_checked = response["providersCheckedCount"]
+        # self.important_providers_count = response["importantProvidersCount"]
+        # self.important_features_count = response["importantFeaturesCount"]
         self.initial_important_providers = [
             ProviderTaskSummary(provider_response) for provider_response in response["importantProviders"]
         ]
@@ -152,7 +141,6 @@ class SearchTaskSummary:
             ProviderTaskSummary(provider_response) for provider_response in response["validationImportantProviders"]
         ]
         self.created_at = response["createdAt"]
-        # performanceMetrics
 
 
 class LogEvent(BaseModel):
@@ -180,7 +168,6 @@ class _RestClient:
         SERVICE_ROOT_V2 + "search/validation-without-upload?fileUpload_id={0}&initialSearchTask={1}"
     )
     SEARCH_TASK_SUMMARY_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}"
-    SEARCH_TASK_FEATURES_META_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/features/{0}"
     STOP_SEARCH_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/stop"
     SEARCH_MODELS_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/models/{0}"
     SEARCH_SCORES_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}"
@@ -513,10 +500,6 @@ class _RestClient:
     def stop_search_task_v2(self, trace_id: str, search_task_id: str):
         api_path = self.STOP_SEARCH_URI_FMT_V2.format(search_task_id)
         self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id=trace_id))
-
-    def get_search_features_meta_v2(self, trace_id: str, provider_search_task_id: str):
-        api_path = self.SEARCH_TASK_FEATURES_META_URI_FMT_V2.format(provider_search_task_id)
-        return self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
 
     def get_search_models_v2(self, trace_id: str, search_task_id: str):
         api_path = self.SEARCH_MODELS_URI_FMT_V2.format(search_task_id)

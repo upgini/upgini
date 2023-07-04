@@ -43,7 +43,7 @@ class IpToCountrySearchKeyConverter:
         #     and track_metrics["ip"] is not None
         #     and track_metrics["ip"] != "0.0.0.0"
         # ):
-        #     country_code = self._get_country_code(track_metrics["ip"])
+        #     country_code = self._get_country_code(track_metrics["ip"])  # TODO check that country_code is not None!
         #     msg = bundle.get("country_auto_determined").format(country_code)
         #     print(msg)
         #     self.logger.info(msg)

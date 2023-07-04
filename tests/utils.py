@@ -46,19 +46,19 @@ def mock_initial_search(requests_mock: Mocker, url: str) -> str:
     return search_task_id
 
 
-def _construct_metrics(
-    hit_rate: float, auc: Optional[float], rmse: Optional[float], accuracy: Optional[float], uplift: Optional[float]
-) -> List[dict]:
-    metrics = [{"code": "HIT_RATE", "value": hit_rate}]
-    if auc is not None:
-        metrics.append({"code": "AUC", "value": auc})
-    if rmse is not None:
-        metrics.append({"code": "RMSE", "value": rmse})
-    if accuracy is not None:
-        metrics.append({"code": "ACCURACY", "value": accuracy})
-    if uplift is not None:
-        metrics.append({"code": "UPLIFT", "value": uplift})
-    return metrics
+# def _construct_metrics(
+#     hit_rate: float, auc: Optional[float], rmse: Optional[float], accuracy: Optional[float], uplift: Optional[float]
+# ) -> List[dict]:
+#     metrics = [{"code": "HIT_RATE", "value": hit_rate}]
+#     if auc is not None:
+#         metrics.append({"code": "AUC", "value": auc})
+#     if rmse is not None:
+#         metrics.append({"code": "RMSE", "value": rmse})
+#     if accuracy is not None:
+#         metrics.append({"code": "ACCURACY", "value": accuracy})
+#     if uplift is not None:
+#         metrics.append({"code": "UPLIFT", "value": uplift})
+#     return metrics
 
 
 def mock_initial_summary(
@@ -73,7 +73,6 @@ def mock_initial_summary(
     eval_set_metrics: Optional[List[dict]] = None,
 ) -> str:
     ads_search_task_id = random_id()
-    metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
 
     requests_mock.get(
         url + "/public/api/v2/search/" + search_task_id,
@@ -91,11 +90,6 @@ def mock_initial_summary(
                     "searchTaskId": search_task_id,
                     "searchType": "INITIAL",
                     "taskStatus": "COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {"metrics": metrics},
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": eval_set_metrics or [],
                 }
             ],
             "validationImportantProviders": [],
@@ -142,23 +136,6 @@ def mock_get_metadata(requests_mock: Mocker, url: str, search_task_id: str):
             "hierarchicalGroupKeys": [],
             "hierarchicalSubgroupKeys": [],
             "rowsCount": 15555,
-        },
-    )
-
-
-def mock_get_features_meta(
-    requests_mock: Mocker,
-    url: str,
-    ads_search_task_id: str,
-    ads_features: List[dict],
-    etalon_features: Optional[List[dict]] = None,
-):
-    etalon_features = etalon_features or []
-    requests_mock.get(
-        url + "/public/api/v2/search/features/" + ads_search_task_id,
-        json={
-            "providerFeatures": ads_features,
-            "etalonFeatures": etalon_features,
         },
     )
 
@@ -213,7 +190,7 @@ def mock_validation_summary(
     eval_set_metrics: Optional[List[dict]] = None,
 ) -> str:
     ads_search_task_id = random_id()
-    metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
+    # metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
     requests_mock.get(
         url + "/public/api/v2/search/" + initial_search_task_id,
         json={
@@ -230,11 +207,6 @@ def mock_validation_summary(
                     "searchTaskId": initial_search_task_id,
                     "searchType": "INITIAL",
                     "taskStatus": "COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {"metrics": metrics},
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": eval_set_metrics or [],
                 }
             ],
             "validationImportantProviders": [
@@ -243,11 +215,6 @@ def mock_validation_summary(
                     "searchTaskId": validation_search_task_id,
                     "searchType": "VALIDATION",
                     "taskStatus": "VALIDATION_COMPLETED",
-                    "providerName": "Provider-123456",
-                    "providerId": "123456",
-                    "providerQuality": {"metrics": metrics},
-                    "featuresFoundCount": 1,
-                    "evalSetMetrics": eval_set_metrics or [],
                 }
             ],
             "createdAt": 1633302145414,
@@ -270,7 +237,7 @@ def mock_initial_and_validation_summary(
 ):
     ads_search_task_id = random_id()
     validation_ads_search_task_id = random_id()
-    metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
+    # metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
 
     req_counter = RequestsCounter()
     file_upload_task_id = random_id()
@@ -306,11 +273,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": search_task_id,
                         "searchType": "INITIAL",
                         "taskStatus": "SUBMITTED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "featuresFoundCount": 1,
-                        "providerQuality": {"metrics": []},
-                        "evalSetMetrics": [],
                     }
                 ],
                 "validationImportantProviders": [],
@@ -332,11 +294,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": search_task_id,
                         "searchType": "INITIAL",
                         "taskStatus": "COMPLETED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "providerQuality": {"metrics": metrics},
-                        "featuresFoundCount": 1,
-                        "evalSetMetrics": eval_set_metrics or [],
                     }
                 ],
                 "validationImportantProviders": [],
@@ -358,11 +315,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": search_task_id,
                         "searchType": "INITIAL",
                         "taskStatus": "COMPLETED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "providerQuality": {"metrics": metrics},
-                        "featuresFoundCount": 1,
-                        "evalSetMetrics": eval_set_metrics or [],
                     }
                 ],
                 "validationImportantProviders": [],
@@ -384,11 +336,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": search_task_id,
                         "searchType": "INITIAL",
                         "taskStatus": "COMPLETED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "providerQuality": {"metrics": metrics},
-                        "featuresFoundCount": 1,
-                        "evalSetMetrics": eval_set_metrics or [],
                     }
                 ],
                 "validationImportantProviders": [
@@ -397,11 +344,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": validation_search_task_id,
                         "searchType": "VALIDATION",
                         "taskStatus": "SUBMITTED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "featuresFoundCount": 1,
-                        "providerQuality": {"metrics": []},
-                        "evalSetMetrics": [],
                     }
                 ],
                 "createdAt": 1633302145414,
@@ -422,11 +364,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": search_task_id,
                         "searchType": "INITIAL",
                         "taskStatus": "COMPLETED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "providerQuality": {"metrics": metrics},
-                        "featuresFoundCount": 1,
-                        "evalSetMetrics": eval_set_metrics or [],
                     }
                 ],
                 "validationImportantProviders": [
@@ -435,11 +372,6 @@ def mock_initial_and_validation_summary(
                         "searchTaskId": validation_search_task_id,
                         "searchType": "VALIDATION",
                         "taskStatus": "VALIDATION_COMPLETED",
-                        "providerName": "Provider-123456",
-                        "providerId": "123456",
-                        "providerQuality": {"metrics": metrics},
-                        "featuresFoundCount": 1,
-                        "evalSetMetrics": eval_set_metrics or [],
                     }
                 ],
                 "createdAt": 1633302145414,
