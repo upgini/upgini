@@ -1754,7 +1754,10 @@ class FeaturesEnricher(TransformerMixin):
             self._search_task.unused_features_for_generation is not None
             and len(self._search_task.unused_features_for_generation) > 0
         ):
-            msg = bundle.get("features_not_generated").format(self._search_task.unused_features_for_generation)
+            unused_features_for_generation = [
+                dataset.columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
+            ]
+            msg = bundle.get("features_not_generated").format(unused_features_for_generation)
             self.logger.warning(msg)
             print(msg)
             self.warning_counter.increment()
