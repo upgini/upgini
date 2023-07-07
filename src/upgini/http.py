@@ -123,6 +123,7 @@ class ProviderTaskSummary:
         self.search_task_id = response["searchTaskId"]
         self.status = response["taskStatus"]
         self.error_message = response.get("errorMessage")
+        self.unused_features_for_generation = response.get("unusedFeaturesForGeneration")
 
 
 class SearchTaskSummary:

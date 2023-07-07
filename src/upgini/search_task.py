@@ -54,6 +54,7 @@ class SearchTask:
         self.api_key = api_key
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
+        self.unused_features_for_generation: Optional[List[str]] = None
 
     def poll_result(self, trace_id: str, quiet: bool = False, check_fit: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
@@ -116,6 +117,7 @@ class SearchTask:
             check_fit and "VALIDATION" in self.summary.status
         ):
             self.provider_metadata_v2 = []
+            self.unused_features_for_generation = []
             for provider_summary in self.summary.initial_important_providers:
                 if provider_summary.status == "COMPLETED":
                     self.provider_metadata_v2.append(
@@ -123,6 +125,8 @@ class SearchTask:
                             provider_summary.ads_search_task_id, trace_id
                         )
                     )
+                    if provider_summary.unused_features_for_generation is not None:
+                        self.unused_features_for_generation.extend(provider_summary.unused_features_for_generation)
 
         return self
 

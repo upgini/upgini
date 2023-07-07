@@ -1750,6 +1750,15 @@ class FeaturesEnricher(TransformerMixin):
             self.__display_slack_community_link(msg)
             self.warning_counter.increment()
 
+        if (
+            self._search_task.unused_features_for_generation is not None
+            and len(self._search_task.unused_features_for_generation) > 0
+        ):
+            msg = bundle.get("features_not_generated").format(self._search_task.unused_features_for_generation)
+            self.logger.warning(msg)
+            print(msg)
+            self.warning_counter.increment()
+
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
         self.__show_selected_features(self.fit_search_keys)
