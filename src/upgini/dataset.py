@@ -845,6 +845,9 @@ class Dataset:  # (pd.DataFrame):
             )
             search_customization.featuresFilter = feature_filter
 
+        if self.imbalanced:
+            search_customization.runtimeParameters["etalon_imbalanced"] = True
+
         return search_customization
 
     def _rename_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
