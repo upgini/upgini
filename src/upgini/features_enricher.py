@@ -2244,21 +2244,33 @@ class FeaturesEnricher(TransformerMixin):
 
             internal_provider = feature_meta.data_provider or ""
             if feature_meta.data_provider:
-                provider = (
-                    f"<a href='{feature_meta.data_provider_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_provider}</a>"
-                )
+                all_providers = [
+                    (
+                        f"<a href='{link}' " 
+                        "target='_blank' rel='noopener noreferrer'>" 
+                        f"{provider_name}</a>"
+                     )
+                    for provider_name, link in itertools.zip_longest(
+                        feature_meta.data_provider.split(","), feature_meta.data_provider_link.split(",")
+                    )
+                ]
+                provider = f"{', '.join(all_providers)}"
             else:
                 provider = internal_provider
 
             internal_source = feature_meta.data_source or ""
             if feature_meta.data_source:
-                source = (
-                    f"<a href='{feature_meta.data_source_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_source}</a>"
-                )
+                all_sources = [
+                    (
+                        f"<a href='{link}' "
+                        "target='_blank' rel='noopener noreferrer'>"
+                        f"{source_name}</a>"
+                    )
+                    for source_name, link in itertools.zip_longest(
+                        feature_meta.data_source.split(","), feature_meta.data_source_link.split(",")
+                    )
+                ]
+                source = f"{', '.join(all_sources)}"
             else:
                 source = internal_source
 
