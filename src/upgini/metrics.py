@@ -8,7 +8,13 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import get_scorer_names, check_scoring, get_scorer, make_scorer
+from sklearn.metrics import check_scoring, get_scorer, make_scorer
+try:
+    from sklearn.metrics import get_scorer_names
+    available_scorers = get_scorer_names()
+except ImportError:
+    from sklearn.metrics._scorer import SCORERS
+    available_scorers = SCORERS
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
@@ -48,6 +54,7 @@ CATBOOST_MULTICLASS_PARAMS = {
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
+    # "early_stopping_rounds": 20,
 }
 
 LIGHTGBM_PARAMS = {
@@ -156,6 +163,8 @@ class EstimatorWrapper:
 
     def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray) -> Optional[float]:
         X, y, fit_params = self._prepare_to_fit(X, y)
+        # if isinstance(self.estimator, CatBoostClassifier) or isinstance(self.estimator, CatBoostRegressor):
+        #     fit_params["early_stopping_rounds"] = 20
 
         if X.shape[1] == 0:
             return None
