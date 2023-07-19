@@ -111,6 +111,7 @@ class FeaturesEnricher(TransformerMixin):
     RANDOM_STATE = 42
     CALCULATE_METRICS_THRESHOLD = 50_000_000
     CALCULATE_METRICS_MIN_THRESHOLD = 500
+    GENERATE_FEATURES_LIMIT = 10
     EMPTY_FEATURES_INFO = pd.DataFrame(
         columns=[
             bundle.get("features_info_provider"),
@@ -211,8 +212,8 @@ class FeaturesEnricher(TransformerMixin):
         self.generate_features = generate_features
         self.round_embeddings = round_embeddings
         if generate_features is not None:
-            if len(generate_features) > 2:
-                msg = bundle.get("too_many_generate_features")
+            if len(generate_features) > self.GENERATE_FEATURES_LIMIT:
+                msg = bundle.get("too_many_generate_features").format(self.GENERATE_FEATURES_LIMIT)
                 self.logger.error(msg)
                 raise ValidationError(msg)
             self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
