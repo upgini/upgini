@@ -8,7 +8,15 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import get_scorer_names, check_scoring, get_scorer, make_scorer
+from sklearn.metrics import check_scoring, get_scorer, make_scorer
+
+try:
+    from sklearn.metrics import get_scorer_names
+    available_scorers = get_scorer_names()
+except ImportError:
+    from sklearn.metrics._scorer import SCORERS
+    available_scorers = SCORERS
+
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
@@ -385,7 +393,6 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
 
     multiplier = 1
     if isinstance(scoring, str):
-        available_scorers = get_scorer_names()
         metric_name = scoring
         if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
             scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
