@@ -2234,6 +2234,16 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 return shap
 
+        def list_or_single(lst: List[str], single: str):
+            return lst or ([single] if single else [])
+        
+        def make_links(names: List[str], links: List[str]):
+            all_links = [
+                (f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{name}</a>")
+                for name, link in itertools.zip_longest(names, links)
+            ]
+            return ",".join(all_links)
+
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
@@ -2243,34 +2253,18 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
 
             internal_provider = feature_meta.data_provider or ""
-            if feature_meta.data_provider:
-                all_providers = [
-                    (
-                        f"<a href='{link}' " 
-                        "target='_blank' rel='noopener noreferrer'>" 
-                        f"{provider_name}</a>"
-                     )
-                    for provider_name, link in itertools.zip_longest(
-                        feature_meta.data_provider.split(","), feature_meta.data_provider_link.split(",")
-                    )
-                ]
-                provider = f"{', '.join(all_providers)}"
+            providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
+            provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
+            if providers:
+                provider = make_links(providers, provider_links)
             else:
                 provider = internal_provider
 
             internal_source = feature_meta.data_source or ""
-            if feature_meta.data_source:
-                all_sources = [
-                    (
-                        f"<a href='{link}' "
-                        "target='_blank' rel='noopener noreferrer'>"
-                        f"{source_name}</a>"
-                    )
-                    for source_name, link in itertools.zip_longest(
-                        feature_meta.data_source.split(","), feature_meta.data_source_link.split(",")
-                    )
-                ]
-                source = f"{', '.join(all_sources)}"
+            sources = list_or_single(feature_meta.data_sources, feature_meta.data_source)
+            source_links = list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
+            if sources:
+                source = make_links(sources, source_links)
             else:
                 source = internal_source
 
