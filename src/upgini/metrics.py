@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Callable, List, Optional, Tuple, Union, Dict, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -9,12 +9,15 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer
+from upgini.utils.sklearn_ext import cross_validate
 
 try:
     from sklearn.metrics import get_scorer_names
+
     available_scorers = get_scorer_names()
 except ImportError:
     from sklearn.metrics._scorer import SCORERS
+
     available_scorers = SCORERS
 
 from sklearn.metrics._regression import (
@@ -22,7 +25,7 @@ from sklearn.metrics._regression import (
     check_consistent_length,
     mean_squared_error,
 )
-from sklearn.model_selection import BaseCrossValidator, cross_validate
+from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -37,8 +40,10 @@ CATBOOST_PARAMS = {
     "min_child_samples": 10,
     "max_depth": 5,
     "early_stopping_rounds": 20,
+    "use_best_model": True,
     "one_hot_max_size": 100,
-    "verbose": False,
+    # "verbose": False,
+    "verbose": True,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
 }
@@ -52,8 +57,11 @@ CATBOOST_MULTICLASS_PARAMS = {
     "loss_function": "MultiClass",
     "subsample": 0.5,
     "bootstrap_type": "Bernoulli",
+    "early_stopping_rounds": 20,
+    "use_best_model": True,
     "rsm": 0.1,
-    "verbose": False,
+    # "verbose": False,
+    "verbose": True,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
 }
