@@ -9,6 +9,7 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer
+
 from upgini.utils.sklearn_ext import cross_validate
 
 try:
@@ -103,6 +104,87 @@ NA_VALUES = [
 ]
 
 NA_REPLACEMENT = "NA"
+
+SUPPORTED_CATBOOST_METRICS = {s.upper(): s for s in {
+    "Logloss",
+    "CrossEntropy",
+    "CtrFactor",
+    "Focal",
+    "RMSE",
+    "LogCosh",
+    "Lq",
+    "MAE",
+    "Quantile",
+    "MultiQuantile",
+    "Expectile",
+    "LogLinQuantile",
+    "MAPE",
+    "Poisson",
+    "MSLE",
+    "MedianAbsoluteError",
+    "SMAPE",
+    "Huber",
+    "Tweedie",
+    "Cox",
+    "RMSEWithUncertainty",
+    "MultiClass",
+    "MultiClassOneVsAll",
+    "PairLogit",
+    "PairLogitPairwise",
+    "YetiRank",
+    "YetiRankPairwise",
+    "QueryRMSE",
+    "QuerySoftMax",
+    "QueryCrossEntropy",
+    "StochasticFilter",
+    "LambdaMart",
+    "StochasticRank",
+    "PythonUserDefinedPerObject",
+    "PythonUserDefinedMultiTarget",
+    "UserPerObjMetric",
+    "UserQuerywiseMetric",
+    "R2",
+    "NumErrors",
+    "FairLoss",
+    "AUC",
+    "Accuracy",
+    "BalancedAccuracy",
+    "BalancedErrorRate",
+    "BrierScore",
+    "Precision",
+    "Recall",
+    "F1",
+    "TotalF1",
+    "F",
+    "MCC",
+    "ZeroOneLoss",
+    "HammingLoss",
+    "HingeLoss",
+    "Kappa",
+    "WKappa",
+    "LogLikelihoodOfPrediction",
+    "NormalizedGini",
+    "PRAUC",
+    "PairAccuracy",
+    "AverageGain",
+    "QueryAverage",
+    "QueryAUC",
+    "PFound",
+    "PrecisionAt",
+    "RecallAt",
+    "MAP",
+    "NDCG",
+    "DCG",
+    "FilteredDCG",
+    "MRR",
+    "ERR",
+    "SurvivalAft",
+    "MultiRMSE",
+    "MultiRMSEWithMissingValues",
+    "MultiLogloss",
+    "MultiCrossEntropy",
+    "Combination",
+}}
 
 
 class EstimatorWrapper:
@@ -218,14 +300,20 @@ class EstimatorWrapper:
             "target_type": target_type,
         }
         if estimator is None:
+            params = dict()
+            # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
+            #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
-                params = _get_add_params(CATBOOST_MULTICLASS_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))

@@ -312,23 +312,22 @@ def cross_validate(
 
         return ret
     except Exception:
-        logging.exception("Failed to execute overrided cross_validate. Fallback to original")
-        raise
-        # return cross_validate(
-        #     estimator,
-        #     X,
-        #     y,
-        #     groups=groups,
-        #     scoring=scoring,
-        #     cv=cv,
-        #     n_jobs=n_jobs,
-        #     verbose=verbose,
-        #     fit_params=fit_params,
-        #     pre_dispatch=pre_dispatch,
-        #     return_train_score=return_train_score,
-        #     return_estimator=return_estimator,
-        #     error_score=error_score,
-        # )
+        logging.exception("Failed to execute overriden cross_validate. Fallback to original")
+        return cross_validate(
+            estimator,
+            X,
+            y,
+            groups=groups,
+            scoring=scoring,
+            cv=cv,
+            n_jobs=n_jobs,
+            verbose=verbose,
+            fit_params=fit_params,
+            pre_dispatch=pre_dispatch,
+            return_train_score=return_train_score,
+            return_estimator=return_estimator,
+            error_score=error_score,
+        )
 
 
 def _fit_and_score(
