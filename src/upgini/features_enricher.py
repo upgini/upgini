@@ -834,6 +834,8 @@ class FeaturesEnricher(TransformerMixin):
                         bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
+                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(y_sorted.mean(), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -894,6 +896,10 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
+                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                                eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
+                                    eval_y_sorted.mean(), 4
+                                )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
                                     bundle.get("quality_metrics_baseline_header").format(metric)
@@ -908,7 +914,7 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
 
                     metrics_df = (
-                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
+                        pd.DataFrame(metrics)
                     )
                     do_without_pandas_limits(
                         lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
@@ -2268,11 +2274,7 @@ class FeaturesEnricher(TransformerMixin):
                         feature_sample = [round(f, 4) for f in feature_sample]
 
             def to_anchor(link: str, value: str) -> str:
-                return (
-                    f"<a href='{link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{value}</a>"
-                )
+                return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
 
             internal_provider = feature_meta.data_provider or ""
             if feature_meta.data_provider:
@@ -2488,27 +2490,7 @@ class FeaturesEnricher(TransformerMixin):
         )
         if metrics is not None:
             msg = bundle.get("quality_metrics_header")
-
-            try:
-                from IPython.display import display
-
-                _ = get_ipython()  # type: ignore
-
-                print(Format.GREEN + Format.BOLD + msg + Format.END)
-                # TODO for roc_auc calculate GINI and GINI %
-                # if bundle.get("quality_metrics_uplift_header") in metrics.columns:
-                #     metrics = metrics.copy()
-                #     try:
-                #         baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
-                #         metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
-                #             metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
-                #         ).round(2)
-                #     except Exception:
-                #         pass
-                display(metrics)
-            except (ImportError, NameError):
-                print(msg)
-                print(metrics)
+            display_html_dataframe(metrics, metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))

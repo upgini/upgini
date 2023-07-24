@@ -32,6 +32,11 @@ def do_without_pandas_limits(func: Callable):
 
 
 def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: str):
+    if not ipython_available():
+        print(header)
+        print(internal_df)
+        return
+
     from IPython.display import HTML, display
 
     def map_to_td(value) -> str:
@@ -78,7 +83,7 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
         <h2>{header}</h2>
         <div style="text-align: right">
             <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>Copy</button>
-            <a href='mailto:<put email for share>?subject=Relevant features&body=<Paste search result here>'>
+            <a href='mailto:<put email for share>?subject={header}&body=<Paste search result here>'>
                 <button>Share</button>
             </a>
         </div>
