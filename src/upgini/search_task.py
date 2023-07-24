@@ -215,10 +215,9 @@ class SearchTask:
             silent_mode=silent_mode,
         )
 
-    def _check_finished_initial_search(self) -> List[ProviderTaskSummary]:
-        if self.summary is None or len(self.summary.initial_important_providers) == 0:
+    def _check_finished_initial_search(self):
+        if self.provider_metadata_v2 is None or len(self.provider_metadata_v2) == 0:
             raise RuntimeError(bundle.get("search_not_started"))
-        return self.summary.initial_important_providers
 
     def _check_finished_validation_search(self) -> List[ProviderTaskSummary]:
         if self.summary is None or len(self.summary.validation_important_providers) == 0:

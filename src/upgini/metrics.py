@@ -381,6 +381,49 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         return X, y, params
 
 
+def validate_scoring_argument(scoring: Union[Callable, str, None]):
+    if isinstance(scoring, str) and scoring is not None:
+        _get_scorer_by_name(scoring)
+
+
+def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
+    available_scorers = get_scorer_names()
+    metric_name = scoring
+    if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
+        scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
+        multiplier = -1
+    elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
+        scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
+        multiplier = -1
+    elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
+        scoring = get_scorer("neg_root_mean_squared_error")
+        multiplier = -1
+    elif scoring in available_scorers:
+        scoring = get_scorer(scoring)
+    elif ("neg_" + scoring) in available_scorers:
+        scoring = get_scorer("neg_" + scoring)
+        multiplier = -1
+    else:
+        supported_metrics = set(available_scorers)
+        neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
+        supported_metrics.update(neg_metrics)
+        supported_metrics.update(
+            [
+                "mean_squared_log_error",
+                "MSLE",
+                "msle",
+                "root_mean_squared_log_error",
+                "RMSLE",
+                "rmsle",
+                "root_mean_squared_error",
+                "RMSE",
+                "rmse",
+            ]
+        )
+        raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
+    return scoring, metric_name, multiplier
+
+
 def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:
     if scoring is None:
         if target_type == ModelTaskType.BINARY:
@@ -394,40 +437,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
 
     multiplier = 1
     if isinstance(scoring, str):
-        available_scorers = get_scorer_names()
-        metric_name = scoring
-        if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
-            scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
-            multiplier = -1
-        elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
-            scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
-            multiplier = -1
-        elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
-            scoring = get_scorer("neg_root_mean_squared_error")
-            multiplier = -1
-        elif scoring in available_scorers:
-            scoring = get_scorer(scoring)
-        elif ("neg_" + scoring) in available_scorers:
-            scoring = get_scorer("neg_" + scoring)
-            multiplier = -1
-        else:
-            supported_metrics = set(available_scorers)
-            neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
-            supported_metrics.update(neg_metrics)
-            supported_metrics.update(
-                [
-                    "mean_squared_log_error",
-                    "MSLE",
-                    "msle",
-                    "root_mean_squared_log_error",
-                    "RMSLE",
-                    "rmsle",
-                    "root_mean_squared_error",
-                    "RMSE",
-                    "rmse",
-                ]
-            )
-            raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
+        scoring, metric_name, multiplier = _get_scorer_by_name(scoring)
     elif hasattr(scoring, "__name__"):
         metric_name = scoring.__name__
     else:

@@ -1,5 +1,5 @@
-from random import randint
 import tempfile
+from random import randint
 from typing import List, Optional, Union
 
 import pandas as pd
@@ -9,7 +9,6 @@ from upgini.metadata import ProviderTaskMetadataV2
 
 
 class RequestsCounter:
-
     def __init__(self):
         self.count = 0
 
@@ -144,10 +143,16 @@ def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_i
     requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.dict())
 
 
-def mock_raw_features(requests_mock: Mocker, url: str, search_task_id: str, path_to_mock_features: str):
+def mock_raw_features(
+    requests_mock: Mocker, url: str, search_task_id: str, path_to_mock_features: str, metrics_calculation=True
+):
     ads_search_task_features_id = random_id()
+    api = (
+        f"{url}/public/api/v2/search/rawfeatures/{search_task_id}"
+        f"?metricsCalculation={str(metrics_calculation).lower()}"
+    )
     requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/" + search_task_id,
+        api,
         json={
             "adsSearchTaskFeaturesDTO": [
                 {"searchType": "INITIAL", "adsSearchTaskFeaturesId": ads_search_task_features_id}
@@ -385,11 +390,19 @@ def mock_initial_and_validation_summary(
 
 
 def mock_validation_raw_features(
-    requests_mock: Mocker, url: str, validation_search_task_id: str, mock_features: Union[str, pd.DataFrame]
+    requests_mock: Mocker,
+    url: str,
+    validation_search_task_id: str,
+    mock_features: Union[str, pd.DataFrame],
+    metrics_calculation=False,
 ):
     ads_search_task_features_id = random_id()
+    api = (
+        f"{url}/public/api/v2/search/rawfeatures/{validation_search_task_id}"
+        f"?metricsCalculation={str(metrics_calculation).lower()}"
+    )
     requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/" + validation_search_task_id,
+        api,
         json={
             "adsSearchTaskFeaturesDTO": [
                 {"searchType": "VALIDATION", "adsSearchTaskFeaturesId": ads_search_task_features_id}

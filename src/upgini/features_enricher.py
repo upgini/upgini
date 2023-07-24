@@ -38,7 +38,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper
+from upgini.metrics import EstimatorWrapper, validate_scoring_argument
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
@@ -703,6 +703,8 @@ class FeaturesEnricher(TransformerMixin):
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
 
+                validate_scoring_argument(scoring)
+
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
@@ -913,9 +915,7 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
-                    metrics_df = (
-                        pd.DataFrame(metrics)
-                    )
+                    metrics_df = pd.DataFrame(metrics)
                     do_without_pandas_limits(
                         lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
                     )
@@ -1618,6 +1618,8 @@ class FeaturesEnricher(TransformerMixin):
                     print(msg)
                     self.logger.warning(msg)
 
+        validate_scoring_argument(scoring)
+
         self._validate_binary_observations(validated_y)
 
         self.__log_debug_information(
@@ -1800,9 +1802,12 @@ class FeaturesEnricher(TransformerMixin):
         gc.collect()
 
         if calculate_metrics:
-            self.__show_metrics(
-                scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
-            )
+            try:
+                self.__show_metrics(
+                    scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                )
+            except Exception:
+                self.logger.exception("Failed to calculate metrics")
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
