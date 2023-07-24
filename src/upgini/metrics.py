@@ -389,6 +389,7 @@ def validate_scoring_argument(scoring: Union[Callable, str, None]):
 def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
     available_scorers = get_scorer_names()
     metric_name = scoring
+    multiplier = 1
     if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
         scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
         multiplier = -1
