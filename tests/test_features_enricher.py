@@ -180,7 +180,7 @@ def test_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+                enriched_rocauc: [0.493158, 0.507513, 0.503419],
             }
         )
         .set_index("segment")
@@ -480,7 +480,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.500276, 0.499805, 0.497979],
+                enriched_rocauc: [0.500714, 0.500000, 0.498058],
             }
         )
         .set_index("segment")
@@ -615,9 +615,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.498860, 0.529256, 0.522158],
-                enriched_rocauc: [0.494321, 0.518849, 0.522010],
-                uplift: [-0.004540, -0.010407, -0.000148],
+                baseline_rocauc: [0.508920, 0.525607, 0.520815],
+                enriched_rocauc: [0.508176, 0.528022, 0.499444],
+                uplift: [-0.000744, 0.002415, -0.021371],
             }
         )
         .set_index("segment")
@@ -782,7 +782,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+                enriched_rocauc: [0.493158, 0.507513, 0.503419],
             }
         )
         .set_index("segment")
@@ -922,7 +922,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+                enriched_rocauc: [0.493158, 0.507513, 0.503419],
             }
         )
         .set_index("segment")
@@ -1060,7 +1060,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                enriched_rocauc: [0.488020, 0.508249, 0.511376],
+                enriched_rocauc: [0.493158, 0.507513, 0.503419],
             }
         )
         .set_index("segment")
@@ -1181,9 +1181,9 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             {
                 "segment": [train_segment],
                 rows_header: [5319],
-                baseline_rocauc: [0.501952],
-                enriched_rocauc: [0.504399],
-                uplift: [0.002448],
+                baseline_rocauc: [0.501774],
+                enriched_rocauc: [0.510705],
+                uplift: [0.008931],
             }
         )
         .set_index("segment")
@@ -2138,9 +2138,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             {
                 "segment": [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [10000, 1000, 1000],
-                baseline_rocauc: [0.492343, 0.512044, 0.468342],
-                enriched_rocauc: [0.495704, 0.502245, 0.474845],
-                uplift: [0.003361, -0.009799, 0.006503],
+                baseline_rocauc: [0.496573, 0.500007, 0.499248],
+                enriched_rocauc: [0.494259, 0.512474, 0.494782],
+                uplift: [-0.002314, 0.012467, -0.004466],
             }
         )
         .set_index("segment")

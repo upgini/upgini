@@ -10,6 +10,7 @@ from traceback import format_exc
 
 import numpy as np
 import scipy.sparse as sp
+from catboost import CatBoostClassifier, CatBoostRegressor
 from joblib import Parallel, logger
 from scipy.sparse import issparse
 from sklearn import config_context, get_config
@@ -312,7 +313,22 @@ def cross_validate(
         return ret
     except Exception:
         logging.exception("Failed to execute overrided cross_validate. Fallback to original")
-        return cross_validate()
+        raise
+        # return cross_validate(
+        #     estimator,
+        #     X,
+        #     y,
+        #     groups=groups,
+        #     scoring=scoring,
+        #     cv=cv,
+        #     n_jobs=n_jobs,
+        #     verbose=verbose,
+        #     fit_params=fit_params,
+        #     pre_dispatch=pre_dispatch,
+        #     return_train_score=return_train_score,
+        #     return_estimator=return_estimator,
+        #     error_score=error_score,
+        # )
 
 
 def _fit_and_score(
@@ -470,9 +486,9 @@ def _fit_and_score(
         if y_train is None:
             estimator.fit(X_train, **fit_params)
         else:
-            fit_params = fit_params.copy()
-            fit_params["eval_set"] = [(X_test, y_test)]
-            fit_params["verbose_eval"] = True
+            if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
+                fit_params = fit_params.copy()
+                fit_params["eval_set"] = [(X_test, y_test)]
             estimator.fit(X_train, y_train, **fit_params)
 
     except Exception:

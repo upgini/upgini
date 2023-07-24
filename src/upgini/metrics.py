@@ -42,8 +42,7 @@ CATBOOST_PARAMS = {
     "early_stopping_rounds": 20,
     "use_best_model": True,
     "one_hot_max_size": 100,
-    # "verbose": False,
-    "verbose": True,
+    "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
 }
@@ -60,8 +59,7 @@ CATBOOST_MULTICLASS_PARAMS = {
     "early_stopping_rounds": 20,
     "use_best_model": True,
     "rsm": 0.1,
-    # "verbose": False,
-    "verbose": True,
+    "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
 }
@@ -182,7 +180,7 @@ class EstimatorWrapper:
             estimator=self.estimator,
             X=X,
             y=y,
-            scoring={"score": scorer},
+            scoring=scorer,
             cv=self.cv,
             fit_params=fit_params,
             return_estimator=True,
