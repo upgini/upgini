@@ -2371,7 +2371,8 @@ class FeaturesEnricher(TransformerMixin):
     @staticmethod
     def _group_relevant_data_sources(df: pd.DataFrame) -> pd.DataFrame:
         return (
-            df.groupby([bundle.get("features_info_provider"), bundle.get("features_info_source")])
+            df.query(f"{bundle.get('features_info_provider')} != ''")
+            .groupby([bundle.get("features_info_provider"), bundle.get("features_info_source")])
             .agg(
                 shap_sum=(bundle.get("features_info_shap"), "sum"),
                 row_count=(bundle.get("features_info_shap"), "count"),
