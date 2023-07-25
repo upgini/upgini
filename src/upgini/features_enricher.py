@@ -38,7 +38,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper
+from upgini.metrics import EstimatorWrapper, validate_scoring_argument
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
@@ -114,12 +114,12 @@ class FeaturesEnricher(TransformerMixin):
     GENERATE_FEATURES_LIMIT = 10
     EMPTY_FEATURES_INFO = pd.DataFrame(
         columns=[
-            bundle.get("features_info_provider"),
-            bundle.get("features_info_source"),
             bundle.get("features_info_name"),
             bundle.get("features_info_shap"),
             bundle.get("features_info_hitrate"),
-            bundle.get("features_info_type"),
+            bundle.get("features_info_value_preview"),
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
             bundle.get("features_info_commercial_schema"),
         ]
     )
@@ -169,6 +169,7 @@ class FeaturesEnricher(TransformerMixin):
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self._features_info_without_links: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self.feature_names_ = []
         self.feature_importances_ = []
@@ -703,6 +704,8 @@ class FeaturesEnricher(TransformerMixin):
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
 
+                validate_scoring_argument(scoring)
+
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
@@ -834,6 +837,8 @@ class FeaturesEnricher(TransformerMixin):
                         bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
+                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(y_sorted.mean(), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -894,6 +899,10 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
+                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                                eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
+                                    eval_y_sorted.mean(), 4
+                                )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
                                     bundle.get("quality_metrics_baseline_header").format(metric)
@@ -907,9 +916,7 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
-                    metrics_df = (
-                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
-                    )
+                    metrics_df = pd.DataFrame(metrics)
                     do_without_pandas_limits(
                         lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
                     )
@@ -1526,7 +1533,7 @@ class FeaturesEnricher(TransformerMixin):
             return excluded_features[feature_name_header].values.tolist()
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
-        if len(search_keys) == 0 and self.country_code is None:
+        if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
                 raise ValidationError(bundle.get("search_key_differ_from_fit"))
@@ -1611,6 +1618,8 @@ class FeaturesEnricher(TransformerMixin):
                     msg = bundle.get("missing_generate_feature").format(gen_feature, x_columns)
                     print(msg)
                     self.logger.warning(msg)
+
+        validate_scoring_argument(scoring)
 
         self._validate_binary_observations(validated_y)
 
@@ -1794,9 +1803,12 @@ class FeaturesEnricher(TransformerMixin):
         gc.collect()
 
         if calculate_metrics:
-            self.__show_metrics(
-                scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
-            )
+            try:
+                self.__show_metrics(
+                    scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                )
+            except Exception:
+                self.logger.exception("Failed to calculate metrics")
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -2240,86 +2252,104 @@ class FeaturesEnricher(TransformerMixin):
             raise Exception(bundle.get("missing_features_meta"))
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
+        features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         self.feature_names_ = []
         self.feature_importances_ = []
         features_info = []
+        features_info_without_links = []
         internal_features_info = []
 
         def round_shap_value(shap: float) -> float:
-            if shap > 0.0 and shap < 0.000001:
-                return 0.000001
+            if shap > 0.0 and shap < 0.0001:
+                return 0.0001
             else:
-                return shap
+                return round(shap, 4)
 
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+            feature_sample = []
             if feature_meta.name not in x_columns:
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+                if feature_meta.name in features_df.columns:
+                    feature_sample = features_df[feature_meta.name].dropna().sample(5).values.tolist()
+                    if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
+                        feature_sample = [round(f, 4) for f in feature_sample]
+
+            def to_anchor(link: str, value: str) -> str:
+                return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
 
             internal_provider = feature_meta.data_provider or ""
             if feature_meta.data_provider:
-                provider = (
-                    f"<a href='{feature_meta.data_provider_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_provider}</a>"
-                )
+                provider = to_anchor(feature_meta.data_provider_link, feature_meta.data_provider)
             else:
                 provider = internal_provider
 
             internal_source = feature_meta.data_source or ""
             if feature_meta.data_source:
-                source = (
-                    f"<a href='{feature_meta.data_source_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_source}</a>"
-                )
+                source = to_anchor(feature_meta.data_source_link, feature_meta.data_source)
             else:
                 source = internal_source
 
             internal_feature_name = feature_meta.name
             if feature_meta.doc_link:
-                feature_name = (
-                    f"<a href='{feature_meta.doc_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.name}</a>"
-                )
+                feature_name = to_anchor(feature_meta.doc_link, feature_meta.name)
             else:
                 feature_name = internal_feature_name
 
-            features_info.append(
-                {
-                    bundle.get("features_info_provider"): provider,
-                    bundle.get("features_info_source"): source,
-                    bundle.get("features_info_name"): feature_name,
-                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
-                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    bundle.get("features_info_type"): feature_meta.type,
-                    bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
-                }
-            )
+            # Show only enriched features
+            if feature_meta.name not in x_columns and feature_meta.name != COUNTRY:
+                commercial_schema = (
+                    "Premium"
+                    if feature_meta.commercial_schema in ["Trial", "Paid"]
+                    else (feature_meta.commercial_schema or "")
+                )
+                features_info.append(
+                    {
+                        bundle.get("features_info_name"): feature_name,
+                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                        bundle.get("features_info_value_preview"): feature_sample,
+                        bundle.get("features_info_provider"): provider,
+                        bundle.get("features_info_source"): source,
+                        bundle.get("features_info_commercial_schema"): commercial_schema,
+                    }
+                )
+                features_info_without_links.append(
+                    {
+                        bundle.get("features_info_name"): internal_feature_name,
+                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                        bundle.get("features_info_value_preview"): feature_sample,
+                        bundle.get("features_info_provider"): internal_provider,
+                        bundle.get("features_info_source"): internal_source,
+                        bundle.get("features_info_commercial_schema"): commercial_schema,
+                    }
+                )
             internal_features_info.append(
                 {
-                    bundle.get("features_info_provider"): internal_provider,
-                    bundle.get("features_info_source"): internal_source,
                     bundle.get("features_info_name"): internal_feature_name,
+                    "feature_link": feature_meta.doc_link,
                     bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
                     bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    bundle.get("features_info_type"): feature_meta.type,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): internal_provider,
+                    "provider_link": feature_meta.data_provider_link,
+                    bundle.get("features_info_source"): internal_source,
+                    "source_link": feature_meta.data_source_link,
                     bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
                 }
             )
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
+            self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
-            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
+            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self._internal_features_info}"))
         else:
-            self.features_info = self.EMPTY_FEATURES_INFO
-            self._internal_features_info = self.EMPTY_FEATURES_INFO
             self.logger.warning("Empty features info")
 
     def __filtered_importance_names(
@@ -2466,27 +2496,7 @@ class FeaturesEnricher(TransformerMixin):
         )
         if metrics is not None:
             msg = bundle.get("quality_metrics_header")
-
-            try:
-                from IPython.display import display
-
-                _ = get_ipython()  # type: ignore
-
-                print(Format.GREEN + Format.BOLD + msg + Format.END)
-                # TODO for roc_auc calculate GINI and GINI %
-                # if bundle.get("quality_metrics_uplift_header") in metrics.columns:
-                #     metrics = metrics.copy()
-                #     try:
-                #         baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
-                #         metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
-                #             metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
-                #         ).round(2)
-                #     except Exception:
-                #         pass
-                display(metrics)
-            except (ImportError, NameError):
-                print(msg)
-                print(metrics)
+            display_html_dataframe(metrics, metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
@@ -2496,9 +2506,11 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             self.logger.info(msg)
-            display_html_dataframe(self.features_info)
-
-            if len(self.feature_names_) == 0:
+            if len(self.feature_names_) > 0:
+                display_html_dataframe(
+                    self.features_info, self._features_info_without_links, bundle.get("relevant_features_header")
+                )
+            else:
                 msg = bundle.get("features_info_zero_important_features")
                 self.logger.warning(msg)
                 self.__display_slack_community_link(msg)

@@ -1,5 +1,6 @@
 from typing import Callable
 import pandas as pd
+import urllib.parse
 
 
 def ipython_available() -> bool:
@@ -30,16 +31,34 @@ def do_without_pandas_limits(func: Callable):
         pd.options.display.width = prev_width
 
 
-def display_html_dataframe(df: pd.DataFrame):
+def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: str):
+    if not ipython_available():
+        print(header)
+        print(internal_df)
+        return
+
     from IPython.display import HTML, display
 
     def map_to_td(value) -> str:
         if isinstance(value, float):
-            return f"<td class='upgini-number'>{value:.6f}</td>"
+            return f"<td class='upgini-number'>{value:.4f}</td>"
         else:
             return f"<td class='upgini-text'>{value}</td>"
 
-    table_str = (
+    table_tsv = urllib.parse.quote(internal_df.to_csv(index=False, sep="\t"), safe=",")
+
+    table_html = (
+        "<table class='upgini-df'>"
+        + "<thead>"
+        + "".join(f"<th>{col}</th>" for col in df.columns)
+        + "</thead>"
+        + "<tbody>"
+        + "".join("<tr>" + "".join(map(map_to_td, row[1:])) + "</tr>" for row in df.itertuples())
+        + "</tbody>"
+        + "</table>"
+    )
+
+    result_html = (
         """<style>
             .upgini-df thead th {
                 font-weight:bold;
@@ -58,14 +77,37 @@ def display_html_dataframe(df: pd.DataFrame):
             .upgini-number {
                 text-align: center;
             }
-        </style>"""
-        + "<table class='upgini-df'>"
-        + "<thead>"
-        + "".join(f"<th>{col}</th>" for col in df.columns)
-        + "</thead>"
-        + "<tbody>"
-        + "".join("<tr>" + "".join(map(map_to_td, row[1:])) + "</tr>" for row in df.itertuples())
-        + "</tbody>"
-        + "</table>"
+        </style>
+        """ +
+        f"""
+        <h2>{header}</h2>
+        <div style="text-align: right">
+            <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>Copy</button>
+            <a href='mailto:<put email for share>?subject={header}&body=<Paste search result here>'>
+                <button>Share</button>
+            </a>
+        </div>
+        """ + table_html
     )
-    display(HTML(table_str))
+    display(HTML(result_html))
+
+
+# def show_button_download_pdf(source: str, title="Download as PDF"):
+#     from xhtml2pdf import pisa
+
+#     file_name = f"report-{uuid.uuid4()}.pdf"
+#     with open(file_name, "wb") as output:
+#         pisa.CreatePDF(
+#             src=source,
+#             dest=output
+#         )
+
+#     import base64
+#     from IPython.display import HTML
+
+#     with open(file_name, "rb") as f:
+#         b64 = base64.b64encode(f.read())
+#         payload = b64.decode()
+#         html = '<a download="{filename}" href="data:application/pdf;base64,{payload}" target="_blank">{title}</a>'
+#         html = html.format(payload=payload, title=title, filename=file_name)
+#         return HTML(html)
