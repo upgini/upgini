@@ -123,6 +123,14 @@ class FeaturesEnricher(TransformerMixin):
             bundle.get("features_info_commercial_schema"),
         ]
     )
+    EMPTY_DATA_SOURCES = pd.DataFrame(
+        columns=[
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
+            bundle.get("relevant_data_sources_all_shap"),
+            bundle.get("relevant_data_sources_number"),
+        ]
+    )
 
     def __init__(
         self,
@@ -171,6 +179,8 @@ class FeaturesEnricher(TransformerMixin):
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._features_info_without_links: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
+        self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
@@ -2349,8 +2359,32 @@ class FeaturesEnricher(TransformerMixin):
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
             do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self._internal_features_info}"))
+
+            self.relevant_data_sources = self._group_relevant_data_sources(self.features_info)
+            self._relevant_data_sources_wo_links = self._group_relevant_data_sources(self._features_info_without_links)
+            do_without_pandas_limits(
+                lambda: self.logger.info(f"Relevant data sources:\n{self._relevant_data_sources_wo_links}")
+            )
         else:
             self.logger.warning("Empty features info")
+
+    @staticmethod
+    def _group_relevant_data_sources(df: pd.DataFrame) -> pd.DataFrame:
+        return (
+            df.groupby([bundle.get("features_info_provider"), bundle.get("features_info_source")])
+            .agg(
+                shap_sum=(bundle.get("features_info_shap"), "sum"),
+                row_count=(bundle.get("features_info_shap"), "count"),
+            )
+            .sort_values(by="shap_sum", ascending=False)
+            .reset_index()
+            .rename(
+                columns={
+                    "shap_sum": bundle.get("relevant_data_sources_all_shap"),
+                    "row_count": bundle.get("relevant_data_sources_number"),
+                }
+            )
+        )
 
     def __filtered_importance_names(
         self, importance_threshold: Optional[float], max_features: Optional[int]
@@ -2509,6 +2543,12 @@ class FeaturesEnricher(TransformerMixin):
             if len(self.feature_names_) > 0:
                 display_html_dataframe(
                     self.features_info, self._features_info_without_links, bundle.get("relevant_features_header")
+                )
+
+                display_html_dataframe(
+                    self.relevant_data_sources,
+                    self._relevant_data_sources_wo_links,
+                    bundle.get("relevant_data_sources_header"),
                 )
             else:
                 msg = bundle.get("features_info_zero_important_features")
