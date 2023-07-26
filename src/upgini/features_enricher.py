@@ -49,7 +49,7 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
-from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits
+from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits, prepare_and_show_report
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -1784,6 +1784,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
+        self.__show_report_button()
         self.__show_selected_features(self.fit_search_keys)
 
         if not self.warning_counter.has_warnings():
@@ -2285,7 +2286,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
                 if feature_meta.name in features_df.columns:
-                    feature_sample = features_df[feature_meta.name].dropna().sample(5).values.tolist()
+                    feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
                     if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
                         feature_sample = [round(f, 4) for f in feature_sample]
 
@@ -2311,7 +2312,7 @@ class FeaturesEnricher(TransformerMixin):
                 feature_name = internal_feature_name
 
             # Show only enriched features
-            if feature_meta.name not in x_columns and feature_meta.name != COUNTRY:
+            if feature_meta.name not in x_columns and feature_meta.name != COUNTRY and feature_meta.shap_value > 0.0:
                 commercial_schema = (
                     "Premium"
                     if feature_meta.commercial_schema in ["Trial", "Paid"]
@@ -2559,6 +2560,12 @@ class FeaturesEnricher(TransformerMixin):
         except (ImportError, NameError):
             print(msg)
             print(self._internal_features_info)
+
+    def __show_report_button(self):
+        pass
+        # prepare_and_show_report(
+
+        # )
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
