@@ -1,9 +1,11 @@
 import base64
+from io import BytesIO
+import math
+import textwrap
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from typing import Callable, Optional
-import textwrap
 
 import pandas as pd
 from xhtml2pdf import pisa
@@ -40,11 +42,19 @@ def do_without_pandas_limits(func: Callable):
 def make_table(df: pd.DataFrame, wrap_long_string=None) -> str:
     def map_to_td(value) -> str:
         if isinstance(value, float):
-            return f"<td class='upgini-number'>{value:.4f}</td>"
+            if value is None or not math.isfinite(value):
+                value = "&nbsp;"
+            else:
+                value = f"{value:.4f}"
+            return f"<td class='upgini-number'>{value}</td>"
         elif isinstance(value, int):
+            if value is None:
+                value = "&nbsp;"
             return f"<td class='upgini-number'>{value}</td>"
         else:
-            if wrap_long_string is not None and len(value) > wrap_long_string:
+            if value is None or len(value) == 0 or value == "nan":
+                value = "&nbsp;"
+            elif wrap_long_string is not None and len(value) > wrap_long_string:
                 value = "</br>".join(textwrap.wrap(value, wrap_long_string))
             return f"<td class='upgini-text'>{value}</td>"
 
@@ -95,9 +105,9 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
         <h2>{header}</h2>
         <div style="display:flex; flex-direction:column; align-items:flex-end; width: fit-content;">
             <div style="text-align: right">
-                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>Copy</button>
+                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>\U0001F4C2 Copy</button>
                 <a href='mailto:<Share with...>?subject={email_subject}&body={table_tsv}'>
-                    <button>Share</button>
+                    <button>\U0001F4E8 Share</button>
                 </a>
             </div>
             {table_html}
@@ -109,7 +119,7 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
 def prepare_and_show_report(
     relevant_features_df: pd.DataFrame,
     relevant_datasources_df: pd.DataFrame,
-    metrics_df: pd.DataFrame,
+    metrics_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str],
 ):
@@ -118,6 +128,7 @@ def prepare_and_show_report(
 
     report = f"""<html>
         <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
             <style>
                 @page {{
                     size: a4 portrait;
@@ -137,11 +148,20 @@ def prepare_and_show_report(
                     }}
                 }}
 
+                @font-face {{
+                    font-family: "Alice-Regular";
+                    src: url("/fonts/Alice-Regular.ttf") format("truetype");
+                }}
+
+                body {{
+                    font-family: "Alice-Regular", Arial, sans-serif;
+                }}
+
                 #header_content {{
                     background-color: black;
                     color: white;
                     text-align: center;
-                    padding-top: 6pt;
+                    padding-top: 7pt;
                     font-size: 15pt;
                     height: 38pt;
                 }}
@@ -198,8 +218,10 @@ def prepare_and_show_report(
             <p>This report was generated automatically by Upgini.</p>
             <p>The report shows a listing of relevant features for your
             ML task and accuracy metrics after enrichment.</p>
-            <h3>All relevant features. Accuracy after enrichment</h3>
-            {make_table(metrics_df)}
+            {"<h3>All relevant features. Accuracy after enrichment</h3>" + make_table(metrics_df)
+             if metrics_df is not None
+             else ""
+            }
             <h3>All relevant features. Listing</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
             <h3>Relevant data sources</h3>
@@ -212,14 +234,14 @@ def prepare_and_show_report(
     show_button_download_pdf(report)
 
 
-def show_button_download_pdf(source: str, title="Download PDF report"):
+def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
     from IPython.display import HTML, display
 
     file_name = f"report-{uuid.uuid4()}.pdf"
     with open(file_name + ".html", "w") as f:
         f.write(source)
     with open(file_name, "wb") as output:
-        pisa.CreatePDF(src=source, dest=output)
+        pisa.CreatePDF(src=BytesIO(source.encode("UTF-8")), dest=output)
 
     with open(file_name, "rb") as f:
         b64 = base64.b64encode(f.read())

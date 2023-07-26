@@ -181,6 +181,7 @@ class FeaturesEnricher(TransformerMixin):
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
+        self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
@@ -1606,6 +1607,7 @@ class FeaturesEnricher(TransformerMixin):
         self.warning_counter.reset()
         self.df_with_original_index = None
         self.__cached_sampled_datasets = None
+        self.metrics = None
 
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
@@ -1784,7 +1786,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
-        self.__show_report_button()
         self.__show_selected_features(self.fit_search_keys)
 
         if not self.warning_counter.has_warnings():
@@ -1820,6 +1821,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except Exception:
                 self.logger.exception("Failed to calculate metrics")
+        self.__show_report_button()
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -2289,6 +2291,9 @@ class FeaturesEnricher(TransformerMixin):
                     feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
                     if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
                         feature_sample = [round(f, 4) for f in feature_sample]
+                    feature_sample = ", ".join(feature_sample)
+                    if len(feature_sample) > 30:
+                        feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
                 return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
@@ -2521,7 +2526,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
     ):
-        metrics = self.calculate_metrics(
+        self.metrics = self.calculate_metrics(
             scoring=scoring,
             estimator=estimator,
             importance_threshold=importance_threshold,
@@ -2530,9 +2535,9 @@ class FeaturesEnricher(TransformerMixin):
             trace_id=trace_id,
             silent=True,
         )
-        if metrics is not None:
+        if self.metrics is not None:
             msg = bundle.get("quality_metrics_header")
-            display_html_dataframe(metrics, metrics, msg)
+            display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
@@ -2562,10 +2567,13 @@ class FeaturesEnricher(TransformerMixin):
             print(self._internal_features_info)
 
     def __show_report_button(self):
-        pass
-        # prepare_and_show_report(
-
-        # )
+        prepare_and_show_report(
+            relevant_features_df=self._features_info_without_links,
+            relevant_datasources_df=self._relevant_data_sources_wo_links,
+            metrics_df=self.metrics,
+            search_id=self.search_id,
+            email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+        )
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
