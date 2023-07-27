@@ -49,7 +49,11 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
-from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits, prepare_and_show_report
+from upgini.utils.display_utils import (
+    display_html_dataframe,
+    do_without_pandas_limits,
+    prepare_and_show_report,
+)
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -2318,7 +2322,12 @@ class FeaturesEnricher(TransformerMixin):
                 feature_name = internal_feature_name
 
             # Show only enriched features
-            if feature_meta.name not in x_columns and feature_meta.name != COUNTRY and feature_meta.shap_value > 0.0:
+            if (
+                feature_meta.name not in x_columns
+                and feature_meta.name != COUNTRY
+                and feature_meta.shap_value > 0.0
+                and feature_meta.name not in self.fit_generated_features
+            ):
                 commercial_schema = (
                     "Premium"
                     if feature_meta.commercial_schema in ["Trial", "Paid"]
@@ -2570,9 +2579,9 @@ class FeaturesEnricher(TransformerMixin):
     def __show_report_button(self):
         prepare_and_show_report(
             relevant_features_df=self._features_info_without_links,
-            relevant_datasources_df=self._relevant_data_sources_wo_links,
+            relevant_datasources_df=self.relevant_data_sources,
             metrics_df=self.metrics,
-            search_id=self.search_id,
+            search_id=self._search_task.search_task_id,
             email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
         )
 
