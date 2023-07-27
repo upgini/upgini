@@ -172,7 +172,7 @@ class FeaturesEnricher(TransformerMixin):
             msg = f"WARNING: Unsupported arguments: {kwargs}"
             self.logger.warning(msg)
             print(msg)
-        
+
         self.passed_features: List[str] = []
         self.df_with_original_index: Optional[pd.DataFrame] = None
         self.country_added = False
