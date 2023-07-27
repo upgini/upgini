@@ -2290,7 +2290,7 @@ class FeaturesEnricher(TransformerMixin):
                 if feature_meta.name in features_df.columns:
                     feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
                     if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
-                        feature_sample = [round(f, 4) for f in feature_sample]
+                        feature_sample = [str(round(f, 4)) for f in feature_sample]
                     feature_sample = ", ".join(feature_sample)
                     if len(feature_sample) > 30:
                         feature_sample = feature_sample[:30] + "..."
