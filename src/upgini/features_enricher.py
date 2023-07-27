@@ -172,6 +172,20 @@ class FeaturesEnricher(TransformerMixin):
             msg = f"WARNING: Unsupported arguments: {kwargs}"
             self.logger.warning(msg)
             print(msg)
+        
+        self.passed_features: List[str] = []
+        self.df_with_original_index: Optional[pd.DataFrame] = None
+        self.country_added = False
+        self.fit_generated_features: List[str] = []
+        self.fit_dropped_features: Set[str] = set()
+        self.fit_search_keys = search_keys
+        self.warning_counter = WarningCounter()
+        self.X: Optional[pd.DataFrame] = None
+        self.y: Optional[pd.Series] = None
+        self.eval_set: Optional[List[Tuple]] = None
+        self.autodetected_search_keys: Dict[str, SearchKey] = {}
+        self.imbalanced = False
+        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
 
         validate_version(self.logger)
         self.search_keys = search_keys or dict()
@@ -240,19 +254,6 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
 
-        self.passed_features: List[str] = []
-        self.df_with_original_index: Optional[pd.DataFrame] = None
-        self.country_added = False
-        self.fit_generated_features: List[str] = []
-        self.fit_dropped_features: Set[str] = set()
-        self.fit_search_keys = search_keys
-        self.warning_counter = WarningCounter()
-        self.X: Optional[pd.DataFrame] = None
-        self.y: Optional[pd.Series] = None
-        self.eval_set: Optional[List[Tuple]] = None
-        self.autodetected_search_keys: Dict[str, SearchKey] = {}
-        self.imbalanced = False
-        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
 
