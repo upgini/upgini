@@ -8,7 +8,13 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import SCORERS, check_scoring, get_scorer, make_scorer
+from sklearn.metrics import check_scoring, get_scorer, make_scorer
+try:
+    from sklearn.metrics import get_scorer_names
+    available_scorers = get_scorer_names()
+except ImportError:
+    from sklearn.metrics._scorer import SCORERS
+    available_scorers = SCORERS
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
@@ -48,6 +54,7 @@ CATBOOST_MULTICLASS_PARAMS = {
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
+    # "early_stopping_rounds": 20,
 }
 
 LIGHTGBM_PARAMS = {
@@ -156,6 +163,8 @@ class EstimatorWrapper:
 
     def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray) -> Optional[float]:
         X, y, fit_params = self._prepare_to_fit(X, y)
+        # if isinstance(self.estimator, CatBoostClassifier) or isinstance(self.estimator, CatBoostRegressor):
+        #     fit_params["early_stopping_rounds"] = 20
 
         if X.shape[1] == 0:
             return None
@@ -372,6 +381,49 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         return X, y, params
 
 
+def validate_scoring_argument(scoring: Union[Callable, str, None]):
+    if isinstance(scoring, str) and scoring is not None:
+        _get_scorer_by_name(scoring)
+
+
+def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
+    metric_name = scoring
+    multiplier = 1
+    if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
+        scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
+        multiplier = -1
+    elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
+        scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
+        multiplier = -1
+    elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
+        scoring = get_scorer("neg_root_mean_squared_error")
+        multiplier = -1
+    elif scoring in available_scorers:
+        scoring = get_scorer(scoring)
+    elif ("neg_" + scoring) in available_scorers:
+        scoring = get_scorer("neg_" + scoring)
+        multiplier = -1
+    else:
+        supported_metrics = set(available_scorers)
+        neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
+        supported_metrics.update(neg_metrics)
+        supported_metrics.update(
+            [
+                "mean_squared_log_error",
+                "MSLE",
+                "msle",
+                "root_mean_squared_log_error",
+                "RMSLE",
+                "rmsle",
+                "root_mean_squared_error",
+                "RMSE",
+                "rmse",
+            ]
+        )
+        raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
+    return scoring, metric_name, multiplier
+
+
 def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:
     if scoring is None:
         if target_type == ModelTaskType.BINARY:
@@ -385,39 +437,7 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
 
     multiplier = 1
     if isinstance(scoring, str):
-        metric_name = scoring
-        if "mean_squared_log_error" == metric_name or "MSLE" == metric_name or "msle" == metric_name:
-            scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
-            multiplier = -1
-        elif "root_mean_squared_log_error" in metric_name or "RMSLE" == metric_name or "rmsle" == metric_name:
-            scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
-            multiplier = -1
-        elif "root_mean_squared_error" == metric_name or "RMSE" == metric_name or "rmse" == metric_name:
-            scoring = get_scorer("neg_root_mean_squared_error")
-            multiplier = -1
-        elif scoring in SCORERS.keys():
-            scoring = get_scorer(scoring)
-        elif ("neg_" + scoring) in SCORERS.keys():
-            scoring = get_scorer("neg_" + scoring)
-            multiplier = -1
-        else:
-            supported_metrics = set(SCORERS.keys())
-            neg_metrics = [m[4:] for m in supported_metrics if m.startswith("neg_")]
-            supported_metrics.update(neg_metrics)
-            supported_metrics.update(
-                [
-                    "mean_squared_log_error",
-                    "MSLE",
-                    "msle",
-                    "root_mean_squared_log_error",
-                    "RMSLE",
-                    "rmsle",
-                    "root_mean_squared_error",
-                    "RMSE",
-                    "rmse",
-                ]
-            )
-            raise ValidationError(bundle.get("metrics_invalid_scoring").format(scoring, sorted(supported_metrics)))
+        scoring, metric_name, multiplier = _get_scorer_by_name(scoring)
     elif hasattr(scoring, "__name__"):
         metric_name = scoring.__name__
     else:
