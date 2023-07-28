@@ -2065,7 +2065,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
-    assert len(first_feature_info["Value preview"]) == 5
+    assert len(first_feature_info["Value preview"]) > 0 and len(first_feature_info["Value preview"]) < 30
     # Client features are no longer shown
     # assert enricher.features_info.loc[1, feature_name_header] == "datetime_time_sin_1"
     # assert enricher.features_info.loc[1, shap_value_header] == 0.001

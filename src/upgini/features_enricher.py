@@ -49,7 +49,11 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
-from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits
+from upgini.utils.display_utils import (
+    display_html_dataframe,
+    do_without_pandas_limits,
+    prepare_and_show_report,
+)
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -169,6 +173,20 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
             print(msg)
 
+        self.passed_features: List[str] = []
+        self.df_with_original_index: Optional[pd.DataFrame] = None
+        self.country_added = False
+        self.fit_generated_features: List[str] = []
+        self.fit_dropped_features: Set[str] = set()
+        self.fit_search_keys = search_keys
+        self.warning_counter = WarningCounter()
+        self.X: Optional[pd.DataFrame] = None
+        self.y: Optional[pd.Series] = None
+        self.eval_set: Optional[List[Tuple]] = None
+        self.autodetected_search_keys: Dict[str, SearchKey] = {}
+        self.imbalanced = False
+        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
+
         validate_version(self.logger)
         self.search_keys = search_keys or dict()
         self.country_code = country_code
@@ -181,6 +199,7 @@ class FeaturesEnricher(TransformerMixin):
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
+        self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
@@ -235,19 +254,6 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
 
-        self.passed_features: List[str] = []
-        self.df_with_original_index: Optional[pd.DataFrame] = None
-        self.country_added = False
-        self.fit_generated_features: List[str] = []
-        self.fit_dropped_features: Set[str] = set()
-        self.fit_search_keys = search_keys
-        self.warning_counter = WarningCounter()
-        self.X: Optional[pd.DataFrame] = None
-        self.y: Optional[pd.Series] = None
-        self.eval_set: Optional[List[Tuple]] = None
-        self.autodetected_search_keys: Dict[str, SearchKey] = {}
-        self.imbalanced = False
-        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
 
@@ -1606,6 +1612,7 @@ class FeaturesEnricher(TransformerMixin):
         self.warning_counter.reset()
         self.df_with_original_index = None
         self.__cached_sampled_datasets = None
+        self.metrics = None
 
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
@@ -1819,6 +1826,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except Exception:
                 self.logger.exception("Failed to calculate metrics")
+        self.__show_report_button()
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -2285,9 +2293,13 @@ class FeaturesEnricher(TransformerMixin):
                 self.feature_names_.append(feature_meta.name)
                 self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
                 if feature_meta.name in features_df.columns:
-                    feature_sample = features_df[feature_meta.name].dropna().sample(5).values.tolist()
+                    feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
                     if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
                         feature_sample = [round(f, 4) for f in feature_sample]
+                    feature_sample = [str(f) for f in feature_sample]
+                    feature_sample = ", ".join(feature_sample)
+                    if len(feature_sample) > 30:
+                        feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
                 return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
@@ -2311,7 +2323,12 @@ class FeaturesEnricher(TransformerMixin):
                 feature_name = internal_feature_name
 
             # Show only enriched features
-            if feature_meta.name not in x_columns and feature_meta.name != COUNTRY:
+            if (
+                feature_meta.name not in x_columns
+                and feature_meta.name != COUNTRY
+                and feature_meta.shap_value > 0.0
+                and feature_meta.name not in self.fit_generated_features
+            ):
                 commercial_schema = (
                     "Premium"
                     if feature_meta.commercial_schema in ["Trial", "Paid"]
@@ -2520,7 +2537,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
     ):
-        metrics = self.calculate_metrics(
+        self.metrics = self.calculate_metrics(
             scoring=scoring,
             estimator=estimator,
             importance_threshold=importance_threshold,
@@ -2529,9 +2546,9 @@ class FeaturesEnricher(TransformerMixin):
             trace_id=trace_id,
             silent=True,
         )
-        if metrics is not None:
+        if self.metrics is not None:
             msg = bundle.get("quality_metrics_header")
-            display_html_dataframe(metrics, metrics, msg)
+            display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
@@ -2559,6 +2576,15 @@ class FeaturesEnricher(TransformerMixin):
         except (ImportError, NameError):
             print(msg)
             print(self._internal_features_info)
+
+    def __show_report_button(self):
+        prepare_and_show_report(
+            relevant_features_df=self._features_info_without_links,
+            relevant_datasources_df=self.relevant_data_sources,
+            metrics_df=self.metrics,
+            search_id=self._search_task.search_task_id,
+            email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+        )
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:

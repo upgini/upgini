@@ -11,6 +11,7 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
+import jwt
 
 import pandas as pd
 import requests
@@ -626,6 +627,12 @@ class _RestClient:
 
     def get_active_ads_definitions(self):
         return self._with_unauth_retry(lambda: self._send_get_req(self.GET_ACTIVE_ADS_DEFINITIONS_URI, None))
+
+    def get_current_email(self) -> Optional[str]:
+        try:
+            return jwt.decode(self._get_access_token(), options={"verify_signature": False})["sub"]
+        except Exception:
+            return None
 
     # ---
 
