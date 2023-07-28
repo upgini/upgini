@@ -1801,31 +1801,31 @@ class FeaturesEnricher(TransformerMixin):
                 msg = bundle.get("metrics_with_paid_features")
                 self.logger.warning(msg)
                 self.__display_slack_community_link(msg)
-            return None
+        else:
+            if calculate_metrics is None:
+                if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
+                    [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
+                ):
+                    msg = bundle.get("too_small_for_metrics")
+                    self.logger.warning(msg)
+                    calculate_metrics = False
+                elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
+                    self.logger.warning("Too big dataset for automatic metrics calculation")
+                    calculate_metrics = False
+                else:
+                    calculate_metrics = True
 
-        if calculate_metrics is None:
-            if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
-                [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
-            ):
-                msg = bundle.get("too_small_for_metrics")
-                self.logger.warning(msg)
-                calculate_metrics = False
-            elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
-                self.logger.warning("Too big dataset for automatic metrics calculation")
-                calculate_metrics = False
-            else:
-                calculate_metrics = True
+            del df, validated_X, validated_y, dataset
+            gc.collect()
 
-        del df, validated_X, validated_y, dataset
-        gc.collect()
+            if calculate_metrics:
+                try:
+                    self.__show_metrics(
+                        scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                    )
+                except Exception:
+                    self.logger.exception("Failed to calculate metrics")
 
-        if calculate_metrics:
-            try:
-                self.__show_metrics(
-                    scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
-                )
-            except Exception:
-                self.logger.exception("Failed to calculate metrics")
         self.__show_report_button()
 
     def get_columns_by_search_keys(self, keys: List[str]):
