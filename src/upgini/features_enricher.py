@@ -2288,18 +2288,26 @@ class FeaturesEnricher(TransformerMixin):
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+            # Use only enriched features
+            if (
+                feature_meta.name in x_columns
+                or feature_meta.name == COUNTRY
+                or feature_meta.shap_value == 0.0
+                or feature_meta.name in self.fit_generated_features
+            ):
+                continue
+
             feature_sample = []
-            if feature_meta.name not in x_columns:
-                self.feature_names_.append(feature_meta.name)
-                self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
-                if feature_meta.name in features_df.columns:
-                    feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
-                    if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
-                        feature_sample = [round(f, 4) for f in feature_sample]
-                    feature_sample = [str(f) for f in feature_sample]
-                    feature_sample = ", ".join(feature_sample)
-                    if len(feature_sample) > 30:
-                        feature_sample = feature_sample[:30] + "..."
+            self.feature_names_.append(feature_meta.name)
+            self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+            if feature_meta.name in features_df.columns:
+                feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
+                if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
+                    feature_sample = [round(f, 4) for f in feature_sample]
+                feature_sample = [str(f) for f in feature_sample]
+                feature_sample = ", ".join(feature_sample)
+                if len(feature_sample) > 30:
+                    feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
                 return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
@@ -2322,40 +2330,33 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 feature_name = internal_feature_name
 
-            # Show only enriched features
-            if (
-                feature_meta.name not in x_columns
-                and feature_meta.name != COUNTRY
-                and feature_meta.shap_value > 0.0
-                and feature_meta.name not in self.fit_generated_features
-            ):
-                commercial_schema = (
-                    "Premium"
-                    if feature_meta.commercial_schema in ["Trial", "Paid"]
-                    else (feature_meta.commercial_schema or "")
-                )
-                features_info.append(
-                    {
-                        bundle.get("features_info_name"): feature_name,
-                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
-                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                        bundle.get("features_info_value_preview"): feature_sample,
-                        bundle.get("features_info_provider"): provider,
-                        bundle.get("features_info_source"): source,
-                        bundle.get("features_info_commercial_schema"): commercial_schema,
-                    }
-                )
-                features_info_without_links.append(
-                    {
-                        bundle.get("features_info_name"): internal_feature_name,
-                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
-                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                        bundle.get("features_info_value_preview"): feature_sample,
-                        bundle.get("features_info_provider"): internal_provider,
-                        bundle.get("features_info_source"): internal_source,
-                        bundle.get("features_info_commercial_schema"): commercial_schema,
-                    }
-                )
+            commercial_schema = (
+                "Premium"
+                if feature_meta.commercial_schema in ["Trial", "Paid"]
+                else (feature_meta.commercial_schema or "")
+            )
+            features_info.append(
+                {
+                    bundle.get("features_info_name"): feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): provider,
+                    bundle.get("features_info_source"): source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
+                }
+            )
+            features_info_without_links.append(
+                {
+                    bundle.get("features_info_name"): internal_feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): internal_provider,
+                    bundle.get("features_info_source"): internal_source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
+                }
+            )
             internal_features_info.append(
                 {
                     bundle.get("features_info_name"): internal_feature_name,

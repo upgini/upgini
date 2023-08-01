@@ -231,7 +231,8 @@ def prepare_and_show_report(
         </body>
     </html>"""
 
-    show_button_download_pdf(report)
+    if len(relevant_features_df) > 0:
+        show_button_download_pdf(report)
 
 
 def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
