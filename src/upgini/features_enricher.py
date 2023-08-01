@@ -2824,7 +2824,7 @@ def is_frames_equal(first, second) -> bool:
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
-    elif type(first) == type(second):
+    elif type(first) is type(second):
         return first == second
     else:
         raise ValidationError(bundle.get("x_and_eval_x_diff_types").format(type(first), type(second)))
