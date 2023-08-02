@@ -474,7 +474,7 @@ class Dataset:  # (pd.DataFrame):
                     parts = []
                     for class_idx in range(quantile25_idx):
                         sampled = train_segment[train_segment[target_column] == classes[class_idx]].sample(
-                            n=count_of_quantile25_class
+                            n=count_of_quantile25_class, random_state=self.random_state
                         )
                         parts.append(sampled)
                     for class_idx in range(quantile25_idx, len(classes)):
