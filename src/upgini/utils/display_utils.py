@@ -205,7 +205,7 @@ def prepare_and_show_report(
         <body>
             <div id="header_content">UPGINI</div>
             <div id="footer_content">
-                © Upgini, DWTC, Dubai, UAE</br>
+                © Upgini, Dubai, UAE</br>
                 sales@upgini.com
             </div>
 
