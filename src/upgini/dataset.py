@@ -40,6 +40,7 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
+from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -581,7 +582,12 @@ class Dataset:  # (pd.DataFrame):
             # if self.task_type != ModelTaskType.MULTICLASS:
             #     self.data[target] = self.data[target].apply(pd.to_numeric, errors="coerce")
 
-        keys_to_validate = [key for search_group in self.search_keys_checked for key in search_group]
+        keys_to_validate = [
+            key
+            for search_group in self.search_keys_checked
+            for key in search_group
+            if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
+        ]
         mandatory_columns = [target]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)

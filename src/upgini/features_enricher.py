@@ -1025,7 +1025,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            extended_X = converter.convert(extended_X)
+            extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(search_keys)
         hem_column = self.__get_hem_column(search_keys)
@@ -1685,7 +1685,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(self.fit_search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            df = converter.convert(df)
+            df = converter.convert(df, keep_time=True)
             self.logger.info(f"Date column after convertion: {df[date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
         else:
@@ -1709,6 +1709,8 @@ class FeaturesEnricher(TransformerMixin):
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
         if email_converted_to_hem:
             non_feature_columns.append(email_column)
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
@@ -1732,6 +1734,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys)
 
         self.df_with_original_index = df.copy()
+        df = df.reset_index(drop=True).sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
         combined_search_keys = []
         for L in range(1, len(self.fit_search_keys.keys()) + 1):
@@ -1991,7 +1994,10 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = FeaturesEnricher._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             # Xy = pd.concat([X, y], axis=1)
@@ -2011,6 +2017,8 @@ class FeaturesEnricher(TransformerMixin):
                 Xy = Xy.sort_index()
 
             drop_columns = [TARGET]
+            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+                drop_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
             if search_keys_hash in Xy.columns:
                 drop_columns.append(search_keys_hash)
             X = Xy.drop(columns=drop_columns)
@@ -2131,7 +2139,10 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = self._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
@@ -2145,6 +2156,8 @@ class FeaturesEnricher(TransformerMixin):
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
