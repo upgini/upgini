@@ -1269,7 +1269,10 @@ class FeaturesEnricher(TransformerMixin):
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
         client_features = [
-            c for c in X_sampled.columns.to_list() if c not in (excluding_search_keys + list(self.fit_dropped_features))
+            c
+            for c in X_sampled.columns.to_list()
+            if c
+            not in (excluding_search_keys + list(self.fit_dropped_features) + [DateTimeSearchKeyConverter.DATETIME_COL])
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
