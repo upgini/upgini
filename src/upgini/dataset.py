@@ -20,7 +20,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import get_rest_client, resolve_api_token
+from upgini.http import get_rest_client
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -159,7 +159,6 @@ class Dataset:  # (pd.DataFrame):
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
-        # suffix = resolve_api_token(self.api_key)[:6]
         new_columns = []
         dup_counter = 0
         for column in self.data.columns:
