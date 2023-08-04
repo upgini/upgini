@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
+import hashlib
 from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
@@ -158,7 +159,7 @@ class Dataset:  # (pd.DataFrame):
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
-        suffix = resolve_api_token(self.api_key)[:6]
+        # suffix = resolve_api_token(self.api_key)[:6]
         new_columns = []
         dup_counter = 0
         for column in self.data.columns:
@@ -168,6 +169,7 @@ class Dataset:  # (pd.DataFrame):
                 continue
 
             new_column = str(column)
+            suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
             if len(new_column) == 0:
                 raise ValidationError(bundle.get("dataset_empty_column_names"))
             # db limit for column length
