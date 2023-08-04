@@ -595,7 +595,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_rocauc: [0.493158, 0.507513, 0.503419],
+            baseline_rocauc: [0.508920, 0.525607, 0.520815],
+            enriched_rocauc: [0.508176, 0.528022, 0.499444],
+            uplift: [-0.000744, 0.002415, -0.021371],
         }
     )
     print("Expected metrics: ")
