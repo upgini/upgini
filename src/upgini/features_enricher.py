@@ -804,6 +804,8 @@ class FeaturesEnricher(TransformerMixin):
                         self.loss, model_task_type, logger=self.logger
                     )
                     if fitting_X.shape[1] > 0:
+                        print("Calculate baseline metric because fitting_X shape more than 0.")
+                        print(fitting_X)
                         self.logger.info(
                             f"Calculate baseline {metric} on train client features: {fitting_X.columns.to_list()}"
                         )
