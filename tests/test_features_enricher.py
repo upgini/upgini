@@ -2348,12 +2348,14 @@ def test_email_search_key(requests_mock: Mocker):
     ):
         self.validate()
         columns = self.columns.to_list()
-        print(columns)
-        assert "email_fake_a" not in columns
-        assert "email_domain_fake_a" in columns
-        assert "hashed_email_fake_a" in columns
-        assert "email_one_domain_fake_a" in columns
-        assert {"hashed_email_fake_a", "email_one_domain_fake_a"} == {
+        assert set(columns) == {
+            "system_record_id",
+            "target",
+            "hashed_email_64ff8c",
+            "email_one_domain_3b0a68",
+            "email_domain_10c73f",
+        }
+        assert {"hashed_email_64ff8c", "email_one_domain_3b0a68"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
@@ -2397,9 +2399,8 @@ def test_composit_index_search_key(requests_mock: Mocker):
         **kwargs,
     ):
         self.validate()
-        assert "country_fake_a" in self.columns
-        assert "postal_code_fake_a" in self.columns
-        assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
+        assert set(self.columns.to_list()) == {"system_record_id", "country_aff64e", "postal_code_13534a", "target"}
+        assert {"country_aff64e", "postal_code_13534a"} == {sk for sublist in self.search_keys for sk in sublist}
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
@@ -2492,16 +2493,23 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         **kwargs,
     ):
         self.validate()
-        columns = self.columns.to_list()
-        assert "eml_fake_a" not in columns
-        assert "email_domain_fake_a" in columns
+        columns = set(self.columns.to_list())
+        assert columns == {
+            "system_record_id",
+            "postal_code_13534a",
+            "phone_45569d",
+            "date_0e8763",
+            "target",
+            "hashed_email_64ff8c",
+            "email_one_domain_3b0a68",
+            "email_domain_10c73f",
+        }
         assert {
-            # "country_fake_a",
-            "postal_code_fake_a",
-            "phone_fake_a",
-            "hashed_email_fake_a",
-            "email_one_domain_fake_a",
-            "date_fake_a",
+            "postal_code_13534a",
+            "phone_45569d",
+            "hashed_email_64ff8c",
+            "email_one_domain_3b0a68",
+            "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         search_task = SearchTask(search_task_id, self, endpoint=url, api_key="fake_api_key")
         search_task.provider_metadata_v2 = [
@@ -2544,12 +2552,12 @@ def test_search_keys_autodetection(requests_mock: Mocker):
     ):
         self.validate(validate_target=False)
         assert {
-            # "country_fake_a",
-            "postal_code_fake_a",
-            "phone_fake_a",
-            "hashed_email_fake_a",
-            "email_one_domain_fake_a",
-            "date_fake_a",
+            # "country_aff64e",
+            "postal_code_13534a",
+            "phone_45569d",
+            "hashed_email_64ff8c",
+            "email_one_domain_3b0a68",
+            "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         raise TestException()
         # return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
@@ -2593,7 +2601,7 @@ def test_numbers_with_comma(requests_mock: Mocker):
         **kwargs,
     ):
         self.validate()
-        assert self.data["feature_fake_a"].dtype == "float64"
+        assert self.data["feature_2ad562"].dtype == "float64"
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.search = mock_search
@@ -2640,11 +2648,11 @@ def test_diff_target_dups(requests_mock: Mocker):
         self.validate()
         assert len(self.data) == 2
         print(self.data)
-        assert self.data.loc[0, "date_fake_a"] == 1672531200000
-        assert self.data.loc[0, "feature_fake_a"] == 12
+        assert self.data.loc[0, "date_0e8763"] == 1672531200000
+        assert self.data.loc[0, "feature_2ad562"] == 12
         assert self.data.loc[0, "target"] == 0
-        assert self.data.loc[1, "date_fake_a"] == 1672531200000
-        assert self.data.loc[1, "feature_fake_a"] == 13
+        assert self.data.loc[1, "date_0e8763"] == 1672531200000
+        assert self.data.loc[1, "feature_2ad562"] == 13
         assert self.data.loc[1, "target"] == 1
         return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
