@@ -1,6 +1,7 @@
-from random import randint
+import itertools
 import tempfile
-from typing import List, Optional, Union
+from random import randint
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 from requests_mock import Mocker
@@ -9,7 +10,6 @@ from upgini.metadata import ProviderTaskMetadataV2
 
 
 class RequestsCounter:
-
     def __init__(self):
         self.count = 0
 
@@ -65,7 +65,7 @@ def mock_initial_summary(
     requests_mock: Mocker,
     url: str,
     search_task_id: str,
-    hit_rate: float,
+    hit_rate: float = 0.0,
     auc: Optional[float] = None,
     rmse: Optional[float] = None,
     accuracy: Optional[float] = None,
@@ -99,7 +99,45 @@ def mock_initial_summary(
     return ads_search_task_id
 
 
-def mock_get_metadata(requests_mock: Mocker, url: str, search_task_id: str):
+def mock_get_metadata(
+    requests_mock: Mocker,
+    url: str,
+    search_task_id: str,
+    metadata_columns: Optional[List[Dict]] = None,
+    search_keys: Optional[List[str]] = None,
+):
+    if metadata_columns is None:
+        metadata_columns = [
+            {
+                "index": 0,
+                "name": "systemrecordid_473310000",
+                "originalName": "SystemRecordId_473310000",
+                "dataType": "STRING",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 1,
+                "name": "phone_num",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
+            {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
+            {
+                "index": 4,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+        ]
+    if search_keys is None:
+        search_keys = ["phone_num", "rep_date"]
+    combined_search_keys = []
+    for L in range(1, len(search_keys) + 1):
+        for subset in itertools.combinations(search_keys, L):
+            combined_search_keys.append(subset)
     requests_mock.get(
         url + f"/public/api/v2/search/{search_task_id}/metadata",
         json={
@@ -107,32 +145,8 @@ def mock_get_metadata(requests_mock: Mocker, url: str, search_task_id: str):
             "fileMetadataId": "123",
             "name": "test",
             "description": "",
-            "columns": [
-                {
-                    "index": 0,
-                    "name": "systemrecordid_473310000",
-                    "originalName": "SystemRecordId_473310000",
-                    "dataType": "STRING",
-                    "meaningType": "FEATURE",
-                },
-                {
-                    "index": 1,
-                    "name": "phone_num",
-                    "originalName": "phone_num",
-                    "dataType": "STRING",
-                    "meaningType": "MSISDN",
-                },
-                {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
-                {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
-                {
-                    "index": 4,
-                    "name": "system_record_id",
-                    "originalName": "system_record_id",
-                    "dataType": "INT",
-                    "meaningType": "SYSTEM_RECORD_ID",
-                },
-            ],
-            "searchKeys": [["phone_num"], ["rep_date"], ["phone_num", "rep_date"]],
+            "columns": metadata_columns,
+            "searchKeys": combined_search_keys,
             "hierarchicalGroupKeys": [],
             "hierarchicalSubgroupKeys": [],
             "rowsCount": 15555,
@@ -144,10 +158,16 @@ def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_i
     requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.dict())
 
 
-def mock_raw_features(requests_mock: Mocker, url: str, search_task_id: str, path_to_mock_features: str):
+def mock_raw_features(
+    requests_mock: Mocker, url: str, search_task_id: str, path_to_mock_features: str, metrics_calculation=True
+):
     ads_search_task_features_id = random_id()
+    api = (
+        f"{url}/public/api/v2/search/rawfeatures/{search_task_id}"
+        f"?metricsCalculation={str(metrics_calculation).lower()}"
+    )
     requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/" + search_task_id,
+        api,
         json={
             "adsSearchTaskFeaturesDTO": [
                 {"searchType": "INITIAL", "adsSearchTaskFeaturesId": ads_search_task_features_id}
@@ -385,11 +405,19 @@ def mock_initial_and_validation_summary(
 
 
 def mock_validation_raw_features(
-    requests_mock: Mocker, url: str, validation_search_task_id: str, mock_features: Union[str, pd.DataFrame]
+    requests_mock: Mocker,
+    url: str,
+    validation_search_task_id: str,
+    mock_features: Union[str, pd.DataFrame],
+    metrics_calculation=False,
 ):
     ads_search_task_features_id = random_id()
+    api = (
+        f"{url}/public/api/v2/search/rawfeatures/{validation_search_task_id}"
+        f"?metricsCalculation={str(metrics_calculation).lower()}"
+    )
     requests_mock.get(
-        url + "/public/api/v2/search/rawfeatures/" + validation_search_task_id,
+        api,
         json={
             "adsSearchTaskFeaturesDTO": [
                 {"searchType": "VALIDATION", "adsSearchTaskFeaturesId": ads_search_task_features_id}

@@ -38,7 +38,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper
+from upgini.metrics import EstimatorWrapper, validate_scoring_argument
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
@@ -49,7 +49,11 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
-from upgini.utils.display_utils import display_html_dataframe, do_without_pandas_limits
+from upgini.utils.display_utils import (
+    display_html_dataframe,
+    do_without_pandas_limits,
+    prepare_and_show_report,
+)
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
@@ -114,13 +118,21 @@ class FeaturesEnricher(TransformerMixin):
     GENERATE_FEATURES_LIMIT = 10
     EMPTY_FEATURES_INFO = pd.DataFrame(
         columns=[
-            bundle.get("features_info_provider"),
-            bundle.get("features_info_source"),
             bundle.get("features_info_name"),
             bundle.get("features_info_shap"),
             bundle.get("features_info_hitrate"),
-            bundle.get("features_info_type"),
+            bundle.get("features_info_value_preview"),
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
             bundle.get("features_info_commercial_schema"),
+        ]
+    )
+    EMPTY_DATA_SOURCES = pd.DataFrame(
+        columns=[
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
+            bundle.get("relevant_data_sources_all_shap"),
+            bundle.get("relevant_data_sources_number"),
         ]
     )
 
@@ -161,6 +173,20 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
             print(msg)
 
+        self.passed_features: List[str] = []
+        self.df_with_original_index: Optional[pd.DataFrame] = None
+        self.country_added = False
+        self.fit_generated_features: List[str] = []
+        self.fit_dropped_features: Set[str] = set()
+        self.fit_search_keys = search_keys
+        self.warning_counter = WarningCounter()
+        self.X: Optional[pd.DataFrame] = None
+        self.y: Optional[pd.Series] = None
+        self.eval_set: Optional[List[Tuple]] = None
+        self.autodetected_search_keys: Dict[str, SearchKey] = {}
+        self.imbalanced = False
+        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
+
         validate_version(self.logger)
         self.search_keys = search_keys or dict()
         self.country_code = country_code
@@ -169,7 +195,11 @@ class FeaturesEnricher(TransformerMixin):
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self._features_info_without_links: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
+        self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
+        self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
@@ -224,19 +254,6 @@ class FeaturesEnricher(TransformerMixin):
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
 
-        self.passed_features: List[str] = []
-        self.df_with_original_index: Optional[pd.DataFrame] = None
-        self.country_added = False
-        self.fit_generated_features: List[str] = []
-        self.fit_dropped_features: Set[str] = set()
-        self.fit_search_keys = search_keys
-        self.warning_counter = WarningCounter()
-        self.X: Optional[pd.DataFrame] = None
-        self.y: Optional[pd.Series] = None
-        self.eval_set: Optional[List[Tuple]] = None
-        self.autodetected_search_keys: Dict[str, SearchKey] = {}
-        self.imbalanced = False
-        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
 
@@ -703,6 +720,8 @@ class FeaturesEnricher(TransformerMixin):
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
 
+                validate_scoring_argument(scoring)
+
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
@@ -834,6 +853,8 @@ class FeaturesEnricher(TransformerMixin):
                         bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
+                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(y_sorted.mean(), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -894,6 +915,10 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
+                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                                eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
+                                    eval_y_sorted.mean(), 4
+                                )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
                                     bundle.get("quality_metrics_baseline_header").format(metric)
@@ -907,9 +932,7 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
-                    metrics_df = (
-                        pd.DataFrame(metrics).set_index(bundle.get("quality_metrics_segment_header")).rename_axis("")
-                    )
+                    metrics_df = pd.DataFrame(metrics)
                     do_without_pandas_limits(
                         lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
                     )
@@ -1002,7 +1025,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            extended_X = converter.convert(extended_X)
+            extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(search_keys)
         hem_column = self.__get_hem_column(search_keys)
@@ -1246,7 +1269,10 @@ class FeaturesEnricher(TransformerMixin):
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
         client_features = [
-            c for c in X_sampled.columns.to_list() if c not in (excluding_search_keys + list(self.fit_dropped_features))
+            c
+            for c in X_sampled.columns.to_list()
+            if c
+            not in (excluding_search_keys + list(self.fit_dropped_features) + [DateTimeSearchKeyConverter.DATETIME_COL])
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
@@ -1526,7 +1552,7 @@ class FeaturesEnricher(TransformerMixin):
             return excluded_features[feature_name_header].values.tolist()
 
     def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
-        if len(search_keys) == 0 and self.country_code is None:
+        if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
                 raise ValidationError(bundle.get("search_key_differ_from_fit"))
@@ -1589,6 +1615,7 @@ class FeaturesEnricher(TransformerMixin):
         self.warning_counter.reset()
         self.df_with_original_index = None
         self.__cached_sampled_datasets = None
+        self.metrics = None
 
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
@@ -1611,6 +1638,8 @@ class FeaturesEnricher(TransformerMixin):
                     msg = bundle.get("missing_generate_feature").format(gen_feature, x_columns)
                     print(msg)
                     self.logger.warning(msg)
+
+        validate_scoring_argument(scoring)
 
         self._validate_binary_observations(validated_y)
 
@@ -1659,7 +1688,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(self.fit_search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            df = converter.convert(df)
+            df = converter.convert(df, keep_time=True)
             self.logger.info(f"Date column after convertion: {df[date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
         else:
@@ -1683,6 +1712,8 @@ class FeaturesEnricher(TransformerMixin):
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
         if email_converted_to_hem:
             non_feature_columns.append(email_column)
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
@@ -1706,6 +1737,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys)
 
         self.df_with_original_index = df.copy()
+        df = df.reset_index(drop=True).sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
         combined_search_keys = []
         for L in range(1, len(self.fit_search_keys.keys()) + 1):
@@ -1775,28 +1807,32 @@ class FeaturesEnricher(TransformerMixin):
                 msg = bundle.get("metrics_with_paid_features")
                 self.logger.warning(msg)
                 self.__display_slack_community_link(msg)
-            return None
+        else:
+            if calculate_metrics is None:
+                if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
+                    [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
+                ):
+                    msg = bundle.get("too_small_for_metrics")
+                    self.logger.warning(msg)
+                    calculate_metrics = False
+                elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
+                    self.logger.warning("Too big dataset for automatic metrics calculation")
+                    calculate_metrics = False
+                else:
+                    calculate_metrics = True
 
-        if calculate_metrics is None:
-            if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
-                [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
-            ):
-                msg = bundle.get("too_small_for_metrics")
-                self.logger.warning(msg)
-                calculate_metrics = False
-            elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
-                self.logger.warning("Too big dataset for automatic metrics calculation")
-                calculate_metrics = False
-            else:
-                calculate_metrics = True
+            del df, validated_X, validated_y, dataset
+            gc.collect()
 
-        del df, validated_X, validated_y, dataset
-        gc.collect()
+            if calculate_metrics:
+                try:
+                    self.__show_metrics(
+                        scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                    )
+                except Exception:
+                    self.logger.exception("Failed to calculate metrics")
 
-        if calculate_metrics:
-            self.__show_metrics(
-                scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
-            )
+        self.__show_report_button()
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -1961,7 +1997,10 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = FeaturesEnricher._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             # Xy = pd.concat([X, y], axis=1)
@@ -1981,6 +2020,8 @@ class FeaturesEnricher(TransformerMixin):
                 Xy = Xy.sort_index()
 
             drop_columns = [TARGET]
+            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+                drop_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
             if search_keys_hash in Xy.columns:
                 drop_columns.append(search_keys_hash)
             X = Xy.drop(columns=drop_columns)
@@ -2101,7 +2142,10 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = self._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
@@ -2115,6 +2159,8 @@ class FeaturesEnricher(TransformerMixin):
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
@@ -2240,87 +2286,140 @@ class FeaturesEnricher(TransformerMixin):
             raise Exception(bundle.get("missing_features_meta"))
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
+        features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         self.feature_names_ = []
         self.feature_importances_ = []
         features_info = []
+        features_info_without_links = []
         internal_features_info = []
 
         def round_shap_value(shap: float) -> float:
-            if shap > 0.0 and shap < 0.000001:
-                return 0.000001
+            if shap > 0.0 and shap < 0.0001:
+                return 0.0001
             else:
-                return shap
+                return round(shap, 4)
 
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
-            if feature_meta.name not in x_columns:
-                self.feature_names_.append(feature_meta.name)
-                self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+            # Use only enriched features
+            if (
+                feature_meta.name in x_columns
+                or feature_meta.name == COUNTRY
+                or feature_meta.shap_value == 0.0
+                or feature_meta.name in self.fit_generated_features
+            ):
+                continue
+
+            feature_sample = []
+            self.feature_names_.append(feature_meta.name)
+            self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+            if feature_meta.name in features_df.columns:
+                feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
+                if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
+                    feature_sample = [round(f, 4) for f in feature_sample]
+                feature_sample = [str(f) for f in feature_sample]
+                feature_sample = ", ".join(feature_sample)
+                if len(feature_sample) > 30:
+                    feature_sample = feature_sample[:30] + "..."
+
+            def to_anchor(link: str, value: str) -> str:
+                return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
 
             internal_provider = feature_meta.data_provider or ""
             if feature_meta.data_provider:
-                provider = (
-                    f"<a href='{feature_meta.data_provider_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_provider}</a>"
-                )
+                provider = to_anchor(feature_meta.data_provider_link, feature_meta.data_provider)
             else:
                 provider = internal_provider
 
             internal_source = feature_meta.data_source or ""
             if feature_meta.data_source:
-                source = (
-                    f"<a href='{feature_meta.data_source_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.data_source}</a>"
-                )
+                source = to_anchor(feature_meta.data_source_link, feature_meta.data_source)
             else:
                 source = internal_source
 
             internal_feature_name = feature_meta.name
             if feature_meta.doc_link:
-                feature_name = (
-                    f"<a href='{feature_meta.doc_link}' "
-                    "target='_blank' rel='noopener noreferrer'>"
-                    f"{feature_meta.name}</a>"
-                )
+                feature_name = to_anchor(feature_meta.doc_link, feature_meta.name)
             else:
                 feature_name = internal_feature_name
 
+            commercial_schema = (
+                "Premium"
+                if feature_meta.commercial_schema in ["Trial", "Paid"]
+                else (feature_meta.commercial_schema or "")
+            )
             features_info.append(
                 {
-                    bundle.get("features_info_provider"): provider,
-                    bundle.get("features_info_source"): source,
                     bundle.get("features_info_name"): feature_name,
                     bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
                     bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    bundle.get("features_info_type"): feature_meta.type,
-                    bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): provider,
+                    bundle.get("features_info_source"): source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
+                }
+            )
+            features_info_without_links.append(
+                {
+                    bundle.get("features_info_name"): internal_feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): internal_provider,
+                    bundle.get("features_info_source"): internal_source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
                 }
             )
             internal_features_info.append(
                 {
-                    bundle.get("features_info_provider"): internal_provider,
-                    bundle.get("features_info_source"): internal_source,
                     bundle.get("features_info_name"): internal_feature_name,
+                    "feature_link": feature_meta.doc_link,
                     bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
                     bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    bundle.get("features_info_type"): feature_meta.type,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): internal_provider,
+                    "provider_link": feature_meta.data_provider_link,
+                    bundle.get("features_info_source"): internal_source,
+                    "source_link": feature_meta.data_source_link,
                     bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
                 }
             )
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
+            self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
-            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self.features_info}"))
+            do_without_pandas_limits(lambda: self.logger.info(f"Features info:\n{self._internal_features_info}"))
+
+            self.relevant_data_sources = self._group_relevant_data_sources(self.features_info)
+            self._relevant_data_sources_wo_links = self._group_relevant_data_sources(self._features_info_without_links)
+            do_without_pandas_limits(
+                lambda: self.logger.info(f"Relevant data sources:\n{self._relevant_data_sources_wo_links}")
+            )
         else:
-            self.features_info = self.EMPTY_FEATURES_INFO
-            self._internal_features_info = self.EMPTY_FEATURES_INFO
             self.logger.warning("Empty features info")
+
+    @staticmethod
+    def _group_relevant_data_sources(df: pd.DataFrame) -> pd.DataFrame:
+        return (
+            df.query(f"{bundle.get('features_info_provider')} != ''")
+            .groupby([bundle.get("features_info_provider"), bundle.get("features_info_source")])
+            .agg(
+                shap_sum=(bundle.get("features_info_shap"), "sum"),
+                row_count=(bundle.get("features_info_shap"), "count"),
+            )
+            .sort_values(by="shap_sum", ascending=False)
+            .reset_index()
+            .rename(
+                columns={
+                    "shap_sum": bundle.get("relevant_data_sources_all_shap"),
+                    "row_count": bundle.get("relevant_data_sources_number"),
+                }
+            )
+        )
 
     def __filtered_importance_names(
         self, importance_threshold: Optional[float], max_features: Optional[int]
@@ -2455,7 +2554,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
     ):
-        metrics = self.calculate_metrics(
+        self.metrics = self.calculate_metrics(
             scoring=scoring,
             estimator=estimator,
             importance_threshold=importance_threshold,
@@ -2464,29 +2563,9 @@ class FeaturesEnricher(TransformerMixin):
             trace_id=trace_id,
             silent=True,
         )
-        if metrics is not None:
+        if self.metrics is not None:
             msg = bundle.get("quality_metrics_header")
-
-            try:
-                from IPython.display import display
-
-                _ = get_ipython()  # type: ignore
-
-                print(Format.GREEN + Format.BOLD + msg + Format.END)
-                # TODO for roc_auc calculate GINI and GINI %
-                # if bundle.get("quality_metrics_uplift_header") in metrics.columns:
-                #     metrics = metrics.copy()
-                #     try:
-                #         baseline_header = [c for c in metrics.columns if "Baseline" in c][0]
-                #         metrics[bundle.get("quality_metrics_uplift_prc_header")] = (
-                #             metrics[bundle.get("quality_metrics_uplift_header")] / metrics[baseline_header] * 100.0
-                #         ).round(2)
-                #     except Exception:
-                #         pass
-                display(metrics)
-            except (ImportError, NameError):
-                print(msg)
-                print(metrics)
+            display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         msg = bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
@@ -2496,9 +2575,17 @@ class FeaturesEnricher(TransformerMixin):
 
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             self.logger.info(msg)
-            display_html_dataframe(self.features_info)
+            if len(self.feature_names_) > 0:
+                display_html_dataframe(
+                    self.features_info, self._features_info_without_links, bundle.get("relevant_features_header")
+                )
 
-            if len(self.feature_names_) == 0:
+                display_html_dataframe(
+                    self.relevant_data_sources,
+                    self._relevant_data_sources_wo_links,
+                    bundle.get("relevant_data_sources_header"),
+                )
+            else:
                 msg = bundle.get("features_info_zero_important_features")
                 self.logger.warning(msg)
                 self.__display_slack_community_link(msg)
@@ -2506,6 +2593,15 @@ class FeaturesEnricher(TransformerMixin):
         except (ImportError, NameError):
             print(msg)
             print(self._internal_features_info)
+
+    def __show_report_button(self):
+        prepare_and_show_report(
+            relevant_features_df=self._features_info_without_links,
+            relevant_datasources_df=self.relevant_data_sources,
+            metrics_df=self.metrics,
+            search_id=self._search_task.search_task_id,
+            email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+        )
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
@@ -2744,7 +2840,7 @@ def is_frames_equal(first, second) -> bool:
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
-    elif type(first) == type(second):
+    elif type(first) is type(second):
         return first == second
     else:
         raise ValidationError(bundle.get("x_and_eval_x_diff_types").format(type(first), type(second)))
