@@ -41,6 +41,7 @@ from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
+from upgini.utils.progress_bar import CustomProgressBar
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -882,6 +883,7 @@ class Dataset:  # (pd.DataFrame):
     def search(
         self,
         trace_id: str,
+        progress_bar: CustomProgressBar,
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
@@ -918,12 +920,14 @@ class Dataset:  # (pd.DataFrame):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
+                progress_bar.progress = (1.0, "Uploading labeled dataset...")
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
+                progress_bar.progress = (6.0, "Matching with data sources...")
                 self.file_upload_id = search_task_response.file_upload_id
 
-        search_task = SearchTask(
+        return SearchTask(
             search_task_response.search_task_id,
             self,
             return_scores,
@@ -933,7 +937,6 @@ class Dataset:  # (pd.DataFrame):
             endpoint=self.endpoint,
             api_key=self.api_key,
         )
-        return search_task.poll_result(trace_id)
 
     def validation(
         self,
@@ -980,7 +983,7 @@ class Dataset:  # (pd.DataFrame):
                 )
                 self.file_upload_id = search_task_response.file_upload_id
 
-        search_task = SearchTask(
+        return SearchTask(
             search_task_response.search_task_id,
             self,
             return_scores,
@@ -989,8 +992,6 @@ class Dataset:  # (pd.DataFrame):
             endpoint=self.endpoint,
             api_key=self.api_key,
         )
-
-        return search_task.poll_result(trace_id, quiet=silent_mode)
 
     def prepare_uploading_file(self, base_path: str) -> str:
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"

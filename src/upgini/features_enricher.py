@@ -22,7 +22,7 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import UPGINI_API_KEY, LoggerFactory, SearchProgress, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -60,6 +60,7 @@ from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
+from upgini.utils.progress_bar import CustomProgressBar
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
@@ -156,6 +157,7 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
         exclude_columns: Optional[List[str]] = None,
+        work_async: bool = False,
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
@@ -256,6 +258,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
+        self.work_async = work_async
 
     def _get_api_key(self):
         return self._api_key
@@ -318,6 +321,9 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
+        progress_bar = CustomProgressBar()
+        progress_bar.progress = (0.0, bundle.get("START_FIT"))
+        progress_bar.display()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for fit: {args}"
@@ -346,6 +352,7 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    progress_bar,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
@@ -355,7 +362,9 @@ class FeaturesEnricher(TransformerMixin):
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                 )
                 self.logger.info("Fit finished successfully")
+                progress_bar.progress = (100.0, bundle.get("FINISHED"))
             except Exception as e:
+                progress_bar.progress = (100.0, bundle.get("FAILED"))
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -450,6 +459,9 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit_transform")
 
+            progress_bar = CustomProgressBar()
+            progress_bar.progress = (0, "Checking labeled dataset...")
+
             try:
                 self.X = X
                 self.y = y
@@ -470,6 +482,7 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    progress_bar,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
@@ -500,6 +513,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link()
                     raise e
             finally:
+                progress_bar.progress = (100, "Finished")
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
 
             result = self.transform(
@@ -1339,12 +1353,17 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
+    def get_progress(self, trace_id: Optional[str] = None) -> SearchProgress:
+        if self._search_task is not None:
+            trace_id = trace_id or uuid.uuid4()
+            return self._search_task.get_progress(trace_id)
+
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
         return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
 
     def __inner_transform(
         self,
-        trace_id,
+        trace_id: str,
         X: pd.DataFrame,
         *,
         exclude_features_sources: Optional[List[str]] = None,
@@ -1501,6 +1520,27 @@ class FeaturesEnricher(TransformerMixin):
             del df_without_features, dataset
             gc.collect()
 
+            if self.work_async:
+                return
+
+            progress = self.get_progress(trace_id)
+            try:
+                while progress.stage != "DOWNLOADING":  # TODO change to FINISHED
+                    if progress.stage == "FAILED":
+                        raise Exception(progress.error_message)
+                    time.sleep(1)
+                    progress = self.get_progress(trace_id)
+            except KeyboardInterrupt as e:
+                print(bundle.get("search_stopping"))
+                get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(
+                    trace_id, validation_task.search_task_id
+                )
+                self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
+                print(bundle.get("search_stopped"))
+                raise e
+
+            self._search_task.poll_result(trace_id, silent_mode=False)
+
             def enrich():
                 res, _ = self.__enrich(
                     df_with_original_index,
@@ -1603,6 +1643,7 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
         eval_set: Optional[List[tuple]],
+        progress_bar: CustomProgressBar,
         *,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool],
@@ -1765,10 +1806,41 @@ class FeaturesEnricher(TransformerMixin):
 
         self._search_task = dataset.search(
             trace_id,
+            progress_bar,
             extract_features=True,
             runtime_parameters=self._get_copy_of_runtime_parameters(),
             exclude_features_sources=exclude_features_sources,
         )
+
+        print(bundle.get("polling_search_task").format(self._search_task.search_task_id))
+        if not self.__is_registered:
+            print(bundle.get("polling_unregister_information"))
+
+        if self.work_async:
+            return
+
+        progress = self.get_progress(trace_id)
+        try:
+            while progress.stage != "DOWNLOADING":  # TODO change to FINISHED
+                progress_bar.progress = (progress.percent, bundle.get(progress.stage))
+                if progress.stage == "FAILED":
+                    self.logger.error(
+                        f"Search {self._search_task.search_task_id} failed with error {progress.error}"
+                        f" and message {progress.error_message}"
+                    )
+                    raise RuntimeError(bundle.get("search_task_failed_status"))
+                time.sleep(1)
+                progress = self.get_progress(trace_id)
+        except KeyboardInterrupt as e:
+            print(bundle.get("search_stopping"))
+            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, self._search_task.search_task_id)
+            self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
+            print(bundle.get("search_stopped"))
+            raise e
+
+        self._search_task.poll_result(trace_id, quiet=True)
+
+        progress_bar.progress = (99, "Downloading results...")
 
         self.imbalanced = dataset.imbalanced
 
@@ -2754,6 +2826,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.DataFrame, pd.Series, None] = None,
         eval_set: Union[Tuple, None] = None,
     ):
+        # TODO async
         try:
             random_state = 42
             rnd = np.random.RandomState(random_state)

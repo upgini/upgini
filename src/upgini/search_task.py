@@ -9,6 +9,7 @@ from upgini import dataset
 from upgini.http import (
     LoggerFactory,
     ProviderTaskSummary,
+    SearchProgress,
     SearchTaskSummary,
     get_rest_client,
     is_demo_api_key,
@@ -55,6 +56,9 @@ class SearchTask:
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
         self.unused_features_for_generation: Optional[List[str]] = None
+
+    def get_progress(self, trace_id: str) -> SearchProgress:
+        return get_rest_client(self.endpoint, self.api_key).get_search_progress(trace_id, self.search_task_id)
 
     def poll_result(self, trace_id: str, quiet: bool = False, check_fit: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}

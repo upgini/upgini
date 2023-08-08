@@ -145,6 +145,14 @@ class SearchTaskSummary:
         self.created_at = response["createdAt"]
 
 
+class SearchProgress:
+    def __init__(self, response: dict):
+        self.stage = response["currentStage"]
+        self.percent = response["percent"]
+        self.error = response.get("errorCode")
+        self.error_message = response.get("errorMessage")
+
+
 class LogEvent(BaseModel):
     source: str
     tags: str
@@ -170,6 +178,7 @@ class _RestClient:
         SERVICE_ROOT_V2 + "search/validation-without-upload?fileUpload_id={0}&initialSearchTask={1}"
     )
     SEARCH_TASK_SUMMARY_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}"
+    SEARCH_TASK_PROGRESS_URI_FMT = SERVICE_ROOT_V2 + "search/{0}/progress"
     STOP_SEARCH_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/stop"
     SEARCH_MODELS_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/models/{0}"
     SEARCH_SCORES_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/scores/{0}"
@@ -498,6 +507,11 @@ class _RestClient:
         api_path = self.SEARCH_TASK_SUMMARY_URI_FMT_V2.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return SearchTaskSummary(response)
+
+    def get_search_progress(self, trace_id: str, search_task_id: str) -> SearchProgress:
+        api_path = self.SEARCH_TASK_PROGRESS_URI_FMT.format(search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return SearchProgress(response)
 
     def stop_search_task_v2(self, trace_id: str, search_task_id: str):
         api_path = self.STOP_SEARCH_URI_FMT_V2.format(search_task_id)
