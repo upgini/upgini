@@ -6,13 +6,15 @@ import random
 import socket
 import threading
 import time
+from enum import Enum
 from functools import lru_cache
 from http.client import HTTPConnection
 from json import dumps
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
-import jwt
+import datetime
 
+import jwt
 import pandas as pd
 import requests
 from pydantic import BaseModel
@@ -146,11 +148,64 @@ class SearchTaskSummary:
 
 
 class SearchProgress:
-    def __init__(self, response: dict):
-        self.stage = response["currentStage"]
-        self.percent = response["percent"]
-        self.error = response.get("errorCode")
-        self.error_message = response.get("errorMessage")
+    def __init__(self, *args):
+        # (response: dict)
+        if len(args) == 1 and isinstance(args[0], dict):
+            response: Dict[str, Any] = args[0]
+            self.stage = response["currentStage"]
+            self.percent = float(response["percent"])
+            self.eta: Optional[int] = None
+            self.error = response.get("errorCode")
+            self.error_message = response.get("errorMessage")
+        # (percent: float, stage: ProgressStage)
+        elif len(args) == 2 and isinstance(args[0], float) and isinstance(args[1], ProgressStage):
+            self.percent = args[0]
+            self.stage = args[1].value
+            self.eta: Optional[int] = None
+            self.error = None
+            self.error_message = None
+        # (percent: float, stage: ProgressStage, eta: int)
+        elif (
+            len(args) == 3
+            and isinstance(args[0], float)
+            and isinstance(args[1], ProgressStage)
+            and isinstance(args[2], float)
+        ):
+            self.percent = args[0]
+            self.stage = args[1].value
+            seconds_left = args[2]
+            self.eta = int(seconds_left * (100 - self.percent) / self.percent)
+            self.error = None
+            self.error_message = None
+        else:
+            raise RuntimeError("Unsupported arguments for SearchProgress constructor")
+
+    def update_eta(self, seconds_left: int):
+        self.eta = int(seconds_left * (100 - self.percent) / self.percent)
+
+    def eta_time(self) -> str:
+        return str(datetime.timedelta(seconds=self.eta))
+
+    def to_progress_bar(self) -> Tuple[int, str]:
+        text = bundle.get(self.stage)
+        if self.eta is not None:
+            text += f" Approximately {self.eta_time()} remaining"
+        return (self.percent, text)
+
+
+class ProgressStage(Enum):
+    START_FIT = "START_FIT"
+    START_TRANSFORM = "START_TRANSFORM"
+    CREATING_FIT = "CREATING_FIT"
+    CREATING_TRANSFORM = "CREATING_TRANSFORM"
+    MATCHING = "MATCHING"
+    SEARCHING = "SEARCHING"
+    ENRICHING = "ENRICHING"
+    GENERATING_REPORT = "GENERATING_REPORT"
+    DOWNLOADING = "DOWNLOADING"
+    RETRIEVING_CACHE = "RETRIEVING_CACHE"
+    FINISHED = "FINISHED"
+    FAILED = "FAILED"
 
 
 class LogEvent(BaseModel):

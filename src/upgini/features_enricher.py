@@ -22,7 +22,7 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, SearchProgress, get_rest_client
+from upgini.http import UPGINI_API_KEY, LoggerFactory, ProgressStage, SearchProgress, get_rest_client
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -60,7 +60,10 @@ from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
-from upgini.utils.progress_bar import CustomProgressBar
+try:
+    from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
+except Exception:
+    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
@@ -157,7 +160,6 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
         exclude_columns: Optional[List[str]] = None,
-        work_async: bool = False,
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
@@ -258,7 +260,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
-        self.work_async = work_async
 
     def _get_api_key(self):
         return self._api_key
@@ -283,6 +284,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -321,9 +323,15 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
-        progress_bar = CustomProgressBar()
-        progress_bar.progress = (0.0, bundle.get("START_FIT"))
-        progress_bar.display()
+        search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
+        if progress_callback is not None:
+            progress_callback(search_progress)
+            progress_bar = None
+        else:
+            progress_bar = ProgressBar()
+            progress_bar.progress = search_progress.to_progress_bar()
+            progress_bar.display()
+
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for fit: {args}"
@@ -353,6 +361,7 @@ class FeaturesEnricher(TransformerMixin):
                     y,
                     checked_eval_set,
                     progress_bar,
+                    start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
@@ -360,11 +369,20 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    progress_callback=progress_callback,
                 )
                 self.logger.info("Fit finished successfully")
-                progress_bar.progress = (100.0, bundle.get("FINISHED"))
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
-                progress_bar.progress = (100.0, bundle.get("FAILED"))
+                search_progress = SearchProgress(100.0, ProgressStage.FAILED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -399,6 +417,7 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -459,9 +478,14 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit_transform")
 
-            progress_bar = CustomProgressBar()
-            progress_bar.progress = (0, "Checking labeled dataset...")
-
+            search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
+            if progress_callback is not None:
+                progress_callback(search_progress)
+                progress_bar = None
+            else:
+                progress_bar = ProgressBar()
+                progress_bar.progress = search_progress.to_progress_bar()
+                progress_bar.display()
             try:
                 self.X = X
                 self.y = y
@@ -483,6 +507,7 @@ class FeaturesEnricher(TransformerMixin):
                     y,
                     checked_eval_set,
                     progress_bar,
+                    start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
@@ -490,9 +515,20 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    progress_callback=progress_callback,
                 )
                 self.logger.info("Inner fit finished successfully")
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
+                search_progress = SearchProgress(100.0, ProgressStage.FAILED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -513,7 +549,6 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_slack_community_link()
                     raise e
             finally:
-                progress_bar.progress = (100, "Finished")
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
 
             result = self.transform(
@@ -524,6 +559,8 @@ class FeaturesEnricher(TransformerMixin):
                 max_features=max_features,
                 trace_id=trace_id,
                 silent_mode=True,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
             )
             self.logger.info("Fit_transform finished successfully")
             return result
@@ -539,6 +576,8 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: Optional[str] = None,
         metrics_calculation: bool = False,
         silent_mode=False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Transform `X`.
@@ -568,6 +607,14 @@ class FeaturesEnricher(TransformerMixin):
 
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
+        search_progress = SearchProgress(0.0, ProgressStage.START_TRANSFORM)
+        if progress_callback is not None:
+            progress_callback(search_progress)
+            progress_bar = None
+        else:
+            progress_bar = progress_bar or ProgressBar()
+            progress_bar.progress = search_progress.to_progress_bar()
+            progress_bar.display()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for transform: {args}"
@@ -595,14 +642,26 @@ class FeaturesEnricher(TransformerMixin):
                 result = self.__inner_transform(
                     trace_id,
                     X,
+                    start_time,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
+                    progress_bar=progress_bar,
                 )
                 self.logger.info("Transform finished successfully")
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner transform" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -656,6 +715,8 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         trace_id: Optional[str] = None,
         silent: bool = False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
@@ -1353,10 +1414,11 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
-    def get_progress(self, trace_id: Optional[str] = None) -> SearchProgress:
-        if self._search_task is not None:
+    def get_progress(self, trace_id: Optional[str] = None, search_task: Optional[SearchTask] = None) -> SearchProgress:
+        search_task = search_task or self._search_task
+        if search_task is not None:
             trace_id = trace_id or uuid.uuid4()
-            return self._search_task.get_progress(trace_id)
+            return search_task.get_progress(trace_id)
 
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
         return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
@@ -1365,12 +1427,15 @@ class FeaturesEnricher(TransformerMixin):
         self,
         trace_id: str,
         X: pd.DataFrame,
+        start_time: int,
         *,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float],
         max_features: Optional[int],
         metrics_calculation: bool = False,
         silent_mode: bool = False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ) -> pd.DataFrame:
         with MDC(trace_id=trace_id):
             if self._search_task is None:
@@ -1510,26 +1575,41 @@ class FeaturesEnricher(TransformerMixin):
             validation_task = self._search_task.validation(
                 trace_id,
                 dataset,
+                start_time=start_time,
                 extract_features=True,
                 runtime_parameters=runtime_parameters,
                 exclude_features_sources=exclude_features_sources,
                 metrics_calculation=metrics_calculation,
                 silent_mode=silent_mode,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
             )
 
             del df_without_features, dataset
             gc.collect()
 
-            if self.work_async:
-                return
+            if not silent_mode:
+                print(bundle.get("polling_search_task").format(validation_task.search_task_id))
+                if not self.__is_registered:
+                    print(bundle.get("polling_unregister_information"))
 
-            progress = self.get_progress(trace_id)
+            progress = self.get_progress(trace_id, validation_task)
+            progress.update_eta(time.time() - start_time)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
             try:
-                while progress.stage != "DOWNLOADING":  # TODO change to FINISHED
-                    if progress.stage == "FAILED":
+                while progress.stage != ProgressStage.DOWNLOADING.value:
+                    progress.update_eta(time.time() - start_time)
+                    if progress_bar is not None:
+                        progress_bar.progress = progress.to_progress_bar()
+                    if progress_callback is not None:
+                        progress_callback(progress)
+                    if progress.stage == ProgressStage.FAILED.value:
                         raise Exception(progress.error_message)
                     time.sleep(1)
-                    progress = self.get_progress(trace_id)
+                    progress = self.get_progress(trace_id, validation_task)
             except KeyboardInterrupt as e:
                 print(bundle.get("search_stopping"))
                 get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(
@@ -1539,7 +1619,14 @@ class FeaturesEnricher(TransformerMixin):
                 print(bundle.get("search_stopped"))
                 raise e
 
-            self._search_task.poll_result(trace_id, silent_mode=False)
+            validation_task.poll_result(trace_id, quiet=True)
+
+            seconds_left = time.time() - start_time
+            progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
 
             def enrich():
                 res, _ = self.__enrich(
@@ -1552,8 +1639,8 @@ class FeaturesEnricher(TransformerMixin):
 
             if not silent_mode:
                 print(bundle.get("transform_start"))
-                with Spinner():
-                    result = enrich()
+                # with Spinner():
+                result = enrich()
             else:
                 result = enrich()
 
@@ -1643,7 +1730,8 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
         eval_set: Optional[List[tuple]],
-        progress_bar: CustomProgressBar,
+        progress_bar: Optional[ProgressBar],
+        start_time: int,
         *,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool],
@@ -1652,6 +1740,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -1805,8 +1894,10 @@ class FeaturesEnricher(TransformerMixin):
         ]
 
         self._search_task = dataset.search(
-            trace_id,
-            progress_bar,
+            trace_id=trace_id,
+            progress_bar=progress_bar,
+            start_time=start_time,
+            progress_callback=progress_callback,
             extract_features=True,
             runtime_parameters=self._get_copy_of_runtime_parameters(),
             exclude_features_sources=exclude_features_sources,
@@ -1816,14 +1907,20 @@ class FeaturesEnricher(TransformerMixin):
         if not self.__is_registered:
             print(bundle.get("polling_unregister_information"))
 
-        if self.work_async:
-            return
-
         progress = self.get_progress(trace_id)
+        progress.update_eta(time.time() - start_time)
+        if progress_bar is not None:
+            progress_bar.progress = progress.to_progress_bar()
+        if progress_callback is not None:
+            progress_callback(progress)
         try:
-            while progress.stage != "DOWNLOADING":  # TODO change to FINISHED
-                progress_bar.progress = (progress.percent, bundle.get(progress.stage))
-                if progress.stage == "FAILED":
+            while progress.stage != ProgressStage.GENERATING_REPORT.value:
+                progress.update_eta(time.time() - start_time)
+                if progress_bar is not None:
+                    progress_bar.progress = progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(progress)
+                if progress.stage == ProgressStage.FAILED.value:
                     self.logger.error(
                         f"Search {self._search_task.search_task_id} failed with error {progress.error}"
                         f" and message {progress.error_message}"
@@ -1840,7 +1937,12 @@ class FeaturesEnricher(TransformerMixin):
 
         self._search_task.poll_result(trace_id, quiet=True)
 
-        progress_bar.progress = (99, "Downloading results...")
+        seconds_left = time.time() - start_time
+        progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
+        if progress_bar is not None:
+            progress_bar.progress = progress.to_progress_bar()
+        if progress_callback is not None:
+            progress_callback(progress)
 
         self.imbalanced = dataset.imbalanced
 

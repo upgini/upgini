@@ -4,7 +4,7 @@ import tempfile
 import time
 from ipaddress import IPv4Address, ip_address
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import get_rest_client, resolve_api_token
+from upgini.http import ProgressStage, SearchProgress, get_rest_client, resolve_api_token
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -41,7 +41,10 @@ from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.progress_bar import CustomProgressBar
+try:
+    from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
+except Exception:
+    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -883,7 +886,9 @@ class Dataset:  # (pd.DataFrame):
     def search(
         self,
         trace_id: str,
-        progress_bar: CustomProgressBar,
+        progress_bar: Optional[ProgressBar],
+        start_time: float,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         return_scores: bool = False,
         extract_features: bool = False,
         accurate_model: bool = False,
@@ -920,11 +925,19 @@ class Dataset:  # (pd.DataFrame):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-                progress_bar.progress = (1.0, "Uploading labeled dataset...")
+                time_left = time.time() - start_time
+                search_progress = SearchProgress(2.0, ProgressStage.CREATING_FIT, time_left)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
-                progress_bar.progress = (6.0, "Matching with data sources...")
+                # if progress_bar is not None:
+                #     progress_bar.progress = (6.0, bundle.get(ProgressStage.MATCHING.value))
+                # if progress_callback is not None:
+                #     progress_callback(SearchProgress(6.0, ProgressStage.MATCHING))
                 self.file_upload_id = search_task_response.file_upload_id
 
         return SearchTask(
@@ -942,12 +955,15 @@ class Dataset:  # (pd.DataFrame):
         self,
         trace_id: str,
         initial_search_task_id: str,
+        start_time: int,
         return_scores: bool = True,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ) -> SearchTask:
         if self.etalon_def is None:
             self.validate(validate_target=False, silent_mode=silent_mode)
@@ -962,7 +978,12 @@ class Dataset:  # (pd.DataFrame):
             runtime_parameters=runtime_parameters,
             metrics_calculation=metrics_calculation,
         )
-
+        seconds_left = time.time() - start_time
+        search_progress = SearchProgress(1.0, ProgressStage.CREATING_TRANSFORM, seconds_left)
+        if progress_bar is not None:
+            progress_bar.progress = search_progress.to_progress_bar()
+        if progress_callback is not None:
+            progress_callback(search_progress)
         if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
             trace_id, self.file_upload_id, file_metadata
         ):
@@ -972,7 +993,9 @@ class Dataset:  # (pd.DataFrame):
         else:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = self.prepare_uploading_file(tmp_dir)
+                # To avoid rate limit
                 time.sleep(1)
+
                 search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
                     trace_id,
                     parquet_file_path,
@@ -982,6 +1005,10 @@ class Dataset:  # (pd.DataFrame):
                     search_customization,
                 )
                 self.file_upload_id = search_task_response.file_upload_id
+        # if progress_bar is not None:
+        #     progress_bar.progress = (6.0, bundle.get(ProgressStage.ENRICHING.value))
+        # if progress_callback is not None:
+        #     progress_callback(SearchProgress(6.0, ProgressStage.ENRICHING))
 
         return SearchTask(
             search_task_response.search_task_id,
