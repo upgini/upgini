@@ -1,13 +1,13 @@
-from typing import Tuple
-from IPython.display import DisplayObject
-from IPython.core import display_functions
-from binascii import hexlify
 import os
+from binascii import hexlify
+from typing import Tuple
+
+from IPython.display import DisplayObject, display
 
 
 class CustomProgressBar(DisplayObject):
-    """Progressbar supports displaying a progressbar like element
-    """
+    """Progressbar supports displaying a progressbar like element"""
+
     def __init__(self, total=100):
         """Creates a new progressbar
 
@@ -18,29 +18,27 @@ class CustomProgressBar(DisplayObject):
         """
         self.total = total
         self._progress = 0
-        self.html_width = '60ex'
+        self.html_width = "60ex"
         self.text_width = 60
-        self._display_id = hexlify(os.urandom(8)).decode('ascii')
+        self._display_id = hexlify(os.urandom(8)).decode("ascii")
         self._stage = ""
 
     def __repr__(self):
         fraction = self.progress / self.total
-        filled = '=' * int(fraction * self.text_width)
-        rest = ' ' * (self.text_width - len(filled))
-        return '[{}{}] {}% {}'.format(
-            filled, rest,
-            self.progress, self._stage
-        )
+        filled = "=" * int(fraction * self.text_width)
+        rest = " " * (self.text_width - len(filled))
+        return "[{}{}] {}% {}".format(filled, rest, self.progress, self._stage)
 
     def _repr_html_(self):
         return "<progress style='width:{}' max='{}' value='{}'></progress>  {}% {}".format(
-            self.html_width, self.total, self.progress, self.progress, self._stage)
+            self.html_width, self.total, self.progress, self.progress, self._stage
+        )
 
     def display(self):
-        display_functions.display(self, display_id=self._display_id)
+        display(self, display_id=self._display_id)
 
     def update(self):
-        display_functions.display(self, display_id=self._display_id, update=True)
+        display(self, display_id=self._display_id, update=True)
 
     @property
     def progress(self):
