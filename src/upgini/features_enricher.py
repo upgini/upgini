@@ -1596,21 +1596,27 @@ class FeaturesEnricher(TransformerMixin):
                     print(bundle.get("polling_unregister_information"))
 
             progress = self.get_progress(trace_id, validation_task)
-            progress.update_eta(time.time() - start_time)
+            progress.recalculate_eta(time.time() - start_time)
             if progress_bar is not None:
                 progress_bar.progress = progress.to_progress_bar()
             if progress_callback is not None:
                 progress_callback(progress)
+            prev_progress: Optional[SearchProgress] = None
+            polling_period_seconds = 1
             try:
                 while progress.stage != ProgressStage.DOWNLOADING.value:
-                    progress.update_eta(time.time() - start_time)
+                    if prev_progress is None or prev_progress.stage != progress.stage:
+                        progress.recalculate_eta(time.time() - start_time)
+                    else:
+                        progress.update_eta(prev_progress.eta - polling_period_seconds)
+                    prev_progress = progress
                     if progress_bar is not None:
                         progress_bar.progress = progress.to_progress_bar()
                     if progress_callback is not None:
                         progress_callback(progress)
                     if progress.stage == ProgressStage.FAILED.value:
                         raise Exception(progress.error_message)
-                    time.sleep(1)
+                    time.sleep(polling_period_seconds)
                     progress = self.get_progress(trace_id, validation_task)
             except KeyboardInterrupt as e:
                 print(bundle.get("search_stopping"))
@@ -1910,14 +1916,20 @@ class FeaturesEnricher(TransformerMixin):
             print(bundle.get("polling_unregister_information"))
 
         progress = self.get_progress(trace_id)
-        progress.update_eta(time.time() - start_time)
+        prev_progress = None
+        progress.recalculate_eta(time.time() - start_time)
         if progress_bar is not None:
             progress_bar.progress = progress.to_progress_bar()
         if progress_callback is not None:
             progress_callback(progress)
+        poll_period_seconds = 1
         try:
             while progress.stage != ProgressStage.GENERATING_REPORT.value:
-                progress.update_eta(time.time() - start_time)
+                if prev_progress is None or prev_progress.stage != progress.stage:
+                    progress.recalculate_eta(time.time() - start_time)
+                else:
+                    progress.update_eta(prev_progress.eta - poll_period_seconds)
+                prev_progress = progress
                 if progress_bar is not None:
                     progress_bar.progress = progress.to_progress_bar()
                 if progress_callback is not None:
@@ -1928,7 +1940,7 @@ class FeaturesEnricher(TransformerMixin):
                         f" and message {progress.error_message}"
                     )
                     raise RuntimeError(bundle.get("search_task_failed_status"))
-                time.sleep(1)
+                time.sleep(poll_period_seconds)
                 progress = self.get_progress(trace_id)
         except KeyboardInterrupt as e:
             print(bundle.get("search_stopping"))

@@ -13,6 +13,7 @@ from json import dumps
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 import datetime
+import copy
 
 import jwt
 import pandas as pd
@@ -180,8 +181,11 @@ class SearchProgress:
         else:
             raise RuntimeError("Unsupported arguments for SearchProgress constructor")
 
-    def update_eta(self, seconds_left: int):
+    def recalculate_eta(self, seconds_left: int):
         self.eta = int(seconds_left * (100 - self.percent) / self.percent)
+
+    def update_eta(self, seconds: int):
+        self.eta = seconds
 
     def eta_time(self) -> str:
         return str(datetime.timedelta(seconds=self.eta))
@@ -192,6 +196,9 @@ class SearchProgress:
         if self.eta is not None:
             eta = f"Approximately {self.eta_time()} remaining"
         return (int(self.percent), text, eta)
+
+    def copy(self) -> "SearchProgress":
+        return copy.deepcopy(self)
 
 
 class ProgressStage(Enum):
