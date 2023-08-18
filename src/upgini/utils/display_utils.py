@@ -222,10 +222,10 @@ def prepare_and_show_report(
              if metrics_df is not None
              else ""
             }
-            <h3>All relevant features. Listing</h3>
-            {make_table(relevant_features_df, wrap_long_string=25)}
             <h3>Relevant data sources</h3>
             {make_table(relevant_datasources_df)}
+            <h3>All relevant features. Listing</h3>
+            {make_table(relevant_features_df, wrap_long_string=25)}
             <p>To buy found data sources, please contact: <a href='mailto:sales@upgini.com'>sales@upgini.com</a></p>
             <p>Best regards, </br><b>Upgini Team</b></p>
         </body>

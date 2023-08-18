@@ -25,9 +25,11 @@ from .utils import (
     mock_default_requests,
     mock_get_metadata,
     mock_get_task_metadata_v2,
+    mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_validation_progress,
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
@@ -68,14 +70,11 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=100.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0},
-        ],
     )
     requests_mock.get(
         url + f"/public/api/v2/search/{search_task_id}/metadata",
@@ -185,15 +184,13 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     metrics = enricher.calculate_metrics()
     print(metrics)
 
-    expected_metrics = (
-        pd.DataFrame(
-            {
-                segment_header: [train_segment, eval_1_segment],
-                rows_header: [6582, 2505],
-                target_mean_header: [0.5, 0.8854],
-                baseline_rocauc: [0.741056, 0.719275],
-            }
-        )
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: [train_segment, eval_1_segment],
+            rows_header: [6582, 2505],
+            target_mean_header: [0.5, 0.8854],
+            baseline_rocauc: [0.741056, 0.719275],
+        }
     )
 
     assert_frame_equal(expected_metrics, metrics)
@@ -203,15 +200,11 @@ def test_default_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -263,19 +256,13 @@ def test_default_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -335,15 +322,11 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -395,19 +378,13 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -468,15 +445,11 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -528,19 +501,13 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -603,15 +570,11 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -660,19 +623,13 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -730,15 +687,11 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.5},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -787,19 +740,13 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -857,15 +804,11 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.5},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -921,19 +864,13 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -995,15 +932,11 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -1052,19 +985,13 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1088,7 +1015,8 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
 
     enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
 
-    assert enricher.calculate_metrics(scoring="mean_absolute_persentage_error") is None
+    with pytest.raises(ValidationError, match=r".*mean_absolute_persentage_error is not a valid scoring value.*"):
+        enricher.calculate_metrics(scoring="mean_absolute_persentage_error")
 
     assert len(enriched_X) == len(X)
 
@@ -1100,41 +1028,37 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
     pd.set_option("display.max_columns", 1000)
     print(metrics_df)
 
-    assert metrics_df.loc[0, segment_header] == 500
+    assert metrics_df.loc[0, segment_header] == "Train"
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
-    assert metrics_df.loc[0, baseline_mae] == approx(0.4940)
-    assert metrics_df.loc[0, enriched_mae] == approx(0.4940)
-    assert metrics_df.loc[0, uplift] == approx(-0.0)
+    assert metrics_df.loc[0, baseline_mae] == approx(0.4980)
+    assert metrics_df.loc[0, enriched_mae] == approx(0.4960)
+    assert metrics_df.loc[0, uplift] == approx(0.002)
 
-    assert metrics_df.loc[1, eval_1_segment] == 500
+    assert metrics_df.loc[1, segment_header] == "Eval 1"
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
-    assert metrics_df.loc[1, baseline_mae] == approx(0.4672)
-    assert metrics_df.loc[1, enriched_mae] == approx(0.4736)
-    assert metrics_df.loc[1, uplift] == approx(-0.0064)
+    assert metrics_df.loc[1, baseline_mae] == approx(0.4752)
+    assert metrics_df.loc[1, enriched_mae] == approx(0.4912)
+    assert metrics_df.loc[1, uplift] == approx(-0.016)
 
-    assert metrics_df.loc[2, eval_2_segment] == 500
+    assert metrics_df.loc[2, segment_header] == "Eval 2"
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
-    assert metrics_df.loc[2, baseline_mae] == approx(0.4928)
-    assert metrics_df.loc[2, enriched_mae] == approx(0.4744)
-    assert metrics_df.loc[2, uplift] == approx(0.0184)
+    assert metrics_df.loc[2, baseline_mae] == approx(0.5)
+    assert metrics_df.loc[2, enriched_mae] == approx(0.4696)
+    assert metrics_df.loc[2, uplift] == approx(0.0304)
 
 
 def test_rf_metric_rmse(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -1183,19 +1107,13 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
@@ -1253,15 +1171,11 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.0,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -1313,19 +1227,13 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.0,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)

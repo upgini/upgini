@@ -12,6 +12,7 @@ from tests.utils import (
     mock_default_requests,
     mock_get_metadata,
     mock_get_task_metadata_v2,
+    mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
@@ -243,6 +244,7 @@ def test_widget(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
 
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id)
     mock_get_metadata(
         requests_mock,

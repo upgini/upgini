@@ -9,6 +9,7 @@ from upgini import dataset
 from upgini.http import (
     LoggerFactory,
     ProviderTaskSummary,
+    SearchProgress,
     SearchTaskSummary,
     get_rest_client,
     is_demo_api_key,
@@ -55,6 +56,9 @@ class SearchTask:
         self.logger = LoggerFactory().get_logger(endpoint, api_key)
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
         self.unused_features_for_generation: Optional[List[str]] = None
+
+    def get_progress(self, trace_id: str) -> SearchProgress:
+        return get_rest_client(self.endpoint, self.api_key).get_search_progress(trace_id, self.search_task_id)
 
     def poll_result(self, trace_id: str, quiet: bool = False, check_fit: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
@@ -198,21 +202,27 @@ class SearchTask:
         self,
         trace_id: str,
         validation_dataset: "dataset.Dataset",
+        start_time: int,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
+        progress_bar=None,
+        progress_callback=None,
     ) -> "SearchTask":
         return validation_dataset.validation(
             trace_id,
             self.search_task_id,
+            start_time=start_time,
             return_scores=True,
             extract_features=extract_features,
             runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
             metrics_calculation=metrics_calculation,
             silent_mode=silent_mode,
+            progress_bar=progress_bar,
+            progress_callback=progress_callback,
         )
 
     def _check_finished_initial_search(self):
