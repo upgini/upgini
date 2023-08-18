@@ -16,14 +16,15 @@ class CustomFallbackProgressBar:
         self._progress = 0
         self.text_width = 60
         self._stage = ""
+        self._eta = ""
 
     def __repr__(self):
         fraction = self.progress / self.total
         filled = '=' * int(fraction * self.text_width)
         rest = ' ' * (self.text_width - len(filled))
-        return '[{}{}] {}% {}'.format(
+        return '[{}{}] {}% {} {}'.format(
             filled, rest,
-            self.progress, self._stage
+            self.progress, self._stage, self._eta
         )
 
     def display(self):
@@ -38,7 +39,8 @@ class CustomFallbackProgressBar:
         return self._progress
 
     @progress.setter
-    def progress(self, value: Tuple[float, str]):
+    def progress(self, value: Tuple[float, str, str]):
         self._progress = value[0]
         self._stage = value[1]
+        self._eta = value[2]
         self.update()

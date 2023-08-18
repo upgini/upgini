@@ -612,9 +612,11 @@ class FeaturesEnricher(TransformerMixin):
             progress_callback(search_progress)
             progress_bar = None
         else:
+            new_progress = progress_bar is None
             progress_bar = progress_bar or ProgressBar()
             progress_bar.progress = search_progress.to_progress_bar()
-            progress_bar.display()
+            if new_progress:
+                progress_bar.display()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for transform: {args}"

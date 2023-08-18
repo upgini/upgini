@@ -22,6 +22,7 @@ class CustomProgressBar(DisplayObject):
         self.text_width = 60
         self._display_id = hexlify(os.urandom(8)).decode("ascii")
         self._stage = ""
+        self._eta = ""
 
     def __repr__(self):
         fraction = self.progress / self.total
@@ -30,8 +31,8 @@ class CustomProgressBar(DisplayObject):
         return "[{}{}] {}% {}".format(filled, rest, self.progress, self._stage)
 
     def _repr_html_(self):
-        return "<progress style='width:{}' max='{}' value='{}'></progress>  {}% {}".format(
-            self.html_width, self.total, self.progress, self.progress, self._stage
+        return "<progress style='width:{}' max='{}' value='{}'></progress>  {}% {}</br>{}".format(
+            self.html_width, self.total, self.progress, int(self.progress), self._stage, self._eta
         )
 
     def display(self):
@@ -45,7 +46,8 @@ class CustomProgressBar(DisplayObject):
         return self._progress
 
     @progress.setter
-    def progress(self, value: Tuple[float, str]):
+    def progress(self, value: Tuple[float, str, str]):
         self._progress = value[0]
         self._stage = value[1]
+        self._eta = value[2]
         self.update()

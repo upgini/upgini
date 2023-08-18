@@ -188,9 +188,10 @@ class SearchProgress:
 
     def to_progress_bar(self) -> Tuple[int, str]:
         text = bundle.get(self.stage)
+        eta = ""
         if self.eta is not None:
-            text += f" Approximately {self.eta_time()} remaining"
-        return (self.percent, text)
+            eta = f"Approximately {self.eta_time()} remaining"
+        return (int(self.percent), text, eta)
 
 
 class ProgressStage(Enum):
