@@ -22,7 +22,13 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, ProgressStage, SearchProgress, get_rest_client
+from upgini.http import (
+    UPGINI_API_KEY,
+    LoggerFactory,
+    ProgressStage,
+    SearchProgress,
+    get_rest_client,
+)
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -60,10 +66,12 @@ from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
+
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
@@ -833,6 +841,8 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     search_keys_for_metrics=search_keys_for_metrics,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
                 )
                 if prepared_data is None:
                     return None
@@ -1169,6 +1179,8 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         search_keys_for_metrics: Optional[List[str]] = None,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
@@ -1302,6 +1314,8 @@ class FeaturesEnricher(TransformerMixin):
                     silent_mode=True,
                     trace_id=trace_id,
                     metrics_calculation=True,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
                 )
                 if enriched is None:
                     return None
@@ -1336,6 +1350,8 @@ class FeaturesEnricher(TransformerMixin):
                     silent_mode=True,
                     trace_id=trace_id,
                     metrics_calculation=True,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback
                 )
                 if enriched_X is None:
                     return None
@@ -1605,7 +1621,7 @@ class FeaturesEnricher(TransformerMixin):
             polling_period_seconds = 1
             try:
                 while progress.stage != ProgressStage.DOWNLOADING.value:
-                    if prev_progress is None or prev_progress.stage != progress.stage:
+                    if prev_progress is None or prev_progress.percent != progress.percent:
                         progress.recalculate_eta(time.time() - start_time)
                     else:
                         progress.update_eta(prev_progress.eta - polling_period_seconds)
@@ -1925,7 +1941,7 @@ class FeaturesEnricher(TransformerMixin):
         poll_period_seconds = 1
         try:
             while progress.stage != ProgressStage.GENERATING_REPORT.value:
-                if prev_progress is None or prev_progress.stage != progress.stage:
+                if prev_progress is None or prev_progress.percent != progress.percent:
                     progress.recalculate_eta(time.time() - start_time)
                 else:
                     progress.update_eta(prev_progress.eta - poll_period_seconds)
@@ -2015,7 +2031,14 @@ class FeaturesEnricher(TransformerMixin):
             if calculate_metrics:
                 try:
                     self.__show_metrics(
-                        scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                        scoring,
+                        estimator,
+                        importance_threshold,
+                        max_features,
+                        remove_outliers_calc_metrics,
+                        trace_id,
+                        progress_bar,
+                        progress_callback,
                     )
                 except Exception:
                     self.logger.exception("Failed to calculate metrics")
@@ -2741,6 +2764,8 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         self.metrics = self.calculate_metrics(
             scoring=scoring,
@@ -2750,6 +2775,8 @@ class FeaturesEnricher(TransformerMixin):
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             trace_id=trace_id,
             silent=True,
+            progress_bar=progress_bar,
+            progress_callback=progress_callback,
         )
         if self.metrics is not None:
             msg = bundle.get("quality_metrics_header")
