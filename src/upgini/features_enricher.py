@@ -2231,13 +2231,14 @@ class FeaturesEnricher(TransformerMixin):
                 Xy = Xy.sort_index()
 
             drop_columns = [TARGET]
-            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
-                drop_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
             if search_keys_hash in Xy.columns:
                 drop_columns.append(search_keys_hash)
             X = Xy.drop(columns=drop_columns)
 
             y = Xy[TARGET].copy()
+
+        if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+            X.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         return X, y
 
@@ -2370,8 +2371,9 @@ class FeaturesEnricher(TransformerMixin):
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
-            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-                df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
+
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
