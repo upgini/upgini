@@ -17,7 +17,7 @@
 <a href="/LICENSE"><img alt="BSD-3 license" src="https://img.shields.io/badge/license-BSD--3%20Clause-green"></a>
 <a href="https://pypi.org/project/upgini/"><img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/upgini"></a>
 <a href="https://pypi.org/project/upgini/"><img alt="PyPI" src="https://img.shields.io/pypi/v/upgini?label=Release"></a>
-<a href="https://pypistats.org/packages/upgini"><img alt="Downloads from pypistats" src="https://pepy.tech/badge/upgini"></a>
+<a href="https://pepy.tech/project/upgini"><img alt="Downloads" src="https://static.pepy.tech/badge/upgini"></a>
 <a href="https://4mlg.short.gy/join-upgini-community"><img alt="Upgini slack community" src="https://img.shields.io/badge/slack-@upgini-orange.svg?logo=slack"></a>
 </p>
 
