@@ -88,10 +88,19 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
                 font-weight:bold;
                 text-align: center;
                 padding: 0.5em;
+                border-bottom: 2px solid black;
             }}
 
             .upgini-df tbody td {{
                 padding: 0.5em;
+            }}
+
+            .upgini-df tbody tr:nth-child(odd) {{
+                background-color: #ffffff;
+            }}
+
+            .upgini-df tbody tr:nth-child(even) {{
+                background-color: #f2f2f2;
             }}
 
             .upgini-text {{
