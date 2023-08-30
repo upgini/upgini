@@ -1351,7 +1351,7 @@ class FeaturesEnricher(TransformerMixin):
                     trace_id=trace_id,
                     metrics_calculation=True,
                     progress_bar=progress_bar,
-                    progress_callback=progress_callback
+                    progress_callback=progress_callback,
                 )
                 if enriched_X is None:
                     return None
@@ -2539,15 +2539,19 @@ class FeaturesEnricher(TransformerMixin):
                     feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
-                return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
+                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
 
-            internal_provider = feature_meta.data_provider or ""
+            internal_provider = feature_meta.data_provider or "Upgini"
             if feature_meta.data_provider:
                 provider = to_anchor(feature_meta.data_provider_link, feature_meta.data_provider)
             else:
-                provider = internal_provider
+                provider = to_anchor("https://upgini.com", "Upgini")
 
-            internal_source = feature_meta.data_source or ""
+            internal_source = feature_meta.data_source or (
+                "LLM with external data augmentation"
+                if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
+                else ""
+            )
             if feature_meta.data_source:
                 source = to_anchor(feature_meta.data_source_link, feature_meta.data_source)
             else:
@@ -2561,8 +2565,8 @@ class FeaturesEnricher(TransformerMixin):
 
             commercial_schema = (
                 "Premium"
-                if feature_meta.commercial_schema in ["Trial", "Paid"]
-                else (feature_meta.commercial_schema or "")
+                if feature_meta.commercial_schema in ["Trial", "Paid"] or feature_meta.commercial_schema is None
+                else feature_meta.commercial_schema
             )
             features_info.append(
                 {
