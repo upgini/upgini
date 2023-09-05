@@ -22,7 +22,13 @@ from sklearn.model_selection import BaseCrossValidator
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.http import UPGINI_API_KEY, LoggerFactory, get_rest_client
+from upgini.http import (
+    UPGINI_API_KEY,
+    LoggerFactory,
+    ProgressStage,
+    SearchProgress,
+    get_rest_client,
+)
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
@@ -60,6 +66,12 @@ from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
+
+try:
+    from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
+except Exception:
+    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+
 from upgini.utils.target_utils import define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
@@ -280,6 +292,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -318,6 +331,15 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
+        search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
+        if progress_callback is not None:
+            progress_callback(search_progress)
+            progress_bar = None
+        else:
+            progress_bar = ProgressBar()
+            progress_bar.progress = search_progress.to_progress_bar()
+            progress_bar.display()
+
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for fit: {args}"
@@ -346,6 +368,8 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    progress_bar,
+                    start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
@@ -353,9 +377,20 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    progress_callback=progress_callback,
                 )
                 self.logger.info("Fit finished successfully")
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
+                search_progress = SearchProgress(100.0, ProgressStage.FAILED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -390,6 +425,7 @@ class FeaturesEnricher(TransformerMixin):
         scoring: Union[Callable, str, None] = None,
         estimator: Optional[Any] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -450,6 +486,14 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit_transform")
 
+            search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
+            if progress_callback is not None:
+                progress_callback(search_progress)
+                progress_bar = None
+            else:
+                progress_bar = ProgressBar()
+                progress_bar.progress = search_progress.to_progress_bar()
+                progress_bar.display()
             try:
                 self.X = X
                 self.y = y
@@ -470,6 +514,8 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     checked_eval_set,
+                    progress_bar,
+                    start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
@@ -477,9 +523,20 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    progress_callback=progress_callback,
                 )
                 self.logger.info("Inner fit finished successfully")
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
+                search_progress = SearchProgress(100.0, ProgressStage.FAILED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner fit" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -510,6 +567,8 @@ class FeaturesEnricher(TransformerMixin):
                 max_features=max_features,
                 trace_id=trace_id,
                 silent_mode=True,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
             )
             self.logger.info("Fit_transform finished successfully")
             return result
@@ -525,6 +584,8 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: Optional[str] = None,
         metrics_calculation: bool = False,
         silent_mode=False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Transform `X`.
@@ -554,6 +615,16 @@ class FeaturesEnricher(TransformerMixin):
 
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
+        search_progress = SearchProgress(0.0, ProgressStage.START_TRANSFORM)
+        if progress_callback is not None:
+            progress_callback(search_progress)
+            progress_bar = None
+        else:
+            new_progress = progress_bar is None
+            progress_bar = progress_bar or ProgressBar()
+            progress_bar.progress = search_progress.to_progress_bar()
+            if new_progress:
+                progress_bar.display()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for transform: {args}"
@@ -581,14 +652,26 @@ class FeaturesEnricher(TransformerMixin):
                 result = self.__inner_transform(
                     trace_id,
                     X,
+                    start_time,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
+                    progress_bar=progress_bar,
                 )
                 self.logger.info("Transform finished successfully")
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
             except Exception as e:
+                search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
+                if progress_bar is not None:
+                    progress_bar.progress = search_progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(search_progress)
                 error_message = "Failed on inner transform" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
                 )
@@ -642,6 +725,8 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         trace_id: Optional[str] = None,
         silent: bool = False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
@@ -756,6 +841,8 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     search_keys_for_metrics=search_keys_for_metrics,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
                 )
                 if prepared_data is None:
                     return None
@@ -1025,7 +1112,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            extended_X = converter.convert(extended_X)
+            extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
         email_column = self.__get_email_column(search_keys)
         hem_column = self.__get_hem_column(search_keys)
@@ -1092,6 +1179,8 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         search_keys_for_metrics: Optional[List[str]] = None,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
@@ -1225,6 +1314,8 @@ class FeaturesEnricher(TransformerMixin):
                     silent_mode=True,
                     trace_id=trace_id,
                     metrics_calculation=True,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
                 )
                 if enriched is None:
                     return None
@@ -1259,6 +1350,8 @@ class FeaturesEnricher(TransformerMixin):
                     silent_mode=True,
                     trace_id=trace_id,
                     metrics_calculation=True,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
                 )
                 if enriched_X is None:
                     return None
@@ -1269,7 +1362,10 @@ class FeaturesEnricher(TransformerMixin):
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
         client_features = [
-            c for c in X_sampled.columns.to_list() if c not in (excluding_search_keys + list(self.fit_dropped_features))
+            c
+            for c in X_sampled.columns.to_list()
+            if c
+            not in (excluding_search_keys + list(self.fit_dropped_features) + [DateTimeSearchKeyConverter.DATETIME_COL])
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
@@ -1336,19 +1432,28 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
+    def get_progress(self, trace_id: Optional[str] = None, search_task: Optional[SearchTask] = None) -> SearchProgress:
+        search_task = search_task or self._search_task
+        if search_task is not None:
+            trace_id = trace_id or uuid.uuid4()
+            return search_task.get_progress(trace_id)
+
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
         return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
 
     def __inner_transform(
         self,
-        trace_id,
+        trace_id: str,
         X: pd.DataFrame,
+        start_time: int,
         *,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float],
         max_features: Optional[int],
         metrics_calculation: bool = False,
         silent_mode: bool = False,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ) -> pd.DataFrame:
         with MDC(trace_id=trace_id):
             if self._search_task is None:
@@ -1488,15 +1593,64 @@ class FeaturesEnricher(TransformerMixin):
             validation_task = self._search_task.validation(
                 trace_id,
                 dataset,
+                start_time=start_time,
                 extract_features=True,
                 runtime_parameters=runtime_parameters,
                 exclude_features_sources=exclude_features_sources,
                 metrics_calculation=metrics_calculation,
                 silent_mode=silent_mode,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
             )
 
             del df_without_features, dataset
             gc.collect()
+
+            if not silent_mode:
+                print(bundle.get("polling_search_task").format(validation_task.search_task_id))
+                if not self.__is_registered:
+                    print(bundle.get("polling_unregister_information"))
+
+            progress = self.get_progress(trace_id, validation_task)
+            progress.recalculate_eta(time.time() - start_time)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
+            prev_progress: Optional[SearchProgress] = None
+            polling_period_seconds = 1
+            try:
+                while progress.stage != ProgressStage.DOWNLOADING.value:
+                    if prev_progress is None or prev_progress.percent != progress.percent:
+                        progress.recalculate_eta(time.time() - start_time)
+                    else:
+                        progress.update_eta(prev_progress.eta - polling_period_seconds)
+                    prev_progress = progress
+                    if progress_bar is not None:
+                        progress_bar.progress = progress.to_progress_bar()
+                    if progress_callback is not None:
+                        progress_callback(progress)
+                    if progress.stage == ProgressStage.FAILED.value:
+                        raise Exception(progress.error_message)
+                    time.sleep(polling_period_seconds)
+                    progress = self.get_progress(trace_id, validation_task)
+            except KeyboardInterrupt as e:
+                print(bundle.get("search_stopping"))
+                get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(
+                    trace_id, validation_task.search_task_id
+                )
+                self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
+                print(bundle.get("search_stopped"))
+                raise e
+
+            validation_task.poll_result(trace_id, quiet=True)
+
+            seconds_left = time.time() - start_time
+            progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
 
             def enrich():
                 res, _ = self.__enrich(
@@ -1509,8 +1663,8 @@ class FeaturesEnricher(TransformerMixin):
 
             if not silent_mode:
                 print(bundle.get("transform_start"))
-                with Spinner():
-                    result = enrich()
+                # with Spinner():
+                result = enrich()
             else:
                 result = enrich()
 
@@ -1600,6 +1754,8 @@ class FeaturesEnricher(TransformerMixin):
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
         eval_set: Optional[List[tuple]],
+        progress_bar: Optional[ProgressBar],
+        start_time: int,
         *,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool],
@@ -1608,6 +1764,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -1685,7 +1842,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(self.fit_search_keys)
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
-            df = converter.convert(df)
+            df = converter.convert(df, keep_time=True)
             self.logger.info(f"Date column after convertion: {df[date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
         else:
@@ -1709,6 +1866,8 @@ class FeaturesEnricher(TransformerMixin):
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
         if email_converted_to_hem:
             non_feature_columns.append(email_column)
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
@@ -1732,6 +1891,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys)
 
         self.df_with_original_index = df.copy()
+        df = df.reset_index(drop=True).sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
         combined_search_keys = []
         for L in range(1, len(self.fit_search_keys.keys()) + 1):
@@ -1758,11 +1918,61 @@ class FeaturesEnricher(TransformerMixin):
         ]
 
         self._search_task = dataset.search(
-            trace_id,
+            trace_id=trace_id,
+            progress_bar=progress_bar,
+            start_time=start_time,
+            progress_callback=progress_callback,
             extract_features=True,
             runtime_parameters=self._get_copy_of_runtime_parameters(),
             exclude_features_sources=exclude_features_sources,
         )
+
+        print(bundle.get("polling_search_task").format(self._search_task.search_task_id))
+        if not self.__is_registered:
+            print(bundle.get("polling_unregister_information"))
+
+        progress = self.get_progress(trace_id)
+        prev_progress = None
+        progress.recalculate_eta(time.time() - start_time)
+        if progress_bar is not None:
+            progress_bar.progress = progress.to_progress_bar()
+        if progress_callback is not None:
+            progress_callback(progress)
+        poll_period_seconds = 1
+        try:
+            while progress.stage != ProgressStage.GENERATING_REPORT.value:
+                if prev_progress is None or prev_progress.percent != progress.percent:
+                    progress.recalculate_eta(time.time() - start_time)
+                else:
+                    progress.update_eta(prev_progress.eta - poll_period_seconds)
+                prev_progress = progress
+                if progress_bar is not None:
+                    progress_bar.progress = progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(progress)
+                if progress.stage == ProgressStage.FAILED.value:
+                    self.logger.error(
+                        f"Search {self._search_task.search_task_id} failed with error {progress.error}"
+                        f" and message {progress.error_message}"
+                    )
+                    raise RuntimeError(bundle.get("search_task_failed_status"))
+                time.sleep(poll_period_seconds)
+                progress = self.get_progress(trace_id)
+        except KeyboardInterrupt as e:
+            print(bundle.get("search_stopping"))
+            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, self._search_task.search_task_id)
+            self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
+            print(bundle.get("search_stopped"))
+            raise e
+
+        self._search_task.poll_result(trace_id, quiet=True)
+
+        seconds_left = time.time() - start_time
+        progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
+        if progress_bar is not None:
+            progress_bar.progress = progress.to_progress_bar()
+        if progress_callback is not None:
+            progress_callback(progress)
 
         self.imbalanced = dataset.imbalanced
 
@@ -1821,7 +2031,14 @@ class FeaturesEnricher(TransformerMixin):
             if calculate_metrics:
                 try:
                     self.__show_metrics(
-                        scoring, estimator, importance_threshold, max_features, remove_outliers_calc_metrics, trace_id
+                        scoring,
+                        estimator,
+                        importance_threshold,
+                        max_features,
+                        remove_outliers_calc_metrics,
+                        trace_id,
+                        progress_bar,
+                        progress_callback,
                     )
                 except Exception:
                     self.logger.exception("Failed to calculate metrics")
@@ -1991,7 +2208,10 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = FeaturesEnricher._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             # Xy = pd.concat([X, y], axis=1)
@@ -2016,6 +2236,9 @@ class FeaturesEnricher(TransformerMixin):
             X = Xy.drop(columns=drop_columns)
 
             y = Xy[TARGET].copy()
+
+        if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+            X.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         return X, y
 
@@ -2131,7 +2354,10 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
-            date_column = self._get_date_column(search_keys)
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            else:
+                date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
@@ -2145,6 +2371,9 @@ class FeaturesEnricher(TransformerMixin):
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
+
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
@@ -2287,42 +2516,51 @@ class FeaturesEnricher(TransformerMixin):
         def list_or_single(lst: List[str], single: str):
             return lst or ([single] if single else [])
 
-        def make_links(names: List[str], links: List[str]):
-            all_links = [
-                (f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{name}</a>")
-                for name, link in itertools.zip_longest(names, links)
-            ]
-            return ",".join(all_links)
-
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+            # Use only enriched features
+            if (
+                feature_meta.name in x_columns
+                or feature_meta.name == COUNTRY
+                or feature_meta.shap_value == 0.0
+                or feature_meta.name in self.fit_generated_features
+            ):
+                continue
+
             feature_sample = []
-            if feature_meta.name not in x_columns:
-                self.feature_names_.append(feature_meta.name)
-                self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
-                if feature_meta.name in features_df.columns:
-                    feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
-                    if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
-                        feature_sample = [round(f, 4) for f in feature_sample]
-                    feature_sample = [str(f) for f in feature_sample]
-                    feature_sample = ", ".join(feature_sample)
-                    if len(feature_sample) > 30:
-                        feature_sample = feature_sample[:30] + "..."
+            self.feature_names_.append(feature_meta.name)
+            self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+            if feature_meta.name in features_df.columns:
+                feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
+                if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
+                    feature_sample = [round(f, 4) for f in feature_sample]
+                feature_sample = [str(f) for f in feature_sample]
+                feature_sample = ", ".join(feature_sample)
+                if len(feature_sample) > 30:
+                    feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
-                return f"<a href='{link}' " "target='_blank' rel='noopener noreferrer'>" f"{value}</a>"
+                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
 
-            internal_provider = feature_meta.data_provider or ""
+            def make_links(names: List[str], links: List[str]):
+                all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
+                return ",".join(all_links)
+
+            internal_provider = feature_meta.data_provider or "Upgini"
             providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
             provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
             if providers:
                 provider = make_links(providers, provider_links)
             else:
-                provider = internal_provider
+                provider = to_anchor("https://upgini.com", "Upgini")
 
-            internal_source = feature_meta.data_source or ""
+            internal_source = feature_meta.data_source or (
+                "LLM with external data augmentation"
+                if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
+                else ""
+            )
             sources = list_or_single(feature_meta.data_sources, feature_meta.data_source)
             source_links = list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
             if sources:
@@ -2336,40 +2574,33 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 feature_name = internal_feature_name
 
-            # Show only enriched features
-            if (
-                feature_meta.name not in x_columns
-                and feature_meta.name != COUNTRY
-                and feature_meta.shap_value > 0.0
-                and feature_meta.name not in self.fit_generated_features
-            ):
-                commercial_schema = (
-                    "Premium"
-                    if feature_meta.commercial_schema in ["Trial", "Paid"]
-                    else (feature_meta.commercial_schema or "")
-                )
-                features_info.append(
-                    {
-                        bundle.get("features_info_name"): feature_name,
-                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
-                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                        bundle.get("features_info_value_preview"): feature_sample,
-                        bundle.get("features_info_provider"): provider,
-                        bundle.get("features_info_source"): source,
-                        bundle.get("features_info_commercial_schema"): commercial_schema,
-                    }
-                )
-                features_info_without_links.append(
-                    {
-                        bundle.get("features_info_name"): internal_feature_name,
-                        bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
-                        bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                        bundle.get("features_info_value_preview"): feature_sample,
-                        bundle.get("features_info_provider"): internal_provider,
-                        bundle.get("features_info_source"): internal_source,
-                        bundle.get("features_info_commercial_schema"): commercial_schema,
-                    }
-                )
+            commercial_schema = (
+                "Premium"
+                if feature_meta.commercial_schema in ["Trial", "Paid"] or feature_meta.commercial_schema is None
+                else feature_meta.commercial_schema
+            )
+            features_info.append(
+                {
+                    bundle.get("features_info_name"): feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): provider,
+                    bundle.get("features_info_source"): source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
+                }
+            )
+            features_info_without_links.append(
+                {
+                    bundle.get("features_info_name"): internal_feature_name,
+                    bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    bundle.get("features_info_hitrate"): feature_meta.hit_rate,
+                    bundle.get("features_info_value_preview"): feature_sample,
+                    bundle.get("features_info_provider"): internal_provider,
+                    bundle.get("features_info_source"): internal_source,
+                    bundle.get("features_info_commercial_schema"): commercial_schema,
+                }
+            )
             internal_features_info.append(
                 {
                     bundle.get("features_info_name"): internal_feature_name,
@@ -2550,6 +2781,8 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
         trace_id: str,
+        progress_bar: Optional[ProgressBar] = None,
+        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
         self.metrics = self.calculate_metrics(
             scoring=scoring,
@@ -2559,6 +2792,8 @@ class FeaturesEnricher(TransformerMixin):
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             trace_id=trace_id,
             silent=True,
+            progress_bar=progress_bar,
+            progress_callback=progress_callback,
         )
         if self.metrics is not None:
             msg = bundle.get("quality_metrics_header")
@@ -2751,6 +2986,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.DataFrame, pd.Series, None] = None,
         eval_set: Union[Tuple, None] = None,
     ):
+        # TODO async
         try:
             random_state = 42
             rnd = np.random.RandomState(random_state)
@@ -2837,7 +3073,7 @@ def is_frames_equal(first, second) -> bool:
         return first.equals(second)
     elif isinstance(first, np.ndarray) and isinstance(second, np.ndarray):
         return np.array_equal(first, second)
-    elif type(first) == type(second):
+    elif type(first) is type(second):
         return first == second
     else:
         raise ValidationError(bundle.get("x_and_eval_x_diff_types").format(type(first), type(second)))

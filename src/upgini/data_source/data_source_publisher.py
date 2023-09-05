@@ -48,6 +48,7 @@ class DataSourcePublisher:
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
+        _force_generation=False,
     ) -> str:
         trace_id = str(uuid.uuid4())
 
@@ -67,9 +68,10 @@ class DataSourcePublisher:
                     "searchKeys": {k: v.value.value for k, v in search_keys.items()},
                     "dateFormat": date_format,
                     "excludeColumns": exclude_columns,
-                    "hashFeatureNames": hash_feature_names,
+                    "hashFeatureNames": str(hash_feature_names).lower(),
                     "snapshotFrequencyDays": snapshot_frequency_days,
                     "featuresForEmbeddings": features_for_embeddings,
+                    "forceGeneration": str(_force_generation).lower()
                 }
                 if secondary_search_keys is not None:
                     request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
@@ -88,7 +90,34 @@ class DataSourcePublisher:
                         status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
 
                 if status_response["status"] != "COMPLETED":
-                    raise Exception("Failed to register ADS: " + status_response["errorMessage"])
+                    if "Cost of features generation exceeded the limit" in status_response["errorMessage"]:
+                        print(status_response["errorMessage"])
+
+                        from IPython.display import display
+                        import ipywidgets as widgets
+
+                        button = widgets.Button(description="Start registration with forced generation")
+
+                        display(button)
+
+                        def on_button_clicked(b):
+                            self.place(
+                                data_table_uri,
+                                search_keys,
+                                secondary_search_keys,
+                                sort_column,
+                                date_format,
+                                exclude_columns,
+                                hash_feature_names,
+                                snapshot_frequency_days,
+                                features_for_embeddings,
+                                True,
+                            )
+
+                        button.on_click(on_button_clicked)
+                        return
+                    else:
+                        raise Exception("Failed to register ADS: " + status_response["errorMessage"])
 
                 data_table_id = status_response["adsDefinitionId"]
                 msg = f"Data table successfully registered with id: {data_table_id}"

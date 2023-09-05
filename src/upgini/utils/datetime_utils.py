@@ -16,6 +16,8 @@ DATETIME_PATTERN = r"^[\d\s\.\-:]+$"
 
 
 class DateTimeSearchKeyConverter:
+    DATETIME_COL = "_date_time"
+
     def __init__(self, date_column: str, date_format: Optional[str] = None, logger: Optional[logging.Logger] = None):
         self.date_column = date_column
         self.date_format = date_format
@@ -44,7 +46,7 @@ class DateTimeSearchKeyConverter:
         except Exception:
             return None
 
-    def convert(self, df: pd.DataFrame) -> pd.DataFrame:
+    def convert(self, df: pd.DataFrame, keep_time=False) -> pd.DataFrame:
         if len(df) == 0:
             return df
 
@@ -84,6 +86,9 @@ class DateTimeSearchKeyConverter:
 
         df.drop(columns=seconds, inplace=True)
 
+        if keep_time:
+            df[self.DATETIME_COL] = df[self.date_column].view(np.int64) // 1_000_000
+            df[self.DATETIME_COL] = df[self.DATETIME_COL].apply(self._int_to_opt).astype("Int64")
         df[self.date_column] = df[self.date_column].dt.floor("D").view(np.int64) // 1_000_000
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 

@@ -64,7 +64,7 @@ class EmailSearchKeyConverter:
 
     @staticmethod
     def _email_to_one_domain(email: str) -> Optional[str]:
-        if email is not None and type(email) == str and "@" in email:
+        if email is not None and isinstance(email, str) and "@" in email:
             name_and_domain = email.split("@")
             if len(name_and_domain) == 2 and len(name_and_domain[0]) > 0 and len(name_and_domain[1]) > 0:
                 return name_and_domain[0][0] + name_and_domain[1]

@@ -88,10 +88,19 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
                 font-weight:bold;
                 text-align: center;
                 padding: 0.5em;
+                border-bottom: 2px solid black;
             }}
 
             .upgini-df tbody td {{
                 padding: 0.5em;
+            }}
+
+            .upgini-df tbody tr:nth-child(odd) {{
+                background-color: #ffffff;
+            }}
+
+            .upgini-df tbody tr:nth-child(even) {{
+                background-color: #f2f2f2;
             }}
 
             .upgini-text {{
@@ -205,7 +214,7 @@ def prepare_and_show_report(
         <body>
             <div id="header_content">UPGINI</div>
             <div id="footer_content">
-                © Upgini, DWTC, Dubai, UAE</br>
+                © Upgini, Dubai, UAE</br>
                 sales@upgini.com
             </div>
 
@@ -222,22 +231,23 @@ def prepare_and_show_report(
              if metrics_df is not None
              else ""
             }
-            <h3>All relevant features. Listing</h3>
-            {make_table(relevant_features_df, wrap_long_string=25)}
             <h3>Relevant data sources</h3>
             {make_table(relevant_datasources_df)}
+            <h3>All relevant features. Listing</h3>
+            {make_table(relevant_features_df, wrap_long_string=25)}
             <p>To buy found data sources, please contact: <a href='mailto:sales@upgini.com'>sales@upgini.com</a></p>
             <p>Best regards, </br><b>Upgini Team</b></p>
         </body>
     </html>"""
 
-    show_button_download_pdf(report)
+    if len(relevant_features_df) > 0:
+        show_button_download_pdf(report)
 
 
 def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
     from IPython.display import HTML, display
 
-    file_name = f"report-{uuid.uuid4()}.pdf"
+    file_name = f"upgini-report-{uuid.uuid4()}.pdf"
     with open(file_name + ".html", "w") as f:
         f.write(source)
     with open(file_name, "wb") as output:

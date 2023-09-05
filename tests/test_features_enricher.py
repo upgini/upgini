@@ -30,9 +30,11 @@ from .utils import (
     mock_get_metadata,
     mock_get_task_metadata_v2,
     mock_initial_and_validation_summary,
+    mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_validation_progress,
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
@@ -85,18 +87,13 @@ def test_features_enricher(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -205,7 +202,8 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
-    ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id, hit_rate=99.9)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id)
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
         requests_mock,
@@ -291,18 +289,13 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -385,15 +378,13 @@ def test_saved_features_enricher(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=0.0,
-        auc=0.0,
-        uplift=0.0,
-        eval_set_metrics=[],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -498,17 +489,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -547,14 +532,8 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -654,17 +633,11 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -697,19 +670,13 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -782,17 +749,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -825,19 +786,13 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -910,26 +865,13 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -960,19 +902,13 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1041,11 +977,11 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
     )
     requests_mock.get(
         url + f"/public/api/v2/search/{search_task_id}/metadata",
@@ -1163,16 +1099,13 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     # assert second_feature_info[hitrate_header] == 100.0
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=0.0,
-        auc=0.0,
-        uplift=0.0,
-        eval_set_metrics=[],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1182,12 +1115,15 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         self,
         trace_id: str,
         initial_search_task_id: str,
+        start_time: int,
         return_scores: bool = True,
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
+        progress_bar=None,
+        progress_callback=None,
     ):
         assert "cos(3,freq=W-SUN)" in self.data.columns
         assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun_"
@@ -1195,12 +1131,15 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             self,
             trace_id,
             initial_search_task_id,
+            start_time,
             return_scores,
             extract_features,
             runtime_parameters,
             exclude_features_sources,
             metrics_calculation,
             silent_mode,
+            progress_bar,
+            progress_callback,
         )
 
     Dataset.validation = wrapped_validation
@@ -1220,26 +1159,13 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1328,19 +1254,13 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeValue1" in str(fit_req.body)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1367,26 +1287,13 @@ def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 10.1, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[{"name": "SystemRecordId_473310000", "importance": 1.0, "matchedInPercent": 100.0}],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1507,26 +1414,13 @@ def test_filter_by_importance(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
 
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1587,19 +1481,13 @@ def test_filter_by_importance(requests_mock: Mocker):
     assert metrics is None
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1629,26 +1517,13 @@ def test_filter_by_max_features(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
 
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
-    # mock_get_features_meta(
-    #     requests_mock,
-    #     url,
-    #     ads_search_task_id,
-    #     ads_features=[{"name": "feature", "importance": 0.7, "matchedInPercent": 99.0, "valueType": "NUMERIC"}],
-    #     etalon_features=[],
-    # )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -1708,19 +1583,13 @@ def test_filter_by_max_features(requests_mock: Mocker):
     assert metrics is None
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 100, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -1827,17 +1696,11 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -1890,19 +1753,13 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
 
     mock_features = pd.read_parquet(path_to_mock_features)
@@ -1942,17 +1799,11 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
 
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(
         requests_mock,
         url,
         search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
 
@@ -2012,19 +1863,13 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     mock_validation_summary(
         requests_mock,
         url,
         search_task_id,
         ads_search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -2180,15 +2025,13 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=0.0,
-        auc=0.0,
-        uplift=0.0,
-        eval_set_metrics=[],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
 
@@ -2314,10 +2157,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-            print("Actual result df:")
-            print(actual_result_df)
-            print("Expected result df:")
-            print(expected_result_df)
 
             assert_frame_equal(actual_result_df, expected_result_df)
 
@@ -2360,17 +2199,18 @@ def test_email_search_key(requests_mock: Mocker):
         assert {"hashed_email_fake_a", "email_one_domain_fake_a"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
-        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+        raise TestException()
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
+        raise AssertionError("Search should fail")
     except AssertionError:
         raise
-    except Exception as e:
-        assert e.args[0] == bundle.get("missing_features_meta")
+    except TestException:
+        pass
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count
@@ -2404,17 +2244,18 @@ def test_composit_index_search_key(requests_mock: Mocker):
         assert "country_fake_a" in self.columns
         assert "postal_code_fake_a" in self.columns
         assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
-        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+        raise TestException()
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
+        raise AssertionError("Search sould fail")
     except AssertionError:
         raise
-    except Exception as e:
-        assert e.args[0] == bundle.get("missing_features_meta")
+    except TestException:
+        pass
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count
@@ -2427,15 +2268,13 @@ def test_search_keys_autodetection(requests_mock: Mocker):
 
     search_task_id = "123"
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=0.0,
-        auc=0.0,
-        uplift=0.0,
-        eval_set_metrics=[],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
@@ -2525,7 +2364,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
     except AssertionError:
         raise
     except Exception as e:
-        assert e.args[0] == bundle.get("missing_features_meta")
+        assert e.args[0].path == "/public/api/v2/search/123/progress"
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count
@@ -2537,14 +2376,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
 
     def mock_validation(
         self,
-        trace_id: str,
-        initial_search_task_id: str,
-        return_scores: bool = True,
-        extract_features: bool = False,
-        runtime_parameters: Optional[RuntimeParameters] = None,
-        exclude_features_sources: Optional[List[str]] = None,
-        metrics_calculation: bool = False,
-        silent_mode: bool = False,
+        *args,
+        **kwargs,
     ):
         self.validate(validate_target=False)
         assert {
@@ -2556,7 +2389,6 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "date_fake_a",
         } == {sk for sublist in self.search_keys for sk in sublist}
         raise TestException()
-        # return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
 
     Dataset.validation = mock_validation
 
@@ -2598,7 +2430,7 @@ def test_numbers_with_comma(requests_mock: Mocker):
     ):
         self.validate()
         assert self.data["feature_fake_a"].dtype == "float64"
-        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+        raise TestException()
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
@@ -2607,8 +2439,8 @@ def test_numbers_with_comma(requests_mock: Mocker):
         enricher.fit(df.drop(columns="target"), df.target)
     except AssertionError:
         raise
-    except Exception as e:
-        assert e.args[0] == bundle.get("missing_features_meta")
+    except TestException:
+        pass
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_rows
@@ -2657,10 +2489,11 @@ def test_diff_target_dups(requests_mock: Mocker):
 
     try:
         enricher.fit(df.drop(columns="target"), df.target)
+        raise AssertionError("Search should fail")
     except AssertionError:
         raise
     except Exception as e:
-        assert e.args[0] == bundle.get("missing_features_meta")
+        assert e.args[0].path == "/public/api/v2/search/123/progress"
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_rows
@@ -2675,18 +2508,13 @@ def test_unsupported_arguments(requests_mock: Mocker):
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
     ads_search_task_id = mock_initial_and_validation_summary(
         requests_mock,
         url,
         search_task_id,
         validation_search_task_id,
-        hit_rate=99.9,
-        auc=0.66,
-        uplift=0.1,
-        eval_set_metrics=[
-            {"eval_set_index": 1, "hit_rate": 1.0, "auc": 0.5},
-            {"eval_set_index": 2, "hit_rate": 0.99, "auc": 0.77},
-        ],
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     mock_get_task_metadata_v2(
