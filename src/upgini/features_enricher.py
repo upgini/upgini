@@ -2043,7 +2043,8 @@ class FeaturesEnricher(TransformerMixin):
                         progress_callback,
                     )
                 except Exception:
-                    self.logger.exception("Failed to calculate metrics")
+                    self.__show_report_button()
+                    raise
 
         self.__show_report_button()
 
