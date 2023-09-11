@@ -41,6 +41,7 @@ from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
+
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
@@ -855,8 +856,7 @@ class Dataset:  # (pd.DataFrame):
             )
             search_customization.featuresFilter = feature_filter
 
-        if self.imbalanced:
-            search_customization.runtimeParameters["etalon_imbalanced"] = True
+        search_customization.runtimeParameters["etalon_imbalanced"] = self.imbalanced
 
         return search_customization
 
