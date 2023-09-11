@@ -856,7 +856,7 @@ class Dataset:  # (pd.DataFrame):
             )
             search_customization.featuresFilter = feature_filter
 
-        search_customization.runtimeParameters["etalon_imbalanced"] = self.imbalanced
+        search_customization.runtimeParameters.properties["etalon_imbalanced"] = self.imbalanced
 
         return search_customization
 
