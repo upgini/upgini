@@ -171,6 +171,8 @@ class FeaturesEnricher(TransformerMixin):
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
+        if api_key is not None and not isinstance(api_key, str):
+            raise ValidationError(f"api_key should be `string`, but passed: `{api_key}`")
         self.rest_client = get_rest_client(endpoint, self._api_key)
 
         self.logs_enabled = logs_enabled
@@ -2041,7 +2043,8 @@ class FeaturesEnricher(TransformerMixin):
                         progress_callback,
                     )
                 except Exception:
-                    self.logger.exception("Failed to calculate metrics")
+                    self.__show_report_button()
+                    raise
 
         self.__show_report_button()
 
@@ -2306,6 +2309,13 @@ class FeaturesEnricher(TransformerMixin):
                         )
 
             do_without_pandas_limits(print_datasets_sample)
+
+            maybe_date_col = self._get_date_column(self.search_keys)
+            if X is not None and maybe_date_col is not None:
+                min_date = X[maybe_date_col].min()
+                max_date = X[maybe_date_col].max()
+                self.logger.info(f"Dates interval is ({min_date}, {max_date})")
+
         except Exception:
             self.logger.exception("Failed to log debug information")
 
