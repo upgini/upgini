@@ -2523,6 +2523,9 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 return round(shap, 4)
 
+        def list_or_single(lst: List[str], single: str):
+            return lst or ([single] if single else [])
+
         features_meta.sort(key=lambda m: -m.shap_value)
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
@@ -2549,11 +2552,22 @@ class FeaturesEnricher(TransformerMixin):
                     feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
-                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
+                if not value:
+                    return ""
+                elif not link:
+                    return value
+                else:
+                    return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
+
+            def make_links(names: List[str], links: List[str]):
+                all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
+                return ",".join(all_links)
 
             internal_provider = feature_meta.data_provider or "Upgini"
-            if feature_meta.data_provider:
-                provider = to_anchor(feature_meta.data_provider_link, feature_meta.data_provider)
+            providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
+            provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
+            if providers:
+                provider = make_links(providers, provider_links)
             else:
                 provider = to_anchor("https://upgini.com", "Upgini")
 
@@ -2562,8 +2576,10 @@ class FeaturesEnricher(TransformerMixin):
                 if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
                 else ""
             )
-            if feature_meta.data_source:
-                source = to_anchor(feature_meta.data_source_link, feature_meta.data_source)
+            sources = list_or_single(feature_meta.data_sources, feature_meta.data_source)
+            source_links = list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
+            if sources:
+                source = make_links(sources, source_links)
             else:
                 source = internal_source
 
