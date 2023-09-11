@@ -2542,7 +2542,12 @@ class FeaturesEnricher(TransformerMixin):
                     feature_sample = feature_sample[:30] + "..."
 
             def to_anchor(link: str, value: str) -> str:
-                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
+                if not value:
+                    return ""
+                elif not link:
+                    return value
+                else:
+                    return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
 
             def make_links(names: List[str], links: List[str]):
                 all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
