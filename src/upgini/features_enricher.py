@@ -267,6 +267,10 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.error(msg)
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
+        maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
+        if maybe_downsampling_limit is not None:
+            Dataset.FIT_SAMPLE_THRESHOLD = int(maybe_downsampling_limit)
+            Dataset.FIT_SAMPLE_ROWS = int(maybe_downsampling_limit)
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
