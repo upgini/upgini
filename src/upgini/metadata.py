@@ -153,9 +153,13 @@ class FeaturesMetadataV2(BaseModel):
     shap_value: float
     commercial_schema: Optional[str]
     data_provider: Optional[str]
+    data_providers: Optional[List[str]]
     data_provider_link: Optional[str]
+    data_provider_links: Optional[List[str]]
     data_source: Optional[str]
+    data_sources: Optional[List[str]]
     data_source_link: Optional[str]
+    data_source_links: Optional[List[str]]
     doc_link: Optional[str]
 
 

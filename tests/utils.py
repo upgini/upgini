@@ -65,12 +65,6 @@ def mock_initial_summary(
     requests_mock: Mocker,
     url: str,
     search_task_id: str,
-    hit_rate: float = 0.0,
-    auc: Optional[float] = None,
-    rmse: Optional[float] = None,
-    accuracy: Optional[float] = None,
-    uplift: Optional[float] = None,
-    eval_set_metrics: Optional[List[dict]] = None,
 ) -> str:
     ads_search_task_id = random_id()
 
@@ -202,15 +196,8 @@ def mock_validation_summary(
     initial_search_task_id: str,
     initial_ads_search_task_id: str,
     validation_search_task_id: str,
-    hit_rate: float,
-    auc: Optional[float] = None,
-    rmse: Optional[float] = None,
-    accuracy: Optional[float] = None,
-    uplift: Optional[float] = None,
-    eval_set_metrics: Optional[List[dict]] = None,
 ) -> str:
     ads_search_task_id = random_id()
-    # metrics = _construct_metrics(hit_rate, auc, rmse, accuracy, uplift)
     requests_mock.get(
         url + "/public/api/v2/search/" + initial_search_task_id,
         json={
@@ -248,12 +235,6 @@ def mock_initial_and_validation_summary(
     url: str,
     search_task_id: str,
     validation_search_task_id: str,
-    hit_rate: float,
-    auc: Optional[float] = None,
-    rmse: Optional[float] = None,
-    accuracy: Optional[float] = None,
-    uplift: Optional[float] = None,
-    eval_set_metrics: Optional[List[dict]] = None,
 ):
     ads_search_task_id = random_id()
     validation_ads_search_task_id = random_id()
@@ -402,6 +383,68 @@ def mock_initial_and_validation_summary(
         json=response,
     )
     return ads_search_task_id
+
+
+def mock_initial_progress(
+    requests_mock: Mocker,
+    url: str,
+    search_task_id: str,
+):
+    req_counter = RequestsCounter()
+
+    def response(request, context):
+        if req_counter.count == 0:
+            req_counter.increment()
+            return {
+                "currentStage": "CREATING_FIT",
+                "percent": 4.0,
+            }
+        elif req_counter.count == 1:
+            req_counter.increment()
+            return {
+                "currentStage": "MATCHING",
+                "percent": 6.0,
+            }
+        elif req_counter.count == 2:
+            req_counter.increment()
+            return {
+                "currentStage": "SEARCHING",
+                "percent": 40.0,
+            }
+        else:
+            req_counter.increment()
+            return {
+                "currentStage": "GENERATING_REPORT",
+                "percent": 97.0,
+            }
+
+    requests_mock.get(f"{url}/public/api/v2/search/{search_task_id}/progress", json=response)
+
+
+def mock_validation_progress(requests_mock: Mocker, url: str, validation_search_task_id: str):
+    req_counter = RequestsCounter()
+
+    def response(request, context):
+        if req_counter.count == 0:
+            req_counter.increment()
+            return {
+                "currentStage": "CREATING_TRANSFORM",
+                "percent": 4.0,
+            }
+        elif req_counter.count == 1:
+            req_counter.increment()
+            return {
+                "currentStage": "ENRICHING",
+                "percent": 6.0,
+            }
+        else:
+            req_counter.increment()
+            return {
+                "currentStage": "DOWNLOADING",
+                "percent": 97.0,
+            }
+
+    requests_mock.get(f"{url}/public/api/v2/search/{validation_search_task_id}/progress", json=response)
 
 
 def mock_validation_raw_features(
