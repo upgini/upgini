@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import logging
 import tempfile
 import time
@@ -10,7 +11,6 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
-import hashlib
 from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
@@ -20,7 +20,11 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import ProgressStage, SearchProgress, get_rest_client, resolve_api_token
+from upgini.http import (
+    ProgressStage,
+    SearchProgress,
+    get_rest_client,
+)
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -47,6 +51,7 @@ try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+
 from upgini.utils.warning_counter import WarningCounter
 
 
