@@ -578,7 +578,7 @@ def test_columns_renaming():
     )
     dataset._Dataset__rename_columns()
     print(dataset)
-    assert set(dataset.data.columns.to_list()) == {"date_aa4bpw", "feature1_aa4bpw", "feature1_aa4bpw_0"}
+    assert set(dataset.data.columns.to_list()) == {"feature1_422b73", "date_0e8763", "feature1_422b73_0"}
 
 
 def test_too_long_columns():
@@ -596,11 +596,12 @@ def test_too_long_columns():
     dataset._Dataset__rename_columns()
     print(dataset)
     assert set(dataset.data.columns.to_list()) == {
-        "date_aa4bpw",
-        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
-        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
-        "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
-        "columnname_aa4bpw",
+        "date_0e8763",
+        (
+            "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
+            "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"
+            "columnnamecolumnnamecolumnnamecolumnnamecolumnname_e1e25b"
+        ),
     }
 
 

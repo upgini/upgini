@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Callable, List, Optional, Tuple, Union, Dict, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -9,18 +9,21 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer
+from upgini.utils.sklearn_ext import cross_validate
 try:
     from sklearn.metrics import get_scorer_names
+
     available_scorers = get_scorer_names()
 except ImportError:
     from sklearn.metrics._scorer import SCORERS
+
     available_scorers = SCORERS
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
     mean_squared_error,
 )
-from sklearn.model_selection import BaseCrossValidator, cross_validate
+from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -35,6 +38,7 @@ CATBOOST_PARAMS = {
     "min_child_samples": 10,
     "max_depth": 5,
     "early_stopping_rounds": 20,
+    "use_best_model": True,
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
@@ -50,6 +54,8 @@ CATBOOST_MULTICLASS_PARAMS = {
     "loss_function": "MultiClass",
     "subsample": 0.5,
     "bootstrap_type": "Bernoulli",
+    "early_stopping_rounds": 20,
+    "use_best_model": True,
     "rsm": 0.1,
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
@@ -96,6 +102,87 @@ NA_VALUES = [
 ]
 
 NA_REPLACEMENT = "NA"
+
+SUPPORTED_CATBOOST_METRICS = {s.upper(): s for s in {
+    "Logloss",
+    "CrossEntropy",
+    "CtrFactor",
+    "Focal",
+    "RMSE",
+    "LogCosh",
+    "Lq",
+    "MAE",
+    "Quantile",
+    "MultiQuantile",
+    "Expectile",
+    "LogLinQuantile",
+    "MAPE",
+    "Poisson",
+    "MSLE",
+    "MedianAbsoluteError",
+    "SMAPE",
+    "Huber",
+    "Tweedie",
+    "Cox",
+    "RMSEWithUncertainty",
+    "MultiClass",
+    "MultiClassOneVsAll",
+    "PairLogit",
+    "PairLogitPairwise",
+    "YetiRank",
+    "YetiRankPairwise",
+    "QueryRMSE",
+    "QuerySoftMax",
+    "QueryCrossEntropy",
+    "StochasticFilter",
+    "LambdaMart",
+    "StochasticRank",
+    "PythonUserDefinedPerObject",
+    "PythonUserDefinedMultiTarget",
+    "UserPerObjMetric",
+    "UserQuerywiseMetric",
+    "R2",
+    "NumErrors",
+    "FairLoss",
+    "AUC",
+    "Accuracy",
+    "BalancedAccuracy",
+    "BalancedErrorRate",
+    "BrierScore",
+    "Precision",
+    "Recall",
+    "F1",
+    "TotalF1",
+    "F",
+    "MCC",
+    "ZeroOneLoss",
+    "HammingLoss",
+    "HingeLoss",
+    "Kappa",
+    "WKappa",
+    "LogLikelihoodOfPrediction",
+    "NormalizedGini",
+    "PRAUC",
+    "PairAccuracy",
+    "AverageGain",
+    "QueryAverage",
+    "QueryAUC",
+    "PFound",
+    "PrecisionAt",
+    "RecallAt",
+    "MAP",
+    "NDCG",
+    "DCG",
+    "FilteredDCG",
+    "MRR",
+    "ERR",
+    "SurvivalAft",
+    "MultiRMSE",
+    "MultiRMSEWithMissingValues",
+    "MultiLogloss",
+    "MultiCrossEntropy",
+    "Combination",
+}}
 
 
 class EstimatorWrapper:
@@ -175,7 +262,7 @@ class EstimatorWrapper:
             estimator=self.estimator,
             X=X,
             y=y,
-            scoring={"score": scorer},
+            scoring=scorer,
             cv=self.cv,
             fit_params=fit_params,
             return_estimator=True,
@@ -213,14 +300,20 @@ class EstimatorWrapper:
             "target_type": target_type,
         }
         if estimator is None:
+            params = dict()
+            # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
+            #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
-                params = _get_add_params(CATBOOST_MULTICLASS_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(CATBOOST_PARAMS, add_params)
+                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))

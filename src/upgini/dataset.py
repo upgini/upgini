@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import logging
 import tempfile
 import time
@@ -19,7 +20,11 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import ProgressStage, SearchProgress, get_rest_client, resolve_api_token
+from upgini.http import (
+    ProgressStage,
+    SearchProgress,
+    get_rest_client,
+)
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -46,6 +51,7 @@ try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -163,7 +169,6 @@ class Dataset:  # (pd.DataFrame):
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
-        suffix = resolve_api_token(self.api_key)[:6]
         new_columns = []
         dup_counter = 0
         for column in self.data.columns:
@@ -173,6 +178,7 @@ class Dataset:  # (pd.DataFrame):
                 continue
 
             new_column = str(column)
+            suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
             if len(new_column) == 0:
                 raise ValidationError(bundle.get("dataset_empty_column_names"))
             # db limit for column length
