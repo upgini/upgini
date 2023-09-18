@@ -166,6 +166,10 @@ class DataSourcePublisher:
             try:
                 if data_table_ids is None or len(data_table_ids) == 0:
                     raise ValidationError("Empty data table ids")
+                if isinstance(data_table_ids, str):
+                    data_table_ids = [data_table_ids]
+                if not isinstance(data_table_ids, list):
+                    raise ValidationError("data_table_ids should be string or list of strings")
                 # if listing_type == ListingType.PRIVATE and (client_emails is None or len(client_emails) == 0):
                 #     raise ValidationError("Empty client emails for private data tables")
                 # if listing_type not in [ListingType.PRIVATE, ListingType.TRIAL] and client_emails is not None:
