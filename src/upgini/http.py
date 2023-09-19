@@ -185,7 +185,11 @@ class SearchProgress:
         self.eta = int(seconds_left * (100 - self.percent) / self.percent)
 
     def update_eta(self, seconds: int):
-        self.eta = seconds
+        # temporary workaround - add 5 minutes if time is over
+        if seconds <= 0:
+            self.eta = 5 * 60
+        else:
+            self.eta = seconds
 
     def eta_time(self) -> str:
         return str(datetime.timedelta(seconds=self.eta))
