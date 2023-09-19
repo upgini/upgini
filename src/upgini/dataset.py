@@ -347,7 +347,7 @@ class Dataset:  # (pd.DataFrame):
     def __normalize_hem(self):
         hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
         if hem is not None and hem in self.data.columns:
-            self.data = self.data[hem].str.lower()
+            self.data[hem] = self.data[hem].str.lower()
 
     def __remove_old_dates(self, silent_mode: bool = False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
