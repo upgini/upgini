@@ -344,6 +344,11 @@ class Dataset:  # (pd.DataFrame):
             if (self.data[postal_code] == "").all():
                 raise ValidationError(bundle.get("invalid_postal_code").format(postal_code))
 
+    def __normalize_hem(self):
+        hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
+        if hem is not None and hem in self.data.columns:
+            self.data = self.data[hem].str.lower()
+
     def __remove_old_dates(self, silent_mode: bool = False):
         date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
             FileColumnMeaningType.DATETIME.value
@@ -751,6 +756,8 @@ class Dataset:  # (pd.DataFrame):
         self.__normalize_iso_code()
 
         self.__normalize_postal_code()
+
+        self.__normalize_hem()
 
         self.__convert_features_types()
 
