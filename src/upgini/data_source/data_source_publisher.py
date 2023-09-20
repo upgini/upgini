@@ -48,6 +48,7 @@ class DataSourcePublisher:
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
+        data_table_id_to_replace: Optional[str] = None,
         _force_generation=False,
     ) -> str:
         trace_id = str(uuid.uuid4())
@@ -71,12 +72,14 @@ class DataSourcePublisher:
                     "hashFeatureNames": str(hash_feature_names).lower(),
                     "snapshotFrequencyDays": snapshot_frequency_days,
                     "featuresForEmbeddings": features_for_embeddings,
-                    "forceGeneration": str(_force_generation).lower()
+                    "forceGeneration": str(_force_generation).lower(),
                 }
                 if secondary_search_keys is not None:
                     request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
                 if sort_column is not None:
                     request["sortColumn"] = sort_column
+                if data_table_id_to_replace is not None:
+                    request["adsDefinitionIdToReplace"] = data_table_id_to_replace
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
