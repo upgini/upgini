@@ -2846,13 +2846,16 @@ class FeaturesEnricher(TransformerMixin):
             print(self._internal_features_info)
 
     def __show_report_button(self):
-        prepare_and_show_report(
-            relevant_features_df=self._features_info_without_links,
-            relevant_datasources_df=self.relevant_data_sources,
-            metrics_df=self.metrics,
-            search_id=self._search_task.search_task_id,
-            email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
-        )
+        try:
+            prepare_and_show_report(
+                relevant_features_df=self._features_info_without_links,
+                relevant_datasources_df=self.relevant_data_sources,
+                metrics_df=self.metrics,
+                search_id=self._search_task.search_task_id,
+                email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+            )
+        except Exception:
+            pass
 
     def __validate_importance_threshold(self, importance_threshold: Optional[float]) -> float:
         try:
