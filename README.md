@@ -66,7 +66,12 @@
     <td><a href="https://en.wikipedia.org/wiki/Regression_analysis">☑️ regression</a></td>
     <td><a href="https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting">☑️ time series prediction</a></td>
   </tr>
-</table>
+</table>   
+
+⭐️ [Simple Drag & Drop Search UI](https://appwidget-uragwvgykrk4sbmropphpy.streamlit.app/~/+/):   
+<a href="https://appwidget-uragwvgykrk4sbmropphpy.streamlit.app/~/+/">
+<img width="710" alt="Drag & Drop Search UI" src="https://github.com/upgini/upgini/assets/95645411/36b6460c-51f3-400e-9f04-445b938bf45e">
+</a>
 
 
 ## 🌎 Connected data sources and coverage
