@@ -125,17 +125,14 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
     display(HTML(result_html))
 
 
-def prepare_and_show_report(
-    relevant_features_df: pd.DataFrame,
-    relevant_datasources_df: pd.DataFrame,
-    metrics_df: Optional[pd.DataFrame],
-    search_id: str,
-    email: Optional[str],
+def make_html_report(
+        relevant_features_df: pd.DataFrame,
+        relevant_datasources_df: pd.DataFrame,
+        metrics_df: Optional[pd.DataFrame],
+        search_id: str,
+        email: Optional[str] = None,
 ):
-    if not ipython_available():
-        return
-
-    report = f"""<html>
+    return f"""<html>
         <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
             <style>
@@ -239,6 +236,19 @@ def prepare_and_show_report(
             <p>Best regards, </br><b>Upgini Team</b></p>
         </body>
     </html>"""
+
+
+def prepare_and_show_report(
+    relevant_features_df: pd.DataFrame,
+    relevant_datasources_df: pd.DataFrame,
+    metrics_df: Optional[pd.DataFrame],
+    search_id: str,
+    email: Optional[str],
+):
+    if not ipython_available():
+        return
+
+    report = make_html_report(relevant_features_df, relevant_datasources_df, metrics_df, search_id, email)
 
     if len(relevant_features_df) > 0:
         show_button_download_pdf(report)
