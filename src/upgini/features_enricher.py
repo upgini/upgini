@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_string_dtype
+from pandas.api.types import is_numeric_dtype, is_string_dtype
 from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
@@ -946,7 +946,9 @@ class FeaturesEnricher(TransformerMixin):
                         bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
-                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
+                        y_sorted
+                    ):
                         train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(y_sorted.mean(), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -1008,7 +1010,9 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
-                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
+                                eval_y_sorted
+                            ):
                                 eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
                                     eval_y_sorted.mean(), 4
                                 )
@@ -1204,7 +1208,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset)
             y_sampled = validated_y
-            enriched_X = validated_X
+            enriched_X = X_sampled
             if eval_set is not None:
                 for idx in range(len(eval_set)):
                     eval_X_sampled, _ = self._extend_x(eval_set[idx][0], is_demo_dataset)
