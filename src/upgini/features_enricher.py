@@ -2319,7 +2319,7 @@ class FeaturesEnricher(TransformerMixin):
             do_without_pandas_limits(print_datasets_sample)
 
             maybe_date_col = self._get_date_column(self.search_keys)
-            if X is not None and maybe_date_col is not None:
+            if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 min_date = X[maybe_date_col].min()
                 max_date = X[maybe_date_col].max()
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
