@@ -114,6 +114,7 @@ class DataSourcePublisher:
                                 hash_feature_names,
                                 snapshot_frequency_days,
                                 features_for_embeddings,
+                                data_table_id_to_replace,
                                 True,
                             )
 
