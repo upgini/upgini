@@ -50,6 +50,7 @@ class DataSourcePublisher:
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
         _force_generation=False,
+        _silent=False,
     ) -> str:
         trace_id = str(uuid.uuid4())
 
@@ -86,11 +87,19 @@ class DataSourcePublisher:
                 msg = f"Data table management task created. task_id={task_id}"
                 self.logger.info(msg)
                 print(msg)
-                with Spinner():
+
+                def poll():
                     status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
                     while status_response["status"] not in self.FINAL_STATUSES:
                         time.sleep(5)
                         status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
+                    return status_response
+
+                if not _silent:
+                    with Spinner():
+                        status_response = poll()
+                else:
+                    status_response = poll()
 
                 if status_response["status"] != "COMPLETED":
                     if "Cost of features generation exceeded the limit" in status_response["errorMessage"]:
@@ -116,6 +125,7 @@ class DataSourcePublisher:
                                 features_for_embeddings,
                                 data_table_id_to_replace,
                                 True,
+                                _silent,
                             )
 
                         button.on_click(on_button_clicked)
