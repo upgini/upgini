@@ -179,7 +179,7 @@ class Dataset:  # (pd.DataFrame):
                 raise ValidationError(bundle.get("dataset_empty_column_names"))
             # db limit for column length
             if len(new_column) > 250:
-                new_column = column[:250]
+                new_column = new_column[:250]
 
             # make column name unique relative to server features
             new_column = f"{new_column}_{suffix}"

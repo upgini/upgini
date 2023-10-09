@@ -1,10 +1,10 @@
 import base64
-from io import BytesIO
 import math
 import textwrap
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from typing import Callable, Optional
 
 import pandas as pd
@@ -54,8 +54,9 @@ def make_table(df: pd.DataFrame, wrap_long_string=None) -> str:
         else:
             if value is None or len(value) == 0 or value == "nan":
                 value = "&nbsp;"
-            elif wrap_long_string is not None and len(value) > wrap_long_string:
+            elif wrap_long_string is not None and len(value) > wrap_long_string and " " not in value:
                 value = "</br>".join(textwrap.wrap(value, wrap_long_string))
+
             return f"<td class='upgini-text'>{value}</td>"
 
     return (
@@ -126,12 +127,18 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
 
 
 def make_html_report(
-        relevant_features_df: pd.DataFrame,
-        relevant_datasources_df: pd.DataFrame,
-        metrics_df: Optional[pd.DataFrame],
-        search_id: str,
-        email: Optional[str] = None,
+    relevant_features_df: pd.DataFrame,
+    relevant_datasources_df: pd.DataFrame,
+    metrics_df: Optional[pd.DataFrame],
+    search_id: str,
+    email: Optional[str] = None,
 ):
+    relevant_datasources_df = relevant_datasources_df.copy()
+    relevant_datasources_df["action"] = (
+        f"""<a href="https://upgini.com/requet-a-quote?search-id={search_id}">"""
+        """<button type="button">Request a quote</button></a>"""
+    )
+    relevant_datasources_df.rename(columns={"action": "&nbsp;"}, inplace=True)
     return f"""<html>
         <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -256,6 +263,9 @@ def prepare_and_show_report(
 
 def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
     from IPython.display import HTML, display
+
+    with open("/Users/nikolaytoroptsev/Downloads/pdf.html", "w") as f:
+        f.write(source)
 
     file_name = f"upgini-report-{uuid.uuid4()}.pdf"
     with open(file_name, "wb") as output:
