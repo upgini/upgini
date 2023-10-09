@@ -168,16 +168,18 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
         exclude_columns: Optional[List[str]] = None,
+        client_ip: Optional[str] = None,
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
         if api_key is not None and not isinstance(api_key, str):
             raise ValidationError(f"api_key should be `string`, but passed: `{api_key}`")
         self.rest_client = get_rest_client(endpoint, self._api_key)
+        self.client_ip = client_ip
 
         self.logs_enabled = logs_enabled
         if logs_enabled:
-            self.logger = LoggerFactory().get_logger(endpoint, self._api_key)
+            self.logger = LoggerFactory().get_logger(endpoint, self._api_key, client_ip)
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
@@ -222,6 +224,7 @@ class FeaturesEnricher(TransformerMixin):
                 search_id,
                 endpoint=self.endpoint,
                 api_key=self._api_key,
+                client_ip=client_ip
             )
 
             print(bundle.get("search_by_task_id_start"))
@@ -281,7 +284,7 @@ class FeaturesEnricher(TransformerMixin):
     def _set_api_key(self, api_key: str):
         self._api_key = api_key
         if self.logs_enabled:
-            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key)
+            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key, self.client_ip)
 
     api_key = property(_get_api_key, _set_api_key)
 
@@ -1584,6 +1587,7 @@ class FeaturesEnricher(TransformerMixin):
                 api_key=self.api_key,  # type: ignore
                 date_format=self.date_format,  # type: ignore
                 logger=self.logger,
+                client_ip=self.client_ip
             )
             dataset.meaning_types = meaning_types
             dataset.search_keys = combined_search_keys
@@ -1917,6 +1921,7 @@ class FeaturesEnricher(TransformerMixin):
             date_format=self.date_format,  # type: ignore
             random_state=self.random_state,  # type: ignore
             logger=self.logger,
+            client_ip=self.client_ip,
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = combined_search_keys

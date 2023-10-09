@@ -1,4 +1,6 @@
 import base64
+import copy
+import datetime
 import hashlib
 import logging
 import os
@@ -12,8 +14,6 @@ from http.client import HTTPConnection
 from json import dumps
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
-import datetime
-import copy
 
 import jwt
 import pandas as pd
@@ -882,18 +882,19 @@ def _get_rest_client(backend_url: str, api_token: str) -> _RestClient:
 
 
 class BackendLogHandler(logging.Handler):
-    def __init__(self, rest_client: _RestClient, *args, **kwargs) -> None:
+    def __init__(self, rest_client: _RestClient, client_ip: Optional[str] = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
         self.track_metrics = None
-        self.hostname = "0.0.0.0"
+        self.hostname = client_ip
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
                     self.track_metrics = get_track_metrics()
-                    self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
+                    if self.hostname is None:
+                        self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
                 text = self.format(record)
                 tags = self.track_metrics
                 tags["version"] = __version__
@@ -933,7 +934,9 @@ class LoggerFactory:
         root.setLevel(logging.INFO)
         root.handlers.clear()
 
-    def get_logger(self, backend_url: Optional[str] = None, api_token: Optional[str] = None) -> logging.Logger:
+    def get_logger(
+        self, backend_url: Optional[str] = None, api_token: Optional[str] = None, client_ip: Optional[str] = None
+    ) -> logging.Logger:
         url = _resolve_backend_url(backend_url)
         token = resolve_api_token(api_token)
         key = url + token
@@ -944,7 +947,7 @@ class LoggerFactory:
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
         upgini_logger.handlers.clear()
         rest_client = get_rest_client(backend_url, api_token)
-        datadog_handler = BackendLogHandler(rest_client)
+        datadog_handler = BackendLogHandler(rest_client, client_ip)
         json_formatter = jsonlogger.JsonFormatter(
             "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
             timestamp=True,
