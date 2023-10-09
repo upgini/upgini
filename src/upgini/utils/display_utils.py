@@ -264,9 +264,6 @@ def prepare_and_show_report(
 def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
     from IPython.display import HTML, display
 
-    with open("/Users/nikolaytoroptsev/Downloads/pdf.html", "w") as f:
-        f.write(source)
-
     file_name = f"upgini-report-{uuid.uuid4()}.pdf"
     with open(file_name, "wb") as output:
         pisa.CreatePDF(src=BytesIO(source.encode("UTF-8")), dest=output)

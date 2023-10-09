@@ -5,6 +5,7 @@ import socket
 import sys
 from getpass import getuser
 from hashlib import sha256
+from typing import Optional
 from uuid import getnode
 
 from requests import get, post
@@ -46,7 +47,7 @@ def _get_execution_ide() -> str:
 
 
 @lru_cache()
-def get_track_metrics() -> dict:
+def get_track_metrics(client_ip: Optional[str]) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
     ident_res = "https://api.ipify.org"
@@ -93,28 +94,34 @@ def get_track_metrics() -> dict:
         except Exception as e:
             track["err"] = str(e)
             track["visitorId"] = "None"
-        try:
-            from google.colab import output  # type: ignore
-            from IPython.display import Javascript, display
+        if client_ip:
+            track["ip"] = client_ip
+        else:
+            try:
+                from google.colab import output  # type: ignore
+                from IPython.display import Javascript, display
 
-            display(
-                Javascript(
-                    f"""
-                        window.clientIP = fetch("{ident_res}")
-                            .then(response => response.text())
-                            .then(data => data);
-                    """
+                display(
+                    Javascript(
+                        f"""
+                            window.clientIP = fetch("{ident_res}")
+                                .then(response => response.text())
+                                .then(data => data);
+                        """
+                    )
                 )
-            )
-            track["ip"] = output.eval_js("window.clientIP", timeout_sec=10)
-        except Exception as e:
-            track["err"] = str(e)
-            track["ip"] = "0.0.0.0"
+                track["ip"] = output.eval_js("window.clientIP", timeout_sec=10)
+            except Exception as e:
+                track["err"] = str(e)
+                track["ip"] = "0.0.0.0"
 
     elif track["ide"] == "binder":
         try:
             if "CLIENT_IP" in os.environ.keys():
-                track["ip"] = os.environ["CLIENT_IP"]
+                if client_ip:
+                    track["ip"] = client_ip
+                else:
+                    track["ip"] = os.environ["CLIENT_IP"]
                 track["visitorId"] = sha256(os.environ["CLIENT_IP"].encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
@@ -142,7 +149,10 @@ def get_track_metrics() -> dict:
             track["visitorId"] = "None"
     else:
         try:
-            track["ip"] = get(ident_res, timeout=10).text
+            if client_ip:
+                track["ip"] = client_ip
+            else:
+                track["ip"] = get(ident_res, timeout=10).text
             track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)

@@ -886,15 +886,15 @@ class BackendLogHandler(logging.Handler):
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
         self.track_metrics = None
-        self.hostname = client_ip
+        self.hostname = "0.0.0.0"
+        self.client_ip = client_ip
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
-                    self.track_metrics = get_track_metrics()
-                    if self.hostname is None:
-                        self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
+                    self.track_metrics = get_track_metrics(self.client_ip)
+                    self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
                 text = self.format(record)
                 tags = self.track_metrics
                 tags["version"] = __version__
