@@ -47,7 +47,7 @@ def _get_execution_ide() -> str:
 
 
 @lru_cache()
-def get_track_metrics(client_ip: Optional[str]) -> dict:
+def get_track_metrics(client_ip: Optional[str] = None) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
     ident_res = "https://api.ipify.org"
