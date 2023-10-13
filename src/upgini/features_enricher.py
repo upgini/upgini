@@ -2793,7 +2793,7 @@ class FeaturesEnricher(TransformerMixin):
             for k, v in valid_search_keys.items():
                 # Show warning for country only if country is the only key
                 if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(valid_search_keys) == 1):
-                    msg = bundle.get("single_constant_search_key").format(v, x.loc[0, k])
+                    msg = bundle.get("single_constant_search_key").format(v, x[k].values[0])
                     print(msg)
                     self.logger.warning(msg)
                     self.warning_counter.increment()
