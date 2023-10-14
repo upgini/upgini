@@ -2483,7 +2483,8 @@ class FeaturesEnricher(TransformerMixin):
         if not is_transform and EVAL_SET_INDEX in result_features.columns:
             result_train_features = result_features.loc[result_features[EVAL_SET_INDEX] == 0].copy()
             eval_set_indices = list(result_features[EVAL_SET_INDEX].unique())
-            eval_set_indices.remove(0)
+            if 0 in eval_set_indices:
+                eval_set_indices.remove(0)
             for eval_set_index in eval_set_indices:
                 result_eval_sets[eval_set_index] = result_features.loc[
                     result_features[EVAL_SET_INDEX] == eval_set_index
