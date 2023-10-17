@@ -23,6 +23,10 @@ def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.get("https://pypi.python.org/pypi/upgini/json", json={"releases": {"1.0.0": [{}]}})
     requests_mock.post(url + "/public/api/v2/search/dump-input", content="123".encode())
+    requests_mock.get(
+        url + "/public/api/v2/user/transform-usage",
+        json={"transformedRows": 0, "restRows": 10000, "limit": 10000, "hasLimit": True},
+    )
 
 
 def random_id() -> str:
