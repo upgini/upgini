@@ -25,7 +25,7 @@ def mock_default_requests(requests_mock: Mocker, url: str):
     requests_mock.post(url + "/public/api/v2/search/dump-input", content="123".encode())
     requests_mock.get(
         url + "/public/api/v2/user/transform-usage",
-        json={"transformedRows": 0, "restRows": 10000, "limit": 10000, "hasLimit": True},
+        json={"transformedRows": 0, "restRows": 12000, "limit": 12000, "hasLimit": True},
     )
 
 
