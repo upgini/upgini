@@ -7,9 +7,9 @@ import os
 import pickle
 import sys
 import tempfile
-from threading import Thread
 import time
 import uuid
+from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -60,6 +60,7 @@ from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
     prepare_and_show_report,
+    show_request_quote_button,
 )
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
@@ -221,12 +222,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         self.search_id = search_id
         if search_id:
-            search_task = SearchTask(
-                search_id,
-                endpoint=self.endpoint,
-                api_key=self._api_key,
-                client_ip=client_ip
-            )
+            search_task = SearchTask(search_id, endpoint=self.endpoint, api_key=self._api_key, client_ip=client_ip)
 
             print(bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
@@ -656,6 +652,23 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.warning(msg)
                     self.__display_slack_community_link(msg)
                     return None
+
+                if not metrics_calculation:
+                    transform_usage = get_rest_client(self.endpoint, self.api_key).get_current_transform_usage(trace_id)
+                    self.logger.info(f"Current transform usage: {transform_usage}. Transforming {len(X)} rows")
+                    if transform_usage.has_limit:
+                        if len(X) > transform_usage.rest_rows:
+                            msg = bundle.get("transform_usage_warning").format(len(X), transform_usage.rest_rows)
+                            self.logger.warning(msg)
+                            print(msg)
+                            show_request_quote_button()
+                            return None
+                        else:
+                            msg = bundle.get("transform_usage_info").format(
+                                transform_usage.limit, transform_usage.transformed_rows
+                            )
+                            self.logger.info("transform_usage_warning")
+                            print(msg)
 
                 self.dump_input(trace_id, X)
 
@@ -1588,7 +1601,7 @@ class FeaturesEnricher(TransformerMixin):
                 api_key=self.api_key,  # type: ignore
                 date_format=self.date_format,  # type: ignore
                 logger=self.logger,
-                client_ip=self.client_ip
+                client_ip=self.client_ip,
             )
             dataset.meaning_types = meaning_types
             dataset.search_keys = combined_search_keys

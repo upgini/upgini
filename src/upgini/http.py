@@ -229,6 +229,14 @@ class LogEvent(BaseModel):
     message: str
 
 
+class TransformUsage:
+    def __init__(self, json: dict):
+        self.transformed_rows = json.get("transformedRows")
+        self.rest_rows = json.get("restRows")
+        self.limit = json.get("limit")
+        self.has_limit = json.get("hasLimit")
+
+
 class _RestClient:
     PROD_BACKEND_URL = "https://search.upgini.com"
 
@@ -259,6 +267,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
     SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
+    TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -340,6 +349,7 @@ class _RestClient:
                 time.sleep(10)
                 return self._with_unauth_retry(request)
             else:
+                print(e)
                 show_status_error()
                 raise e
         except UnauthorizedError:
@@ -358,6 +368,7 @@ class _RestClient:
             elif "more than one concurrent search request" in e.message.lower():
                 raise ValidationError(bundle.get("concurrent_request"))
             else:
+                print(e)
                 show_status_error()
                 raise e
 
@@ -641,6 +652,16 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return ProviderTaskMetadataV2.parse_obj(response)
 
+    def get_current_transform_usage(self, trace_id):
+        track_metrics = get_track_metrics()
+        visitor_id = track_metrics.get("visitorId")
+        response = self._with_unauth_retry(
+            lambda: self._send_get_req(
+                self.TRANSFORM_USAGE_FMT, trace_id, additional_headers={"Visitor-Id": visitor_id}
+            )
+        )
+        return TransformUsage(response)
+
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI
         try:
@@ -718,9 +739,10 @@ class _RestClient:
 
     # ---
 
-    def _send_get_req(self, api_path: str, trace_id: Optional[str]):
+    def _send_get_req(self, api_path: str, trace_id: Optional[str], additional_headers: Optional[dict] = None):
         response = requests.get(
-            url=urljoin(self._service_endpoint, api_path), headers=self._get_headers(trace_id=trace_id)
+            url=urljoin(self._service_endpoint, api_path),
+            headers=self._get_headers(trace_id=trace_id, additional_headers=additional_headers),
         )
 
         if response.status_code >= 400:

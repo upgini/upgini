@@ -274,3 +274,20 @@ def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"
         html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
         <button>{title}</button></a>"""
         display(HTML(html))
+
+
+def show_request_quote_button():
+    if not ipython_available():
+        print("https://upgini.com/requet-a-quote")
+    else:
+        from IPython.display import display, Javascript
+        import ipywidgets as widgets
+
+        button = widgets.Button(description="Request a quote")
+
+        def on_button_clicked(b):
+            display(Javascript('window.open("https://upgini.com/requet-a-quote");'))
+
+        button.on_click(on_button_clicked)
+
+        display(button)
