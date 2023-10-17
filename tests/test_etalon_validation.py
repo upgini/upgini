@@ -84,9 +84,7 @@ def test_python_ip_to_int_conversion():
 
 
 def test_ip_v6_conversion():
-    df = pd.DataFrame({
-        "ip": ["::cf:befe:525b"]
-    })
+    df = pd.DataFrame({"ip": ["::cf:befe:525b"]})
     dataset = Dataset("test", df=df)
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
@@ -557,6 +555,38 @@ def test_date_in_diff_formats():
         converted_df = converter.convert(df)
 
 
+def test_datetime_with_ms():
+    expected_df = pd.DataFrame(
+        {
+            "date": [1696636800000, 1695686400000, 1695600000000, 1695081600000],
+            "datetime_time_sin_1": [0.956496, 0.357553, -0.887949, -0.978178],
+            "datetime_time_cos_1": [-0.291746, -0.933893, 0.459942, 0.207769],
+            "datetime_time_sin_2": [-0.558107, -0.667833, -0.816809, -0.406471],
+            "datetime_time_cos_2": [-0.829769, 0.744312, -0.576908, -0.913664],
+            "datetime_time_sin_24": [0.732543, -0.604599, -0.889416, -0.952129],
+            "datetime_time_cos_24": [0.680721, -0.796530, 0.457098, 0.305695],
+            "datetime_time_sin_48": [0.997314, 0.963163, -0.813101, -0.582123],
+            "datetime_time_cos_48": [-0.073238, 0.268920, -0.582123, -0.813101],
+        }
+    )
+    expected_df.date = expected_df.date.astype("Int64")
+
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2023-10-07T07:07:51.006677",
+                "2023-09-26T10:36:12.885666",
+                "2023-09-25T19:49:32.098655",
+                "2023-09-19T18:47:58.268237",
+            ]
+        }
+    )
+    converter = DateTimeSearchKeyConverter("date")
+    converted_df = converter.convert(df)
+    print(converted_df)
+    assert_frame_equal(converted_df, expected_df)
+
+
 def test_columns_renaming():
     df1 = pd.DataFrame(
         {
@@ -623,9 +653,7 @@ def test_downsampling_binary():
         "target": FileColumnMeaningType.TARGET,
         "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
     }
-    dataset = Dataset(
-        "tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url"
-    )
+    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url")
     dataset.task_type = ModelTaskType.BINARY
 
     old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
@@ -668,9 +696,7 @@ def test_downsampling_multiclass():
         "target": FileColumnMeaningType.TARGET,
         "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
     }
-    dataset = Dataset(
-        "tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url"
-    )
+    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url")
     dataset.task_type = ModelTaskType.MULTICLASS
 
     old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD

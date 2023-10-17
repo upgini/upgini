@@ -10,9 +10,9 @@ from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 
 from upgini.errors import ValidationError
 
-DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%y", "%d.%m.%Y", "%m.%d.%y", "%m.%d.%Y"]
+DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%y", "%d.%m.%Y", "%m.%d.%y", "%m.%d.%Y", "%Y-%m-%dT%H:%M:%S.%f"]
 
-DATETIME_PATTERN = r"^[\d\s\.\-:]+$"
+DATETIME_PATTERN = r"^[\d\s\.\-:T]+$"
 
 
 class DateTimeSearchKeyConverter:
