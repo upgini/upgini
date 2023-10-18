@@ -280,10 +280,10 @@ def show_request_quote_button():
     if not ipython_available():
         print("https://upgini.com/requet-a-quote")
     else:
-        from IPython.display import display, Javascript
         import ipywidgets as widgets
+        from IPython.display import Javascript, display
 
-        button = widgets.Button(description="Request a quote")
+        button = widgets.Button(description="Request a quote", button_style="danger")
 
         def on_button_clicked(b):
             display(Javascript('window.open("https://upgini.com/requet-a-quote");'))

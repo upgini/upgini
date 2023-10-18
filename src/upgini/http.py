@@ -236,6 +236,13 @@ class TransformUsage:
         self.limit = json.get("limit")
         self.has_limit = json.get("hasLimit")
 
+    def __str__(self):
+        return (
+            f"TransformUsage(transformed_rows={self.transformed_rows}, "
+            f"rest_rows={self.rest_rows}, limit={self.limit}, "
+            f"has_limit={self.has_limit})"
+        )
+
 
 class _RestClient:
     PROD_BACKEND_URL = "https://search.upgini.com"
@@ -652,7 +659,7 @@ class _RestClient:
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return ProviderTaskMetadataV2.parse_obj(response)
 
-    def get_current_transform_usage(self, trace_id):
+    def get_current_transform_usage(self, trace_id) -> TransformUsage:
         track_metrics = get_track_metrics()
         visitor_id = track_metrics.get("visitorId")
         response = self._with_unauth_retry(
