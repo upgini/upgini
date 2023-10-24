@@ -49,6 +49,7 @@ class DataSourcePublisher:
         snapshot_frequency_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
+        exclude_from_autofe_generation: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
@@ -81,6 +82,8 @@ class DataSourcePublisher:
                     request["sortColumn"] = sort_column
                 if data_table_id_to_replace is not None:
                     request["adsDefinitionIdToReplace"] = data_table_id_to_replace
+                if exclude_from_autofe_generation is not None:
+                    request["excludeFromGeneration"] = exclude_from_autofe_generation
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -124,6 +127,7 @@ class DataSourcePublisher:
                                 snapshot_frequency_days,
                                 features_for_embeddings,
                                 data_table_id_to_replace,
+                                exclude_from_autofe_generation,
                                 True,
                                 _silent,
                             )
