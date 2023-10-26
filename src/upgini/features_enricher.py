@@ -1876,8 +1876,8 @@ class FeaturesEnricher(TransformerMixin):
             self.cv is None
             and date_column
             and model_task_type == ModelTaskType.REGRESSION
-            and {SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys()) == {}
-            and is_blocked_time_series(df, date_column, self.fit_search_keys.keys())
+            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
+            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
         ):
             msg = (
                 "Multivariate TimeSeries detected. Blocked time series cross-validation split selected. "
