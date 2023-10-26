@@ -144,3 +144,56 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
         return False
     except Exception:
         return False
+
+
+def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[str]) -> bool:
+    df = df.copy()
+    seconds = "datetime_seconds"
+    df[date_col] = pd.to_datetime(df[date_col])
+    df[date_col] = df[date_col].dt.tz_localize(None)
+    df[seconds] = (df[date_col] - df[date_col].dt.floor("D")).dt.seconds
+
+    seconds_without_na = df[seconds].dropna()
+    columns_to_drop = [c for c in search_keys if c != date_col] + [seconds]
+    df.drop(columns=columns_to_drop, inplace=True)
+    # Date, not datetime
+    if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
+        return False
+
+    nunique_dates = df[date_col].nunique()
+    # Unique dates count more than 270
+    if nunique_dates < 270:
+        return False
+
+    min_date = df[date_col].min()
+    max_date = df[date_col].max()
+    days_delta = (max_date - min_date).days + 1
+    # Missing dates less than 30% (unique dates count and days delta between earliest and latest dates)
+    if nunique_dates / days_delta < 0.3:
+        return False
+
+    def check_differences(group):
+        num_rows = group.shape[0]
+
+        # check each pair in group
+        for i in range(num_rows):
+            for j in range(i + 1, num_rows):
+                # count number of diff columns
+                diff_count = (group.iloc[i] != group.iloc[j]).sum()
+                if diff_count > 2:
+                    return False
+        return True
+
+    def is_multiple_rows(group):
+        return group.shape[0] > 1
+
+    grouped = df.groupby("date")
+    dates_with_multiple_rows = len(grouped.apply(is_multiple_rows))
+
+    # share of dates with more than one record is more than 99%
+    if dates_with_multiple_rows / nunique_dates < 0.99:
+        return False
+
+    is_diff_less_than_two_columns = grouped.apply(check_differences)
+
+    return is_diff_less_than_two_columns.all()
