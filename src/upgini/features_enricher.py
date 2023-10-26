@@ -1879,6 +1879,12 @@ class FeaturesEnricher(TransformerMixin):
             and {SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys()) == {}
             and is_blocked_time_series(df, date_column, self.fit_search_keys.keys())
         ):
+            msg = (
+                "Multivariate TimeSeries detected. Blocked time series cross-validation split selected. "
+                "More details: https://github.com/upgini/upgini#-time-series-prediction-support"
+            )
+            print(msg)
+            self.logger.warning(msg)
             self.cv = CVType.blocked_time_series
             self.runtime_parameters.properties["cv_type"] = self.cv.name
 
