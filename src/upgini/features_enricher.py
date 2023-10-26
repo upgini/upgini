@@ -55,7 +55,11 @@ from upgini.utils.custom_loss_utils import (
     get_runtime_params_custom_loss,
 )
 from upgini.utils.cv_utils import CVConfig
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter, is_time_series
+from upgini.utils.datetime_utils import (
+    DateTimeSearchKeyConverter,
+    is_blocked_time_series,
+    is_time_series,
+)
 from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
@@ -1866,8 +1870,23 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, self.fit_search_keys)
 
-        self.fit_generated_features = []
+        # Check Multivariate time series
         date_column = self._get_date_column(self.fit_search_keys)
+        if (
+            self.cv is None
+            and date_column
+            and model_task_type == ModelTaskType.REGRESSION
+            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
+            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
+        ):
+            msg = bundle.get("multivariate_timeseries_detected")
+            print(msg)
+            self.logger.warning(msg)
+            self.cv = CVType.blocked_time_series
+            self.runtime_parameters.properties["cv_type"] = self.cv.name
+
+        self.fit_generated_features = []
+
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             df = converter.convert(df, keep_time=True)
