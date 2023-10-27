@@ -408,7 +408,7 @@ class FeaturesEnricher(TransformerMixin):
                 if len(e.args) > 0 and (
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
-                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    self.__display_support_link(bundle.get("features_info_zero_important_features"))
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
@@ -416,7 +416,7 @@ class FeaturesEnricher(TransformerMixin):
                         raise e
                 else:
                     self._dump_python_libs()
-                    self.__display_slack_community_link()
+                    self.__display_support_link()
                     raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -554,7 +554,7 @@ class FeaturesEnricher(TransformerMixin):
                 if len(e.args) > 0 and (
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
-                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    self.__display_support_link(bundle.get("features_info_zero_important_features"))
                     return None
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
@@ -564,7 +564,7 @@ class FeaturesEnricher(TransformerMixin):
                     return None
                 else:
                     self._dump_python_libs()
-                    self.__display_slack_community_link()
+                    self.__display_support_link()
                     raise e
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
@@ -654,7 +654,7 @@ class FeaturesEnricher(TransformerMixin):
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("transform_with_paid_features")
                     self.logger.warning(msg)
-                    self.__display_slack_community_link(msg)
+                    self.__display_support_link(msg)
                     return None
 
                 if not metrics_calculation:
@@ -706,13 +706,13 @@ class FeaturesEnricher(TransformerMixin):
                 if len(e.args) > 0 and (
                     "File doesn't intersect with any ADS" in str(e.args[0]) or "Empty intersection" in str(e.args[0])
                 ):
-                    self.__display_slack_community_link(bundle.get("features_info_zero_important_features"))
+                    self.__display_support_link(bundle.get("features_info_zero_important_features"))
                     return None
                 elif len(e.args) > 0 and (
                     "You have reached the quota limit of trial data usage" in str(e.args[0])
                     or "Current user hasn't access to trial features" in str(e.args[0])
                 ):
-                    self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                    self.__display_support_link(bundle.get("trial_quota_limit_riched"))
                     return None
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
@@ -723,7 +723,7 @@ class FeaturesEnricher(TransformerMixin):
                 else:
                     if not silent_mode:
                         self._dump_python_libs()
-                        self.__display_slack_community_link()
+                        self.__display_support_link()
                     raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
@@ -837,7 +837,7 @@ class FeaturesEnricher(TransformerMixin):
                 if self._has_paid_features(exclude_features_sources):
                     msg = bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
-                    self.__display_slack_community_link(msg)
+                    self.__display_support_link(msg)
                     return None
 
                 cat_features = None
@@ -1067,7 +1067,7 @@ class FeaturesEnricher(TransformerMixin):
                     ):
                         msg = bundle.get("metrics_negative_uplift_without_cv")
                         self.logger.warning(msg)
-                        self.__display_slack_community_link(msg)
+                        self.__display_support_link(msg)
                     elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
                         self.logger.warning("Uplift is negative")
 
@@ -1081,7 +1081,7 @@ class FeaturesEnricher(TransformerMixin):
                     "You have reached the quota limit of trial data usage" in str(e.args[0])
                     or "Current user hasn't access to trial features" in str(e.args[0])
                 ):
-                    self.__display_slack_community_link(bundle.get("trial_quota_limit_riched"))
+                    self.__display_support_link(bundle.get("trial_quota_limit_riched"))
                 elif isinstance(e, ValidationError):
                     self._dump_python_libs()
                     self._show_error(str(e))
@@ -1090,7 +1090,7 @@ class FeaturesEnricher(TransformerMixin):
                 else:
                     if not silent:
                         self._dump_python_libs()
-                        self.__display_slack_community_link()
+                        self.__display_support_link()
                     raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
@@ -2032,7 +2032,7 @@ class FeaturesEnricher(TransformerMixin):
             zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
             msg = bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
             self.logger.warning(msg)
-            self.__display_slack_community_link(msg)
+            self.__display_support_link(msg)
             self.warning_counter.increment()
 
         if (
@@ -2052,13 +2052,13 @@ class FeaturesEnricher(TransformerMixin):
         self.__show_selected_features(self.fit_search_keys)
 
         if not self.warning_counter.has_warnings():
-            self.__display_slack_community_link(bundle.get("all_ok_community_invite"))
+            self.__display_support_link(bundle.get("all_ok_community_invite"))
 
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
                 self.logger.warning(msg)
-                self.__display_slack_community_link(msg)
+                self.__display_support_link(msg)
         else:
             if calculate_metrics is None:
                 if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
@@ -2882,7 +2882,7 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 msg = bundle.get("features_info_zero_important_features")
                 self.logger.warning(msg)
-                self.__display_slack_community_link(msg)
+                self.__display_support_link(msg)
                 self.warning_counter.increment()
         except (ImportError, NameError):
             print(msg)
@@ -3016,11 +3016,11 @@ class FeaturesEnricher(TransformerMixin):
         except Exception:
             self.logger.exception("Failed to dump python libs")
 
-    def __display_slack_community_link(self, link_text: Optional[str] = None):
-        slack_community_link = bundle.get("slack_community_link")
-        link_text = link_text or bundle.get("slack_community_text")
-        badge = bundle.get("slack_community_bage")
-        alt = bundle.get("slack_community_alt")
+    def __display_support_link(self, link_text: Optional[str] = None):
+        support_link = bundle.get("support_link")
+        link_text = link_text or bundle.get("support_text")
+        # badge = bundle.get("slack_community_bage")
+        # alt = bundle.get("slack_community_alt")
         try:
             from IPython.display import HTML, display
 
@@ -3029,13 +3029,13 @@ class FeaturesEnricher(TransformerMixin):
             print(link_text)
             display(
                 HTML(
-                    f"""<a href='{slack_community_link}' target='_blank' rel='noopener noreferrer'>
-                    <img alt='{alt}' src='{badge}'></a>
-                    """
+                    f"""<a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    Support</a>"""
+                    # <img alt='{alt}' src='{badge}'></a>
                 )
             )
         except (ImportError, NameError):
-            print(f"{link_text} at {slack_community_link}")
+            print(f"{link_text} at {support_link}")
 
     def _show_error(self, msg):
         try:
