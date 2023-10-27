@@ -82,7 +82,7 @@
 
 👉 [**Details on  datasets and features**](https://upgini.com/#data_sources) 
 #### 📊 Total: **239 countries** and **up to 41 years** of history
-|Data scource|Countries|History, years|# sources for ensemble|Update|Search keys|API Key required
+|Data sources|Countries|History, years|# sources for ensemble|Update|Search keys|API Key required
 |--|--|--|--|--|--|--|
 |Historical weather & Climate normals | 68 |22|-|Monthly|date, country, postal/ZIP code|No
 |Location/Places/POI/Area/Proximity information from OpenStreetMap | 221 |2|-|Monthly|date, country, postal/ZIP code|No
