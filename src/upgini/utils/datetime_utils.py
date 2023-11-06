@@ -173,7 +173,7 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
         return False
 
     def check_differences(group):
-        data = group.drop("date", axis=1)
+        data = group.drop(date_col, axis=1)
         diffs = data.values[:, None] != data.values
         diff_counts = diffs.sum(axis=2)
         max_diff = np.max(diff_counts)
@@ -182,7 +182,7 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
     def is_multiple_rows(group):
         return group.shape[0] > 1
 
-    grouped = df.groupby("date")
+    grouped = df.groupby(date_col)
     dates_with_multiple_rows = len(grouped.apply(is_multiple_rows))
 
     # share of dates with more than one record is more than 99%
