@@ -3,7 +3,8 @@ import hashlib
 import logging
 import tempfile
 import time
-from ipaddress import IPv4Address, ip_address
+from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address, _BaseAddress, ip_address
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -36,6 +37,7 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
+    SearchKey,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
@@ -286,24 +288,70 @@ class Dataset:  # (pd.DataFrame):
                 self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
-    def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
+    def __ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
         try:
-            ip_addr = ip_address(ip)
-            if isinstance(ip_addr, IPv4Address):
-                return int(ip_addr)
-            else:
-                return None
+            if isinstance(ip, IPv4Address):
+                return int(ip)
+            if isinstance(ip, IPv6Address):
+                return Decimal(int(ip))
         except Exception:
-            return None
+            pass
+
+    @staticmethod
+    def _safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address]) -> Optional[_BaseAddress]:
+        try:
+            return ip_address(ip)
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _is_ipv4(ip: Optional[_BaseAddress]):
+        return ip is not None and (
+            isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
+        )
+
+    @staticmethod
+    def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
+        if isinstance(ip, IPv4Address):
+            return ip
+        return None
+
+    @staticmethod
+    def _to_ipv6(ip: Optional[_BaseAddress]) -> Optional[IPv6Address]:
+        if isinstance(ip, IPv6Address):
+            return ip
+        if isinstance(ip, IPv4Address):
+            return IPv6Address("::ffff:" + str(ip))
+        return None
 
     def __convert_ip(self):
         """Convert ip address to int"""
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.data.columns:
-            # self.logger.info("Convert ip address to int")
-            self.data[ip] = self.data[ip].apply(self.__ip_to_int).astype("Int64")
+            self.logger.info("Convert ip address to int")
+            del self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value]
+            del self.meaning_types[ip]
+
+            # TODO replace all usages of ip to ipv4 (if needed) + ipv6
+            # self.search_keys = []
+
+            self.data[ip] = self.data[ip].apply(self._safe_ip_parse)
             if self.data[ip].isnull().all():
                 raise ValidationError(bundle.get("invalid_ip").format(ip))
+
+            if self.data[ip].apply(self._is_ipv4).any():
+                ipv4 = ip + "_v4"
+                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self.__ip_to_int).astype("Int64")
+                self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
+                self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
+                self.search_keys[ipv4] = SearchKey.IP_ADDRESS
+
+            ipv6 = ip + "_v6"
+            self.data[ipv6] = self.data[ip].apply(self._to_ipv6).apply(self.__ip_to_int)
+            self.data = self.data.drop(columns=ip)
+            self.meaning_types[ipv6] = FileColumnMeaningType.IPv6_ADDRESS
+            self.etalon_def[FileColumnMeaningType.IPv6_ADDRESS.value] = ipv6
+            self.search_keys[ipv6] = SearchKey.IPv6_ADDRESS
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
@@ -789,7 +837,7 @@ class Dataset:  # (pd.DataFrame):
                 if meaning_type in {
                     FileColumnMeaningType.DATE,
                     FileColumnMeaningType.DATETIME,
-                    FileColumnMeaningType.IP_ADDRESS,
+                    # FileColumnMeaningType.IP_ADDRESS,
                 }:
                     min_max_values = NumericInterval(
                         minValue=self.data[column_name].astype("Int64").min(),
@@ -822,7 +870,7 @@ class Dataset:  # (pd.DataFrame):
     def __get_data_type(self, pandas_data_type, column_name) -> DataType:
         if is_integer_dtype(pandas_data_type):
             return DataType.INT
-        elif is_float_dtype(pandas_data_type):
+        elif is_float_dtype(pandas_data_type) or isinstance(self.data[column_name].values[0], Decimal):
             return DataType.DECIMAL
         elif is_string_dtype(pandas_data_type):
             return DataType.STRING

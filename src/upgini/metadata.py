@@ -20,6 +20,7 @@ class FileColumnMeaningType(Enum):
     EMAIL = "EMAIL"
     EMAIL_ONE_DOMAIN = "EMAIL_ONE_DOMAIN"
     IP_ADDRESS = "IP_ADDRESS"
+    IPv6_ADDRESS = "IPv6_ADDRESS"
     IP_RANGE_FROM = "IP_RANGE_FROM"
     IP_RANGE_TO = "IP_RANGE_TO"
     HEM = "HEM"
@@ -37,19 +38,28 @@ class FileColumnMeaningType(Enum):
 
 class SearchKey(Enum):
     EMAIL = FileColumnMeaningType.EMAIL
-    EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
     HEM = FileColumnMeaningType.HEM
     IP = FileColumnMeaningType.IP_ADDRESS
-    IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
-    IP_RANGE_TO = FileColumnMeaningType.IP_RANGE_TO
     PHONE = FileColumnMeaningType.MSISDN
-    MSISDN_RANGE_FROM = FileColumnMeaningType.MSISDN_RANGE_FROM
-    MSISDN_RANGE_TO = FileColumnMeaningType.MSISDN_RANGE_TO
     DATE = FileColumnMeaningType.DATE
     DATETIME = FileColumnMeaningType.DATETIME
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
     COUNTRY = FileColumnMeaningType.COUNTRY
     POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
+
+    # For data source registration. Don't use it for FeaturesEnricher
+    IPv6_ADDRESS = FileColumnMeaningType.IPv6_ADDRESS
+
+    # For data source registration. Don't use it for FeaturesEnricher
+    EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
+    # For data source registration. Don't use it for FeaturesEnricher
+    IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
+    # For data source registration. Don't use it for FeaturesEnricher
+    IP_RANGE_TO = FileColumnMeaningType.IP_RANGE_TO
+    # For data source registration. Don't use it for FeaturesEnricher
+    MSISDN_RANGE_FROM = FileColumnMeaningType.MSISDN_RANGE_FROM
+    # For data source registration. Don't use it for FeaturesEnricher
+    MSISDN_RANGE_TO = FileColumnMeaningType.MSISDN_RANGE_TO
 
     @staticmethod
     def personal_keys() -> List["SearchKey"]:
