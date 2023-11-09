@@ -49,6 +49,7 @@ from upgini.metrics import EstimatorWrapper, validate_scoring_argument
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
+from upgini.utils import combine_search_keys
 from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.custom_loss_utils import (
     get_additional_params_custom_loss,
@@ -1588,10 +1589,7 @@ class FeaturesEnricher(TransformerMixin):
             system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
             df_with_original_index = df[system_columns_with_original_index].copy()
 
-            combined_search_keys = []
-            for L in range(1, len(search_keys.keys()) + 1):
-                for subset in itertools.combinations(search_keys.keys(), L):
-                    combined_search_keys.append(subset)
+            combined_search_keys = combine_search_keys(search_keys.keys())
 
             df_without_features = df.drop(columns=non_keys_columns)
 
@@ -1940,10 +1938,7 @@ class FeaturesEnricher(TransformerMixin):
         self.df_with_original_index = df.copy()
         df = df.reset_index(drop=True).sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
-        combined_search_keys = []
-        for L in range(1, len(self.fit_search_keys.keys()) + 1):
-            for subset in itertools.combinations(self.fit_search_keys.keys(), L):
-                combined_search_keys.append(subset)
+        combined_search_keys = combine_search_keys(self.fit_search_keys.keys())
 
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
