@@ -9,7 +9,9 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer
+
 from upgini.utils.sklearn_ext import cross_validate
+
 try:
     from sklearn.metrics import get_scorer_names
 
@@ -103,86 +105,89 @@ NA_VALUES = [
 
 NA_REPLACEMENT = "NA"
 
-SUPPORTED_CATBOOST_METRICS = {s.upper(): s for s in {
-    "Logloss",
-    "CrossEntropy",
-    "CtrFactor",
-    "Focal",
-    "RMSE",
-    "LogCosh",
-    "Lq",
-    "MAE",
-    "Quantile",
-    "MultiQuantile",
-    "Expectile",
-    "LogLinQuantile",
-    "MAPE",
-    "Poisson",
-    "MSLE",
-    "MedianAbsoluteError",
-    "SMAPE",
-    "Huber",
-    "Tweedie",
-    "Cox",
-    "RMSEWithUncertainty",
-    "MultiClass",
-    "MultiClassOneVsAll",
-    "PairLogit",
-    "PairLogitPairwise",
-    "YetiRank",
-    "YetiRankPairwise",
-    "QueryRMSE",
-    "QuerySoftMax",
-    "QueryCrossEntropy",
-    "StochasticFilter",
-    "LambdaMart",
-    "StochasticRank",
-    "PythonUserDefinedPerObject",
-    "PythonUserDefinedMultiTarget",
-    "UserPerObjMetric",
-    "UserQuerywiseMetric",
-    "R2",
-    "NumErrors",
-    "FairLoss",
-    "AUC",
-    "Accuracy",
-    "BalancedAccuracy",
-    "BalancedErrorRate",
-    "BrierScore",
-    "Precision",
-    "Recall",
-    "F1",
-    "TotalF1",
-    "F",
-    "MCC",
-    "ZeroOneLoss",
-    "HammingLoss",
-    "HingeLoss",
-    "Kappa",
-    "WKappa",
-    "LogLikelihoodOfPrediction",
-    "NormalizedGini",
-    "PRAUC",
-    "PairAccuracy",
-    "AverageGain",
-    "QueryAverage",
-    "QueryAUC",
-    "PFound",
-    "PrecisionAt",
-    "RecallAt",
-    "MAP",
-    "NDCG",
-    "DCG",
-    "FilteredDCG",
-    "MRR",
-    "ERR",
-    "SurvivalAft",
-    "MultiRMSE",
-    "MultiRMSEWithMissingValues",
-    "MultiLogloss",
-    "MultiCrossEntropy",
-    "Combination",
-}}
+SUPPORTED_CATBOOST_METRICS = {
+    s.upper(): s
+    for s in {
+        "Logloss",
+        "CrossEntropy",
+        "CtrFactor",
+        "Focal",
+        "RMSE",
+        "LogCosh",
+        "Lq",
+        "MAE",
+        "Quantile",
+        "MultiQuantile",
+        "Expectile",
+        "LogLinQuantile",
+        "MAPE",
+        "Poisson",
+        "MSLE",
+        "MedianAbsoluteError",
+        "SMAPE",
+        "Huber",
+        "Tweedie",
+        "Cox",
+        "RMSEWithUncertainty",
+        "MultiClass",
+        "MultiClassOneVsAll",
+        "PairLogit",
+        "PairLogitPairwise",
+        "YetiRank",
+        "YetiRankPairwise",
+        "QueryRMSE",
+        "QuerySoftMax",
+        "QueryCrossEntropy",
+        "StochasticFilter",
+        "LambdaMart",
+        "StochasticRank",
+        "PythonUserDefinedPerObject",
+        "PythonUserDefinedMultiTarget",
+        "UserPerObjMetric",
+        "UserQuerywiseMetric",
+        "R2",
+        "NumErrors",
+        "FairLoss",
+        "AUC",
+        "Accuracy",
+        "BalancedAccuracy",
+        "BalancedErrorRate",
+        "BrierScore",
+        "Precision",
+        "Recall",
+        "F1",
+        "TotalF1",
+        "F",
+        "MCC",
+        "ZeroOneLoss",
+        "HammingLoss",
+        "HingeLoss",
+        "Kappa",
+        "WKappa",
+        "LogLikelihoodOfPrediction",
+        "NormalizedGini",
+        "PRAUC",
+        "PairAccuracy",
+        "AverageGain",
+        "QueryAverage",
+        "QueryAUC",
+        "PFound",
+        "PrecisionAt",
+        "RecallAt",
+        "MAP",
+        "NDCG",
+        "DCG",
+        "FilteredDCG",
+        "MRR",
+        "ERR",
+        "SurvivalAft",
+        "MultiRMSE",
+        "MultiRMSEWithMissingValues",
+        "MultiLogloss",
+        "MultiCrossEntropy",
+        "Combination",
+    }
+}
 
 
 class EstimatorWrapper:
@@ -198,7 +203,9 @@ class EstimatorWrapper:
     ):
         self.estimator = estimator
         self.scorer = scorer
-        self.metric_name = metric_name
+        self.metric_name = (
+            "GINI" if metric_name.upper() == "ROC_AUC" and target_type == ModelTaskType.BINARY else metric_name
+        )
         self.multiplier = multiplier
         self.cv = cv
         self.target_type = target_type
@@ -270,7 +277,13 @@ class EstimatorWrapper:
         metrics_by_fold = cv_results["test_score"]
         self.cv_estimators = cv_results["estimator"]
 
-        return np.mean(metrics_by_fold) * self.multiplier
+        metric = np.mean(metrics_by_fold) * self.multiplier
+        return self.post_process_metric(metric)
+
+    def post_process_metric(self, metric: float) -> float:
+        if self.metric_name == "GINI":
+            metric = 2 * metric - 1
+        return metric
 
     def calculate_metric(self, X: pd.DataFrame, y: np.ndarray) -> float:
         X, y, _ = self._prepare_to_calculate(X, y)
@@ -278,7 +291,8 @@ class EstimatorWrapper:
         for est in self.cv_estimators:
             metrics.append(self.scorer(est, X, y))
 
-        return np.mean(metrics) * self.multiplier
+        metric = np.mean(metrics) * self.multiplier
+        return self.post_process_metric(metric)
 
     @staticmethod
     def create(
