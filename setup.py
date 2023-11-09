@@ -40,7 +40,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.216"
+version = "1.1.219"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -87,7 +87,7 @@ try:
             "catboost>=1.0.3",
             "lightgbm>=3.3.2",
             "pyjwt>=2.8.0",
-            "xhtml2pdf>=0.2.11",
+            "xhtml2pdf==0.2.11",
             "ipywidgets>=8.1.0",
         ],
         project_urls={
