@@ -5,6 +5,7 @@ import logging
 import numbers
 import os
 import pickle
+import re
 import sys
 import tempfile
 import time
@@ -174,6 +175,7 @@ class FeaturesEnricher(TransformerMixin):
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
         exclude_columns: Optional[List[str]] = None,
+        baseline_score_column: Optional[Any] = None,
         client_ip: Optional[str] = None,
         **kwargs,
     ):
@@ -278,6 +280,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
+        self.baseline_score_column = baseline_score_column
 
     def _get_api_key(self):
         return self._api_key
@@ -931,7 +934,9 @@ class FeaturesEnricher(TransformerMixin):
                             cat_features,
                             add_params=custom_loss_add_params,
                         )
-                        etalon_metric = baseline_estimator.cross_val_predict(fitting_X, y_sorted)
+                        etalon_metric = baseline_estimator.cross_val_predict(
+                            fitting_X, y_sorted, self.baseline_score_column
+                        )
                         self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
 
                     # 2 Fit and predict with KFold Catboost model on enriched tds
@@ -998,7 +1003,9 @@ class FeaturesEnricher(TransformerMixin):
                                     f"Calculate baseline {metric} on eval set {idx + 1} "
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
-                                etalon_eval_metric = baseline_estimator.calculate_metric(eval_X_sorted, eval_y_sorted)
+                                etalon_eval_metric = baseline_estimator.calculate_metric(
+                                    eval_X_sorted, eval_y_sorted, self.baseline_score_column
+                                )
                                 self.logger.info(
                                     f"Baseline {metric} on eval set {idx + 1} client features: {etalon_eval_metric}"
                                 )
@@ -2051,6 +2058,10 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__show_selected_features(self.fit_search_keys)
 
+        autofe_description = self.get_autofe_features_description()
+        if autofe_description is not None:
+            display_html_dataframe(autofe_description, autofe_description, "*Description of AutoFE feature names")
+
         if not self.warning_counter.has_warnings():
             self.__display_support_link(bundle.get("all_ok_community_invite"))
 
@@ -2692,6 +2703,52 @@ class FeaturesEnricher(TransformerMixin):
         else:
             self.logger.warning("Empty features info")
 
+    def get_autofe_features_description(self):
+        try:
+            autofe_meta = self._search_task.get_autofe_metadata()
+            if autofe_meta is None:
+                return None
+            features_meta = self._search_task.get_all_features_metadata_v2()
+
+            def get_feature_by_display_index(idx):
+                for m in features_meta:
+                    if m.name.endswith(str(idx)):
+                        return m
+
+            descriptions = []
+            for m in autofe_meta:
+                description = dict()
+
+                feature_meta = get_feature_by_display_index(m.display_index)
+                if feature_meta is None:
+                    self.logger.warning(f"Feature meta for display index {m.display_index} not found")
+                    continue
+                description["Sources"] = feature_meta.data_source.replace("AutoFE: features from ", "")
+                description["Feature name"] = feature_meta.name
+
+                feature_idx = 1
+                for bc in m.base_columns:
+                    description[f"Feature {feature_idx}"] = bc.hashed_name
+                    feature_idx += 1
+
+                match = re.match(f"f_autofe_(.+)_{m.display_index}", feature_meta.name)
+                if match is None:
+                    self.logger.warning(f"Failed to infer autofe function from name {feature_meta.name}")
+                else:
+                    description["Function"] = match.group(1)
+
+                descriptions.append(description)
+
+            if len(descriptions) == 0:
+                return None
+
+            descriptions_df = pd.DataFrame(descriptions)
+            descriptions_df.fillna("", inplace=True)
+            return descriptions_df
+        except Exception:
+            self.logger.exception("Failed to generate AutoFE features description")
+            return None
+
     @staticmethod
     def _group_relevant_data_sources(df: pd.DataFrame) -> pd.DataFrame:
         return (
@@ -2894,6 +2951,7 @@ class FeaturesEnricher(TransformerMixin):
                 relevant_features_df=self._features_info_without_links,
                 relevant_datasources_df=self.relevant_data_sources,
                 metrics_df=self.metrics,
+                autofe_descriptions_df=self.get_autofe_features_description(),
                 search_id=self._search_task.search_task_id,
                 email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
             )

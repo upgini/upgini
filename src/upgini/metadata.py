@@ -177,6 +177,18 @@ class ModelEvalSet(BaseModel):
     hit_rate_metrics: HitRateMetrics
 
 
+class BaseColumnMetadata(BaseModel):
+    original_name: str
+    hashed_name: str
+    ads_definition_id: Optional[str]
+
+
+class GeneratedFeatureMetadata(BaseModel):
+    formula: str  # on hashed names
+    display_index: int
+    base_columns: List[BaseColumnMetadata]
+
+
 class ProviderTaskMetadataV2(BaseModel):
     features: List[FeaturesMetadataV2]
     hit_rate_metrics: Optional[HitRateMetrics]
@@ -184,6 +196,7 @@ class ProviderTaskMetadataV2(BaseModel):
     zero_hit_rate_search_keys: Optional[List[str]]
     features_used_for_embeddings: Optional[List[str]]
     shuffle_kfold: Optional[bool]
+    generated_features: Optional[List[GeneratedFeatureMetadata]]
 
 
 class FeaturesFilter(BaseModel):

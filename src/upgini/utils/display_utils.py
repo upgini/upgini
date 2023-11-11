@@ -130,9 +130,14 @@ def make_html_report(
     relevant_features_df: pd.DataFrame,
     relevant_datasources_df: pd.DataFrame,
     metrics_df: Optional[pd.DataFrame],
+    autofe_descriptions_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str] = None,
 ):
+    # relevant_features_df = relevant_features_df.copy()
+    # relevant_features_df["Feature name"] = relevant_features_df["Feature name"].apply(
+    #     lambda x: "*" + x if x.contains("_autofe_") else x
+    # )
     relevant_datasources_df = relevant_datasources_df.copy()
     relevant_datasources_df["action"] = (
         f"""<a href="https://upgini.com/requet-a-quote?search-id={search_id}">"""
@@ -239,6 +244,10 @@ def make_html_report(
             {make_table(relevant_datasources_df)}
             <h3>All relevant features. Listing</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
+            {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df)
+             if autofe_descriptions_df is not None
+             else ""
+            }
             <p>To buy found data sources, please contact: <a href='mailto:sales@upgini.com'>sales@upgini.com</a></p>
             <p>Best regards, </br><b>Upgini Team</b></p>
         </body>
@@ -249,13 +258,16 @@ def prepare_and_show_report(
     relevant_features_df: pd.DataFrame,
     relevant_datasources_df: pd.DataFrame,
     metrics_df: Optional[pd.DataFrame],
+    autofe_descriptions_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str],
 ):
     if not ipython_available():
         return
 
-    report = make_html_report(relevant_features_df, relevant_datasources_df, metrics_df, search_id, email)
+    report = make_html_report(
+        relevant_features_df, relevant_datasources_df, metrics_df, autofe_descriptions_df, search_id, email
+    )
 
     if len(relevant_features_df) > 0:
         show_button_download_pdf(report)
