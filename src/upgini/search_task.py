@@ -18,6 +18,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     FeaturesMetadataV2,
     FileMetadata,
+    GeneratedFeatureMetadata,
     ModelTaskType,
     ProviderTaskMetadataV2,
     RuntimeParameters,
@@ -174,6 +175,14 @@ class SearchTask:
         for meta in self.provider_metadata_v2:
             if meta.shuffle_kfold is not None:
                 return meta.shuffle_kfold
+
+    def get_autofe_metadata(self) -> Optional[List[GeneratedFeatureMetadata]]:
+        if self.provider_metadata_v2 is None:
+            return None
+
+        for meta in self.provider_metadata_v2:
+            if meta.generated_features is not None:
+                return meta.generated_features
 
     @staticmethod
     def _get_provider_summaries(summary: SearchTaskSummary) -> List[ProviderTaskSummary]:

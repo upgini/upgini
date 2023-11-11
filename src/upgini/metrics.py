@@ -8,7 +8,7 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
-from sklearn.metrics import check_scoring, get_scorer, make_scorer
+from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
 
 from upgini.utils.sklearn_ext import cross_validate
 
@@ -255,7 +255,9 @@ class EstimatorWrapper:
         y = np.array(list(joined[y.name].values))
         return X, y, {}
 
-    def cross_val_predict(self, X: pd.DataFrame, y: np.ndarray) -> Optional[float]:
+    def cross_val_predict(
+        self, X: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
+    ) -> Optional[float]:
         X, y, fit_params = self._prepare_to_fit(X, y)
         # if isinstance(self.estimator, CatBoostClassifier) or isinstance(self.estimator, CatBoostRegressor):
         #     fit_params["early_stopping_rounds"] = 20
@@ -265,19 +267,22 @@ class EstimatorWrapper:
 
         scorer = check_scoring(self.estimator, scoring=self.scorer)
 
-        cv_results = cross_validate(
-            estimator=self.estimator,
-            X=X,
-            y=y,
-            scoring=scorer,
-            cv=self.cv,
-            fit_params=fit_params,
-            return_estimator=True,
-        )
-        metrics_by_fold = cv_results["test_score"]
-        self.cv_estimators = cv_results["estimator"]
+        if baseline_score_column is not None and self.metric_name == "GINI":
+            metric = roc_auc_score(y, X[baseline_score_column])
+        else:
+            cv_results = cross_validate(
+                estimator=self.estimator,
+                X=X,
+                y=y,
+                scoring=scorer,
+                cv=self.cv,
+                fit_params=fit_params,
+                return_estimator=True,
+            )
+            metrics_by_fold = cv_results["test_score"]
+            self.cv_estimators = cv_results["estimator"]
 
-        metric = np.mean(metrics_by_fold) * self.multiplier
+            metric = np.mean(metrics_by_fold) * self.multiplier
         return self.post_process_metric(metric)
 
     def post_process_metric(self, metric: float) -> float:
@@ -285,13 +290,16 @@ class EstimatorWrapper:
             metric = 2 * metric - 1
         return metric
 
-    def calculate_metric(self, X: pd.DataFrame, y: np.ndarray) -> float:
+    def calculate_metric(self, X: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None) -> float:
         X, y, _ = self._prepare_to_calculate(X, y)
-        metrics = []
-        for est in self.cv_estimators:
-            metrics.append(self.scorer(est, X, y))
+        if baseline_score_column is not None and self.metric_name == "GINI":
+            metric = roc_auc_score(y, X[baseline_score_column])
+        else:
+            metrics = []
+            for est in self.cv_estimators:
+                metrics.append(self.scorer(est, X, y))
 
-        metric = np.mean(metrics) * self.multiplier
+            metric = np.mean(metrics) * self.multiplier
         return self.post_process_metric(metric)
 
     @staticmethod
