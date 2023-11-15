@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -20,6 +20,9 @@ class FileColumnMeaningType(Enum):
     EMAIL = "EMAIL"
     EMAIL_ONE_DOMAIN = "EMAIL_ONE_DOMAIN"
     IP_ADDRESS = "IP_ADDRESS"
+    IPV6_ADDRESS = "IPV6_ADDRESS"
+    IPV6_RANGE_FROM = "IPV6_RANGE_FROM"
+    IPV6_RANGE_TO = "IPV6_RANGE_TO"
     IP_RANGE_FROM = "IP_RANGE_FROM"
     IP_RANGE_TO = "IP_RANGE_TO"
     HEM = "HEM"
@@ -37,19 +40,30 @@ class FileColumnMeaningType(Enum):
 
 class SearchKey(Enum):
     EMAIL = FileColumnMeaningType.EMAIL
-    EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
     HEM = FileColumnMeaningType.HEM
     IP = FileColumnMeaningType.IP_ADDRESS
-    IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
-    IP_RANGE_TO = FileColumnMeaningType.IP_RANGE_TO
     PHONE = FileColumnMeaningType.MSISDN
-    MSISDN_RANGE_FROM = FileColumnMeaningType.MSISDN_RANGE_FROM
-    MSISDN_RANGE_TO = FileColumnMeaningType.MSISDN_RANGE_TO
     DATE = FileColumnMeaningType.DATE
     DATETIME = FileColumnMeaningType.DATETIME
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
     COUNTRY = FileColumnMeaningType.COUNTRY
     POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
+
+    # For data source registration. Don't use it for FeaturesEnricher
+    IPV6_ADDRESS = FileColumnMeaningType.IPV6_ADDRESS
+    IPV6_RANGE_FROM = FileColumnMeaningType.IPV6_RANGE_FROM
+    IPV6_RANGE_TO = FileColumnMeaningType.IPV6_RANGE_TO
+
+    # For data source registration. Don't use it for FeaturesEnricher
+    EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
+    # For data source registration. Don't use it for FeaturesEnricher
+    IP_RANGE_FROM = FileColumnMeaningType.IP_RANGE_FROM
+    # For data source registration. Don't use it for FeaturesEnricher
+    IP_RANGE_TO = FileColumnMeaningType.IP_RANGE_TO
+    # For data source registration. Don't use it for FeaturesEnricher
+    MSISDN_RANGE_FROM = FileColumnMeaningType.MSISDN_RANGE_FROM
+    # For data source registration. Don't use it for FeaturesEnricher
+    MSISDN_RANGE_TO = FileColumnMeaningType.MSISDN_RANGE_TO
 
     @staticmethod
     def personal_keys() -> List["SearchKey"]:
@@ -59,6 +73,7 @@ class SearchKey(Enum):
 class DataType(Enum):
     INT = "INT"
     DECIMAL = "DECIMAL"
+    BIG_NUMERIC = "BIG_NUMERIC"
     DATE_TIME = "DATE_TIME"
     STRING = "STRING"
     BOOLEAN = "BOOLEAN"

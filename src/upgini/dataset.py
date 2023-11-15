@@ -3,7 +3,7 @@ import hashlib
 import logging
 import tempfile
 import time
-from ipaddress import IPv4Address, ip_address
+from ipaddress import IPv4Address, IPv6Address, _BaseAddress, ip_address
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -41,6 +41,7 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
+from upgini.utils import combine_search_keys
 from upgini.utils.email_utils import EmailSearchKeyConverter
 
 try:
@@ -286,24 +287,75 @@ class Dataset:  # (pd.DataFrame):
                 self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
-    def __ip_to_int(ip: Union[str, int, IPv4Address]) -> Optional[int]:
+    def __ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
         try:
-            ip_addr = ip_address(ip)
-            if isinstance(ip_addr, IPv4Address):
-                return int(ip_addr)
-            else:
-                return None
+            if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
+                return int(ip)
         except Exception:
-            return None
+            pass
+
+    @staticmethod
+    def _safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address]) -> Optional[_BaseAddress]:
+        try:
+            return ip_address(ip)
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _is_ipv4(ip: Optional[_BaseAddress]):
+        return ip is not None and (
+            isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
+        )
+
+    @staticmethod
+    def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
+        if isinstance(ip, IPv4Address):
+            return ip
+        return None
+
+    @staticmethod
+    def _to_ipv6(ip: Optional[_BaseAddress]) -> Optional[IPv6Address]:
+        if isinstance(ip, IPv6Address):
+            return ip
+        if isinstance(ip, IPv4Address):
+            return IPv6Address("::ffff:" + str(ip))
+        return None
 
     def __convert_ip(self):
         """Convert ip address to int"""
         ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if ip is not None and ip in self.data.columns:
-            # self.logger.info("Convert ip address to int")
-            self.data[ip] = self.data[ip].apply(self.__ip_to_int).astype("Int64")
+            self.logger.info("Convert ip address to int")
+            del self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value]
+            del self.meaning_types[ip]
+            original_ip = self.columns_renaming[ip]
+            del self.columns_renaming[ip]
+
+            search_keys = set()
+            for tup in self.search_keys_checked:
+                search_keys.update(tup)
+            search_keys.remove(ip)
+
+            self.data[ip] = self.data[ip].apply(self._safe_ip_parse)
             if self.data[ip].isnull().all():
                 raise ValidationError(bundle.get("invalid_ip").format(ip))
+
+            if self.data[ip].apply(self._is_ipv4).any():
+                ipv4 = ip + "_v4"
+                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self.__ip_to_int).astype("Int64")
+                self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
+                self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
+                search_keys.add(ipv4)
+                self.columns_renaming[ipv4] = original_ip
+
+            ipv6 = ip + "_v6"
+            self.data[ipv6] = self.data[ip].apply(self._to_ipv6).apply(self.__ip_to_int).astype(str)
+            self.data = self.data.drop(columns=ip)
+            self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS
+            self.etalon_def[FileColumnMeaningType.IPV6_ADDRESS.value] = ipv6
+            search_keys.add(ipv6)
+            self.columns_renaming[ipv6] = original_ip
+            self.search_keys = combine_search_keys(search_keys)
 
     def __normalize_iso_code(self):
         iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
@@ -789,7 +841,7 @@ class Dataset:  # (pd.DataFrame):
                 if meaning_type in {
                     FileColumnMeaningType.DATE,
                     FileColumnMeaningType.DATETIME,
-                    FileColumnMeaningType.IP_ADDRESS,
+                    # FileColumnMeaningType.IP_ADDRESS,
                 }:
                     min_max_values = NumericInterval(
                         minValue=self.data[column_name].astype("Int64").min(),
@@ -819,7 +871,7 @@ class Dataset:  # (pd.DataFrame):
             taskType=self.task_type,
         )
 
-    def __get_data_type(self, pandas_data_type, column_name) -> DataType:
+    def __get_data_type(self, pandas_data_type, column_name: str) -> DataType:
         if is_integer_dtype(pandas_data_type):
             return DataType.INT
         elif is_float_dtype(pandas_data_type):
