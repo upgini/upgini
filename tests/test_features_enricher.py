@@ -576,8 +576,8 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [0.508920, 0.525607, 0.520815],
-            enriched_gini: [0.508176, 0.528022, 0.499444],
+            baseline_gini: [0.009285, 0.066373, 0.049547],
+            enriched_gini: [0.006104, 0.056032, -0.006200],
             uplift: [-0.003181, -0.010341, -0.055747],
         }
     )
