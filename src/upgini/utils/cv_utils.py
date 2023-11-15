@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
-from sklearn.model_selection import BaseCrossValidator, KFold, TimeSeriesSplit
+from sklearn.model_selection import BaseCrossValidator, KFold, TimeSeriesSplit, GroupKFold, GroupShuffleSplit
 
 from upgini.metadata import CVType
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
@@ -25,16 +25,10 @@ class CVConfig:
             raise Exception(f"Unexcpected type of cv_type: {type(cv_type)}")
 
         self.shuffle_kfold: Optional[bool] = shuffle_kfold
-        self.test_size: Optional[float] = None
-        if self.cv_type == CVType.k_fold:
-            self.n_folds = 5
-            if self.shuffle_kfold is None:
-                self.shuffle_kfold = date_column is None or is_constant(date_column)
-        elif self.cv_type == CVType.time_series or cv_type == CVType.blocked_time_series:
-            self.n_folds = 10
-            self.test_size = 0.2
-        else:
-            raise Exception(f"Unexpected cv_type: {cv_type}")
+        self.test_size = 0.2
+        self.n_folds = 5
+        if (self.cv_type == CVType.k_fold or self.cv_type == CVType.group_k_fold) and self.shuffle_kfold is None:
+            self.shuffle_kfold = date_column is None or is_constant(date_column)
         if self.shuffle_kfold:
             self.random_state = random_state
         else:
@@ -56,6 +50,10 @@ class CVConfig:
             return TimeSeriesSplit(n_splits=self.n_folds)
         elif self.cv_type == CVType.blocked_time_series:
             return BlockedTimeSeriesSplit(n_splits=self.n_folds, test_size=self.test_size)
+        elif self.cv_type == CVType.group_k_fold and self.shuffle_kfold:
+            return GroupShuffleSplit(n_splits=self.n_folds, test_size=self.test_size, random_state=self.random_state)
+        elif self.cv_type == CVType.group_k_fold:
+            return GroupKFold(n_splits=self.n_folds)
         else:
             return KFold(n_splits=self.n_folds, shuffle=self.shuffle_kfold, random_state=self.random_state)
 
