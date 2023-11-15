@@ -1,3 +1,4 @@
+from functools import reduce
 import gc
 import hashlib
 import itertools
@@ -885,6 +886,7 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_y_sorted,
                     fitting_eval_set_dict,
                     search_keys,
+                    groups,
                 ) = prepared_data
 
                 gc.collect()
@@ -909,7 +911,13 @@ class FeaturesEnricher(TransformerMixin):
                         ).get_cv()
 
                     wrapper = EstimatorWrapper.create(
-                        estimator, self.logger, model_task_type, _cv, fitting_enriched_X, scoring
+                        estimator,
+                        self.logger,
+                        model_task_type,
+                        _cv,
+                        fitting_enriched_X,
+                        scoring,
+                        groups=groups,
                     )
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
@@ -934,6 +942,7 @@ class FeaturesEnricher(TransformerMixin):
                             scoring,
                             cat_features,
                             add_params=custom_loss_add_params,
+                            groups=groups,
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
@@ -957,6 +966,7 @@ class FeaturesEnricher(TransformerMixin):
                             scoring,
                             cat_features,
                             add_params=custom_loss_add_params,
+                            groups=groups,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
@@ -1415,6 +1425,15 @@ class FeaturesEnricher(TransformerMixin):
         X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys, self.cv)
         enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys, self.cv)
 
+        group_columns = self._get_group_columns(search_keys)
+        groups = (
+            None
+            if not group_columns
+            else reduce(
+                lambda left, right: left + "_" + right, [X_sorted[c].astype(str) for c in group_columns]
+            ).factorize()[0]
+        )
+
         existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
 
         fitting_X = X_sorted[client_features].copy()
@@ -1456,6 +1475,7 @@ class FeaturesEnricher(TransformerMixin):
             enriched_y_sorted,
             fitting_eval_set_dict,
             search_keys,
+            groups,
         )
 
     def get_search_id(self) -> Optional[str]:
@@ -1875,20 +1895,8 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, self.fit_search_keys)
 
-        # Check Multivariate time series
         date_column = self._get_date_column(self.fit_search_keys)
-        if (
-            self.cv is None
-            and date_column
-            and model_task_type == ModelTaskType.REGRESSION
-            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
-            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
-        ):
-            msg = bundle.get("multivariate_timeseries_detected")
-            print(msg)
-            self.logger.warning(msg)
-            self.cv = CVType.blocked_time_series
-            self.runtime_parameters.properties["cv_type"] = self.cv.name
+        self.__adjust_cv(df, date_column, model_task_type)
 
         self.fit_generated_features = []
 
@@ -2099,6 +2107,31 @@ class FeaturesEnricher(TransformerMixin):
                     raise
 
         self.__show_report_button()
+
+    def __adjust_cv(self, df: pd.DataFrame, date_column: pd.Series, model_task_type: ModelTaskType):
+        # Check Multivariate time series
+        if (
+            self.cv is None
+            and date_column
+            and model_task_type == ModelTaskType.REGRESSION
+            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
+            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
+        ):
+            msg = bundle.get("multivariate_timeseries_detected")
+            self.__override_cv(CVType.blocked_time_series, msg)
+        elif (
+            self.cv is None
+            and model_task_type != ModelTaskType.REGRESSION
+            and self._get_group_columns(self.fit_search_keys)
+        ):
+            msg = bundle.get("group_k_fold_in_classification")
+            self.__override_cv(CVType.group_k_fold, msg)
+
+    def __override_cv(self, cv: CVType, msg: str):
+        print(msg)
+        self.logger.warning(msg)
+        self.cv = cv
+        self.runtime_parameters.properties["cv_type"] = self.cv.name
 
     def get_columns_by_search_keys(self, keys: List[str]):
         if "HEM" in keys:
@@ -2394,6 +2427,10 @@ class FeaturesEnricher(TransformerMixin):
         for col, t in search_keys.items():
             if t in [SearchKey.DATE, SearchKey.DATETIME]:
                 return col
+
+    @staticmethod
+    def _get_group_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
+        return [col for col, t in search_keys.items() if t not in [SearchKey.DATE, SearchKey.DATETIME]]
 
     @staticmethod
     def __get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:

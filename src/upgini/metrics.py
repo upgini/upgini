@@ -200,6 +200,7 @@ class EstimatorWrapper:
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
         add_params: Optional[Dict[str, Any]] = None,
+        groups: Optional[np.ndarray] = None,
     ):
         self.estimator = estimator
         self.scorer = scorer
@@ -211,6 +212,7 @@ class EstimatorWrapper:
         self.target_type = target_type
         self.add_params = add_params
         self.cv_estimators = None
+        self.groups = groups
 
     def fit(self, X: pd.DataFrame, y: np.ndarray, **kwargs):
         X, y, fit_params = self._prepare_to_fit(X, y)
@@ -276,6 +278,7 @@ class EstimatorWrapper:
                 y=y,
                 scoring=scorer,
                 cv=self.cv,
+                groups=self.groups,
                 fit_params=fit_params,
                 return_estimator=True,
             )
@@ -312,6 +315,7 @@ class EstimatorWrapper:
         scoring: Union[Callable, str, None] = None,
         cat_features: Optional[List[str]] = None,
         add_params: Optional[Dict[str, Any]] = None,
+        groups: Optional[List[str]] = None,
     ) -> "EstimatorWrapper":
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -320,6 +324,7 @@ class EstimatorWrapper:
             "multiplier": multiplier,
             "cv": cv,
             "target_type": target_type,
+            "groups": groups,
         }
         if estimator is None:
             params = dict()
@@ -380,8 +385,11 @@ class CatBoostWrapper(EstimatorWrapper):
         multiplier: int,
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
+        groups: Optional[List[str]] = None,
     ):
-        super(CatBoostWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        super(CatBoostWrapper, self).__init__(
+            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups
+        )
         self.cat_features = None
         self.cat_features_idx = None
 
@@ -430,8 +438,11 @@ class LightGBMWrapper(EstimatorWrapper):
         multiplier: int,
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
+        groups: Optional[List[str]] = None,
     ):
-        super(LightGBMWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        super(LightGBMWrapper, self).__init__(
+            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups
+        )
         self.cat_features = None
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
@@ -465,8 +476,11 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         multiplier: int,
         cv: BaseCrossValidator,
         target_type: ModelTaskType,
+        groups: Optional[List[str]] = None,
     ):
-        super(OtherEstimatorWrapper, self).__init__(estimator, scorer, metric_name, multiplier, cv, target_type)
+        super(OtherEstimatorWrapper, self).__init__(
+            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups
+        )
         self.cat_features = None
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
