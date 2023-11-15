@@ -2123,7 +2123,7 @@ class FeaturesEnricher(TransformerMixin):
             and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
         ):
             msg = bundle.get("multivariate_timeseries_detected")
-            self.__override_cv(CVType.blocked_time_series, msg)
+            self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
         elif (
             (self.cv is None or self.cv == CVType.k_fold)
             and model_task_type != ModelTaskType.REGRESSION
@@ -2135,7 +2135,7 @@ class FeaturesEnricher(TransformerMixin):
     def __override_cv(self, cv: CVType, msg: str, print_warning: bool = True):
         if print_warning:
             print(msg)
-            self.logger.warning(msg)
+        self.logger.warning(msg)
         self.cv = cv
         self.runtime_parameters.properties["cv_type"] = self.cv.name
 
