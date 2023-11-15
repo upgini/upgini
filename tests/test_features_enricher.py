@@ -2251,9 +2251,9 @@ def test_composit_index_search_key(requests_mock: Mocker):
         assert "country_aff64e" in self.columns
         assert "postal_code_13534a"
         assert {"country_aff64e", "postal_code_13534a"} == {sk for sublist in self.search_keys for sk in sublist}
-        #         assert "country_fake_a" in self.columns
-        #         assert "postal_code_fake_a" in self.columns
-        #         assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
+        # assert "country_fake_a" in self.columns
+        # assert "postal_code_fake_a" in self.columns
+        # assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
         raise TestException()
 
     Dataset.search = mock_search

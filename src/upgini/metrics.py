@@ -28,7 +28,7 @@ from sklearn.metrics._regression import (
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
-from upgini.metadata import CVType, ModelTaskType
+from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
 from upgini.utils.target_utils import correct_string_target
 
