@@ -1271,7 +1271,7 @@ class FeaturesEnricher(TransformerMixin):
         group_columns = self._get_group_columns(search_keys)
         groups = (
             None
-            if not group_columns
+            if not group_columns or self.cv != CVType.group_k_fold
             else reduce(
                 lambda left, right: left + "_" + right, [X_sorted[c].astype(str) for c in group_columns]
             ).factorize()[0]
