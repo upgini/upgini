@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import reduce
 import gc
 import hashlib
@@ -1236,176 +1237,18 @@ class FeaturesEnricher(TransformerMixin):
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
 
-        eval_set_sampled_dict = dict()
-
-        if self.__cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
-            self.logger.info("Cached enriched dataset found - use it")
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
-            if exclude_features_sources:
-                enriched_X = drop_existing_columns(enriched_X, exclude_features_sources)
-        elif len(self.feature_importances_) == 0:
-            self.logger.info("No external features selected. So use only input datasets for metrics calculation")
-            X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset)
-            y_sampled = validated_y
-            enriched_X = X_sampled
-            if eval_set is not None:
-                for idx in range(len(eval_set)):
-                    eval_X_sampled, _ = self._extend_x(eval_set[idx][0], is_demo_dataset)
-                    eval_y_sampled = eval_set[idx][1]
-                    enriched_eval_X = eval_X_sampled
-                    eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
-            self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
-        elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
-            self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
-            search_keys = self.fit_search_keys
-
-            rows_to_drop = None
-            task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
-            if task_type == ModelTaskType.REGRESSION:
-                target_outliers_df = self._search_task.get_target_outliers(trace_id)
-                if target_outliers_df is not None and len(target_outliers_df) > 0:
-                    outliers = pd.merge(
-                        self.df_with_original_index,
-                        target_outliers_df,
-                        left_on=SYSTEM_RECORD_ID,
-                        right_on=SYSTEM_RECORD_ID,
-                        how="inner",
-                    )
-                    top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
-                    if remove_outliers_calc_metrics is None or remove_outliers_calc_metrics is True:
-                        rows_to_drop = outliers
-                        not_msg = ""
-                    else:
-                        not_msg = "not "
-                    msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers, not_msg)
-                    print(msg)
-                    self.logger.warning(msg)
-
-            enriched_Xy, enriched_eval_sets = self.__enrich(
-                self.df_with_original_index,
-                self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
-                rows_to_drop=rows_to_drop,
-            )
-
-            enriched_X = drop_existing_columns(enriched_Xy, TARGET)
-            x_columns = [
-                c for c in validated_X.columns.to_list() + self.fit_generated_features if c in enriched_X.columns
-            ]
-            X_sampled = enriched_Xy[x_columns].copy()
-            y_sampled = enriched_Xy[TARGET].copy()
-
-            self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
-            self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
-            self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
-
-            if eval_set is not None:
-                if len(enriched_eval_sets) != len(eval_set):
-                    raise ValidationError(
-                        bundle.get("metrics_eval_set_count_diff").format(len(enriched_eval_sets), len(eval_set))
-                    )
-
-                for idx in range(len(eval_set)):
-                    enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
-                    eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
-                    eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
-                    eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
-
-            self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
-        else:
-            self.logger.info("Dataset is imbalanced or exclude_features_sources or X was passed. Run transform")
-            print(bundle.get("prepare_data_for_metrics"))
-            if eval_set is not None:
-                self.logger.info("Transform with eval_set")
-                # concatenate X and eval_set with eval_set_index
-                df_with_eval_set_index = validated_X.copy()
-                df_with_eval_set_index[TARGET] = validated_y
-                df_with_eval_set_index[EVAL_SET_INDEX] = 0
-                for idx, eval_pair in enumerate(eval_set):
-                    eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
-                    eval_df_with_index = eval_x.copy()
-                    eval_df_with_index[TARGET] = eval_y
-                    eval_df_with_index[EVAL_SET_INDEX] = idx + 1
-                    df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
-
-                # downsample if need to eval_set threshold
-                num_samples = _num_samples(df_with_eval_set_index)
-                if num_samples > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
-                    self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
-                    df_with_eval_set_index = df_with_eval_set_index.sample(
-                        n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state
-                    )
-
-                X_sampled = (
-                    df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0]
-                    .copy()
-                    .drop(columns=[EVAL_SET_INDEX, TARGET])
-                )
-                X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
-                y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
-                eval_set_sampled_dict = dict()
-                for idx in range(len(eval_set)):
-                    eval_x_sampled = (
-                        df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)]
-                        .copy()
-                        .drop(columns=[EVAL_SET_INDEX, TARGET])
-                    )
-                    eval_x_sampled, _ = self._extend_x(eval_x_sampled, is_demo_dataset)
-                    eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
-                        TARGET
-                    ]
-                    eval_set_sampled_dict[idx] = (eval_x_sampled, eval_y_sampled)
-
-                df_with_eval_set_index.drop(columns=TARGET, inplace=True)
-
-                enriched = self.transform(
-                    df_with_eval_set_index,
-                    exclude_features_sources=exclude_features_sources,
-                    silent_mode=True,
-                    trace_id=trace_id,
-                    metrics_calculation=True,
-                    progress_bar=progress_bar,
-                    progress_callback=progress_callback,
-                )
-                if enriched is None:
-                    return None
-
-                enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
-                enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
-
-                for idx in range(len(eval_set)):
-                    enriched_eval_x = enriched[enriched[EVAL_SET_INDEX] == (idx + 1)].copy()
-                    enriched_eval_x.drop(columns=EVAL_SET_INDEX, inplace=True)
-                    eval_x_sampled, eval_y_sampled = eval_set_sampled_dict[idx]
-                    eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
-            else:
-                self.logger.info("Transform without eval_set")
-                df = self.X.copy()
-
-                df[TARGET] = validated_y
-                num_samples = _num_samples(df)
-                if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
-                    self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
-                    df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
-
-                X_sampled = df.copy().drop(columns=TARGET)
-                X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
-                y_sampled = df.copy()[TARGET]
-
-                df.drop(columns=TARGET, inplace=True)
-
-                enriched_X = self.transform(
-                    df,
-                    exclude_features_sources=exclude_features_sources,
-                    silent_mode=True,
-                    trace_id=trace_id,
-                    metrics_calculation=True,
-                    progress_bar=progress_bar,
-                    progress_callback=progress_callback,
-                )
-                if enriched_X is None:
-                    return None
-
-            self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self._sample_data_for_metrics(
+            trace_id,
+            validated_X,
+            validated_y,
+            eval_set,
+            exclude_features_sources,
+            is_input_same_as_fit,
+            is_demo_dataset,
+            remove_outliers_calc_metrics,
+            progress_bar,
+            progress_callback,
+        )
 
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
@@ -1476,6 +1319,253 @@ class FeaturesEnricher(TransformerMixin):
             fitting_eval_set_dict,
             search_keys,
             groups,
+        )
+
+    _SampledDataForMetrics = namedtuple(
+        "_SampledDataForMetrics", "X_sampled y_sampled enriched_X eval_set_sampled_dict search_keys"
+    )
+
+    def _sample_data_for_metrics(
+        self,
+        trace_id: str,
+        validated_X: Union[pd.DataFrame, pd.Series, np.ndarray, None],
+        validated_y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
+        eval_set: Optional[List[tuple]],
+        exclude_features_sources: Optional[List[str]],
+        is_input_same_as_fit: bool,
+        is_demo_dataset: bool,
+        remove_outliers_calc_metrics: Optional[bool],
+        progress_bar: Optional[ProgressBar],
+        progress_callback: Optional[Callable[[SearchProgress], Any]],
+    ) -> _SampledDataForMetrics:
+        if self.__cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
+            self.logger.info("Cached enriched dataset found - use it")
+            return self.__get_sampled_cached_enriched(exclude_features_sources)
+        elif len(self.feature_importances_) == 0:
+            self.logger.info("No external features selected. So use only input datasets for metrics calculation")
+            return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
+        elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
+            self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
+            return self.__sample_balanced(validated_X, validated_y, eval_set, trace_id, remove_outliers_calc_metrics)
+        else:
+            self.logger.info("Dataset is imbalanced or exclude_features_sources or X was passed. Run transform")
+            print(bundle.get("prepare_data_for_metrics"))
+            return self.__sample_imbalanced(
+                validated_X,
+                validated_y,
+                eval_set,
+                is_demo_dataset,
+                exclude_features_sources,
+                trace_id,
+                progress_bar,
+                progress_callback,
+            )
+
+    def __get_sampled_cached_enriched(self, exclude_features_sources: Optional[List[str]]) -> _SampledDataForMetrics:
+        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self.__cached_sampled_datasets
+        if exclude_features_sources:
+            enriched_X = drop_existing_columns(enriched_X, exclude_features_sources)
+
+        return self.__mk_sampled_data_tuple(X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+    def __sample_only_input(
+        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]], is_demo_dataset: bool
+    ) -> _SampledDataForMetrics:
+        eval_set_sampled_dict = dict()
+        X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset)
+        y_sampled = validated_y
+        enriched_X = X_sampled
+        if eval_set is not None:
+            for idx in range(len(eval_set)):
+                eval_X_sampled, _ = self._extend_x(eval_set[idx][0], is_demo_dataset)
+                eval_y_sampled = eval_set[idx][1]
+                enriched_eval_X = eval_X_sampled
+                eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+        self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+        return self.__mk_sampled_data_tuple(X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+    def __sample_balanced(
+        self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series,
+        eval_set: Optional[List[tuple]],
+        trace_id: str,
+        remove_outliers_calc_metrics: Optional[bool],
+    ) -> _SampledDataForMetrics:
+        eval_set_sampled_dict = dict()
+        search_keys = self.fit_search_keys
+
+        rows_to_drop = None
+        task_type = self.model_task_type or define_task(validated_y, self.logger, silent=True)
+        if task_type == ModelTaskType.REGRESSION:
+            target_outliers_df = self._search_task.get_target_outliers(trace_id)
+            if target_outliers_df is not None and len(target_outliers_df) > 0:
+                outliers = pd.merge(
+                    self.df_with_original_index,
+                    target_outliers_df,
+                    left_on=SYSTEM_RECORD_ID,
+                    right_on=SYSTEM_RECORD_ID,
+                    how="inner",
+                )
+                top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
+                if remove_outliers_calc_metrics is None or remove_outliers_calc_metrics is True:
+                    rows_to_drop = outliers
+                    not_msg = ""
+                else:
+                    not_msg = "not "
+                msg = bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers, not_msg)
+                print(msg)
+                self.logger.warning(msg)
+
+        enriched_Xy, enriched_eval_sets = self.__enrich(
+            self.df_with_original_index,
+            self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
+            rows_to_drop=rows_to_drop,
+        )
+
+        enriched_X = drop_existing_columns(enriched_Xy, TARGET)
+        x_columns = [c for c in validated_X.columns.to_list() + self.fit_generated_features if c in enriched_X.columns]
+        X_sampled = enriched_Xy[x_columns].copy()
+        y_sampled = enriched_Xy[TARGET].copy()
+
+        self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
+        self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
+        self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
+
+        if eval_set is not None:
+            if len(enriched_eval_sets) != len(eval_set):
+                raise ValidationError(
+                    bundle.get("metrics_eval_set_count_diff").format(len(enriched_eval_sets), len(eval_set))
+                )
+
+            for idx in range(len(eval_set)):
+                enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
+                eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
+                eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
+                eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+
+        self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+        return self.__mk_sampled_data_tuple(X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+    def __sample_imbalanced(
+        self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series,
+        eval_set: Optional[List[tuple]],
+        is_demo_dataset: bool,
+        exclude_features_sources: Optional[List[str]],
+        trace_id: str,
+        progress_bar: Optional[ProgressBar],
+        progress_callback: Optional[Callable[[SearchProgress], Any]],
+    ) -> _SampledDataForMetrics:
+        if eval_set is not None:
+            self.logger.info("Transform with eval_set")
+            # concatenate X and eval_set with eval_set_index
+            df_with_eval_set_index = validated_X.copy()
+            df_with_eval_set_index[TARGET] = validated_y
+            df_with_eval_set_index[EVAL_SET_INDEX] = 0
+            for idx, eval_pair in enumerate(eval_set):
+                eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+                eval_df_with_index = eval_x.copy()
+                eval_df_with_index[TARGET] = eval_y
+                eval_df_with_index[EVAL_SET_INDEX] = idx + 1
+                df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
+
+            # downsample if need to eval_set threshold
+            num_samples = _num_samples(df_with_eval_set_index)
+            if num_samples > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
+                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
+                df_with_eval_set_index = df_with_eval_set_index.sample(
+                    n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state
+                )
+
+            X_sampled = (
+                df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0]
+                .copy()
+                .drop(columns=[EVAL_SET_INDEX, TARGET])
+            )
+            X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
+            y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
+            eval_set_sampled_dict = dict()
+            for idx in range(len(eval_set)):
+                eval_x_sampled = (
+                    df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)]
+                    .copy()
+                    .drop(columns=[EVAL_SET_INDEX, TARGET])
+                )
+                eval_x_sampled, _ = self._extend_x(eval_x_sampled, is_demo_dataset)
+                eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
+                    TARGET
+                ]
+                eval_set_sampled_dict[idx] = (eval_x_sampled, eval_y_sampled)
+
+            df_with_eval_set_index.drop(columns=TARGET, inplace=True)
+
+            enriched = self.transform(
+                df_with_eval_set_index,
+                exclude_features_sources=exclude_features_sources,
+                silent_mode=True,
+                trace_id=trace_id,
+                metrics_calculation=True,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
+            )
+            if enriched is None:
+                return None
+
+            enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
+            enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
+
+            for idx in range(len(eval_set)):
+                enriched_eval_x = enriched[enriched[EVAL_SET_INDEX] == (idx + 1)].copy()
+                enriched_eval_x.drop(columns=EVAL_SET_INDEX, inplace=True)
+                eval_x_sampled, eval_y_sampled = eval_set_sampled_dict[idx]
+                eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
+        else:
+            self.logger.info("Transform without eval_set")
+            df = self.X.copy()
+
+            df[TARGET] = validated_y
+            num_samples = _num_samples(df)
+            if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
+                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
+                df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
+
+            X_sampled = df.copy().drop(columns=TARGET)
+            X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
+            y_sampled = df.copy()[TARGET]
+
+            df.drop(columns=TARGET, inplace=True)
+
+            enriched_X = self.transform(
+                df,
+                exclude_features_sources=exclude_features_sources,
+                silent_mode=True,
+                trace_id=trace_id,
+                metrics_calculation=True,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
+            )
+            if enriched_X is None:
+                return None
+
+        self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+        return self.__mk_sampled_data_tuple(X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
+
+    def __mk_sampled_data_tuple(
+        self,
+        X_sampled: pd.DataFrame,
+        y_sampled: pd.Series,
+        enriched_X: pd.DataFrame,
+        eval_set_sampled_dict: Dict,
+        search_keys: Dict,
+    ):
+        search_keys = {k: v for k, v in search_keys.items() if k in X_sampled.columns.to_list()}
+        return FeaturesEnricher._SampledDataForMetrics(
+            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys
         )
 
     def get_search_id(self) -> Optional[str]:
