@@ -371,6 +371,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.X = X
                 self.y = y
                 checked_eval_set = []
+                if eval_set is not None and not isinstance(eval_set, tuple):
+                    raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
                 for eval_pair in eval_set or []:
                     if len(eval_pair) != 2:
                         raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
@@ -513,6 +515,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.X = X
                 self.y = y
                 checked_eval_set = []
+                if eval_set is not None and not isinstance(eval_set, tuple):
+                    raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
                 for eval_pair in eval_set or []:
                     if len(eval_pair) != 2:
                         raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
@@ -1190,6 +1194,8 @@ class FeaturesEnricher(TransformerMixin):
             return True, self.X, self.y, self.eval_set
 
         checked_eval_set = []
+        if eval_set is not None and not isinstance(eval_set, tuple):
+            raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
         for eval_pair in eval_set or []:
             if len(eval_pair) != 2:
                 raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
