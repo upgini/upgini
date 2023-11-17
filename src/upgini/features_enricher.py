@@ -294,6 +294,18 @@ class FeaturesEnricher(TransformerMixin):
 
     api_key = property(_get_api_key, _set_api_key)
 
+    @staticmethod
+    def _check_eval_set(eval_set, X):
+        checked_eval_set = []
+        if eval_set is not None and not isinstance(eval_set, list):
+            raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
+        for eval_pair in eval_set or []:
+            if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
+                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
+            if not is_frames_equal(X, eval_pair[0]):
+                checked_eval_set.append(eval_pair)
+        return checked_eval_set
+
     def fit(
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
@@ -370,21 +382,13 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                checked_eval_set = []
-                if eval_set is not None and not isinstance(eval_set, tuple):
-                    raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
-                for eval_pair in eval_set or []:
-                    if len(eval_pair) != 2:
-                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-                    if not is_frames_equal(X, eval_pair[0]):
-                        checked_eval_set.append(eval_pair)
-                self.eval_set = checked_eval_set
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.dump_input(trace_id, X, y, eval_set)
                 self.__inner_fit(
                     trace_id,
                     X,
                     y,
-                    checked_eval_set,
+                    self.eval_set,
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
@@ -514,15 +518,7 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                checked_eval_set = []
-                if eval_set is not None and not isinstance(eval_set, tuple):
-                    raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
-                for eval_pair in eval_set or []:
-                    if len(eval_pair) != 2:
-                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-                    if not is_frames_equal(X, eval_pair[0]):
-                        checked_eval_set.append(eval_pair)
-                self.eval_set = checked_eval_set
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.dump_input(trace_id, X, y, eval_set)
 
                 if _num_samples(drop_duplicates(X)) > Dataset.MAX_ROWS:
@@ -532,7 +528,7 @@ class FeaturesEnricher(TransformerMixin):
                     trace_id,
                     X,
                     y,
-                    checked_eval_set,
+                    self.eval_set,
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
@@ -1193,14 +1189,7 @@ class FeaturesEnricher(TransformerMixin):
         if X is None:
             return True, self.X, self.y, self.eval_set
 
-        checked_eval_set = []
-        if eval_set is not None and not isinstance(eval_set, tuple):
-            raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
-        for eval_pair in eval_set or []:
-            if len(eval_pair) != 2:
-                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-            if not is_frames_equal(X, eval_pair[0]):
-                checked_eval_set.append(eval_pair)
+        checked_eval_set = self._check_eval_set(eval_set, X)
 
         if (
             X is self.X
