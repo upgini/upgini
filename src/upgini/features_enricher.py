@@ -2071,9 +2071,6 @@ class FeaturesEnricher(TransformerMixin):
         if autofe_description is not None:
             display_html_dataframe(autofe_description, autofe_description, "*Description of AutoFE feature names")
 
-        if not self.warning_counter.has_warnings():
-            self.__display_support_link(bundle.get("all_ok_community_invite"))
-
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
@@ -2113,6 +2110,9 @@ class FeaturesEnricher(TransformerMixin):
                     raise
 
         self.__show_report_button()
+
+        if not self.warning_counter.has_warnings():
+            self.__display_support_link(bundle.get("all_ok_community_invite"))
 
     def __adjust_cv(self, df: pd.DataFrame, date_column: pd.Series, model_task_type: ModelTaskType):
         # Check Multivariate time series
@@ -2993,6 +2993,7 @@ class FeaturesEnricher(TransformerMixin):
                 autofe_descriptions_df=self.get_autofe_features_description(),
                 search_id=self._search_task.search_task_id,
                 email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+                search_keys=[str(sk) for sk in self.search_keys.values()],
             )
         except Exception:
             pass
@@ -3116,19 +3117,15 @@ class FeaturesEnricher(TransformerMixin):
     def __display_support_link(self, link_text: Optional[str] = None):
         support_link = bundle.get("support_link")
         link_text = link_text or bundle.get("support_text")
-        # badge = bundle.get("slack_community_bage")
-        # alt = bundle.get("slack_community_alt")
         try:
             from IPython.display import HTML, display
 
             _ = get_ipython()  # type: ignore
             self.logger.warning(link_text)
-            print(link_text)
             display(
                 HTML(
-                    f"""<a href='{support_link}' target='_blank' rel='noopener noreferrer'>
-                    Support</a>"""
-                    # <img alt='{alt}' src='{badge}'></a>
+                    f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    here</a>"""
                 )
             )
         except (ImportError, NameError):
