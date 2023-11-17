@@ -1153,7 +1153,9 @@ class FeaturesEnricher(TransformerMixin):
     def _has_paid_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
 
-    def _extend_x(self, x: pd.DataFrame, is_demo_dataset: bool, convert_date: bool = True) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
+    def _extend_x(
+        self, x: pd.DataFrame, is_demo_dataset: bool, convert_date: bool = True
+    ) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
 
@@ -1341,7 +1343,9 @@ class FeaturesEnricher(TransformerMixin):
             return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
         elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
-            return self.__sample_balanced(validated_X, validated_y, eval_set, trace_id, remove_outliers_calc_metrics, is_demo_dataset)
+            return self.__sample_balanced(
+                validated_X, validated_y, eval_set, trace_id, remove_outliers_calc_metrics, is_demo_dataset
+            )
         else:
             self.logger.info("Dataset is imbalanced or exclude_features_sources or X was passed. Run transform")
             print(bundle.get("prepare_data_for_metrics"))
@@ -1438,7 +1442,9 @@ class FeaturesEnricher(TransformerMixin):
 
             for idx in range(len(eval_set)):
                 enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
-                eval_X_sampled, _ = self._extend_x(enriched_eval_sets[idx + 1][x_columns].copy(), is_demo_dataset, convert_date=False)
+                eval_X_sampled, _ = self._extend_x(
+                    enriched_eval_sets[idx + 1][x_columns].copy(), is_demo_dataset, convert_date=False
+                )
                 eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
