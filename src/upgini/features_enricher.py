@@ -295,6 +295,18 @@ class FeaturesEnricher(TransformerMixin):
 
     api_key = property(_get_api_key, _set_api_key)
 
+    @staticmethod
+    def _check_eval_set(eval_set, X):
+        checked_eval_set = []
+        if eval_set is not None and not isinstance(eval_set, list):
+            raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
+        for eval_pair in eval_set or []:
+            if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
+                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
+            if not is_frames_equal(X, eval_pair[0]):
+                checked_eval_set.append(eval_pair)
+        return checked_eval_set
+
     def fit(
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
@@ -371,19 +383,13 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                checked_eval_set = []
-                for eval_pair in eval_set or []:
-                    if len(eval_pair) != 2:
-                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-                    if not is_frames_equal(X, eval_pair[0]):
-                        checked_eval_set.append(eval_pair)
-                self.eval_set = checked_eval_set
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.dump_input(trace_id, X, y, eval_set)
                 self.__inner_fit(
                     trace_id,
                     X,
                     y,
-                    checked_eval_set,
+                    self.eval_set,
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
@@ -513,13 +519,7 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                checked_eval_set = []
-                for eval_pair in eval_set or []:
-                    if len(eval_pair) != 2:
-                        raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-                    if not is_frames_equal(X, eval_pair[0]):
-                        checked_eval_set.append(eval_pair)
-                self.eval_set = checked_eval_set
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.dump_input(trace_id, X, y, eval_set)
 
                 if _num_samples(drop_duplicates(X)) > Dataset.MAX_ROWS:
@@ -529,7 +529,7 @@ class FeaturesEnricher(TransformerMixin):
                     trace_id,
                     X,
                     y,
-                    checked_eval_set,
+                    self.eval_set,
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
@@ -1190,12 +1190,7 @@ class FeaturesEnricher(TransformerMixin):
         if X is None:
             return True, self.X, self.y, self.eval_set
 
-        checked_eval_set = []
-        for eval_pair in eval_set or []:
-            if len(eval_pair) != 2:
-                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-            if not is_frames_equal(X, eval_pair[0]):
-                checked_eval_set.append(eval_pair)
+        checked_eval_set = self._check_eval_set(eval_set, X)
 
         if (
             X is self.X
@@ -2157,9 +2152,6 @@ class FeaturesEnricher(TransformerMixin):
         if autofe_description is not None:
             display_html_dataframe(autofe_description, autofe_description, "*Description of AutoFE feature names")
 
-        if not self.warning_counter.has_warnings():
-            self.__display_support_link(bundle.get("all_ok_community_invite"))
-
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
                 msg = bundle.get("metrics_with_paid_features")
@@ -2199,6 +2191,9 @@ class FeaturesEnricher(TransformerMixin):
                     raise
 
         self.__show_report_button()
+
+        if not self.warning_counter.has_warnings():
+            self.__display_support_link(bundle.get("all_ok_community_invite"))
 
     def __adjust_cv(self, df: pd.DataFrame, date_column: pd.Series, model_task_type: ModelTaskType):
         # Check Multivariate time series
@@ -3079,6 +3074,7 @@ class FeaturesEnricher(TransformerMixin):
                 autofe_descriptions_df=self.get_autofe_features_description(),
                 search_id=self._search_task.search_task_id,
                 email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+                search_keys=[str(sk) for sk in self.search_keys.values()],
             )
         except Exception:
             pass
@@ -3202,19 +3198,15 @@ class FeaturesEnricher(TransformerMixin):
     def __display_support_link(self, link_text: Optional[str] = None):
         support_link = bundle.get("support_link")
         link_text = link_text or bundle.get("support_text")
-        # badge = bundle.get("slack_community_bage")
-        # alt = bundle.get("slack_community_alt")
         try:
             from IPython.display import HTML, display
 
             _ = get_ipython()  # type: ignore
             self.logger.warning(link_text)
-            print(link_text)
             display(
                 HTML(
-                    f"""<a href='{support_link}' target='_blank' rel='noopener noreferrer'>
-                    Support</a>"""
-                    # <img alt='{alt}' src='{badge}'></a>
+                    f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    here</a>"""
                 )
             )
         except (ImportError, NameError):

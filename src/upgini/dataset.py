@@ -349,7 +349,11 @@ class Dataset:  # (pd.DataFrame):
                 self.columns_renaming[ipv4] = original_ip
 
             ipv6 = ip + "_v6"
-            self.data[ipv6] = self.data[ip].apply(self._to_ipv6).apply(self.__ip_to_int).astype(str)
+            self.data[ipv6] = (
+                self.data[ip].apply(self._to_ipv6)
+                    .apply(self.__ip_to_int)
+                    .astype("string").str.replace(".0", "", regex=False)
+            )
             self.data = self.data.drop(columns=ip)
             self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS
             self.etalon_def[FileColumnMeaningType.IPV6_ADDRESS.value] = ipv6

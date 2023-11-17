@@ -58,14 +58,17 @@ def test_string_ip_to_int_conversion():
             {"ip": None},
         ]
     )
-    dataset = Dataset("test", df=df)  # type: ignore
-    dataset.meaning_types = {
+    dataset = Dataset("test", df=df, search_keys=[("ip", )], meaning_types={
         "ip": FileColumnMeaningType.IP_ADDRESS,
-    }
+    })
+    dataset._Dataset__rename_columns()
     dataset._Dataset__convert_ip()
-    assert dataset.data["ip"].dtype == "Int64"
-    assert dataset.data["ip"].iloc[0] == 3232235777
-    assert dataset.data["ip"].isnull().sum() == 2
+    assert dataset.data["ip_bb9af5_v4"].dtype == "Int64"
+    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
+    assert dataset.data["ip_bb9af5_v4"].isnull().sum() == 2
+    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
+    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
+    assert dataset.data["ip_bb9af5_v6"].isnull().sum() == 2
 
 
 def test_python_ip_to_int_conversion():
@@ -74,37 +77,46 @@ def test_python_ip_to_int_conversion():
             {"ip": ipaddress.ip_address("192.168.1.1")},
         ]
     )
-    dataset = Dataset("test", df=df)  # type: ignore
+    dataset = Dataset("test", df=df, search_keys=[("ip", )])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
+    dataset._Dataset__rename_columns()
     dataset._Dataset__convert_ip()
-    assert dataset.data["ip"].dtype == "Int64"
-    assert dataset.data["ip"].iloc[0] == 3232235777
+    assert dataset.data["ip_bb9af5_v4"].dtype == "Int64"
+    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
+    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
+    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
 
 
 def test_ip_v6_conversion():
     df = pd.DataFrame({"ip": ["::cf:befe:525b"]})
-    dataset = Dataset("test", df=df)
+    dataset = Dataset("test", df=df, search_keys=[("ip", )])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
-    with pytest.raises(ValidationError, match=bundle.get("invalid_ip").format("ip")):
-        dataset._Dataset__convert_ip()
+
+    dataset._Dataset__rename_columns()
+    dataset._Dataset__convert_ip()
+    assert "ip_bb9af5_v4" not in dataset.data.columns
+    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
+    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
 
 
 def test_int_ip_to_int_conversion():
     df = pd.DataFrame(
-        [
-            {"ip": 3232235777},
-        ]
+        {"ip": [3232235777, 892262568539]},
     )
-    dataset = Dataset("test", df=df)  # type: ignore
+    dataset = Dataset("test", df=df, search_keys=[("ip", )])  # type: ignore
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
+    dataset._Dataset__rename_columns()
     dataset._Dataset__convert_ip()
-    assert dataset.data["ip"].iloc[0] == 3232235777
+    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
+    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
+    assert dataset.data["ip_bb9af5_v4"].isnull().sum() == 1
+    assert dataset.data["ip_bb9af5_v6"].iloc[1] == "892262568539"
 
 
 def test_string_date_to_timestamp_convertion():

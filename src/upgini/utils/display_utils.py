@@ -5,7 +5,7 @@ import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 import pandas as pd
 from xhtml2pdf import pisa
@@ -133,6 +133,7 @@ def make_html_report(
     autofe_descriptions_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str] = None,
+    search_keys: Optional[List[str]] = None,
 ):
     # relevant_features_df = relevant_features_df.copy()
     # relevant_features_df["Feature name"] = relevant_features_df["Feature name"].apply(
@@ -236,6 +237,11 @@ def make_html_report(
             <p>This report was generated automatically by Upgini.</p>
             <p>The report shows a listing of relevant features for your
             ML task and accuracy metrics after enrichment.</p>
+            {
+                f"The following primary keys was used for data search: {search_keys}"
+                if search_keys is not None
+                else ""
+            }
             {"<h3>All relevant features. Accuracy after enrichment</h3>" + make_table(metrics_df)
              if metrics_df is not None
              else ""
@@ -244,7 +250,7 @@ def make_html_report(
             {make_table(relevant_datasources_df)}
             <h3>All relevant features. Listing</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
-            {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df)
+            {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df, wrap_long_string=25)
              if autofe_descriptions_df is not None
              else ""
             }
@@ -261,12 +267,13 @@ def prepare_and_show_report(
     autofe_descriptions_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str],
+    search_keys: Optional[List[str]] = None,
 ):
     if not ipython_available():
         return
 
     report = make_html_report(
-        relevant_features_df, relevant_datasources_df, metrics_df, autofe_descriptions_df, search_id, email
+        relevant_features_df, relevant_datasources_df, metrics_df, autofe_descriptions_df, search_id, email, search_keys
     )
 
     if len(relevant_features_df) > 0:
