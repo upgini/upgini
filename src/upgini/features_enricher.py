@@ -1,5 +1,3 @@
-from collections import namedtuple
-from functools import reduce
 import gc
 import hashlib
 import itertools
@@ -12,6 +10,8 @@ import sys
 import tempfile
 import time
 import uuid
+from collections import namedtuple
+from functools import reduce
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
@@ -1229,16 +1229,21 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
     ):
-        is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
+        is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
+        validated_eval_set = (
+            [self._validate_eval_set_pair(validated_X, eval_set_pair) for eval_set_pair in eval_set]
+            if eval_set
+            else None
+        )
 
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self._sample_data_for_metrics(
             trace_id,
             validated_X,
             validated_y,
-            eval_set,
+            validated_eval_set,
             exclude_features_sources,
             is_input_same_as_fit,
             is_demo_dataset,
@@ -1418,6 +1423,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
                 self.logger.warning(msg)
 
+        # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
+        # can differs from it
         enriched_Xy, enriched_eval_sets = self.__enrich(
             self.df_with_original_index,
             self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
@@ -1425,9 +1432,7 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         enriched_X = drop_existing_columns(enriched_Xy, TARGET)
-        x_columns = [c for c in validated_X.columns.to_list() + self.fit_generated_features if c in enriched_X.columns]
-        # date from df_with_original_index should already have been converted
-        X_sampled, search_keys = self._extend_x(enriched_Xy[x_columns].copy(), is_demo_dataset, convert_date=False)
+        X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset, convert_date=True)
         y_sampled = enriched_Xy[TARGET].copy()
 
         self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
@@ -1443,9 +1448,9 @@ class FeaturesEnricher(TransformerMixin):
             for idx in range(len(eval_set)):
                 enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
                 eval_X_sampled, _ = self._extend_x(
-                    enriched_eval_sets[idx + 1][x_columns].copy(), is_demo_dataset, convert_date=False
+                    eval_set[idx][0], is_demo_dataset, convert_date=True
                 )
-                eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
+                eval_y_sampled = eval_set[idx][1].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
@@ -1463,6 +1468,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
     ) -> _SampledDataForMetrics:
+        eval_set_sampled_dict = dict()
         if eval_set is not None:
             self.logger.info("Transform with eval_set")
             # concatenate X and eval_set with eval_set_index
@@ -2542,8 +2548,10 @@ class FeaturesEnricher(TransformerMixin):
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey]
     ) -> pd.DataFrame:
         # save original order or rows
-        df = df.reset_index(drop=True).reset_index()
-        df = df.rename(columns={DEFAULT_INDEX: ORIGINAL_INDEX})
+        original_index_name = df.index.name
+        index_name = df.index.name or DEFAULT_INDEX
+        df = df.reset_index().reset_index(drop=True)
+        df = df.rename(columns={index_name: ORIGINAL_INDEX})
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
@@ -2574,7 +2582,8 @@ class FeaturesEnricher(TransformerMixin):
 
         # return original order
         df = df.set_index(ORIGINAL_INDEX)
-        df = df.sort_index()
+        df.index.name = original_index_name
+        # df = df.sort_index()
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
@@ -2635,6 +2644,9 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(bundle.get("returned_features_same_as_passed").format(dup_features))
 
+        # index overrites from result_features
+        original_index_name = df_with_original_index.index.name
+        df_with_original_index = df_with_original_index.reset_index()
         result_features = pd.merge(
             df_with_original_index,
             result_features,
@@ -2642,6 +2654,8 @@ class FeaturesEnricher(TransformerMixin):
             right_on=SYSTEM_RECORD_ID,
             how="left" if is_transform else "inner",
         )
+        result_features = result_features.set_index(original_index_name or DEFAULT_INDEX)
+        result_features.index.name = original_index_name
 
         if rows_to_drop is not None:
             print(f"Before dropping target outliers size: {len(result_features)}")
