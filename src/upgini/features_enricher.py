@@ -2135,10 +2135,11 @@ class FeaturesEnricher(TransformerMixin):
                 f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
             )
             zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
-            msg = bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
-            self.logger.warning(msg)
-            self.__display_support_link(msg)
-            self.warning_counter.increment()
+            if zero_hit_columns:
+                msg = bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
+                self.logger.warning(msg)
+                self.__display_support_link(msg)
+                self.warning_counter.increment()
 
         if (
             self._search_task.unused_features_for_generation is not None
@@ -2720,7 +2721,7 @@ class FeaturesEnricher(TransformerMixin):
         def list_or_single(lst: List[str], single: str):
             return lst or ([single] if single else [])
 
-        features_meta.sort(key=lambda m: -m.shap_value)
+        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
@@ -3218,10 +3219,10 @@ class FeaturesEnricher(TransformerMixin):
             from IPython.display import HTML, display
 
             _ = get_ipython()  # type: ignore
-            self.logger.warning(link_text)
+            self.logger.warning(f"Showing support link: {link_text}")
             display(
                 HTML(
-                    f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    f"""<br/>{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
                     here</a>"""
                 )
             )
