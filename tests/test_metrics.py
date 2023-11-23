@@ -298,27 +298,26 @@ def test_default_metric_binary(requests_mock: Mocker):
     assert metrics_df is not None
     print(metrics_df)
 
-    # FIXME: different between python versions
-    # assert metrics_df.loc[0, segment_header] == train_segment
-    # assert metrics_df.loc[0, rows_header] == 500
-    # assert metrics_df.loc[0, target_mean_header] == 0.51
-    # assert metrics_df.loc[0, baseline_gini] == approx(0.104954)
-    # assert metrics_df.loc[0, enriched_gini] == approx(0.097089)
-    # assert metrics_df.loc[0, uplift] == approx(-0.007864)
+    assert metrics_df.loc[0, segment_header] == train_segment
+    assert metrics_df.loc[0, rows_header] == 500
+    assert metrics_df.loc[0, target_mean_header] == 0.51
+    assert metrics_df.loc[0, baseline_gini] == approx(0.114333)
+    assert metrics_df.loc[0, enriched_gini] == approx(0.032250)
+    assert metrics_df.loc[0, uplift] == approx(-0.082083)
 
-    # assert metrics_df.loc[1, segment_header] == eval_1_segment
-    # assert metrics_df.loc[1, rows_header] == 250
-    # assert metrics_df.loc[1, target_mean_header] == 0.452
-    # assert metrics_df.loc[1, baseline_gini] == approx(-0.053705)
-    # assert metrics_df.loc[1, enriched_gini] == approx(0.080266)
-    # assert metrics_df.loc[1, uplift] == approx(0.133971)
+    assert metrics_df.loc[1, segment_header] == eval_1_segment
+    assert metrics_df.loc[1, rows_header] == 250
+    assert metrics_df.loc[1, target_mean_header] == 0.452
+    assert metrics_df.loc[1, baseline_gini] == approx(-0.065035)
+    assert metrics_df.loc[1, enriched_gini] == approx(0.114838)
+    assert metrics_df.loc[1, uplift] == approx(0.179872)
 
-    # assert metrics_df.loc[2, segment_header] == eval_2_segment
-    # assert metrics_df.loc[2, rows_header] == 250
-    # assert metrics_df.loc[2, target_mean_header] == 0.536
-    # assert metrics_df.loc[2, baseline_gini] == approx(-0.002072)
-    # assert metrics_df.loc[2, enriched_gini] == approx(-0.002432)
-    # assert metrics_df.loc[2, uplift] == approx(-0.000360)
+    assert metrics_df.loc[2, segment_header] == eval_2_segment
+    assert metrics_df.loc[2, rows_header] == 250
+    assert metrics_df.loc[2, target_mean_header] == 0.536
+    assert metrics_df.loc[2, baseline_gini] == approx(-0.024357)
+    assert metrics_df.loc[2, enriched_gini] == approx(-0.014539)
+    assert metrics_df.loc[2, uplift] == approx(0.009817)
 
 
 def test_default_metric_binary_custom_loss(requests_mock: Mocker):
@@ -422,27 +421,26 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker):
     assert metrics_df is not None
     print(metrics_df)
 
-    # FIXME: different between python versions
-    # assert metrics_df.loc[0, segment_header] == train_segment
-    # assert metrics_df.loc[0, rows_header] == 500
-    # assert metrics_df.loc[0, target_mean_header] == 0.51
-    # assert metrics_df.loc[0, baseline_gini] == approx(0.104954)
-    # assert metrics_df.loc[0, enriched_gini] == approx(0.097089)
-    # assert metrics_df.loc[0, uplift] == approx(-0.007864)
+    assert metrics_df.loc[0, segment_header] == train_segment
+    assert metrics_df.loc[0, rows_header] == 500
+    assert metrics_df.loc[0, target_mean_header] == 0.51
+    assert metrics_df.loc[0, baseline_gini] == approx(0.114333)
+    assert metrics_df.loc[0, enriched_gini] == approx(0.032250)
+    assert metrics_df.loc[0, uplift] == approx(-0.082083)
 
-    # assert metrics_df.loc[1, segment_header] == eval_1_segment
-    # assert metrics_df.loc[1, rows_header] == 250
-    # assert metrics_df.loc[1, target_mean_header] == 0.452
-    # assert metrics_df.loc[1, baseline_gini] == approx(-0.053705)
-    # assert metrics_df.loc[1, enriched_gini] == approx(0.080266)
-    # assert metrics_df.loc[1, uplift] == approx(0.133971)
+    assert metrics_df.loc[1, segment_header] == eval_1_segment
+    assert metrics_df.loc[1, rows_header] == 250
+    assert metrics_df.loc[1, target_mean_header] == 0.452
+    assert metrics_df.loc[1, baseline_gini] == approx(-0.065035)
+    assert metrics_df.loc[1, enriched_gini] == approx(0.114838)
+    assert metrics_df.loc[1, uplift] == approx(0.179872)
 
-    # assert metrics_df.loc[2, segment_header] == eval_2_segment
-    # assert metrics_df.loc[2, rows_header] == 250
-    # assert metrics_df.loc[2, target_mean_header] == 0.536
-    # assert metrics_df.loc[2, baseline_gini] == approx(-0.002072)
-    # assert metrics_df.loc[2, enriched_gini] == approx(-0.002432)
-    # assert metrics_df.loc[2, uplift] == approx(-0.000360)
+    assert metrics_df.loc[2, segment_header] == eval_2_segment
+    assert metrics_df.loc[2, rows_header] == 250
+    assert metrics_df.loc[2, target_mean_header] == 0.536
+    assert metrics_df.loc[2, baseline_gini] == approx(-0.024357)
+    assert metrics_df.loc[2, enriched_gini] == approx(-0.014539)
+    assert metrics_df.loc[2, uplift] == approx(0.009817)
 
 
 def test_default_metric_binary_shuffled(requests_mock: Mocker):
@@ -548,27 +546,26 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
     assert metrics_df is not None
     print(metrics_df)
 
-    # FIXME: different between python versions
-    # assert metrics_df.loc[0, segment_header] == train_segment
-    # assert metrics_df.loc[0, rows_header] == 500
-    # assert metrics_df.loc[0, target_mean_header] == 0.51
-    # assert metrics_df.loc[0, baseline_gini] == approx(0.104954)
-    # assert metrics_df.loc[0, enriched_gini] == approx(0.097089)
-    # assert metrics_df.loc[0, uplift] == approx(-0.007864)
+    assert metrics_df.loc[0, segment_header] == train_segment
+    assert metrics_df.loc[0, rows_header] == 500
+    assert metrics_df.loc[0, target_mean_header] == 0.51
+    assert metrics_df.loc[0, baseline_gini] == approx(0.114333)
+    assert metrics_df.loc[0, enriched_gini] == approx(0.032250)
+    assert metrics_df.loc[0, uplift] == approx(-0.082083)
 
-    # assert metrics_df.loc[1, segment_header] == eval_1_segment
-    # assert metrics_df.loc[1, rows_header] == 250
-    # assert metrics_df.loc[1, target_mean_header] == 0.452
-    # assert metrics_df.loc[1, baseline_gini] == approx(-0.053705)
-    # assert metrics_df.loc[1, enriched_gini] == approx(0.080266)
-    # assert metrics_df.loc[1, uplift] == approx(0.133971)
+    assert metrics_df.loc[1, segment_header] == eval_1_segment
+    assert metrics_df.loc[1, rows_header] == 250
+    assert metrics_df.loc[1, target_mean_header] == 0.452
+    assert metrics_df.loc[1, baseline_gini] == approx(-0.065035)
+    assert metrics_df.loc[1, enriched_gini] == approx(0.114838)
+    assert metrics_df.loc[1, uplift] == approx(0.179872)
 
-    # assert metrics_df.loc[2, segment_header] == eval_2_segment
-    # assert metrics_df.loc[2, rows_header] == 250
-    # assert metrics_df.loc[2, target_mean_header] == 0.536
-    # assert metrics_df.loc[2, baseline_gini] == approx(-0.002072)
-    # assert metrics_df.loc[2, enriched_gini] == approx(-0.002432)
-    # assert metrics_df.loc[2, uplift] == approx(-0.000360)
+    assert metrics_df.loc[2, segment_header] == eval_2_segment
+    assert metrics_df.loc[2, rows_header] == 250
+    assert metrics_df.loc[2, target_mean_header] == 0.536
+    assert metrics_df.loc[2, baseline_gini] == approx(-0.024357)
+    assert metrics_df.loc[2, enriched_gini] == approx(-0.014539)
+    assert metrics_df.loc[2, uplift] == approx(0.009817)
 
 
 def test_blocked_timeseries_rmsle(requests_mock: Mocker):
