@@ -24,6 +24,12 @@ class ListingType(Enum):
     TEST = "DEV"
 
 
+class OnlineUploadingType(Enum):
+    BINDINGS = "BINDINGS"
+    IP = "IP"
+    OTHER = "OTHER"
+
+
 class DataSourcePublisher:
 
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
@@ -245,3 +251,22 @@ class DataSourcePublisher:
                 print(msg)
             except Exception:
                 self.logger.exception(f"Failed to deactivate data tables {data_table_ids} for clients {client_emails}")
+
+    def upload_online(self, uploading_type: OnlineUploadingType, bq_table_id: str, search_keys: List[SearchKey]):
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            try:
+                request = {"uploadingType": uploading_type.value, "bqTableId": bq_table_id, "searchKeys": search_keys}
+                self._rest_client.upload_online(request, trace_id)
+            except Exception:
+                self.logger.exception(f"Failed to upload table {bq_table_id}")
+                raise
+
+    def upload_online_all(self):
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            try:
+                self._rest_client.upload_online_all(trace_id)
+            except Exception:
+                self.logger.exception("Failed to upload all tables to online")
+                raise
