@@ -2167,6 +2167,9 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 self.__display_support_link(msg)
         else:
+            if (scoring is not None or estimator is not None) and calculate_metrics is None:
+                calculate_metrics = True
+
             if calculate_metrics is None:
                 if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
                     [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
