@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from pydantic import BaseModel
 
@@ -68,6 +68,43 @@ class SearchKey(Enum):
     @staticmethod
     def personal_keys() -> List["SearchKey"]:
         return [SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP, SearchKey.PHONE]
+    
+    @staticmethod
+    def from_meaning_type(meaning_type: FileColumnMeaningType) -> "SearchKey":
+        if meaning_type == FileColumnMeaningType.EMAIL:
+            return SearchKey.EMAIL
+        if meaning_type == FileColumnMeaningType.HEM:
+            return SearchKey.HEM
+        if meaning_type == FileColumnMeaningType.IP_ADDRESS:
+            return SearchKey.IP
+        if meaning_type == FileColumnMeaningType.MSISDN:
+            return SearchKey.PHONE
+        if meaning_type == FileColumnMeaningType.DATE:
+            return SearchKey.DATE
+        if meaning_type == FileColumnMeaningType.DATETIME:
+            return SearchKey.DATETIME
+        if meaning_type == FileColumnMeaningType.CUSTOM_KEY:
+            return SearchKey.CUSTOM_KEY
+        if meaning_type == FileColumnMeaningType.COUNTRY:
+            return SearchKey.COUNTRY
+        if meaning_type == FileColumnMeaningType.POSTAL_CODE:
+            return SearchKey.POSTAL_CODE
+        if meaning_type == FileColumnMeaningType.IPV6_ADDRESS:
+            return SearchKey.IPV6_ADDRESS
+        if meaning_type == FileColumnMeaningType.IPV6_RANGE_FROM:
+            return SearchKey.IPV6_RANGE_FROM
+        if meaning_type == FileColumnMeaningType.IPV6_RANGE_TO:
+            return SearchKey.IPV6_RANGE_TO
+        if meaning_type == FileColumnMeaningType.EMAIL_ONE_DOMAIN:
+            return SearchKey.EMAIL_ONE_DOMAIN
+        if meaning_type == FileColumnMeaningType.IP_RANGE_FROM:
+            return SearchKey.IP_RANGE_FROM
+        if meaning_type == FileColumnMeaningType.IP_RANGE_TO:
+            return SearchKey.IP_RANGE_TO
+        if meaning_type == FileColumnMeaningType.MSISDN_RANGE_FROM:
+            return SearchKey.MSISDN_RANGE_FROM
+        if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
+            return SearchKey.MSISDN_RANGE_TO
 
 
 class DataType(Enum):
@@ -158,6 +195,20 @@ class FileMetadata(BaseModel):
     rowsCount: Optional[int]
     checksumMD5: Optional[str]
     digest: Optional[str]
+
+    def column_by_name(self, name: str) -> Optional[FileColumnMetadata]:
+        for c in self.columns:
+            if c.name == name:
+                return c
+
+    def search_types(self) -> Set[SearchKey]:
+        search_keys = set()
+        for keys_group in self.searchKeys:
+            for key in keys_group:
+                column = self.column_by_name(key)
+                if column:
+                    search_keys.add(SearchKey.from_meaning_type(column.meaningType))
+        return search_keys
 
 
 class FeaturesMetadataV2(BaseModel):

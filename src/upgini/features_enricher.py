@@ -1592,6 +1592,56 @@ class FeaturesEnricher(TransformerMixin):
             trace_id = trace_id or uuid.uuid4()
             return search_task.get_progress(trace_id)
 
+    def get_transactional_transform_api(self):
+        if self.api_key is None:
+            raise ValidationError(bundle.get("transactional_transform_unregistered"))
+        if self._search_task is None:
+            raise ValidationError(bundle.get("transactional_transform_unfited"))
+
+        def key_example(key: SearchKey):
+            if key == SearchKey.COUNTRY:
+                return "US"
+            if key == SearchKey.DATE:
+                return "2020-01-01"
+            if key == SearchKey.DATETIME:
+                return "2020-01-01T00:12:00"
+            if key == SearchKey.EMAIL:
+                return "test@email.com"
+            if key == SearchKey.HEM:
+                return "test_hem"
+            if key == SearchKey.IP:
+                return "127.0.0.1"
+            if key == SearchKey.PHONE:
+                return "1029384756"
+            if key == SearchKey.POSTAL_CODE:
+                return "12345678"
+            return "test_value"
+
+        file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
+        search_keys = file_metadata.search_types()
+        if SearchKey.IPV6_ADDRESS in search_keys:
+            search_keys.remove(SearchKey.IPV6_ADDRESS)
+
+        keys = "{" + ", ".join([f'"{key.name}": "{key_example(key)}"' for key in search_keys]) + "}"
+        features_for_transform = self._search_task.get_features_for_transform()
+        if features_for_transform:
+            original_features_for_transform = [
+                c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
+            ]
+            features_section = (
+                ', "features": {' +
+                ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform]) +
+                "}"
+            )
+        else:
+            features_section = ""
+
+        api_example = f"""curl 'https://inference-upgini.azurewebsites.net/api/http_inference_trigger' \\
+    -H 'Authorization: {self.api_key}' \\
+    -H 'Content-Type: application/json' \\
+    -d '{{"search_id": "{self._search_task.search_task_id}", "search_keys": {keys}{features_section}}}'"""
+        return api_example
+
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
         return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
 

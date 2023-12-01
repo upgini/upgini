@@ -1,7 +1,7 @@
-from datetime import datetime
 import logging
 import time
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
@@ -22,6 +22,12 @@ class ListingType(Enum):
     PUBLIC = "PROD"
     PRIVATE = "PRIVATE_SHARE"
     TEST = "DEV"
+
+
+class OnlineUploadingType(Enum):
+    BINDINGS = "BINDINGS"
+    IP = "IP"
+    OTHER = "OTHER"
 
 
 class DataSourcePublisher:
@@ -108,8 +114,8 @@ class DataSourcePublisher:
                     if "Cost of features generation exceeded the limit" in status_response["errorMessage"]:
                         print(status_response["errorMessage"])
 
-                        from IPython.display import display
                         import ipywidgets as widgets
+                        from IPython.display import display
 
                         button = widgets.Button(description="Start registration with forced generation")
 
@@ -245,3 +251,51 @@ class DataSourcePublisher:
                 print(msg)
             except Exception:
                 self.logger.exception(f"Failed to deactivate data tables {data_table_ids} for clients {client_emails}")
+
+    def upload_online(
+            self,
+            bq_table_id: Optional[str] = None,
+            search_keys: Optional[List[SearchKey]] = None
+    ):
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            if bq_table_id is None and search_keys is None:
+                raise ValidationError("One of arguments: bq_table_id or search_keys should be presented")
+            if bq_table_id is not None and search_keys is not None:
+                raise ValidationError("Only one argument could be presented: bq_table_id or search_keys")
+            try:
+                search_keys = [k.value.value for k in search_keys] if search_keys else None
+                request = {"bqTableId": bq_table_id, "searchKeys": search_keys}
+                task_id = self._rest_client.upload_online(request, trace_id)
+                with Spinner():
+                    status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
+                    while status_response["status"] not in self.FINAL_STATUSES:
+                        time.sleep(5)
+                        status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
+
+                if status_response["status"] != "COMPLETED":
+                    raise Exception("Failed to register ADS: " + status_response["errorMessage"])
+
+                print("Uploading successfully finished")
+            except Exception:
+                self.logger.exception(f"Failed to upload table {bq_table_id}")
+                raise
+
+    def upload_online_all(self):
+        search_keys = [
+            [SearchKey.COUNTRY],
+            [SearchKey.COUNTRY, SearchKey.DATE],
+            [SearchKey.COUNTRY, SearchKey.DATE, SearchKey.POSTAL_CODE],
+            [SearchKey.COUNTRY, SearchKey.POSTAL_CODE],
+            [SearchKey.DATE],
+            [SearchKey.HEM],
+            [SearchKey.IP],
+            [SearchKey.IPV6_RANGE_FROM, SearchKey.IPV6_RANGE_TO],
+            [SearchKey.IP_RANGE_FROM, SearchKey.IP_RANGE_TO],
+            [SearchKey.PHONE],
+            [SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO],
+        ]
+        for keys in search_keys:
+            self.upload_online(search_keys=keys)
+
+        print("All ADS-es successfully uploaded")

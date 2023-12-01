@@ -288,6 +288,8 @@ class _RestClient:
     GET_ADS_DESCRIPTION_URI_FMT = "private/api/v2/ads/{0}"
     GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads/descriptions"
     GET_ACTIVE_ADS_DEFINITIONS_URI = "private/api/v2/ads/definitions"
+    UPLOAD_ONLINE_URI = "private/api/v2/ads/upload-online"
+    UPLOAD_ONLINE_ALL_URI = "private/api/v2/ads/upload-online-all"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -743,6 +745,11 @@ class _RestClient:
             return jwt.decode(self._get_access_token(), options={"verify_signature": False})["sub"]
         except Exception:
             return None
+
+    def upload_online(self, request: dict, trace_id: str):
+        api_path = self.UPLOAD_ONLINE_URI
+        response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+        return response["adsManagementTaskId"]
 
     # ---
 
