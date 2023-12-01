@@ -748,11 +748,8 @@ class _RestClient:
 
     def upload_online(self, request: dict, trace_id: str):
         api_path = self.UPLOAD_ONLINE_URI
-        return self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
-
-    def upload_online_all(self, trace_id: str):
-        api_path = self.UPLOAD_ONLINE_ALL_URI
-        return self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, result_format=None))
+        response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+        return response["adsManagementTaskId"]
 
     # ---
 
