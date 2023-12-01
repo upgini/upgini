@@ -290,7 +290,6 @@ class _RestClient:
     GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads/descriptions"
     GET_ACTIVE_ADS_DEFINITIONS_URI = "private/api/v2/ads/definitions"
     UPLOAD_ONLINE_URI = "private/api/v2/ads/upload-online"
-    UPLOAD_ONLINE_ALL_URI = "private/api/v2/ads/upload-online-all"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
