@@ -108,6 +108,8 @@ env/
 env8/
 env9/
 env10/
+.env10/
+.env310/
 env11/
 venv/
 ENV/
