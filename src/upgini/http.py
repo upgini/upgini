@@ -2,6 +2,7 @@ import base64
 import copy
 import datetime
 import hashlib
+import json
 import logging
 import os
 import random
@@ -749,7 +750,7 @@ class _RestClient:
     def upload_online(self, request: dict, trace_id: str):
         api_path = self.UPLOAD_ONLINE_URI
         response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
-        return response["adsManagementTaskId"]
+        return json.loads(response)["adsManagementTaskId"]
 
     # ---
 
