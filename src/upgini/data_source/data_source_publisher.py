@@ -255,7 +255,8 @@ class DataSourcePublisher:
     def upload_online(
             self,
             bq_table_id: Optional[str] = None,
-            search_keys: Optional[List[SearchKey]] = None
+            search_keys: Optional[List[SearchKey]] = None,
+            upload_if_not_exists: bool = False
     ):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
@@ -265,8 +266,13 @@ class DataSourcePublisher:
                 raise ValidationError("Only one argument could be presented: bq_table_id or search_keys")
             try:
                 search_keys = [k.value.value for k in search_keys] if search_keys else None
-                request = {"bqTableId": bq_table_id, "searchKeys": search_keys}
+                request = {
+                    "bqTableId": bq_table_id,
+                    "searchKeys": search_keys,
+                    "uploadIfNotExists": upload_if_not_exists,
+                }
                 task_id = self._rest_client.upload_online(request, trace_id)
+                print(f"Polling uploading task: {task_id}")
                 with Spinner():
                     status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
                     while status_response["status"] not in self.FINAL_STATUSES:
