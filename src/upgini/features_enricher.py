@@ -1629,9 +1629,9 @@ class FeaturesEnricher(TransformerMixin):
                 c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
             ]
             features_section = (
-                ', "features": {' +
-                ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform]) +
-                "}"
+                ', "features": {'
+                + ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform])
+                + "}"
             )
         else:
             features_section = ""
@@ -2269,7 +2269,7 @@ class FeaturesEnricher(TransformerMixin):
             msg = bundle.get("multivariate_timeseries_detected")
             self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
         elif (
-            (self.cv is None or self.cv == CVType.k_fold)
+            self.cv is None
             and model_task_type != ModelTaskType.REGRESSION
             and self._get_group_columns(self.fit_search_keys)
         ):
