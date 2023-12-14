@@ -904,6 +904,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
                     _cv = cv or self.cv
+                    if groups is None and _cv == CVType.group_k_fold:
+                        _cv = CVType.k_fold
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
