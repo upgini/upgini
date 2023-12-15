@@ -905,6 +905,7 @@ class FeaturesEnricher(TransformerMixin):
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
                     _cv = cv or self.cv
                     if groups is None and _cv == CVType.group_k_fold:
+                        self.logger.info("Replacing group_k_fold with k_fold as no groups were found")
                         _cv = CVType.k_fold
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
