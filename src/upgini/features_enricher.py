@@ -904,6 +904,9 @@ class FeaturesEnricher(TransformerMixin):
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
                     _cv = cv or self.cv
+                    if groups is None and _cv == CVType.group_k_fold:
+                        self.logger.info("Replacing group_k_fold with k_fold as no groups were found")
+                        _cv = CVType.k_fold
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
@@ -1629,9 +1632,9 @@ class FeaturesEnricher(TransformerMixin):
                 c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
             ]
             features_section = (
-                ', "features": {' +
-                ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform]) +
-                "}"
+                ', "features": {'
+                + ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform])
+                + "}"
             )
         else:
             features_section = ""
@@ -2269,7 +2272,7 @@ class FeaturesEnricher(TransformerMixin):
             msg = bundle.get("multivariate_timeseries_detected")
             self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
         elif (
-            (self.cv is None or self.cv == CVType.k_fold)
+            self.cv is None
             and model_task_type != ModelTaskType.REGRESSION
             and self._get_group_columns(self.fit_search_keys)
         ):

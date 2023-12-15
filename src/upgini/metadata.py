@@ -68,7 +68,7 @@ class SearchKey(Enum):
     @staticmethod
     def personal_keys() -> List["SearchKey"]:
         return [SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP, SearchKey.PHONE]
-    
+
     @staticmethod
     def from_meaning_type(meaning_type: FileColumnMeaningType) -> "SearchKey":
         if meaning_type == FileColumnMeaningType.EMAIL:
