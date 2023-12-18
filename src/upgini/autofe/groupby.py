@@ -1,6 +1,5 @@
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
-from typing import Dict, List, Optional, Tuple, Union
-import numpy as np
+from typing import Optional
 import pandas as pd
 
 

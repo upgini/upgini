@@ -1,6 +1,5 @@
 from typing import List
 import pandas as pd
-from typing import List
 from upgini.autofe.operand import PandasOperand
 
 

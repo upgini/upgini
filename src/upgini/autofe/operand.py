@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Tuple
-from enum import Enum
 import abc
 import pandas as pd
 import numpy as np

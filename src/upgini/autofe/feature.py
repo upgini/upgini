@@ -10,7 +10,7 @@ from upgini.autofe.all_operands import (
 
 
 class FeatureGroup(object):
-    def __init__(self, op, main_column=None, children=[]):
+    def __init__(self, op, main_column, children):
         self.op = op
         self.main_column_node = main_column
         self.children = children
@@ -52,14 +52,15 @@ class FeatureGroup(object):
             candidates, lambda f: (f.op, f.children[0] if f.op.is_unary or f.op.is_vector else f.children[1])
         ):
             op, main_child = op_child
+            feature_list = list(features)
             if op.is_vectorizable:
                 if op.is_unary:
-                    group = FeatureGroup(op, children=list(features))
+                    group = FeatureGroup(op, main_column=None, children=feature_list)
                 else:
-                    group = FeatureGroup(op, main_column=main_child, children=list(features))
+                    group = FeatureGroup(op, main_column=main_child, children=feature_list)
                 grouped_features.append(group)
             else:
-                grouped_features.extend(list(features))
+                grouped_features.extend(feature_list)
         return grouped_features
 
     def delete_data(self):
