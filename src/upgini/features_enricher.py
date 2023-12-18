@@ -2921,6 +2921,7 @@ class FeaturesEnricher(TransformerMixin):
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
+                description["shap"] = feature_meta.shap_value
                 description["Sources"] = feature_meta.data_source\
                     .replace("AutoFE: features from ", "")\
                     .replace("AutoFE: feature from ", "")
@@ -2940,6 +2941,8 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions_df = pd.DataFrame(descriptions)
             descriptions_df.fillna("", inplace=True)
+            descriptions_df.sort_values(by="shap", ascending=False, inplace=True)
+            descriptions_df.drop(columns="shap", inplace=True)
             return descriptions_df
         except Exception:
             self.logger.exception("Failed to generate AutoFE features description")
