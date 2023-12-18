@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 
@@ -10,16 +10,18 @@ class BaseSearchKeyDetector:
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
         raise NotImplementedError()
 
-    def _get_search_key_by_name(self, column_names: List[str]) -> Optional[str]:
+    def _get_search_keys_by_name(self, column_names: List[str]) -> List[str]:
+        keys = []
         for column_name in column_names:
             if self._is_search_key_by_name(column_name):
-                return column_name
+                keys.append(column_name)
+        return keys
 
-    def get_search_key_column(self, df: pd.DataFrame) -> Optional[str]:
-        maybe_column = self._get_search_key_by_name(df.columns.to_list())
-        if maybe_column is not None:
-            return maybe_column
-
-        for column_name in df.columns:
+    def get_search_key_columns(self, df: pd.DataFrame, existing_search_keys: List[str]) -> List[str]:
+        other_columns = [col for col in df.columns if col not in existing_search_keys]
+        columns_by_names = self._get_search_keys_by_name(other_columns)
+        columns_by_values = []
+        for column_name in other_columns:
             if self._is_search_key_by_values(df[column_name]):
-                return column_name
+                columns_by_values.append(column_name)
+        return list(set(columns_by_names + columns_by_values))

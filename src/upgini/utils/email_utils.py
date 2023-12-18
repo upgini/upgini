@@ -36,13 +36,13 @@ class EmailSearchKeyConverter:
 
     def __init__(
         self,
-        email_column: str,
-        hem_column: Optional[str],
+        email_columns: List[str],
+        hem_columns: List[str],
         search_keys: Dict[str, SearchKey],
         logger: Optional[logging.Logger] = None,
     ):
-        self.email_column = email_column
-        self.hem_column = hem_column
+        self.email_columns = email_columns
+        self.hem_columns = hem_columns
         self.search_keys = search_keys
         if logger is not None:
             self.logger = logger

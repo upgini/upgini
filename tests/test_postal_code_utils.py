@@ -1,6 +1,6 @@
-from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 import pandas as pd
 
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 
 detector = PostalCodeSearchKeyDetector()
 
@@ -8,24 +8,24 @@ detector = PostalCodeSearchKeyDetector()
 def test_is_postal_code_column_by_column_name():
     df = pd.DataFrame({"pstlcd": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) is None
+    assert detector.get_search_key_columns(df) is None
 
     df = pd.DataFrame({"zip": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) == "zip"
+    assert detector.get_search_key_columns(df) == "zip"
 
     df = pd.DataFrame({"zipcode": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) == "zipcode"
+    assert detector.get_search_key_columns(df) == "zipcode"
 
     df = pd.DataFrame({"zip_code": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) == "zip_code"
+    assert detector.get_search_key_columns(df) == "zip_code"
 
     df = pd.DataFrame({"postal_code": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) == "postal_code"
+    assert detector.get_search_key_columns(df) == "postal_code"
 
     df = pd.DataFrame({"postalcode": ["123", "321", "345"]})
 
-    assert detector.get_search_key_column(df) == "postalcode"
+    assert detector.get_search_key_columns(df) == "postalcode"

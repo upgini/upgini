@@ -479,7 +479,7 @@ class _RestClient:
                     api_path, files, trace_id=trace_id, additional_headers=additional_headers
                 )
 
-        response = self._with_unauth_retry(lambda: open_and_send())
+        response = self._with_unauth_retry(open_and_send)
         return SearchTaskResponse(response)
 
     def check_uploaded_file_v2(self, trace_id: str, file_upload_id: str, metadata: FileMetadata) -> bool:

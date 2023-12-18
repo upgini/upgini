@@ -4,13 +4,14 @@ from typing import Dict, List, Optional, Set
 from pydantic import BaseModel
 
 SYSTEM_RECORD_ID = "system_record_id"
+ENTITY_SYSTEM_RECORD_ID = "entity_system_record_id"
 EVAL_SET_INDEX = "eval_set_index"
 TARGET = "target"
 COUNTRY = "country_iso_code"
 RENAMED_INDEX = "index_col"
 DEFAULT_INDEX = "index"
 ORIGINAL_INDEX = "original_index"
-SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
+SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
 
 
 class FileColumnMeaningType(Enum):
@@ -36,6 +37,7 @@ class FileColumnMeaningType(Enum):
     POSTAL_CODE = "POSTAL_CODE"
     SYSTEM_RECORD_ID = "SYSTEM_RECORD_ID"
     EVAL_SET_INDEX = "EVAL_SET_INDEX"
+    ENTITY_SYSTEM_RECORD_ID = "ENTITY_SYSTEM_RECORD_ID"
 
 
 class SearchKey(Enum):
@@ -68,7 +70,7 @@ class SearchKey(Enum):
     @staticmethod
     def personal_keys() -> List["SearchKey"]:
         return [SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP, SearchKey.PHONE]
-    
+
     @staticmethod
     def from_meaning_type(meaning_type: FileColumnMeaningType) -> "SearchKey":
         if meaning_type == FileColumnMeaningType.EMAIL:

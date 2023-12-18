@@ -5,12 +5,11 @@ import logging
 import numbers
 import os
 import pickle
-import re
 import sys
 import tempfile
 import time
 import uuid
-from collections import namedtuple
+from collections import Counter, namedtuple
 from functools import reduce
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -1164,8 +1163,8 @@ class FeaturesEnricher(TransformerMixin):
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
-        email_column = self.__get_email_column(search_keys)
-        hem_column = self.__get_hem_column(search_keys)
+        email_column = self.__get_email_columns(search_keys)
+        hem_column = self.__get_hem_columns(search_keys)
         if email_column:
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
             extended_X = converter.convert(extended_X)
@@ -1713,8 +1712,8 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             else:
                 self.logger.info("Input dataset hasn't date column")
-            email_column = self.__get_email_column(search_keys)
-            hem_column = self.__get_hem_column(search_keys)
+            email_column = self.__get_email_columns(search_keys)
+            hem_column = self.__get_hem_columns(search_keys)
             email_converted_to_hem = False
             if email_column:
                 converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
@@ -1915,6 +1914,14 @@ class FeaturesEnricher(TransformerMixin):
 
         key_types = search_keys.values()
 
+        # Multiple search keys allowed only for PHONE, IP, POSTAL_CODE, EMAIL, HEM
+        multi_keys = [key for key, count in Counter(key_types).items() if count > 1]
+        for multi_key in multi_keys:
+            if multi_key not in [SearchKey.PHONE, SearchKey.IP, SearchKey.POSTAL_CODE, SearchKey.EMAIL, SearchKey.HEM]:
+                msg = bundle.get("unsupported_multi_key").format(multi_key)
+                self.logger.warning(msg)
+                raise ValidationError(msg)
+
         if SearchKey.DATE in key_types and SearchKey.DATETIME in key_types:
             msg = bundle.get("date_and_datetime_simultanious")
             self.logger.warning(msg)
@@ -2052,14 +2059,6 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
-        email_column = self.__get_email_column(self.fit_search_keys)
-        hem_column = self.__get_hem_column(self.fit_search_keys)
-        email_converted_to_hem = False
-        if email_column:
-            converter = EmailSearchKeyConverter(email_column, hem_column, self.fit_search_keys, self.logger)
-            df = converter.convert(df)
-            self.fit_generated_features.extend(converter.generated_features)
-            email_converted_to_hem = converter.email_converted_to_hem
         if (
             self.detect_missing_search_keys
             and list(self.fit_search_keys.values()) == [SearchKey.DATE]
@@ -2068,9 +2067,21 @@ class FeaturesEnricher(TransformerMixin):
             converter = IpToCountrySearchKeyConverter(self.fit_search_keys, self.logger)
             df = converter.convert(df)
 
+        # Explode multiple search keys
+
+
+        email_columns = self.__get_email_columns(self.fit_search_keys)
+        hem_columns = self.__get_hem_columns(self.fit_search_keys)
+        email_converted_to_hem = False
+        if email_columns:
+            converter = EmailSearchKeyConverter(email_columns, hem_columns, self.fit_search_keys, self.logger)
+            df = converter.convert(df)
+            self.fit_generated_features.extend(converter.generated_features)
+            email_converted_to_hem = converter.email_converted_to_hem
+
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
         if email_converted_to_hem:
-            non_feature_columns.append(email_column)
+            non_feature_columns.append(email_columns)
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
@@ -2081,7 +2092,7 @@ class FeaturesEnricher(TransformerMixin):
         df = df.drop(columns=features_to_drop)
 
         if email_converted_to_hem:
-            self.fit_dropped_features.add(email_column)
+            self.fit_dropped_features.add(email_columns)
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
@@ -2114,7 +2125,7 @@ class FeaturesEnricher(TransformerMixin):
         dataset.meaning_types = meaning_types
         dataset.search_keys = combined_search_keys
         if email_converted_to_hem:
-            dataset.ignore_columns = [email_column]
+            dataset.ignore_columns = [email_columns]
 
         self.passed_features = [
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
@@ -2583,16 +2594,12 @@ class FeaturesEnricher(TransformerMixin):
         return [col for col, t in search_keys.items() if t not in [SearchKey.DATE, SearchKey.DATETIME]]
 
     @staticmethod
-    def __get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
-        for col, t in search_keys.items():
-            if t == SearchKey.EMAIL:
-                return col
+    def __get_email_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
+        return [col for col, t in search_keys.items() if t == SearchKey.EMAIL]
 
     @staticmethod
-    def __get_hem_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
-        for col, t in search_keys.items():
-            if t == SearchKey.HEM:
-                return col
+    def __get_hem_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
+        return [col for col, t in search_keys.items() if t == SearchKey.HEM]
 
     def __add_fit_system_record_id(
         self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey]
@@ -2921,11 +2928,12 @@ class FeaturesEnricher(TransformerMixin):
                     description[f"Feature {feature_idx}"] = bc.hashed_name
                     feature_idx += 1
 
-                match = re.match(f"f_autofe_(.+)_{m.display_index}", feature_meta.name)
-                if match is None:
-                    self.logger.warning(f"Failed to infer autofe function from name {feature_meta.name}")
-                else:
-                    description["Function"] = match.group(1)
+                description["Formula"] = m.formula
+                # match = re.match(f"f_autofe_(.+)_{m.display_index}", feature_meta.name)
+                # if match is None:
+                #     self.logger.warning(f"Failed to infer autofe function from name {feature_meta.name}")
+                # else:
+                #     description["Function"] = match.group(1)
 
                 descriptions.append(description)
 
@@ -3070,13 +3078,13 @@ class FeaturesEnricher(TransformerMixin):
                 self.warning_counter.increment()
 
         if len(valid_search_keys) == 1:
-            for k, v in valid_search_keys.items():
-                # Show warning for country only if country is the only key
-                if x[k].nunique() == 1 and (v != SearchKey.COUNTRY or len(valid_search_keys) == 1):
-                    msg = bundle.get("single_constant_search_key").format(v, x[k].values[0])
-                    print(msg)
-                    self.logger.warning(msg)
-                    self.warning_counter.increment()
+            key, value = list(valid_search_keys.items())[0]
+            # Show warning for country only if country is the only key
+            if x[key].nunique() == 1:
+                msg = bundle.get("single_constant_search_key").format(value, x[key].values[0])
+                print(msg)
+                self.logger.warning(msg)
+                self.warning_counter.increment()
 
         self.logger.info(f"Prepared search keys: {valid_search_keys}")
 
@@ -3186,61 +3194,68 @@ class FeaturesEnricher(TransformerMixin):
         def check_need_detect(search_key: SearchKey):
             return not is_transform or search_key in self.fit_search_keys.values()
 
-        if SearchKey.POSTAL_CODE not in search_keys.values() and check_need_detect(SearchKey.POSTAL_CODE):
-            maybe_key = PostalCodeSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None:
-                search_keys[maybe_key] = SearchKey.POSTAL_CODE
-                self.autodetected_search_keys[maybe_key] = SearchKey.POSTAL_CODE
-                self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_key}")
+        # if SearchKey.POSTAL_CODE not in search_keys.values() and check_need_detect(SearchKey.POSTAL_CODE):
+        if check_need_detect(SearchKey.POSTAL_CODE):
+            maybe_keys = PostalCodeSearchKeyDetector().get_search_key_columns(sample, search_keys)
+            if maybe_keys:
+                new_keys = {key: SearchKey.POSTAL_CODE for key in maybe_keys}
+                search_keys += new_keys
+                self.autodetected_search_keys += new_keys
+                self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_keys}")
                 if not silent_mode:
-                    print(bundle.get("postal_code_detected").format(maybe_key))
+                    print(bundle.get("postal_code_detected").format(maybe_keys))
 
         if (
             SearchKey.COUNTRY not in search_keys.values()
             and self.country_code is None
             and check_need_detect(SearchKey.COUNTRY)
         ):
-            maybe_key = CountrySearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None:
-                search_keys[maybe_key] = SearchKey.COUNTRY
-                self.autodetected_search_keys[maybe_key] = SearchKey.COUNTRY
+            maybe_key = CountrySearchKeyDetector().get_search_key_columns(sample, search_keys)
+            if maybe_key:
+                search_keys[maybe_key[0]] = SearchKey.COUNTRY
+                self.autodetected_search_keys[maybe_key[0]] = SearchKey.COUNTRY
                 self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
                 if not silent_mode:
                     print(bundle.get("country_detected").format(maybe_key))
 
         if (
-            SearchKey.EMAIL not in search_keys.values()
-            and SearchKey.HEM not in search_keys.values()
+            # SearchKey.EMAIL not in search_keys.values()
+            SearchKey.HEM not in search_keys.values()
             and check_need_detect(SearchKey.HEM)
         ):
-            maybe_key = EmailSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None and maybe_key not in search_keys.keys():
+            maybe_keys = EmailSearchKeyDetector().get_search_key_columns(sample, search_keys)
+            if maybe_keys:
                 if self.__is_registered or is_demo_dataset:
-                    search_keys[maybe_key] = SearchKey.EMAIL
-                    self.autodetected_search_keys[maybe_key] = SearchKey.EMAIL
-                    self.logger.info(f"Autodetected search key EMAIL in column {maybe_key}")
+                    new_keys = {key: SearchKey.EMAIL for key in maybe_keys}
+                    search_keys += new_keys
+                    self.autodetected_search_keys += new_keys
+                    self.logger.info(f"Autodetected search key EMAIL in column {maybe_keys}")
                     if not silent_mode:
-                        print(bundle.get("email_detected").format(maybe_key))
+                        print(bundle.get("email_detected").format(maybe_keys))
                 else:
                     self.logger.warning(
-                        f"Autodetected search key EMAIL in column {maybe_key}. But not used because not registered user"
+                        f"Autodetected search key EMAIL in column {maybe_keys}. "
+                        "But not used because not registered user"
                     )
                     if not silent_mode:
-                        print(bundle.get("email_detected_not_registered").format(maybe_key))
+                        print(bundle.get("email_detected_not_registered").format(maybe_keys))
                     self.warning_counter.increment()
 
-        if SearchKey.PHONE not in search_keys.values() and check_need_detect(SearchKey.PHONE):
-            maybe_key = PhoneSearchKeyDetector().get_search_key_column(sample)
-            if maybe_key is not None and maybe_key not in search_keys.keys():
+        # if SearchKey.PHONE not in search_keys.values() and check_need_detect(SearchKey.PHONE):
+        if check_need_detect(SearchKey.PHONE):
+            maybe_keys = PhoneSearchKeyDetector().get_search_key_columns(sample, search_keys)
+            if maybe_keys:
                 if self.__is_registered or is_demo_dataset:
-                    search_keys[maybe_key] = SearchKey.PHONE
-                    self.autodetected_search_keys[maybe_key] = SearchKey.PHONE
-                    self.logger.info(f"Autodetected search key PHONE in column {maybe_key}")
+                    new_keys = {key: SearchKey.PHONE for key in maybe_keys}
+                    search_keys += new_keys
+                    self.autodetected_search_keys += new_keys
+                    self.logger.info(f"Autodetected search key PHONE in column {maybe_keys}")
                     if not silent_mode:
-                        print(bundle.get("phone_detected").format(maybe_key))
+                        print(bundle.get("phone_detected").format(maybe_keys))
                 else:
                     self.logger.warning(
-                        f"Autodetected search key PHONE in column {maybe_key}. But not used because not registered user"
+                        f"Autodetected search key PHONE in column {maybe_keys}. "
+                        "But not used because not registered user"
                     )
                     if not silent_mode:
                         print(bundle.get("phone_detected_not_registered"))
