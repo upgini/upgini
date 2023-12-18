@@ -247,11 +247,12 @@ class BaseColumnMetadata(BaseModel):
     original_name: str
     hashed_name: str
     ads_definition_id: Optional[str]
+    is_augmented: bool
 
 
 class GeneratedFeatureMetadata(BaseModel):
     formula: str  # on hashed names
-    display_index: int
+    display_index: str
     base_columns: List[BaseColumnMetadata]
 
 
