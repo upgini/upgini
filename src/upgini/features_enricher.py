@@ -5,7 +5,6 @@ import logging
 import numbers
 import os
 import pickle
-import re
 import sys
 import tempfile
 import time
@@ -22,6 +21,7 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
+from upgini.autofe.feature import Feature
 
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
@@ -251,6 +251,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
 
         self.runtime_parameters = runtime_parameters or RuntimeParameters()
+        self.runtime_parameters.properties["feature_generation_params.hash_index"] = True
         self.date_format = date_format
         self.random_state = random_state
         self.detect_missing_search_keys = detect_missing_search_keys
@@ -2910,13 +2911,19 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions = []
             for m in autofe_meta:
+                autofe_feature = Feature.from_formula(m.formula)
+                if autofe_feature.op.is_vector:
+                    continue
+
                 description = dict()
 
                 feature_meta = get_feature_by_display_index(m.display_index)
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
-                description["Sources"] = feature_meta.data_source.replace("AutoFE: features from ", "")
+                description["Sources"] = feature_meta.data_source\
+                    .replace("AutoFE: features from ", "")\
+                    .replace("AutoFE: feature from ", "")
                 description["Feature name"] = feature_meta.name
 
                 feature_idx = 1
@@ -2924,11 +2931,7 @@ class FeaturesEnricher(TransformerMixin):
                     description[f"Feature {feature_idx}"] = bc.hashed_name
                     feature_idx += 1
 
-                match = re.match(f"f_autofe_(.+)_{m.display_index}", feature_meta.name)
-                if match is None:
-                    self.logger.warning(f"Failed to infer autofe function from name {feature_meta.name}")
-                else:
-                    description["Function"] = match.group(1)
+                description["Function"] = autofe_feature.op.name
 
                 descriptions.append(description)
 
