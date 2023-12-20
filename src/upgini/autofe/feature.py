@@ -48,8 +48,8 @@ class Column:
     def to_formula(self, **kwargs) -> str:
         return str(self.get_columns(**kwargs)[0])
 
-    def to_pretty_formula(self, **kwargs) -> str:
-        return self.to_formula(kwargs)
+    def to_pretty_formula(self) -> str:
+        return self.to_formula()
 
 
 class Feature:
@@ -135,7 +135,7 @@ class Feature:
             return self.children[0].infer_type(data)
 
     def calculate(self, data: pd.DataFrame, is_root=False) -> Union[pd.Series, pd.DataFrame]:
-        if isinstance(self.op, PandasOperand) and self.op.is_vector:
+        if isinstance(self.op, PandasOperand):
             if self.op.is_vector:
                 ds = [child.calculate(data) for child in self.children]
                 new_data = self.op.calculate(data=ds)
@@ -188,15 +188,15 @@ class Feature:
             result.append(")")
             return "".join(result)
 
-    def to_pretty_formula(self, **kwargs) -> str:
+    def to_pretty_formula(self) -> str:
         if self.op.name in ["+", "-", "*", "/"]:
-            left = self.children[0].to_pretty_formula(**kwargs)
-            right = self.children[1].to_pretty_formula(**kwargs)
+            left = self.children[0].to_pretty_formula()
+            right = self.children[1].to_pretty_formula()
             return f"{left} {self.op.name} {right}"
         else:
             result = [self.op.name, "("]
             for i in range(len(self.children)):
-                string_i = self.children[i].to_pretty_formula(**kwargs)
+                string_i = self.children[i].to_pretty_formula()
                 result.append(string_i)
                 result.append(", ")
             result.pop()
