@@ -322,6 +322,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        search_id_callback: Optional[Callable[[str], Any]] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -381,6 +382,8 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit")
 
+            self.__validate_search_keys(self.search_keys, self.search_id)
+
             try:
                 self.X = X
                 self.y = y
@@ -401,6 +404,7 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     progress_callback=progress_callback,
+                    search_id_callback=search_id_callback,
                 )
                 self.logger.info("Fit finished successfully")
                 search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
@@ -508,6 +512,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             self.logger.info("Start fit_transform")
+
+            self.__validate_search_keys(self.search_keys, self.search_id)
 
             search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
             if progress_callback is not None:
@@ -653,6 +659,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             self.logger.info("Start transform")
+
+            self.__validate_search_keys(self.search_keys, self.search_id)
             try:
                 if len(self.feature_names_) == 0:
                     self.logger.warning(bundle.get("no_important_features_for_transform"))
@@ -812,6 +820,8 @@ class FeaturesEnricher(TransformerMixin):
                 msg = f"WARNING: Unsupported named arguments for calculate_metrics: {kwargs}"
                 self.logger.warning(msg)
                 print(msg)
+
+            self.__validate_search_keys(self.search_keys, self.search_id)
 
             try:
                 self.__log_debug_information(
@@ -1912,7 +1922,7 @@ class FeaturesEnricher(TransformerMixin):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
-                raise ValidationError(bundle.get("search_key_differ_from_fit"))
+                return
             else:
                 self.logger.warning("search_keys not provided")
                 raise ValidationError(bundle.get("empty_search_keys"))
@@ -1971,6 +1981,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -2133,6 +2144,9 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters=self._get_copy_of_runtime_parameters(),
             exclude_features_sources=exclude_features_sources,
         )
+
+        if search_id_callback is not None:
+            search_id_callback(self._search_task.search_task_id)
 
         print(bundle.get("polling_search_task").format(self._search_task.search_task_id))
         if not self.__is_registered:
@@ -2944,6 +2958,7 @@ class FeaturesEnricher(TransformerMixin):
             descriptions_df.sort_values(by="shap", ascending=False, inplace=True)
             descriptions_df.drop(columns="shap", inplace=True)
             return descriptions_df
+
         except Exception:
             self.logger.exception("Failed to generate AutoFE features description")
             return None
