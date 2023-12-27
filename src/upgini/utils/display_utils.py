@@ -224,7 +224,7 @@ def make_html_report(
         <body>
             <div id="header_content">UPGINI</div>
             <div id="footer_content">
-                © Upgini, Dubai, UAE</br>
+                © Upgini</br>
                 sales@upgini.com
             </div>
 

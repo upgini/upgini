@@ -22,7 +22,7 @@ class CVConfig:
         elif isinstance(cv_type, CVType):
             self.cv_type = cv_type
         else:
-            raise Exception(f"Unexcpected type of cv_type: {type(cv_type)}")
+            raise Exception(f"Unexpected type of cv_type: {type(cv_type)}")
 
         self.shuffle_kfold: Optional[bool] = shuffle_kfold
         self.test_size = 0.2

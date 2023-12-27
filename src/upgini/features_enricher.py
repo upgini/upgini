@@ -21,6 +21,7 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
+from upgini.autofe.feature import Feature
 
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
@@ -250,6 +251,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
 
         self.runtime_parameters = runtime_parameters or RuntimeParameters()
+        self.runtime_parameters.properties["feature_generation_params.hash_index"] = True
         self.date_format = date_format
         self.random_state = random_state
         self.detect_missing_search_keys = detect_missing_search_keys
@@ -320,6 +322,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        search_id_callback: Optional[Callable[[str], Any]] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -379,6 +382,8 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit")
 
+            self.__validate_search_keys(self.search_keys, self.search_id)
+
             try:
                 self.X = X
                 self.y = y
@@ -399,6 +404,7 @@ class FeaturesEnricher(TransformerMixin):
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     progress_callback=progress_callback,
+                    search_id_callback=search_id_callback,
                 )
                 self.logger.info("Fit finished successfully")
                 search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
@@ -506,6 +512,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             self.logger.info("Start fit_transform")
+
+            self.__validate_search_keys(self.search_keys, self.search_id)
 
             search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
             if progress_callback is not None:
@@ -651,6 +659,8 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             self.logger.info("Start transform")
+
+            self.__validate_search_keys(self.search_keys, self.search_id)
             try:
                 if len(self.feature_names_) == 0:
                     self.logger.warning(bundle.get("no_important_features_for_transform"))
@@ -811,6 +821,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 print(msg)
 
+            self.__validate_search_keys(self.search_keys, self.search_id)
+
             try:
                 self.__log_debug_information(
                     X if X is not None else self.X,
@@ -903,6 +915,9 @@ class FeaturesEnricher(TransformerMixin):
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
                     _cv = cv or self.cv
+                    if groups is None and _cv == CVType.group_k_fold:
+                        self.logger.info("Replacing group_k_fold with k_fold as no groups were found")
+                        _cv = CVType.k_fold
                     if not isinstance(_cv, BaseCrossValidator):
                         date_column = self._get_date_column(search_keys)
                         date_series = validated_X[date_column] if date_column is not None else None
@@ -1628,9 +1643,9 @@ class FeaturesEnricher(TransformerMixin):
                 c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
             ]
             features_section = (
-                ', "features": {' +
-                ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform]) +
-                "}"
+                ', "features": {'
+                + ", ".join([f'"{feature}": "test_value"' for feature in original_features_for_transform])
+                + "}"
             )
         else:
             features_section = ""
@@ -1907,7 +1922,7 @@ class FeaturesEnricher(TransformerMixin):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.warning(f"search_id {search_id} provided without search_keys")
-                raise ValidationError(bundle.get("search_key_differ_from_fit"))
+                return
             else:
                 self.logger.warning("search_keys not provided")
                 raise ValidationError(bundle.get("empty_search_keys"))
@@ -1974,6 +1989,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
@@ -2141,6 +2157,9 @@ class FeaturesEnricher(TransformerMixin):
             exclude_features_sources=exclude_features_sources,
         )
 
+        if search_id_callback is not None:
+            search_id_callback(self._search_task.search_task_id)
+
         print(bundle.get("polling_search_task").format(self._search_task.search_task_id))
         if not self.__is_registered:
             print(bundle.get("polling_unregister_information"))
@@ -2280,7 +2299,7 @@ class FeaturesEnricher(TransformerMixin):
             msg = bundle.get("multivariate_timeseries_detected")
             self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
         elif (
-            (self.cv is None or self.cv == CVType.k_fold)
+            self.cv is None
             and model_task_type != ModelTaskType.REGRESSION
             and self._get_group_columns(self.fit_search_keys)
         ):
@@ -2914,13 +2933,20 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions = []
             for m in autofe_meta:
+                autofe_feature = Feature.from_formula(m.formula)
+                if autofe_feature.op.is_vector:
+                    continue
+
                 description = dict()
 
                 feature_meta = get_feature_by_display_index(m.display_index)
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
-                description["Sources"] = feature_meta.data_source.replace("AutoFE: features from ", "")
+                description["shap"] = feature_meta.shap_value
+                description["Sources"] = feature_meta.data_source\
+                    .replace("AutoFE: features from ", "")\
+                    .replace("AutoFE: feature from ", "")
                 description["Feature name"] = feature_meta.name
 
                 feature_idx = 1
@@ -2928,12 +2954,7 @@ class FeaturesEnricher(TransformerMixin):
                     description[f"Feature {feature_idx}"] = bc.hashed_name
                     feature_idx += 1
 
-                description["Formula"] = m.formula
-                # match = re.match(f"f_autofe_(.+)_{m.display_index}", feature_meta.name)
-                # if match is None:
-                #     self.logger.warning(f"Failed to infer autofe function from name {feature_meta.name}")
-                # else:
-                #     description["Function"] = match.group(1)
+                description["Function"] = autofe_feature.op.name
 
                 descriptions.append(description)
 
@@ -2942,7 +2963,10 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions_df = pd.DataFrame(descriptions)
             descriptions_df.fillna("", inplace=True)
+            descriptions_df.sort_values(by="shap", ascending=False, inplace=True)
+            descriptions_df.drop(columns="shap", inplace=True)
             return descriptions_df
+
         except Exception:
             self.logger.exception("Failed to generate AutoFE features description")
             return None

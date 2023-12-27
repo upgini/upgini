@@ -394,6 +394,7 @@ Search keys and features in X should be the same as for `fit()`
 enricher = FeaturesEnricher(
   #same set of a search keys as for the fit step
   search_keys={"date": SearchKey.DATE},
+  api_key="<YOUR API_KEY>",  # if you fit enricher with api_key then you should use it here
   search_id = "abcdef00-0000-0000-0000-999999999999"
 )
 enriched_prod_dataframe=enricher.transform(input_dataframe)
