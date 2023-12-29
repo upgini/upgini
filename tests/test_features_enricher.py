@@ -2161,7 +2161,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-
             assert_frame_equal(actual_result_df, expected_result_df)
 
         for i in range(5):
@@ -2197,6 +2196,7 @@ def test_email_search_key(requests_mock: Mocker):
         columns = self.columns.to_list()
         assert set(columns) == {
             "system_record_id",
+            "entity_system_record_id",
             "target",
             "hashed_email_64ff8c",
             "email_one_domain_3b0a68",
@@ -2247,7 +2247,9 @@ def test_composit_index_search_key(requests_mock: Mocker):
         **kwargs,
     ):
         self.validate()
-        assert set(self.columns.to_list()) == {"system_record_id", "country_aff64e", "postal_code_13534a", "target"}
+        assert set(self.columns.to_list()) == {
+            "system_record_id", "entity_system_record_id", "country_aff64e", "postal_code_13534a", "target"
+        }
         assert "country_aff64e" in self.columns
         assert "postal_code_13534a"
         assert {"country_aff64e", "postal_code_13534a"} == {sk for sublist in self.search_keys for sk in sublist}
@@ -2348,6 +2350,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         columns = set(self.columns.to_list())
         assert columns == {
             "system_record_id",
+            "entity_system_record_id",
             "postal_code_13534a",
             "phone_45569d",
             "date_0e8763",
@@ -2381,7 +2384,10 @@ def test_search_keys_autodetection(requests_mock: Mocker):
     except AssertionError:
         raise
     except Exception as e:
-        assert e.args[0].path == "/public/api/v2/search/123/progress"
+        if hasattr(e.args[0], "path"):
+            assert e.args[0].path == "/public/api/v2/search/123/progress"
+        else:
+            raise e
     finally:
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count

@@ -21,8 +21,8 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
-from upgini.autofe.feature import Feature
 
+from upgini.autofe.feature import Feature
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
@@ -37,9 +37,11 @@ from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
     DEFAULT_INDEX,
+    ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
     ORIGINAL_INDEX,
     RENAMED_INDEX,
+    SEARCH_KEY_UNNEST,
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
@@ -1171,6 +1173,9 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
 
+        # TODO unnest multiple search keys
+        unnest_search_keys = []
+
         extended_X = x.copy()
         generated_features = []
         date_column = self._get_date_column(search_keys)
@@ -1178,10 +1183,10 @@ class FeaturesEnricher(TransformerMixin):
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
-        email_column = self.__get_email_columns(search_keys)
-        hem_column = self.__get_hem_columns(search_keys)
+        email_column = self.__get_email_column(search_keys)
+        hem_column = self.__get_hem_column(search_keys)
         if email_column:
-            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
+            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, unnest_search_keys, self.logger)
             extended_X = converter.convert(extended_X)
             generated_features.extend(converter.generated_features)
         if (
@@ -1727,11 +1732,36 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             else:
                 self.logger.info("Input dataset hasn't date column")
-            email_column = self.__get_email_columns(search_keys)
-            hem_column = self.__get_hem_columns(search_keys)
+
+            # Don't pass all features in backend on transform
+            original_features_for_transform = []
+            runtime_parameters = self._get_copy_of_runtime_parameters()
+            features_not_to_pass = [column for column in df.columns if column not in search_keys.keys()]
+            if len(features_not_to_pass) > 0:
+                # Pass only features that need for transform
+                features_for_transform = self._search_task.get_features_for_transform()
+                if features_for_transform is not None and len(features_for_transform) > 0:
+                    file_metadata = self._search_task.get_file_metadata(trace_id)
+                    original_features_for_transform = [
+                        c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
+                    ]
+
+                    runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
+
+            columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform))
+
+            df[ENTITY_SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
+                "Float64"
+            )
+
+            # Explode multiple search keys
+            df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys)
+
+            email_column = self.__get_email_column(search_keys)
+            hem_column = self.__get_hem_column(search_keys)
             email_converted_to_hem = False
             if email_column:
-                converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
+                converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, unnest_search_keys, self.logger)
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
                 email_converted_to_hem = converter.email_converted_to_hem
@@ -1745,39 +1775,31 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
-            non_keys_columns = [column for column in df.columns if column not in search_keys.keys()]
+            for col in original_features_for_transform:
+                meaning_types[col] = FileColumnMeaningType.FEATURE
+            features_not_to_pass = [column for column in features_not_to_pass if column not in search_keys.keys()]
             if email_converted_to_hem:
-                non_keys_columns.append(email_column)
+                features_not_to_pass.append(email_column)
 
-            # Don't pass features in backend on transform
-            original_features_for_transform = None
-            runtime_parameters = self._get_copy_of_runtime_parameters()
-            if len(non_keys_columns) > 0:
-                # Pass only features that need for transform
-                features_for_transform = self._search_task.get_features_for_transform()
-                if features_for_transform is not None and len(features_for_transform) > 0:
-                    file_metadata = self._search_task.get_file_metadata(trace_id)
-                    original_features_for_transform = [
-                        c.originalName or c.name for c in file_metadata.columns if c.name in features_for_transform
-                    ]
-                    non_keys_columns = [c for c in non_keys_columns if c not in original_features_for_transform]
-
-                    runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
-
-            columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
+            features_not_to_pass = [c for c in features_not_to_pass if c not in original_features_for_transform]
+            columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform))
 
             df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
                 "Float64"
             )
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+            meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
+            if SEARCH_KEY_UNNEST in df.columns:
+                meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
 
             df = df.reset_index(drop=True)
-            system_columns_with_original_index = [SYSTEM_RECORD_ID] + generated_features
+            system_columns_with_original_index = [SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID] + generated_features
+
             df_with_original_index = df[system_columns_with_original_index].copy()
 
             combined_search_keys = combine_search_keys(search_keys.keys())
 
-            df_without_features = df.drop(columns=non_keys_columns)
+            df_without_features = df.drop(columns=features_not_to_pass)
 
             del df
             gc.collect()
@@ -1952,11 +1974,11 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
             raise ValidationError(msg)
 
-        for key_type in SearchKey.__members__.values():
-            if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
-                msg = bundle.get("multiple_search_key").format(key_type)
-                self.logger.warning(msg)
-                raise ValidationError(msg)
+        # for key_type in SearchKey.__members__.values():
+        #     if key_type != SearchKey.CUSTOM_KEY and list(key_types).count(key_type) > 1:
+        #         msg = bundle.get("multiple_search_key").format(key_type)
+        #         self.logger.warning(msg)
+        #         raise ValidationError(msg)
 
         # non_personal_keys = set(SearchKey.__members__.values()) - set(SearchKey.personal_keys())
         # if (
@@ -2084,20 +2106,37 @@ class FeaturesEnricher(TransformerMixin):
             df = converter.convert(df)
 
         # Explode multiple search keys
+        non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
+        meaning_types = {
+            **{col: key.value for col, key in self.fit_search_keys.items()},
+            **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
+        }
+        meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+        if eval_set is not None and len(eval_set) > 0:
+            meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
+        df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID)
 
+        # TODO check that this is correct for enrichment
+        self.df_with_original_index = df.copy()
 
-        email_columns = self.__get_email_columns(self.fit_search_keys)
-        hem_columns = self.__get_hem_columns(self.fit_search_keys)
+        df, unnest_search_keys = self._explode_multiple_search_keys(df, self.fit_search_keys)
+
+        # Convert EMAIL to HEM after unnesting to do it only with one column
+        email_column = self.__get_email_column(self.fit_search_keys)
+        hem_column = self.__get_hem_column(self.fit_search_keys)
         email_converted_to_hem = False
-        if email_columns:
-            converter = EmailSearchKeyConverter(email_columns, hem_columns, self.fit_search_keys, self.logger)
+        if email_column:
+            converter = EmailSearchKeyConverter(email_column, hem_column, self.fit_search_keys, unnest_search_keys, self.logger)
             df = converter.convert(df)
             self.fit_generated_features.extend(converter.generated_features)
             email_converted_to_hem = converter.email_converted_to_hem
 
-        non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
+        non_feature_columns = (
+            [self.TARGET_NAME, EVAL_SET_INDEX, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST] 
+            + list(self.fit_search_keys.keys())
+        )
         if email_converted_to_hem:
-            non_feature_columns.append(email_columns)
+            non_feature_columns.append(email_column)
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
@@ -2108,7 +2147,7 @@ class FeaturesEnricher(TransformerMixin):
         df = df.drop(columns=features_to_drop)
 
         if email_converted_to_hem:
-            self.fit_dropped_features.add(email_columns)
+            self.fit_dropped_features.add(email_column)
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
@@ -2117,12 +2156,14 @@ class FeaturesEnricher(TransformerMixin):
             **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
         }
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
+        meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
+        if SEARCH_KEY_UNNEST in df.columns:
+            meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
         if eval_set is not None and len(eval_set) > 0:
             meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
 
-        df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys)
+        df = self.__add_fit_system_record_id(df, meaning_types, self.fit_search_keys, SYSTEM_RECORD_ID)
 
-        self.df_with_original_index = df.copy()
         df = df.reset_index(drop=True).sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
         combined_search_keys = combine_search_keys(self.fit_search_keys.keys())
@@ -2130,6 +2171,9 @@ class FeaturesEnricher(TransformerMixin):
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
             df=df,  # type: ignore
+            meaning_types=meaning_types,
+            search_keys=combined_search_keys,
+            unnest_search_keys=unnest_search_keys,
             model_task_type=model_task_type,  # type: ignore
             endpoint=self.endpoint,  # type: ignore
             api_key=self.api_key,  # type: ignore
@@ -2138,10 +2182,8 @@ class FeaturesEnricher(TransformerMixin):
             logger=self.logger,
             client_ip=self.client_ip,
         )
-        dataset.meaning_types = meaning_types
-        dataset.search_keys = combined_search_keys
         if email_converted_to_hem:
-            dataset.ignore_columns = [email_columns]
+            dataset.ignore_columns = [email_column]
 
         self.passed_features = [
             column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
@@ -2613,15 +2655,58 @@ class FeaturesEnricher(TransformerMixin):
         return [col for col, t in search_keys.items() if t not in [SearchKey.DATE, SearchKey.DATETIME]]
 
     @staticmethod
-    def __get_email_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
-        return [col for col, t in search_keys.items() if t == SearchKey.EMAIL]
+    def __get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+        cols = [col for col, t in search_keys.items() if t == SearchKey.EMAIL]
+        if len(cols) > 1:
+            raise Exception("More than one email column found after unnest")
+        if len(cols) == 1:
+            return cols[0]
 
     @staticmethod
-    def __get_hem_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
-        return [col for col, t in search_keys.items() if t == SearchKey.HEM]
+    def __get_hem_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+        cols = [col for col, t in search_keys.items() if t == SearchKey.HEM]
+        if len(cols) > 1:
+            raise Exception("More than one hem column found after unnest")
+        if len(cols) == 1:
+            return cols[0]
+    
+    
+    def _explode_multiple_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
+        # find groups of multiple search keys
+        search_key_names_by_type = dict()
+        for key_name, key_type in search_keys.items():
+            search_key_names_by_type[key_type] = search_key_names_by_type.get(key_type, []) + [key_name]
+        search_key_names_by_type = {
+            key_type: key_names 
+            for key_type, key_names in search_key_names_by_type.items() 
+            if len(key_names) > 1
+        }
+        if len(search_key_names_by_type) == 0:
+            return df, []
+
+        multiple_keys_columns = [col for cols in search_key_names_by_type.values() for col in cols]
+        other_columns = [col for col in df.columns if col not in multiple_keys_columns]
+        exploded_dfs = []
+        unnest_search_keys = []
+
+        for key_type, key_names in search_key_names_by_type.items():
+            new_search_key = f"upgini_{key_type.name.lower()}_unnest"
+            exploded_df = pd.melt(df, id_vars=other_columns,
+                                  value_vars=key_names,
+                                  var_name=SEARCH_KEY_UNNEST,
+                                  value_name=new_search_key)
+            exploded_dfs.append(exploded_df)
+            for old_key in key_names:
+                del search_keys[old_key]
+            search_keys[new_search_key] = key_type
+            unnest_search_keys.append(new_search_key)
+        
+        df = pd.concat(exploded_dfs, ignore_index=True)
+        return df, unnest_search_keys
+
 
     def __add_fit_system_record_id(
-        self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey]
+        self, df: pd.DataFrame, meaning_types: Dict[str, FileColumnMeaningType], search_keys: Dict[str, SearchKey], id_name: str
     ) -> pd.DataFrame:
         # save original order or rows
         original_index_name = df.index.name
@@ -2654,14 +2739,17 @@ class FeaturesEnricher(TransformerMixin):
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
-        df = df.rename(columns={DEFAULT_INDEX: SYSTEM_RECORD_ID})
+        df = df.rename(columns={DEFAULT_INDEX: id_name})
 
         # return original order
         df = df.set_index(ORIGINAL_INDEX)
         df.index.name = original_index_name
-        # df = df.sort_index()
 
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+        meaning_types[id_name] = (
+            FileColumnMeaningType.SYSTEM_RECORD_ID 
+            if id_name == SYSTEM_RECORD_ID 
+            else FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
+        )
         return df
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -2715,7 +2803,10 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         comparing_columns = X.columns if is_transform else df_with_original_index.columns
-        dup_features = [c for c in comparing_columns if c in result_features.columns and c != SYSTEM_RECORD_ID]
+        dup_features = [
+            c for c in comparing_columns 
+            if c in result_features.columns and c not in [SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
+        ]
         if len(dup_features) > 0:
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(bundle.get("returned_features_same_as_passed").format(dup_features))
@@ -2726,8 +2817,7 @@ class FeaturesEnricher(TransformerMixin):
         result_features = pd.merge(
             df_with_original_index,
             result_features,
-            left_on=SYSTEM_RECORD_ID,
-            right_on=SYSTEM_RECORD_ID,
+            on=ENTITY_SYSTEM_RECORD_ID,
             how="left" if is_transform else "inner",
         )
         result_features = result_features.set_index(original_index_name or DEFAULT_INDEX)
@@ -3223,8 +3313,8 @@ class FeaturesEnricher(TransformerMixin):
             maybe_keys = PostalCodeSearchKeyDetector().get_search_key_columns(sample, search_keys)
             if maybe_keys:
                 new_keys = {key: SearchKey.POSTAL_CODE for key in maybe_keys}
-                search_keys += new_keys
-                self.autodetected_search_keys += new_keys
+                search_keys.update(new_keys)
+                self.autodetected_search_keys.update(new_keys)
                 self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_keys}")
                 if not silent_mode:
                     print(bundle.get("postal_code_detected").format(maybe_keys))
@@ -3251,8 +3341,8 @@ class FeaturesEnricher(TransformerMixin):
             if maybe_keys:
                 if self.__is_registered or is_demo_dataset:
                     new_keys = {key: SearchKey.EMAIL for key in maybe_keys}
-                    search_keys += new_keys
-                    self.autodetected_search_keys += new_keys
+                    search_keys.update(new_keys)
+                    self.autodetected_search_keys.update(new_keys)
                     self.logger.info(f"Autodetected search key EMAIL in column {maybe_keys}")
                     if not silent_mode:
                         print(bundle.get("email_detected").format(maybe_keys))
@@ -3271,8 +3361,8 @@ class FeaturesEnricher(TransformerMixin):
             if maybe_keys:
                 if self.__is_registered or is_demo_dataset:
                     new_keys = {key: SearchKey.PHONE for key in maybe_keys}
-                    search_keys += new_keys
-                    self.autodetected_search_keys += new_keys
+                    search_keys.update(new_keys)
+                    self.autodetected_search_keys.update(new_keys)
                     self.logger.info(f"Autodetected search key PHONE in column {maybe_keys}")
                     if not silent_mode:
                         print(bundle.get("phone_detected").format(maybe_keys))

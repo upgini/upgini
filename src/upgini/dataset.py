@@ -22,7 +22,9 @@ from pandas.core.dtypes.common import is_period_dtype
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, get_rest_client
 from upgini.metadata import (
+    ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
+    SEARCH_KEY_UNNEST,
     SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
     TARGET,
@@ -76,6 +78,7 @@ class Dataset:  # (pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
+        unnest_search_keys: Optional[List[str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         random_state: Optional[int] = None,
         endpoint: Optional[str] = None,
@@ -110,6 +113,7 @@ class Dataset:  # (pd.DataFrame):
         self.description = description
         self.meaning_types = meaning_types
         self.search_keys = search_keys
+        self.unnest_search_keys = unnest_search_keys
         self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
@@ -171,7 +175,7 @@ class Dataset:  # (pd.DataFrame):
         new_columns = []
         dup_counter = 0
         for column in self.data.columns:
-            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID]:
+            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]:
                 self.columns_renaming[column] = column
                 new_columns.append(column)
                 continue
@@ -233,6 +237,7 @@ class Dataset:  # (pd.DataFrame):
         # Remove absolute duplicates (exclude system_record_id)
         unique_columns = self.data.columns.tolist()
         unique_columns.remove(SYSTEM_RECORD_ID)
+        unique_columns.remove(ENTITY_SYSTEM_RECORD_ID)
         self.logger.info(f"Dataset shape before clean duplicates: {self.data.shape}")
         self.data.drop_duplicates(subset=unique_columns, inplace=True)
         self.logger.info(f"Dataset shape after clean duplicates: {self.data.shape}")
@@ -382,7 +387,7 @@ class Dataset:  # (pd.DataFrame):
 
             if is_string_dtype(self.data[postal_code]):
                 try:
-                    self.data[postal_code] = self.data[postal_code].astype("Float64").astype("Int64").astype("string")
+                    self.data[postal_code] = self.data[postal_code].astype("string").astype("Float64").astype("Int64").astype("string")
                 except Exception:
                     pass
             elif is_float_dtype(self.data[postal_code]):
@@ -861,6 +866,9 @@ class Dataset:  # (pd.DataFrame):
                     meaningType=meaning_type,
                     minMaxValues=min_max_values,
                 )
+
+                if self.unnest_search_keys and column_meta.originalName in self.unnest_search_keys:
+                    column_meta.isUnnest = True
 
                 columns.append(column_meta)
 
