@@ -25,7 +25,7 @@ from upgini.autofe.feature import Feature
 
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
-from upgini.errors import ValidationError
+from upgini.errors import HttpError, ValidationError
 from upgini.http import (
     UPGINI_API_KEY,
     LoggerFactory,
@@ -245,6 +245,9 @@ class FeaturesEnricher(TransformerMixin):
                     # TODO validate search_keys with search_keys from file_metadata
                     print(bundle.get("search_by_task_id_finish"))
                     self.logger.info(f"Successfully initialized with search_id: {search_id}")
+                except HttpError as e:
+                    if "Interrupted by client" in e.args[0]:
+                        raise ValidationError("Search was cancelled")
                 except Exception as e:
                     print(bundle.get("failed_search_by_task_id"))
                     self.logger.exception(f"Failed to find search_id: {search_id}")
