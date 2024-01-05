@@ -302,6 +302,8 @@ class FeaturesEnricher(TransformerMixin):
     @staticmethod
     def _check_eval_set(eval_set, X):
         checked_eval_set = []
+        if eval_set is not None and isinstance(eval_set, tuple):
+            eval_set = [eval_set]
         if eval_set is not None and not isinstance(eval_set, list):
             raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
         for eval_pair in eval_set or []:
@@ -315,7 +317,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.Series, np.ndarray, List],
-        eval_set: Optional[List[tuple]] = None,
+        eval_set: Optional[Union[List[tuple], tuple]] = None,
         *args,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
@@ -445,7 +447,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List],
-        eval_set: Optional[List[tuple]] = None,
+        eval_set: Optional[Union[List[tuple], tuple]] = None,
         *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
@@ -759,7 +761,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
-        eval_set: Optional[List[tuple]] = None,
+        eval_set: Optional[Union[List[tuple], tuple]] = None,
         *args,
         scoring: Union[Callable, str, None] = None,
         cv: Union[BaseCrossValidator, CVType, None] = None,
@@ -1235,7 +1237,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: str,
         X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None] = None,
-        eval_set: Optional[List[tuple]] = None,
+        eval_set: Optional[Union[List[tuple], tuple]] = None,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -1248,9 +1250,10 @@ class FeaturesEnricher(TransformerMixin):
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         validated_X = self._validate_X(X)
         validated_y = self._validate_y(validated_X, y)
+        checked_eval_set = self._check_eval_set(eval_set, X)
         validated_eval_set = (
-            [self._validate_eval_set_pair(validated_X, eval_set_pair) for eval_set_pair in eval_set]
-            if eval_set
+            [self._validate_eval_set_pair(validated_X, eval_set_pair) for eval_set_pair in checked_eval_set]
+            if checked_eval_set
             else None
         )
 
