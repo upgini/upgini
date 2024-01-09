@@ -69,7 +69,7 @@
 </table>   
 
 ⭐️ [Simple Drag & Drop Search UI](https://upgini.com/upgini-widget):   
-<a href="https://appwidget-uragwvgykrk4sbmropphpy.streamlit.app/~/+/">
+<a href="https://upgini.com/upgini-widget">
 <img width="710" alt="Drag & Drop Search UI" src="https://github.com/upgini/upgini/assets/95645411/36b6460c-51f3-400e-9f04-445b938bf45e">
 </a>
 
