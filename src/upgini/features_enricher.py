@@ -1443,15 +1443,22 @@ class FeaturesEnricher(TransformerMixin):
 
         # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
         # can differs from it
+        fit_features = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
         enriched_Xy, enriched_eval_sets = self.__enrich(
             self.df_with_original_index,
-            self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True),
+            fit_features,
             rows_to_drop=rows_to_drop,
         )
 
+        original_df_sampled = self.df_with_original_index[self.df_with_original_index[SYSTEM_RECORD_ID].isin(fit_features[SYSTEM_RECORD_ID])]
         enriched_X = drop_existing_columns(enriched_Xy, TARGET)
-        X_sampled, search_keys = self._extend_x(validated_X, is_demo_dataset)
-        y_sampled = enriched_Xy[TARGET].copy()
+        if EVAL_SET_INDEX in original_df_sampled.columns:
+            Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == 0")
+        else:
+            Xy_sampled = original_df_sampled
+        X_sampled = drop_existing_columns(Xy_sampled, [SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET])
+        search_keys = self.fit_search_keys
+        y_sampled = Xy_sampled[TARGET].copy()
 
         self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
         self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
@@ -1465,8 +1472,9 @@ class FeaturesEnricher(TransformerMixin):
 
             for idx in range(len(eval_set)):
                 enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
-                eval_X_sampled, _ = self._extend_x(eval_set[idx][0], is_demo_dataset)
-                eval_y_sampled = eval_set[idx][1].copy()
+                eval_Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == {idx + 1}")
+                eval_X_sampled = drop_existing_columns(eval_Xy_sampled, [SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET])
+                eval_y_sampled = eval_Xy_sampled[TARGET].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
@@ -1507,12 +1515,12 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             X_sampled = (
-                df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0]
+                df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0")
                 .copy()
                 .drop(columns=[EVAL_SET_INDEX, TARGET])
             )
             X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
-            y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == 0].copy()[TARGET]
+            y_sampled = df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0").copy()[TARGET]
             eval_set_sampled_dict = dict()
             for idx in range(len(eval_set)):
                 eval_x_sampled = (

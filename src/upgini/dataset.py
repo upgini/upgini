@@ -382,7 +382,7 @@ class Dataset:  # (pd.DataFrame):
 
             if is_string_dtype(self.data[postal_code]):
                 try:
-                    self.data[postal_code] = self.data[postal_code].astype("Float64").astype("Int64").astype("string")
+                    self.data[postal_code] = self.data[postal_code].astype("float64").astype("Int64").astype("string")
                 except Exception:
                     pass
             elif is_float_dtype(self.data[postal_code]):
