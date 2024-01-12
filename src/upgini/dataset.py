@@ -36,12 +36,14 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
+    SearchKey,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils import combine_search_keys
+from upgini.utils.deduplicate_utils import remove_fintech_duplicates
 from upgini.utils.email_utils import EmailSearchKeyConverter
 
 try:
@@ -820,6 +822,13 @@ class Dataset:  # (pd.DataFrame):
         self.__validate_dataset(validate_target, silent_mode)
 
         if validate_target:
+            search_keys = {
+                col: SearchKey.from_meaning_type(key_type)
+                for col, key_type in self.meaning_types.items()
+                if SearchKey.from_meaning_type(key_type) is not None
+                }
+            self.data = remove_fintech_duplicates(self.data, search_keys, self.logger)
+
             self.__validate_target()
 
             self.__resample()

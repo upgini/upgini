@@ -64,6 +64,7 @@ from upgini.utils.datetime_utils import (
     is_blocked_time_series,
     is_time_series,
 )
+from upgini.utils.deduplicate_utils import remove_fintech_duplicates
 from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
@@ -1183,8 +1184,8 @@ class FeaturesEnricher(TransformerMixin):
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
             extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
-        email_column = self.__get_email_column(search_keys)
-        hem_column = self.__get_hem_column(search_keys)
+        email_column = self._get_email_column(search_keys)
+        hem_column = self._get_hem_column(search_keys)
         if email_column:
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
             extended_X = converter.convert(extended_X)
@@ -1505,6 +1506,8 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df_with_index[TARGET] = eval_y
                 eval_df_with_index[EVAL_SET_INDEX] = idx + 1
                 df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
+            
+            df_with_eval_set_index = remove_fintech_duplicates(df_with_eval_set_index, self.search_keys, self.logger)
 
             # downsample if need to eval_set threshold
             num_samples = _num_samples(df_with_eval_set_index)
@@ -1741,8 +1744,8 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             else:
                 self.logger.info("Input dataset hasn't date column")
-            email_column = self.__get_email_column(search_keys)
-            hem_column = self.__get_hem_column(search_keys)
+            email_column = self._get_email_column(search_keys)
+            hem_column = self._get_hem_column(search_keys)
             email_converted_to_hem = False
             if email_column:
                 converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, self.logger)
@@ -2081,8 +2084,8 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
-        email_column = self.__get_email_column(self.fit_search_keys)
-        hem_column = self.__get_hem_column(self.fit_search_keys)
+        email_column = self._get_email_column(self.fit_search_keys)
+        hem_column = self._get_hem_column(self.fit_search_keys)
         email_converted_to_hem = False
         if email_column:
             converter = EmailSearchKeyConverter(email_column, hem_column, self.fit_search_keys, self.logger)
@@ -2615,15 +2618,21 @@ class FeaturesEnricher(TransformerMixin):
         return [col for col, t in search_keys.items() if t not in [SearchKey.DATE, SearchKey.DATETIME]]
 
     @staticmethod
-    def __get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+    def _get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         for col, t in search_keys.items():
             if t == SearchKey.EMAIL:
                 return col
 
     @staticmethod
-    def __get_hem_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+    def _get_hem_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         for col, t in search_keys.items():
             if t == SearchKey.HEM:
+                return col
+    
+    @staticmethod
+    def _get_phone_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+        for col, t in search_keys.items():
+            if t == SearchKey.PHONE:
                 return col
 
     def __add_fit_system_record_id(
