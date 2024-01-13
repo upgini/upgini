@@ -289,7 +289,7 @@ class _RestClient:
     GET_ALL_ADS_DESCRIPTIONS_URI = "private/api/v2/ads/descriptions"
     GET_ACTIVE_ADS_DEFINITIONS_URI = "private/api/v2/ads/definitions"
     UPLOAD_ONLINE_URI = "private/api/v2/ads/upload-online"
-    UPLOAD_ONLINE_ALL_URI = "private/api/v2/ads/upload-online-all"
+    STOP_ADS_MANAGEMENT_TASK_URI_FMT = "private/api/v2/ads/management-task/{0}/stop"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -750,6 +750,10 @@ class _RestClient:
         api_path = self.UPLOAD_ONLINE_URI
         response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
         return response["adsManagementTaskId"]
+
+    def stop_ads_management_task(self, ads_management_task_id: str, trace_id: str):
+        api_path = self.STOP_ADS_MANAGEMENT_TASK_URI_FMT.format(ads_management_task_id)
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id))
 
     # ---
 
