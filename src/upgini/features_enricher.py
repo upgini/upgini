@@ -21,8 +21,8 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
-from upgini.autofe.feature import Feature
 
+from upgini.autofe.feature import Feature
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import HttpError, ValidationError
@@ -1451,7 +1451,9 @@ class FeaturesEnricher(TransformerMixin):
             rows_to_drop=rows_to_drop,
         )
 
-        original_df_sampled = self.df_with_original_index[self.df_with_original_index[SYSTEM_RECORD_ID].isin(fit_features[SYSTEM_RECORD_ID])]
+        original_df_sampled = self.df_with_original_index[
+            self.df_with_original_index[SYSTEM_RECORD_ID].isin(fit_features[SYSTEM_RECORD_ID])
+            ]
         enriched_X = drop_existing_columns(enriched_Xy, TARGET)
         if EVAL_SET_INDEX in original_df_sampled.columns:
             Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == 0")
