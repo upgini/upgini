@@ -62,6 +62,7 @@ class DataSourcePublisher:
         trace_id = str(uuid.uuid4())
 
         with MDC(trace_id=trace_id):
+            task_id = None
             try:
                 if data_table_uri is None or not data_table_uri.startswith("bq://"):
                     raise ValidationError(
@@ -148,6 +149,12 @@ class DataSourcePublisher:
                 self.logger.info(msg)
                 print(msg)
                 return data_table_id
+            except KeyboardInterrupt:
+                if task_id is not None:
+                    msg = f"Stopping AdsManagementTask {task_id}"
+                    print(msg)
+                    self.logger.info(msg)
+                    self._rest_client.stop_ads_management_task(task_id, trace_id)
             except Exception:
                 self.logger.exception("Failed to register data table")
                 raise
