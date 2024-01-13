@@ -750,11 +750,10 @@ class _RestClient:
         api_path = self.UPLOAD_ONLINE_URI
         response = self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
         return response["adsManagementTaskId"]
-    
+
     def stop_ads_management_task(self, ads_management_task_id: str, trace_id: str):
         api_path = self.STOP_ADS_MANAGEMENT_TASK_URI_FMT.format(ads_management_task_id)
         self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id))
-
 
     # ---
 
