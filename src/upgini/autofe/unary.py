@@ -22,10 +22,10 @@ class Log(PandasOperand):
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return np.log(np.abs(data.replace(0, np.nan)))
+        return self._round_value(np.log(np.abs(data.replace(0, np.nan))))
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        return np.log(data.replace(0, np.nan).abs())
+        return self._round_value(np.log(data.replace(0, np.nan).abs()))
 
 
 class Sqrt(PandasOperand):
@@ -35,10 +35,10 @@ class Sqrt(PandasOperand):
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return np.sqrt(np.abs(data))
+        return self._round_value(np.sqrt(np.abs(data)))
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        return np.sqrt(data.abs())
+        return self._round_value(np.sqrt(data.abs()))
 
 
 class Square(PandasOperand):
@@ -60,10 +60,10 @@ class Sigmoid(PandasOperand):
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return 1 / (1 + np.exp(-data))
+        return self._round_value(1 / (1 + np.exp(-data)))
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        return 1 / (1 + np.exp(-data))
+        return self._round_value(1 / (1 + np.exp(-data)))
 
 
 class Floor(PandasOperand):
