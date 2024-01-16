@@ -780,11 +780,11 @@ Requests and support, in preferred order
 - **scoped to a Single Bug** - one bug per report.
 
 ## 🧩 Contributing
-We are a **very** small team and this is a part-time project for us, thus most probably we won't be able:
+We are not a large team, so we probably won't be able to:
  - implement smooth integration with most common low-code ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
- - implement all possible data verification and normalization capabilities for different types of search keys (we just started with current 6 types)
+ - implement all possible data verification and normalization capabilities for different types of search keys 
+And we need some help from the community!
 
-And we need some help from community)
 So, we'll be happy about every **pull request** you open and **issue** you find to make this library **more incredible**. Please note that it might sometimes take us a while to get back to you.
 **For major changes**, please open an issue first to discuss what you would like to change
 #### Developing
