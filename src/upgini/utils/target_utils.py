@@ -30,15 +30,18 @@ def define_task(y: pd.Series, logger: Optional[logging.Logger] = None, silent: b
     target_items = target.nunique()
     if target_items == 1:
         raise ValidationError(bundle.get("dataset_constant_target"))
-    target_ratio = target_items / len(target)
+    
     if target_items == 2:
         task = ModelTaskType.BINARY
-    elif (target.dtype.kind == "f" and np.any(target != target.astype(int))) or (
-        is_numeric_dtype(target) and (target_items > 50 or target_ratio > 0.2)
-    ):
-        task = ModelTaskType.REGRESSION
     else:
-        task = ModelTaskType.MULTICLASS
+        non_zero_target = target[target != 0]
+        target_ratio = target_items / len(non_zero_target)
+        if (target.dtype.kind == "f" and np.any(target != target.astype(int))) or (
+            is_numeric_dtype(target) and (target_items > 50 or target_ratio > 0.2)
+        ):
+            task = ModelTaskType.REGRESSION
+        else:
+            task = ModelTaskType.MULTICLASS
     logger.info(f"Detected task type: {task}")
     if not silent:
         print(bundle.get("target_type_detected").format(task))

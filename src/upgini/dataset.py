@@ -81,7 +81,6 @@ class Dataset:  # (pd.DataFrame):
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
-        client_ip: Optional[str] = None,
         warning_counter: Optional[WarningCounter] = None,
         **kwargs,
     ):
@@ -125,7 +124,6 @@ class Dataset:  # (pd.DataFrame):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
-        self.client_ip = client_ip
         self.warning_counter = warning_counter or WarningCounter()
 
     def __len__(self):
@@ -1019,7 +1017,7 @@ class Dataset:  # (pd.DataFrame):
             task_type=self.task_type,
             endpoint=self.endpoint,
             api_key=self.api_key,
-            client_ip=self.client_ip,
+            logger=self.logger,
         )
 
     def validation(
@@ -1089,7 +1087,7 @@ class Dataset:  # (pd.DataFrame):
             initial_search_task_id=initial_search_task_id,
             endpoint=self.endpoint,
             api_key=self.api_key,
-            client_ip=self.client_ip,
+            logger=self.logger,
         )
 
     def prepare_uploading_file(self, base_path: str) -> str:

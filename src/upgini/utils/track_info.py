@@ -36,18 +36,22 @@ def _env_contains(envs) -> bool:
 
 
 def _get_execution_ide() -> str:
-    if "google.colab" in sys.modules and _env_contains(_ide_env_variables["colab"]):
-        return "colab"
-    elif os.path.exists("/kaggle") and _check_installed("kaggle") and _env_contains(_ide_env_variables["kaggle"]):
-        return "kaggle"
-    elif getuser() == "jovyan" and _env_contains(_ide_env_variables["binder"]):
-        return "binder"
-    else:
+    try:
+        if "google.colab" in sys.modules and _env_contains(_ide_env_variables["colab"]):
+            return "colab"
+        elif os.path.exists("/kaggle") and _check_installed("kaggle") and _env_contains(_ide_env_variables["kaggle"]):
+            return "kaggle"
+        elif getuser() == "jovyan" and _env_contains(_ide_env_variables["binder"]):
+            return "binder"
+        elif "widget" in socket.gethostname():
+            return "widget"
+        else:
+            return "other"
+    except Exception:
         return "other"
 
-
 @lru_cache()
-def get_track_metrics(client_ip: Optional[str] = None) -> dict:
+def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
     ident_res = "https://api.ipify.org"
@@ -66,33 +70,17 @@ def get_track_metrics(client_ip: Optional[str] = None) -> dict:
             from google.colab import output  # type: ignore
             from IPython.display import Javascript, display
 
-            # path_to_script = Path(__file__).parent.parent.resolve() / "fingerprint.js"
-            # with open(path_to_script) as f:
-            #     js_content = f.read()
-            # print(f"JS loaded. Length: {len(js_content)}")
-
             display(
                 Javascript(
-                    # """
-                    #     async function loadModuleFromString(code) {
-                    #         const blob = new Blob([code], { type: 'application/javascript' });
-                    #         const url = URL.createObjectURL(blob);
-                    #         const module = await import(url);
-                    #         URL.revokeObjectURL(url); // Clean URL-object after module load
-                    #         return module;
-                    #     }
-                    #     window.visitorId = loadModuleFromString(""" + js_content + """)
                     """
-                        window.visitorId = import('http://cdn.jsdelivr.net/gh/upgini/upgini/js/visitorid.js')
+                        import('https://upgini.github.io/upgini/js/visitorid.js')
                             .then(FingerprintJS => FingerprintJS.load())
                             .then(fp => fp.get())
-                            .then(result => result.visitorId);
+                            .then(result => window.visitorId = result.visitorId);
                     """
                 )
             )
-            # https://raw.githubusercontent.com/upgini/upgini/main/js/visitorid.js
-            # http://cdn.jsdelivr.net/gh/upgini/upgini/js/visitorid.js
-            track["visitorId"] = output.eval_js("visitorId", timeout_sec=10)
+            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=10)
         except Exception as e:
             track["err"] = str(e)
             track["visitorId"] = "None"
@@ -106,9 +94,9 @@ def get_track_metrics(client_ip: Optional[str] = None) -> dict:
                 display(
                     Javascript(
                         f"""
-                            window.clientIP = fetch("{ident_res}")
+                            fetch("{ident_res}")
                                 .then(response => response.text())
-                                .then(data => data);
+                                .then(data => window.clientIP = data);
                         """
                     )
                 )
@@ -155,7 +143,10 @@ def get_track_metrics(client_ip: Optional[str] = None) -> dict:
                 track["ip"] = client_ip
             else:
                 track["ip"] = get(ident_res, timeout=10).text
-            track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
+            if client_visitorid:
+                track["visitorId"] = client_visitorid
+            else:
+                track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
 

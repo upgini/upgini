@@ -301,11 +301,13 @@ class _RestClient:
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
     SEARCH_KEYS_HEADER_NAME = "Search-Keys"
 
-    def __init__(self, service_endpoint, refresh_token, silent_mode=False):
+    def __init__(self, service_endpoint, refresh_token, silent_mode=False, client_ip=None, client_visitorid=None):
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
         self.silent_mode = silent_mode
+        self.client_ip = client_ip
+        self.client_visitorid = client_visitorid
         self._access_token = self._refresh_access_token()
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
@@ -470,7 +472,7 @@ class _RestClient:
                     )
                 files["tracking"] = (
                     "tracking.json",
-                    dumps(get_track_metrics()).encode(),
+                    dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
                     "application/json",
                 )
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
@@ -554,7 +556,7 @@ class _RestClient:
                     )
                 files["tracking"] = (
                     "ide",
-                    dumps(get_track_metrics()).encode(),
+                    dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
                     "application/json",
                 )
 
@@ -662,7 +664,7 @@ class _RestClient:
         return ProviderTaskMetadataV2.parse_obj(response)
 
     def get_current_transform_usage(self, trace_id) -> TransformUsage:
-        track_metrics = get_track_metrics()
+        track_metrics = get_track_metrics(self.client_ip, self.client_visitorid)
         visitor_id = track_metrics.get("visitorId")
         response = self._with_unauth_retry(
             lambda: self._send_get_req(
@@ -905,11 +907,12 @@ def resolve_api_token(api_token: Optional[str]) -> str:
         return DEMO_API_KEY
 
 
-def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None) -> _RestClient:
+def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None,
+                    client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> _RestClient:
     url = _resolve_backend_url(backend_url)
     token = resolve_api_token(api_token)
 
-    return _get_rest_client(url, token)
+    return _get_rest_client(url, token, client_ip, client_visitorid)
 
 
 def is_demo_api_key(api_token: Optional[str]) -> bool:
@@ -917,23 +920,27 @@ def is_demo_api_key(api_token: Optional[str]) -> bool:
 
 
 @lru_cache()
-def _get_rest_client(backend_url: str, api_token: str) -> _RestClient:
+def _get_rest_client(backend_url: str, api_token: str,
+                     client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> _RestClient:
     return _RestClient(backend_url, api_token)
 
 
 class BackendLogHandler(logging.Handler):
-    def __init__(self, rest_client: _RestClient, client_ip: Optional[str] = None, *args, **kwargs) -> None:
+    def __init__(self, rest_client: _RestClient, 
+                 client_ip: Optional[str] = None, client_visitorid: Optional[str] = None, 
+                 *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
         self.track_metrics = None
         self.hostname = "0.0.0.0"
         self.client_ip = client_ip
+        self.client_visitorid = client_visitorid
 
     def emit(self, record: logging.LogRecord) -> None:
         def task():
             try:
                 if self.track_metrics is None or len(self.track_metrics) == 0:
-                    self.track_metrics = get_track_metrics(self.client_ip)
+                    self.track_metrics = get_track_metrics(self.client_ip, self.client_visitorid)
                     self.hostname = self.track_metrics.get("ip") or "0.0.0.0"
                 text = self.format(record)
                 tags = self.track_metrics
@@ -975,7 +982,8 @@ class LoggerFactory:
         root.handlers.clear()
 
     def get_logger(
-        self, backend_url: Optional[str] = None, api_token: Optional[str] = None, client_ip: Optional[str] = None
+        self, backend_url: Optional[str] = None, api_token: Optional[str] = None, 
+        client_ip: Optional[str] = None, client_visitorid: Optional[str] = None
     ) -> logging.Logger:
         url = _resolve_backend_url(backend_url)
         token = resolve_api_token(api_token)
@@ -987,7 +995,7 @@ class LoggerFactory:
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
         upgini_logger.handlers.clear()
         rest_client = get_rest_client(backend_url, api_token)
-        datadog_handler = BackendLogHandler(rest_client, client_ip)
+        datadog_handler = BackendLogHandler(rest_client, client_ip, client_visitorid)
         json_formatter = jsonlogger.JsonFormatter(
             "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
             timestamp=True,
