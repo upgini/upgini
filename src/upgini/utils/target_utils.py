@@ -30,7 +30,6 @@ def define_task(y: pd.Series, logger: Optional[logging.Logger] = None, silent: b
     target_items = target.nunique()
     if target_items == 1:
         raise ValidationError(bundle.get("dataset_constant_target"))
-
     if target_items == 2:
         task = ModelTaskType.BINARY
     else:
