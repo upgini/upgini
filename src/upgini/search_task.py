@@ -1,3 +1,4 @@
+import logging
 import tempfile
 import time
 from functools import lru_cache
@@ -43,7 +44,7 @@ class SearchTask:
         task_type: Optional[ModelTaskType] = None,
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
-        client_ip: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         self.search_task_id = search_task_id
         self.initial_search_task_id = initial_search_task_id
@@ -55,7 +56,11 @@ class SearchTask:
         self.summary = None
         self.endpoint = endpoint
         self.api_key = api_key
-        self.logger = LoggerFactory().get_logger(endpoint, api_key, client_ip)
+        if logger is not None:
+            self.logger = logger
+        else:
+            self.logger = logging.getLogger()
+            self.logger.setLevel("FATAL")
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
         self.unused_features_for_generation: Optional[List[str]] = None
 
