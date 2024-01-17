@@ -1002,13 +1002,13 @@ class FeaturesEnricher(TransformerMixin):
 
                     train_metrics = {
                         bundle.get("quality_metrics_segment_header"): bundle.get("quality_metrics_train_segment"),
-                        bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
+                        bundle.get("quality_metrics_rows_header"): _num_samples(self.X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                         y_sorted
                     ):
-                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(y_sorted.mean(), 4)
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(self.y.mean(), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -1068,14 +1068,14 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_segment_header"): bundle.get(
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
-                                bundle.get("quality_metrics_rows_header"): _num_samples(eval_X_sorted),
+                                bundle.get("quality_metrics_rows_header"): _num_samples(self.eval_set[idx][0]), #_num_samples(eval_X_sorted),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                                 eval_y_sorted
                             ):
                                 eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
-                                    eval_y_sorted.mean(), 4
+                                    self.eval_set[idx][1].mean(), 4
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
