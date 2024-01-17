@@ -83,13 +83,15 @@ def get_track_metrics(client_ip: Optional[str] = None) -> dict:
                     #     }
                     #     window.visitorId = loadModuleFromString(""" + js_content + """)
                     """
-                        window.visitorId = import('https://openfpcdn.io/fingerprintjs/v3')
+                        window.visitorId = import('http://cdn.jsdelivr.net/gh/upgini/upgini/js/visitorid.js')
                             .then(FingerprintJS => FingerprintJS.load())
                             .then(fp => fp.get())
                             .then(result => result.visitorId);
                     """
                 )
             )
+            # https://raw.githubusercontent.com/upgini/upgini/main/js/visitorid.js
+            # http://cdn.jsdelivr.net/gh/upgini/upgini/js/visitorid.js
             track["visitorId"] = output.eval_js("visitorId", timeout_sec=10)
         except Exception as e:
             track["err"] = str(e)
