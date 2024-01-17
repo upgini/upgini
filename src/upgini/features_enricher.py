@@ -181,17 +181,19 @@ class FeaturesEnricher(TransformerMixin):
         exclude_columns: Optional[List[str]] = None,
         baseline_score_column: Optional[Any] = None,
         client_ip: Optional[str] = None,
+        client_visitorid: Optional[str] = None,
         **kwargs,
     ):
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
         if api_key is not None and not isinstance(api_key, str):
             raise ValidationError(f"api_key should be `string`, but passed: `{api_key}`")
-        self.rest_client = get_rest_client(endpoint, self._api_key)
+        self.rest_client = get_rest_client(endpoint, self._api_key, client_ip, client_visitorid)
         self.client_ip = client_ip
+        self.client_visitorid = client_visitorid
 
         self.logs_enabled = logs_enabled
         if logs_enabled:
-            self.logger = LoggerFactory().get_logger(endpoint, self._api_key, client_ip)
+            self.logger = LoggerFactory().get_logger(endpoint, self._api_key, client_ip, client_visitorid)
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
@@ -232,7 +234,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         self.search_id = search_id
         if search_id:
-            search_task = SearchTask(search_id, endpoint=self.endpoint, api_key=self._api_key, client_ip=client_ip)
+            search_task = SearchTask(search_id, endpoint=self.endpoint, api_key=self._api_key, logger=self.logger)
 
             print(bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
@@ -296,7 +298,7 @@ class FeaturesEnricher(TransformerMixin):
     def _set_api_key(self, api_key: str):
         self._api_key = api_key
         if self.logs_enabled:
-            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key, self.client_ip)
+            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key, self.client_ip, self.client_visitorid)
 
     api_key = property(_get_api_key, _set_api_key)
 
@@ -679,7 +681,7 @@ class FeaturesEnricher(TransformerMixin):
                     return None
 
                 if not metrics_calculation:
-                    transform_usage = get_rest_client(self.endpoint, self.api_key).get_current_transform_usage(trace_id)
+                    transform_usage = self.rest_client.get_current_transform_usage(trace_id)
                     self.logger.info(f"Current transform usage: {transform_usage}. Transforming {len(X)} rows")
                     if transform_usage.has_limit:
                         if len(X) > transform_usage.rest_rows:
@@ -1808,7 +1810,6 @@ class FeaturesEnricher(TransformerMixin):
                 api_key=self.api_key,  # type: ignore
                 date_format=self.date_format,  # type: ignore
                 logger=self.logger,
-                client_ip=self.client_ip,
             )
             dataset.meaning_types = meaning_types
             dataset.search_keys = combined_search_keys
@@ -1871,7 +1872,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress = self.get_progress(trace_id, validation_task)
             except KeyboardInterrupt as e:
                 print(bundle.get("search_stopping"))
-                get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(
+                self.rest_client.stop_search_task_v2(
                     trace_id, validation_task.search_task_id
                 )
                 self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
@@ -2143,7 +2144,6 @@ class FeaturesEnricher(TransformerMixin):
             date_format=self.date_format,  # type: ignore
             random_state=self.random_state,  # type: ignore
             logger=self.logger,
-            client_ip=self.client_ip,
         )
         dataset.meaning_types = meaning_types
         dataset.search_keys = combined_search_keys
@@ -2200,7 +2200,7 @@ class FeaturesEnricher(TransformerMixin):
                 progress = self.get_progress(trace_id)
         except KeyboardInterrupt as e:
             print(bundle.get("search_stopping"))
-            get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, self._search_task.search_task_id)
+            self.rest_client.stop_search_task_v2(trace_id, self._search_task.search_task_id)
             self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
             print(bundle.get("search_stopped"))
             raise e
@@ -3192,7 +3192,7 @@ class FeaturesEnricher(TransformerMixin):
                 metrics_df=self.metrics,
                 autofe_descriptions_df=self.get_autofe_features_description(),
                 search_id=self._search_task.search_task_id,
-                email=get_rest_client(self.endpoint, self.api_key).get_current_email(),
+                email=self.rest_client.get_current_email(),
                 search_keys=[str(sk) for sk in self.search_keys.values()],
             )
         except Exception:
@@ -3376,7 +3376,7 @@ class FeaturesEnricher(TransformerMixin):
                                 pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
                             with open(f"{tmp_dir}/eval_y.pickle", "wb") as eval_y_file:
                                 pickle.dump(sample(eval_set[0][1], eval_xy_sample_index), eval_y_file)
-                            get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                            self.rest_client.dump_input_files(
                                 trace_id,
                                 f"{tmp_dir}/x.pickle",
                                 f"{tmp_dir}/y.pickle",
@@ -3384,13 +3384,13 @@ class FeaturesEnricher(TransformerMixin):
                                 f"{tmp_dir}/eval_y.pickle",
                             )
                         else:
-                            get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                            self.rest_client.dump_input_files(
                                 trace_id,
                                 f"{tmp_dir}/x.pickle",
                                 f"{tmp_dir}/y.pickle",
                             )
                     else:
-                        get_rest_client(self.endpoint, self.api_key).dump_input_files(
+                        self.rest_client.dump_input_files(
                             trace_id,
                             f"{tmp_dir}/x.pickle",
                         )
