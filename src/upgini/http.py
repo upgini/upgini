@@ -461,6 +461,11 @@ class _RestClient:
                         metadata_with_md5.json(exclude_none=True).encode(),
                         "application/json",
                     ),
+                    "tracking": (
+                        "tracking.json",
+                        dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
+                        "application/json",
+                    ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
@@ -470,11 +475,6 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
-                files["tracking"] = (
-                    "tracking.json",
-                    dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
-                    "application/json",
-                )
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
 
                 return self._send_post_file_req_v2(
@@ -545,6 +545,11 @@ class _RestClient:
                         metadata_with_md5.json(exclude_none=True).encode(),
                         "application/json",
                     ),
+                    "tracking": (
+                        "tracking.json",
+                        dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
+                        "application/json",
+                    ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
@@ -554,11 +559,6 @@ class _RestClient:
                         search_customization.json(exclude_none=True).encode(),
                         "application/json",
                     )
-                files["tracking"] = (
-                    "ide",
-                    dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
-                    "application/json",
-                )
 
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
 
@@ -922,7 +922,7 @@ def is_demo_api_key(api_token: Optional[str]) -> bool:
 @lru_cache()
 def _get_rest_client(backend_url: str, api_token: str,
                      client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> _RestClient:
-    return _RestClient(backend_url, api_token)
+    return _RestClient(backend_url, api_token, client_ip, client_visitorid)
 
 
 class BackendLogHandler(logging.Handler):
