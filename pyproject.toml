@@ -3,3 +3,8 @@ line-length = 120
 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "./src"
+]
