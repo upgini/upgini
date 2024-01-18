@@ -301,13 +301,14 @@ class _RestClient:
     USER_AGENT_HEADER_VALUE = "pyupgini/" + __version__
     SEARCH_KEYS_HEADER_NAME = "Search-Keys"
 
-    def __init__(self, service_endpoint, refresh_token, silent_mode=False, client_ip=None, client_visitorid=None):
+    def __init__(self, service_endpoint, refresh_token, client_ip=None, client_visitorid=None):
         # debug_requests_on()
         self._service_endpoint = service_endpoint
         self._refresh_token = refresh_token
-        self.silent_mode = silent_mode
+        # self.silent_mode = silent_mode
         self.client_ip = client_ip
         self.client_visitorid = client_visitorid
+        print(f"Created RestClient with {client_ip} and {client_visitorid}")
         self._access_token = self._refresh_access_token()
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
@@ -441,6 +442,10 @@ class _RestClient:
     ) -> SearchTaskResponse:
         api_path = self.INITIAL_SEARCH_URI_FMT_V2
 
+        print(f"Start initial search with {self.client_ip} and {self.client_visitorid}")
+        track_metrics = get_track_metrics(self.client_ip, self.client_visitorid)
+        print(f"Sending track metrics: {track_metrics}")
+
         def open_and_send():
             md5_hash = hashlib.md5()
             with open(file_path, "rb") as file:
@@ -463,7 +468,7 @@ class _RestClient:
                     ),
                     "tracking": (
                         "tracking.json",
-                        dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
+                        dumps(track_metrics).encode(),
                         "application/json",
                     ),
                     "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
@@ -994,7 +999,7 @@ class LoggerFactory:
 
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
         upgini_logger.handlers.clear()
-        rest_client = get_rest_client(backend_url, api_token)
+        rest_client = get_rest_client(backend_url, api_token, client_ip, client_visitorid)
         datadog_handler = BackendLogHandler(rest_client, client_ip, client_visitorid)
         json_formatter = jsonlogger.JsonFormatter(
             "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",

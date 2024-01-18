@@ -8,6 +8,7 @@ import pandas as pd
 
 from upgini import dataset
 from upgini.http import (
+    _RestClient,
     ProviderTaskSummary,
     SearchProgress,
     SearchTaskSummary,
@@ -41,8 +42,7 @@ class SearchTask:
         accurate_model: bool = False,
         initial_search_task_id: Optional[str] = None,
         task_type: Optional[ModelTaskType] = None,
-        endpoint: Optional[str] = None,
-        api_key: Optional[str] = None,
+        rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.search_task_id = search_task_id
@@ -53,8 +53,7 @@ class SearchTask:
         self.accurate_model = accurate_model
         self.task_type = task_type
         self.summary = None
-        self.endpoint = endpoint
-        self.api_key = api_key
+        self.rest_client = rest_client
         if logger is not None:
             self.logger = logger
         else:
@@ -64,7 +63,7 @@ class SearchTask:
         self.unused_features_for_generation: Optional[List[str]] = None
 
     def get_progress(self, trace_id: str) -> SearchProgress:
-        return get_rest_client(self.endpoint, self.api_key).get_search_progress(trace_id, self.search_task_id)
+        return self.rest_client.get_search_progress(trace_id, self.search_task_id)
 
     def poll_result(self, trace_id: str, quiet: bool = False, check_fit: bool = False) -> "SearchTask":
         completed_statuses = {"COMPLETED", "VALIDATION_COMPLETED"}
@@ -72,7 +71,7 @@ class SearchTask:
         submitted_statuses = {"SUBMITTED", "VALIDATION_SUBMITTED"}
         if not quiet:
             print(bundle.get("polling_search_task").format(self.search_task_id))
-            if is_demo_api_key(self.api_key):
+            if is_demo_api_key(self.rest_client._refresh_token):
                 print(bundle.get("polling_unregister_information"))
         search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
 
@@ -80,14 +79,14 @@ class SearchTask:
             with Spinner():
                 if self.PROTECT_FROM_RATE_LIMIT:
                     time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-                self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
+                self.summary = self.rest_client.search_task_summary_v2(
                     trace_id, search_task_id
                 )
                 while self.summary.status not in completed_statuses and (
                     not check_fit or "VALIDATION" not in self.summary.status
                 ):
                     time.sleep(self.POLLING_DELAY_SECONDS)
-                    self.summary = get_rest_client(self.endpoint, self.api_key).search_task_summary_v2(
+                    self.summary = self.rest_client.search_task_summary_v2(
                         trace_id, search_task_id
                     )
                     if self.summary.status in failed_statuses:
@@ -103,7 +102,7 @@ class SearchTask:
         except KeyboardInterrupt as e:
             if not check_fit:
                 print(bundle.get("search_stopping"))
-                get_rest_client(self.endpoint, self.api_key).stop_search_task_v2(trace_id, search_task_id)
+                self.rest_client.stop_search_task_v2(trace_id, search_task_id)
                 self.logger.warning(f"Search {search_task_id} stopped by user")
                 print(bundle.get("search_stopped"))
             raise e
@@ -131,7 +130,7 @@ class SearchTask:
             for provider_summary in self.summary.initial_important_providers:
                 if provider_summary.status == "COMPLETED":
                     self.provider_metadata_v2.append(
-                        get_rest_client(self.endpoint, self.api_key).get_provider_search_metadata_v3(
+                        self.rest_client.get_provider_search_metadata_v3(
                             provider_summary.ads_search_task_id, trace_id
                         )
                     )
@@ -257,8 +256,8 @@ class SearchTask:
         if self.PROTECT_FROM_RATE_LIMIT:
             time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
         return _get_all_initial_raw_features_cached(
-            self.endpoint,
-            self.api_key,
+            self.rest_client._service_endpoint,
+            self.rest_client._refresh_token,
             trace_id,
             self.search_task_id,
             metrics_calculation,
@@ -268,7 +267,11 @@ class SearchTask:
     def get_target_outliers(self, trace_id: str) -> Optional[pd.DataFrame]:
         self._check_finished_initial_search()
         return _get_target_outliers_cached(
-            self.endpoint, self.api_key, trace_id, self.search_task_id, self.PROTECT_FROM_RATE_LIMIT
+            self.rest_client._service_endpoint,
+            self.rest_client._refresh_token,
+            trace_id,
+            self.search_task_id,
+            self.PROTECT_FROM_RATE_LIMIT
         )
 
     def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:
@@ -286,8 +289,8 @@ class SearchTask:
     def get_all_validation_raw_features(self, trace_id: str, metrics_calculation=False) -> Optional[pd.DataFrame]:
         self._check_finished_validation_search()
         return _get_all_validation_raw_features_cached(
-            self.endpoint,
-            self.api_key,
+            self.rest_client._service_endpoint,
+            self.rest_client._refresh_token,
             trace_id,
             self.search_task_id,
             metrics_calculation,
@@ -295,7 +298,7 @@ class SearchTask:
         )
 
     def get_file_metadata(self, trace_id: str) -> FileMetadata:
-        return get_rest_client(self.endpoint, self.api_key).get_search_file_metadata(self.search_task_id, trace_id)
+        return self.rest_client.get_search_file_metadata(self.search_task_id, trace_id)
 
 
 @lru_cache()

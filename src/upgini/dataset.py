@@ -20,7 +20,7 @@ from pandas.api.types import (
 from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.http import ProgressStage, SearchProgress, get_rest_client
+from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_COLUMNS,
@@ -78,8 +78,7 @@ class Dataset:  # (pd.DataFrame):
         search_keys: Optional[List[Tuple[str, ...]]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         random_state: Optional[int] = None,
-        endpoint: Optional[str] = None,
-        api_key: Optional[str] = None,
+        rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
         warning_counter: Optional[WarningCounter] = None,
         **kwargs,
@@ -114,8 +113,7 @@ class Dataset:  # (pd.DataFrame):
         self.hierarchical_subgroup_keys = []
         self.file_upload_id: Optional[str] = None
         self.etalon_def: Optional[Dict[str, str]] = None
-        self.endpoint = endpoint
-        self.api_key = api_key
+        self.rest_client = rest_client
         self.random_state = random_state
         self.columns_renaming: Dict[str, str] = {}
         self.imbalanced: bool = False
@@ -983,10 +981,10 @@ class Dataset:  # (pd.DataFrame):
             runtime_parameters=runtime_parameters,
         )
 
-        if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
+        if self.file_upload_id is not None and self.rest_client.check_uploaded_file_v2(
             trace_id, self.file_upload_id, file_metadata
         ):
-            search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_without_upload_v2(
+            search_task_response = self.rest_client.initial_search_without_upload_v2(
                 trace_id, self.file_upload_id, file_metadata, file_metrics, search_customization
             )
         else:
@@ -999,7 +997,7 @@ class Dataset:  # (pd.DataFrame):
                     progress_bar.progress = search_progress.to_progress_bar()
                 if progress_callback is not None:
                     progress_callback(search_progress)
-                search_task_response = get_rest_client(self.endpoint, self.api_key).initial_search_v2(
+                search_task_response = self.rest_client.initial_search_v2(
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
                 # if progress_bar is not None:
@@ -1015,8 +1013,7 @@ class Dataset:  # (pd.DataFrame):
             extract_features,
             accurate_model,
             task_type=self.task_type,
-            endpoint=self.endpoint,
-            api_key=self.api_key,
+            rest_client=self.rest_client,
             logger=self.logger,
         )
 
@@ -1053,10 +1050,10 @@ class Dataset:  # (pd.DataFrame):
             progress_bar.progress = search_progress.to_progress_bar()
         if progress_callback is not None:
             progress_callback(search_progress)
-        if self.file_upload_id is not None and get_rest_client(self.endpoint, self.api_key).check_uploaded_file_v2(
+        if self.file_upload_id is not None and self.rest_client.check_uploaded_file_v2(
             trace_id, self.file_upload_id, file_metadata
         ):
-            search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_without_upload_v2(
+            search_task_response = self.rest_client.validation_search_without_upload_v2(
                 trace_id, self.file_upload_id, initial_search_task_id, file_metadata, file_metrics, search_customization
             )
         else:
@@ -1065,7 +1062,7 @@ class Dataset:  # (pd.DataFrame):
                 # To avoid rate limit
                 time.sleep(1)
 
-                search_task_response = get_rest_client(self.endpoint, self.api_key).validation_search_v2(
+                search_task_response = self.rest_client.validation_search_v2(
                     trace_id,
                     parquet_file_path,
                     initial_search_task_id,
@@ -1085,8 +1082,7 @@ class Dataset:  # (pd.DataFrame):
             return_scores,
             extract_features,
             initial_search_task_id=initial_search_task_id,
-            endpoint=self.endpoint,
-            api_key=self.api_key,
+            rest_client=self.rest_client,
             logger=self.logger,
         )
 
