@@ -1008,7 +1008,7 @@ class FeaturesEnricher(TransformerMixin):
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                         y_sorted
                     ):
-                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(self.y.mean(), 4)
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(np.mean(self.y), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -1068,14 +1068,14 @@ class FeaturesEnricher(TransformerMixin):
                                 bundle.get("quality_metrics_segment_header"): bundle.get(
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
-                                bundle.get("quality_metrics_rows_header"): _num_samples(self.eval_set[idx][0]), #_num_samples(eval_X_sorted),
+                                bundle.get("quality_metrics_rows_header"): _num_samples(self.eval_set[idx][0]),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                                 eval_y_sorted
                             ):
                                 eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
-                                    self.eval_set[idx][1].mean(), 4
+                                    np.mean(self.eval_set[idx][1]), 4
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
@@ -1091,6 +1091,9 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
 
                     metrics_df = pd.DataFrame(metrics)
+                    mean_target_hdr = bundle.get("quality_metrics_mean_target_header")
+                    if mean_target_hdr in metrics_df.columns:
+                        metrics_df[mean_target_hdr] = metrics_df[mean_target_hdr].astype("float64")
                     do_without_pandas_limits(
                         lambda: self.logger.info(f"Metrics calculation finished successfully:\n{metrics_df}")
                     )
