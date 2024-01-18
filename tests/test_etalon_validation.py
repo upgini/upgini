@@ -616,7 +616,7 @@ def test_columns_renaming():
     df = pd.concat([df1, df2], axis=1)
 
     dataset = Dataset(
-        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)], endpoint="fake.url"
+        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)]
     )
     dataset._Dataset__rename_columns()
     print(dataset)
@@ -633,7 +633,7 @@ def test_too_long_columns():
     )
 
     dataset = Dataset(
-        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)], endpoint="fake.url"
+        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)]
     )
     dataset._Dataset__rename_columns()
     print(dataset)
@@ -665,7 +665,7 @@ def test_downsampling_binary():
         "target": FileColumnMeaningType.TARGET,
         "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
     }
-    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url")
+    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.BINARY
 
     old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
@@ -708,7 +708,7 @@ def test_downsampling_multiclass():
         "target": FileColumnMeaningType.TARGET,
         "eval_set_index": FileColumnMeaningType.EVAL_SET_INDEX,
     }
-    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)], endpoint="fake.url")
+    dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.MULTICLASS
 
     old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD

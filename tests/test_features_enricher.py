@@ -1616,7 +1616,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     X = tds[["date"]]
     y = tds.target
 
-    search_task = SearchTask("", endpoint=url)
+    search_task = SearchTask("")
 
     def initial_max_hit_rate() -> Optional[float]:
         return 1.0
@@ -2363,7 +2363,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "email_one_domain_3b0a68",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
-        search_task = SearchTask(search_task_id, self, endpoint=url, api_key="fake_api_key")
+        search_task = SearchTask(search_task_id, self, rest_client=enricher.rest_client)
         search_task.provider_metadata_v2 = [
             ProviderTaskMetadataV2(
                 features=[
@@ -2499,7 +2499,7 @@ def test_diff_target_dups(requests_mock: Mocker):
         assert self.data.loc[1, "date_0e8763"] == 1672531200000
         assert self.data.loc[1, "feature_2ad562"] == 13
         assert self.data.loc[1, "target"] == 1
-        return SearchTask("123", self, endpoint=url, api_key="fake_api_key")
+        return SearchTask("123", self, rest_client=enricher.rest_client)
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1

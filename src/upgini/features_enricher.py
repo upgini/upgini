@@ -234,7 +234,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         self.search_id = search_id
         if search_id:
-            search_task = SearchTask(search_id, endpoint=self.endpoint, api_key=self._api_key, logger=self.logger)
+            search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
 
             print(bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
@@ -1820,10 +1820,9 @@ class FeaturesEnricher(TransformerMixin):
 
             dataset = Dataset(
                 "sample_" + str(uuid.uuid4()),
-                df=df_without_features,  # type: ignore
-                endpoint=self.endpoint,  # type: ignore
-                api_key=self.api_key,  # type: ignore
-                date_format=self.date_format,  # type: ignore
+                df=df_without_features,
+                date_format=self.date_format,
+                rest_client=self.rest_client,
                 logger=self.logger,
             )
             dataset.meaning_types = meaning_types
@@ -2153,11 +2152,10 @@ class FeaturesEnricher(TransformerMixin):
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
             df=df,  # type: ignore
-            model_task_type=model_task_type,  # type: ignore
-            endpoint=self.endpoint,  # type: ignore
-            api_key=self.api_key,  # type: ignore
-            date_format=self.date_format,  # type: ignore
-            random_state=self.random_state,  # type: ignore
+            model_task_type=model_task_type,
+            date_format=self.date_format,
+            random_state=self.random_state,
+            rest_client=self.rest_client,
             logger=self.logger,
         )
         dataset.meaning_types = meaning_types
