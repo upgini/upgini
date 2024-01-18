@@ -224,10 +224,12 @@ class EstimatorWrapper:
         return self.estimator.predict(**kwargs)
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
-        X, y, groups = self._prepare_data(X, y)
+        X, y, groups = self._prepare_data(X, y, groups=self.groups)
         return X, y, groups, {}
 
-    def _prepare_data(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+    def _prepare_data(
+        self, X: pd.DataFrame, y: pd.Series, groups: Optional[np.ndarray] = None
+    ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
@@ -237,7 +239,6 @@ class EstimatorWrapper:
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
 
-        groups = self.groups
         if groups is not None:
             X["__groups"] = groups
             X, y = self._remove_empty_target_rows(X, y)
