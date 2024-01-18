@@ -856,7 +856,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
-                
+
                 effective_X = X if X is not None else self.X
                 effective_eval_set = eval_set if eval_set is not None else self.eval_set
 
@@ -2480,7 +2480,7 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("y_is_constant_eval_set"))
 
         return validated_eval_X, validated_eval_y
-    
+
     def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
         if self.baseline_score_column is not None:
             if self.baseline_score_column not in X.columns:
