@@ -215,7 +215,7 @@ class EstimatorWrapper:
         self.groups = groups
 
     def fit(self, X: pd.DataFrame, y: np.ndarray, **kwargs):
-        X, y, fit_params = self._prepare_to_fit(X, y)
+        X, y, _, fit_params = self._prepare_to_fit(X, y)
         kwargs.update(fit_params)
         self.estimator.fit(X, y, **kwargs)
         return self
@@ -223,7 +223,11 @@ class EstimatorWrapper:
     def predict(self, **kwargs):
         return self.estimator.predict(**kwargs)
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
+        X, y, groups = self._prepare_data(X, y)
+        return X, y, groups, {}
+
+    def _prepare_data(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
         for c in X.columns:
             if is_numeric_dtype(X[c]):
                 X[c] = X[c].astype(float)
@@ -233,36 +237,34 @@ class EstimatorWrapper:
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
 
+        groups = self.groups
+        if groups is not None:
+            X["groups"] = groups
+            X, y = self._remove_empty_target_rows(X, y)
+            groups = X["groups"]
+            X.drop(columns="groups", inplace=True)
+        else:
+            X, y = self._remove_empty_target_rows(X, y)
+
+        return X, y, groups
+
+    def _remove_empty_target_rows(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
         joined = pd.concat([X, y], axis=1)
         joined = joined[joined[y.name].notna()]
         joined = joined.reset_index(drop=True)
         X = joined.drop(columns=y.name)
         y = np.array(list(joined[y.name].values))
-        return X, y, {}
+
+        return X, y
 
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
-        for c in X.columns:
-            if is_numeric_dtype(X[c]):
-                X[c] = X[c].astype(float)
-            else:
-                X[c] = X[c].astype(str)
-
-        if not isinstance(y, pd.Series):
-            raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
-
-        joined = pd.concat([X, y], axis=1)
-        joined = joined[joined[y.name].notna()]
-        joined = joined.reset_index(drop=True)
-        X = joined.drop(columns=y.name)
-        y = np.array(list(joined[y.name].values))
+        X, y, _ = self._prepare_data(X, y)
         return X, y, {}
 
     def cross_val_predict(
         self, X: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
     ) -> Optional[float]:
-        X, y, fit_params = self._prepare_to_fit(X, y)
-        # if isinstance(self.estimator, CatBoostClassifier) or isinstance(self.estimator, CatBoostRegressor):
-        #     fit_params["early_stopping_rounds"] = 20
+        X, y, groups, fit_params = self._prepare_to_fit(X, y)
 
         if X.shape[1] == 0:
             return None
@@ -278,7 +280,7 @@ class EstimatorWrapper:
                 y=y,
                 scoring=scorer,
                 cv=self.cv,
-                groups=self.groups,
+                groups=groups,
                 fit_params=fit_params,
                 return_estimator=True,
             )
@@ -393,8 +395,8 @@ class CatBoostWrapper(EstimatorWrapper):
         self.cat_features = None
         self.cat_features_idx = None
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
-        X, y, params = super()._prepare_to_fit(X, y)
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
+        X, y, groups, params = super()._prepare_to_fit(X, y)
         self.cat_features = _get_cat_features(X)
         X = fill_na_cat_features(X, self.cat_features)
         # unique_cat_features = []
@@ -418,7 +420,7 @@ class CatBoostWrapper(EstimatorWrapper):
             del self.estimator._init_params["cat_features"]
 
         params.update({"cat_features": self.cat_features_idx})
-        return X, y, params
+        return X, y, groups, params
 
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_calculate(X, y)
@@ -445,8 +447,8 @@ class LightGBMWrapper(EstimatorWrapper):
         )
         self.cat_features = None
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, dict]:
-        X, y, params = super()._prepare_to_fit(X, y)
+    def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
+        X, y, groups, params = super()._prepare_to_fit(X, y)
         self.cat_features = _get_cat_features(X)
         X = fill_na_cat_features(X, self.cat_features)
         for feature in self.cat_features:
@@ -454,7 +456,7 @@ class LightGBMWrapper(EstimatorWrapper):
         if not is_numeric_dtype(y):
             y = correct_string_target(y)
 
-        return X, y, params
+        return X, y, groups, params
 
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_calculate(X, y)
@@ -483,8 +485,8 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         )
         self.cat_features = None
 
-    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, dict]:
-        X, y, params = super()._prepare_to_fit(X, y)
+    def _prepare_to_fit(self, X: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
+        X, y, groups, params = super()._prepare_to_fit(X, y)
         self.cat_features = _get_cat_features(X)
         num_features = [col for col in X.columns if col not in self.cat_features]
         X[num_features] = X[num_features].fillna(-999)
@@ -494,7 +496,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
             X[feature] = X[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
             y = correct_string_target(y)
-        return X, y, params
+        return X, y, groups, params
 
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         X, y, params = super()._prepare_to_calculate(X, y)
