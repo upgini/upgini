@@ -308,7 +308,6 @@ class _RestClient:
         # self.silent_mode = silent_mode
         self.client_ip = client_ip
         self.client_visitorid = client_visitorid
-        print(f"Created RestClient with {client_ip} and {client_visitorid}")
         self._access_token = self._refresh_access_token()
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
