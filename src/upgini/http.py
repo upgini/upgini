@@ -308,7 +308,6 @@ class _RestClient:
         # self.silent_mode = silent_mode
         self.client_ip = client_ip
         self.client_visitorid = client_visitorid
-        print(f"Created RestClient with {client_ip} and {client_visitorid}")
         self._access_token = self._refresh_access_token()
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
@@ -442,9 +441,7 @@ class _RestClient:
     ) -> SearchTaskResponse:
         api_path = self.INITIAL_SEARCH_URI_FMT_V2
 
-        print(f"Start initial search with {self.client_ip} and {self.client_visitorid}")
         track_metrics = get_track_metrics(self.client_ip, self.client_visitorid)
-        print(f"Sending track metrics: {track_metrics}")
 
         def open_and_send():
             md5_hash = hashlib.md5()
@@ -486,7 +483,7 @@ class _RestClient:
                     api_path, files, trace_id=trace_id, additional_headers=additional_headers
                 )
 
-        response = self._with_unauth_retry(lambda: open_and_send())
+        response = self._with_unauth_retry(open_and_send)
         return SearchTaskResponse(response)
 
     def check_uploaded_file_v2(self, trace_id: str, file_upload_id: str, metadata: FileMetadata) -> bool:
@@ -571,7 +568,7 @@ class _RestClient:
                     api_path, files, trace_id=trace_id, additional_headers=additional_headers
                 )
 
-        response = self._with_unauth_retry(lambda: open_and_send())
+        response = self._with_unauth_retry(open_and_send)
         return SearchTaskResponse(response)
 
     def validation_search_without_upload_v2(

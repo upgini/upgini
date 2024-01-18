@@ -2785,9 +2785,9 @@ class FeaturesEnricher(TransformerMixin):
         result_features.index.name = original_index_name
 
         if rows_to_drop is not None:
-            print(f"Before dropping target outliers size: {len(result_features)}")
+            self.logger.info(f"Before dropping target outliers size: {len(result_features)}")
             result_features = result_features[~result_features[SYSTEM_RECORD_ID].isin(rows_to_drop[SYSTEM_RECORD_ID])]
-            print(f"After dropping target outliers size: {len(result_features)}")
+            self.logger.info(f"After dropping target outliers size: {len(result_features)}")
 
         result_eval_sets = dict()
         if not is_transform and EVAL_SET_INDEX in result_features.columns:
