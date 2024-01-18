@@ -239,10 +239,10 @@ class EstimatorWrapper:
 
         groups = self.groups
         if groups is not None:
-            X["groups"] = groups
+            X["__groups"] = groups
             X, y = self._remove_empty_target_rows(X, y)
-            groups = X["groups"]
-            X.drop(columns="groups", inplace=True)
+            groups = X["__groups"]
+            X.drop(columns="__groups", inplace=True)
         else:
             X, y = self._remove_empty_target_rows(X, y)
 
