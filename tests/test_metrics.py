@@ -189,8 +189,8 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment],
-            rows_header: [6582, 2505],
-            target_mean_header: [0.5, 0.8854],
+            rows_header: [28000, 2505],
+            target_mean_header: [0.8825, 0.8854],
             baseline_gini: [0.486038, 0.450277],
         }
     )
