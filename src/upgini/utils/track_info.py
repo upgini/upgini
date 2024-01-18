@@ -50,6 +50,7 @@ def _get_execution_ide() -> str:
     except Exception:
         return "other"
 
+
 @lru_cache()
 def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
     # default values

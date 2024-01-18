@@ -297,7 +297,8 @@ class FeaturesEnricher(TransformerMixin):
     def _set_api_key(self, api_key: str):
         self._api_key = api_key
         if self.logs_enabled:
-            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key, self.client_ip, self.client_visitorid)
+            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key,
+                                                     self.client_ip, self.client_visitorid)
 
     api_key = property(_get_api_key, _set_api_key)
 
@@ -1000,15 +1001,17 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_metric = None
                         uplift = None
 
+                    effective_X = X if X is not None else self.X
+                    effective_y = y if y is not None else self.y
                     train_metrics = {
                         bundle.get("quality_metrics_segment_header"): bundle.get("quality_metrics_train_segment"),
-                        bundle.get("quality_metrics_rows_header"): _num_samples(self.X),
+                        bundle.get("quality_metrics_rows_header"): _num_samples(effective_X),
                         # bundle.get("quality_metrics_match_rate_header"): self._search_task.initial_max_hit_rate_v2(),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                         y_sorted
                     ):
-                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(np.mean(self.y), 4)
+                        train_metrics[bundle.get("quality_metrics_mean_target_header")] = round(np.mean(effective_y), 4)
                     if etalon_metric is not None:
                         train_metrics[bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
@@ -1064,18 +1067,19 @@ class FeaturesEnricher(TransformerMixin):
                             else:
                                 eval_uplift = None
 
+                            effective_eval_set = eval_set if eval_set is not None else self.eval_set
                             eval_metrics = {
                                 bundle.get("quality_metrics_segment_header"): bundle.get(
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
-                                bundle.get("quality_metrics_rows_header"): _num_samples(self.eval_set[idx][0]),
+                                bundle.get("quality_metrics_rows_header"): _num_samples(effective_eval_set[idx][0]),
                                 # bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                                 eval_y_sorted
                             ):
                                 eval_metrics[bundle.get("quality_metrics_mean_target_header")] = round(
-                                    np.mean(self.eval_set[idx][1]), 4
+                                    np.mean(effective_eval_set[idx][1]), 4
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[
@@ -3399,6 +3403,8 @@ class FeaturesEnricher(TransformerMixin):
 
 def _num_samples(x):
     """Return number of samples in array-like x."""
+    if x is None:
+        return 0
     message = "Expected sequence or array-like, got %s" % type(x)
     if hasattr(x, "fit") and callable(x.fit):
         # Don't get num_samples from an ensembles length!
