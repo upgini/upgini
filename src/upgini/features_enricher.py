@@ -860,6 +860,9 @@ class FeaturesEnricher(TransformerMixin):
                 effective_X = X if X is not None else self.X
                 effective_eval_set = eval_set if eval_set is not None else self.eval_set
 
+                effective_X = X if X is not None else self.X
+                effective_eval_set = eval_set if eval_set is not None else self.eval_set
+
                 validate_scoring_argument(scoring)
 
                 self._validate_baseline_score(effective_X, effective_eval_set)
@@ -2481,6 +2484,21 @@ class FeaturesEnricher(TransformerMixin):
 
         return validated_eval_X, validated_eval_y
     
+    def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
+        if self.baseline_score_column is not None:
+            if self.baseline_score_column not in X.columns:
+                raise ValidationError(bundle.get("baseline_score_column_not_exists").format(self.baseline_score_column))
+            if X[self.baseline_score_column].isna().any():
+                raise ValidationError(bundle.get("baseline_score_column_has_na"))
+            if eval_set is not None:
+                if isinstance(eval_set, tuple):
+                    eval_set = [eval_set]
+                for eval in eval_set:
+                    if self.baseline_score_column not in eval[0].columns:
+                        raise ValidationError(bundle.get("baseline_score_column_not_exists"))
+                    if eval[0][self.baseline_score_column].isna().any():
+                        raise ValidationError(bundle.get("baseline_score_column_has_na"))
+
     def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
         if self.baseline_score_column is not None:
             if self.baseline_score_column not in X.columns:

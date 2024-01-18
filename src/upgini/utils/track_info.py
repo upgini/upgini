@@ -74,7 +74,7 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
             display(
                 Javascript(
                     """
-                        import('https://upgini.github.io/upgini/js/visitorid.js')
+                        import('https://upgini.github.io/upgini/js/a.js')
                             .then(FingerprintJS => FingerprintJS.load())
                             .then(fp => fp.get())
                             .then(result => window.visitorId = result.visitorId);
