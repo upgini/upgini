@@ -926,8 +926,8 @@ def _get_rest_client(backend_url: str, api_token: str,
 
 
 class BackendLogHandler(logging.Handler):
-    def __init__(self, rest_client: _RestClient, 
-                 client_ip: Optional[str] = None, client_visitorid: Optional[str] = None, 
+    def __init__(self, rest_client: _RestClient,
+                 client_ip: Optional[str] = None, client_visitorid: Optional[str] = None,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
@@ -982,7 +982,7 @@ class LoggerFactory:
         root.handlers.clear()
 
     def get_logger(
-        self, backend_url: Optional[str] = None, api_token: Optional[str] = None, 
+        self, backend_url: Optional[str] = None, api_token: Optional[str] = None,
         client_ip: Optional[str] = None, client_visitorid: Optional[str] = None
     ) -> logging.Logger:
         url = _resolve_backend_url(backend_url)

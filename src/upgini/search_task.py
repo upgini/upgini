@@ -8,7 +8,6 @@ import pandas as pd
 
 from upgini import dataset
 from upgini.http import (
-    LoggerFactory,
     ProviderTaskSummary,
     SearchProgress,
     SearchTaskSummary,
