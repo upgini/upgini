@@ -663,6 +663,8 @@ class Dataset:  # (pd.DataFrame):
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
 
+        # TODO remove ipv4 from validation if ipv6 is presented
+
         nrows = len(self.data)
         validation_stats = {}
         self.data["valid_keys"] = 0
@@ -815,18 +817,23 @@ class Dataset:  # (pd.DataFrame):
 
         self.__convert_features_types()
 
-        self.__clean_duplicates(silent_mode)
+        search_keys = {
+            col: SearchKey.from_meaning_type(key_type)
+            for col, key_type in self.meaning_types.items()
+            if SearchKey.from_meaning_type(key_type) is not None
+        }
+
+        if validate_target:
+            need_full_defuplication, self.data = remove_fintech_duplicates(self.data, search_keys, self.logger)
+        else:
+            need_full_defuplication = True
+
+        if need_full_defuplication:
+            self.__clean_duplicates(silent_mode)
 
         self.__validate_dataset(validate_target, silent_mode)
 
         if validate_target:
-            search_keys = {
-                col: SearchKey.from_meaning_type(key_type)
-                for col, key_type in self.meaning_types.items()
-                if SearchKey.from_meaning_type(key_type) is not None
-                }
-            self.data = remove_fintech_duplicates(self.data, search_keys, self.logger)
-
             self.__validate_target()
 
             self.__resample()

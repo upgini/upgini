@@ -1526,8 +1526,10 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df_with_index[TARGET] = eval_y
                 eval_df_with_index[EVAL_SET_INDEX] = idx + 1
                 df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
-            
-            df_with_eval_set_index = remove_fintech_duplicates(df_with_eval_set_index, self.search_keys, self.logger)
+
+            _, df_with_eval_set_index = remove_fintech_duplicates(
+                df_with_eval_set_index, self.search_keys, self.logger, silent=True
+            )
 
             # downsample if need to eval_set threshold
             num_samples = _num_samples(df_with_eval_set_index)
@@ -2655,7 +2657,7 @@ class FeaturesEnricher(TransformerMixin):
         for col, t in search_keys.items():
             if t == SearchKey.HEM:
                 return col
-    
+
     @staticmethod
     def _get_phone_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
         for col, t in search_keys.items():
