@@ -58,7 +58,7 @@ def test_convertion_to_hem():
                 None,
                 None,
                 None,
-                None
+                None,
             ],
             EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: ["tgoogle.com", None, None, None, None, None],
             EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: ["google.com", None, None, None, None, None],

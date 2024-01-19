@@ -909,8 +909,12 @@ def resolve_api_token(api_token: Optional[str]) -> str:
         return DEMO_API_KEY
 
 
-def get_rest_client(backend_url: Optional[str] = None, api_token: Optional[str] = None,
-                    client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> _RestClient:
+def get_rest_client(
+    backend_url: Optional[str] = None,
+    api_token: Optional[str] = None,
+    client_ip: Optional[str] = None,
+    client_visitorid: Optional[str] = None,
+) -> _RestClient:
     url = _resolve_backend_url(backend_url)
     token = resolve_api_token(api_token)
 
@@ -922,15 +926,21 @@ def is_demo_api_key(api_token: Optional[str]) -> bool:
 
 
 @lru_cache()
-def _get_rest_client(backend_url: str, api_token: str,
-                     client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> _RestClient:
+def _get_rest_client(
+    backend_url: str, api_token: str, client_ip: Optional[str] = None, client_visitorid: Optional[str] = None
+) -> _RestClient:
     return _RestClient(backend_url, api_token, client_ip, client_visitorid)
 
 
 class BackendLogHandler(logging.Handler):
-    def __init__(self, rest_client: _RestClient,
-                 client_ip: Optional[str] = None, client_visitorid: Optional[str] = None,
-                 *args, **kwargs) -> None:
+    def __init__(
+        self,
+        rest_client: _RestClient,
+        client_ip: Optional[str] = None,
+        client_visitorid: Optional[str] = None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.rest_client = rest_client
         self.track_metrics = None
@@ -984,8 +994,11 @@ class LoggerFactory:
         root.handlers.clear()
 
     def get_logger(
-        self, backend_url: Optional[str] = None, api_token: Optional[str] = None,
-        client_ip: Optional[str] = None, client_visitorid: Optional[str] = None
+        self,
+        backend_url: Optional[str] = None,
+        api_token: Optional[str] = None,
+        client_ip: Optional[str] = None,
+        client_visitorid: Optional[str] = None,
     ) -> logging.Logger:
         url = _resolve_backend_url(backend_url)
         token = resolve_api_token(api_token)

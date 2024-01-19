@@ -53,9 +53,15 @@ class Column:
 
 
 class Feature:
-    def __init__(self, op: Operand, children: List[Union[Column, "Feature"]], data: Optional[pd.DataFrame] = None,
-                 display_index: Optional[str] = None, cached_display_name: Optional[str] = None,
-                 alias: Optional[str] = None):
+    def __init__(
+        self,
+        op: Operand,
+        children: List[Union[Column, "Feature"]],
+        data: Optional[pd.DataFrame] = None,
+        display_index: Optional[str] = None,
+        cached_display_name: Optional[str] = None,
+        alias: Optional[str] = None,
+    ):
         self.op = op
         self.children = children
         self.data = data
@@ -258,8 +264,9 @@ class Feature:
 
 
 class FeatureGroup:
-    def __init__(self, op: Operand, main_column: Optional[Union[Column, Feature]],
-                 children: List[Union[Column, Feature]]):
+    def __init__(
+        self, op: Operand, main_column: Optional[Union[Column, Feature]], children: List[Union[Column, Feature]]
+    ):
         self.op = op
         self.main_column_node = main_column
         self.children = children

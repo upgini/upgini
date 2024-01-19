@@ -1,5 +1,4 @@
 class WarningCounter:
-
     def __init__(self):
         self._count = 0
 

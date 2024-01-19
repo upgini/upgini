@@ -31,7 +31,6 @@ class OnlineUploadingType(Enum):
 
 
 class DataSourcePublisher:
-
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
     DEFAULT_GENERATE_EMBEDDINGS = []
 
@@ -259,11 +258,7 @@ class DataSourcePublisher:
             except Exception:
                 self.logger.exception(f"Failed to deactivate data tables {data_table_ids} for clients {client_emails}")
 
-    def upload_online(
-            self,
-            bq_table_id: Optional[str] = None,
-            search_keys: Optional[List[SearchKey]] = None
-    ):
+    def upload_online(self, bq_table_id: Optional[str] = None, search_keys: Optional[List[SearchKey]] = None):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             if bq_table_id is None and search_keys is None:

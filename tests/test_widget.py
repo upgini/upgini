@@ -417,7 +417,7 @@ def test_widget(requests_mock: Mocker):
                     '<button kind="secondary"><p>Instant purchase</p></button></a></div>'
                 ),
                 (
-                    "<div class=\"stButton\"><a href='https://app.snowflake.com/marketplace/listing/GZSTZ3VDMF6/"
+                    '<div class="stButton"><a href=\'https://app.snowflake.com/marketplace/listing/GZSTZ3VDMF6/'
                     "?referer=upgini' target='_blank' rel='noopener noreferrer'><button kind=\"secondary\"><p>"
                     "Instant purchase</p></button></a></div>"
                 ),

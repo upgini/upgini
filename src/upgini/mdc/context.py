@@ -32,9 +32,7 @@ def get_mdc_fields():
 
 @contextmanager
 def new_log_context(**kwargs):
-    context_id = "mdc-{thread}-{context}".format(
-        thread=threading.current_thread().ident, context=uuid.uuid4()
-    )
+    context_id = "mdc-{thread}-{context}".format(thread=threading.current_thread().ident, context=uuid.uuid4())
 
     LOGGER.debug("creating context %s", context_id)
 
@@ -48,11 +46,9 @@ def new_log_context(**kwargs):
         setattr(context, key, value)
 
     try:
-
         yield context
 
     finally:
-
         LOGGER.debug("deleting context %s", context_id)
 
         try:

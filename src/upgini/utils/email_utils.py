@@ -29,7 +29,6 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
 
 
 class EmailSearchKeyConverter:
-
     HEM_COLUMN_NAME = "hashed_email"
     DOMAIN_COLUMN_NAME = "email_domain"
     EMAIL_ONE_DOMAIN_COLUMN_NAME = "email_one_domain"
