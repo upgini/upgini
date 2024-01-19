@@ -298,8 +298,9 @@ class FeaturesEnricher(TransformerMixin):
     def _set_api_key(self, api_key: str):
         self._api_key = api_key
         if self.logs_enabled:
-            self.logger = LoggerFactory().get_logger(self.endpoint, self._api_key,
-                                                     self.client_ip, self.client_visitorid)
+            self.logger = LoggerFactory().get_logger(
+                self.endpoint, self._api_key, self.client_ip, self.client_visitorid
+            )
 
     api_key = property(_get_api_key, _set_api_key)
 
@@ -857,7 +858,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
-                
+
                 effective_X = X if X is not None else self.X
                 effective_eval_set = eval_set if eval_set is not None else self.eval_set
 
@@ -1470,7 +1471,7 @@ class FeaturesEnricher(TransformerMixin):
 
         original_df_sampled = self.df_with_original_index[
             self.df_with_original_index[SYSTEM_RECORD_ID].isin(fit_features[SYSTEM_RECORD_ID])
-            ]
+        ]
         enriched_X = drop_existing_columns(enriched_Xy, TARGET)
         if EVAL_SET_INDEX in original_df_sampled.columns:
             Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == 0")
@@ -1537,9 +1538,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             X_sampled = (
-                df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0")
-                .copy()
-                .drop(columns=[EVAL_SET_INDEX, TARGET])
+                df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0").copy().drop(columns=[EVAL_SET_INDEX, TARGET])
             )
             X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
             y_sampled = df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0").copy()[TARGET]
@@ -1886,9 +1885,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress = self.get_progress(trace_id, validation_task)
             except KeyboardInterrupt as e:
                 print(bundle.get("search_stopping"))
-                self.rest_client.stop_search_task_v2(
-                    trace_id, validation_task.search_task_id
-                )
+                self.rest_client.stop_search_task_v2(trace_id, validation_task.search_task_id)
                 self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
                 print(bundle.get("search_stopped"))
                 raise e
@@ -2484,21 +2481,6 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("y_is_constant_eval_set"))
 
         return validated_eval_X, validated_eval_y
-    
-    def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
-        if self.baseline_score_column is not None:
-            if self.baseline_score_column not in X.columns:
-                raise ValidationError(bundle.get("baseline_score_column_not_exists").format(self.baseline_score_column))
-            if X[self.baseline_score_column].isna().any():
-                raise ValidationError(bundle.get("baseline_score_column_has_na"))
-            if eval_set is not None:
-                if isinstance(eval_set, tuple):
-                    eval_set = [eval_set]
-                for eval in eval_set:
-                    if self.baseline_score_column not in eval[0].columns:
-                        raise ValidationError(bundle.get("baseline_score_column_not_exists"))
-                    if eval[0][self.baseline_score_column].isna().any():
-                        raise ValidationError(bundle.get("baseline_score_column_has_na"))
 
     def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
         if self.baseline_score_column is not None:
@@ -3004,9 +2986,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
                 description["shap"] = feature_meta.shap_value
-                description["Sources"] = feature_meta.data_source\
-                    .replace("AutoFE: features from ", "")\
-                    .replace("AutoFE: feature from ", "")
+                description["Sources"] = feature_meta.data_source.replace("AutoFE: features from ", "").replace(
+                    "AutoFE: feature from ", ""
+                )
                 description["Feature name"] = feature_meta.name
 
                 feature_idx = 1

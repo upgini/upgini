@@ -348,9 +348,11 @@ class Dataset:  # (pd.DataFrame):
 
             ipv6 = ip + "_v6"
             self.data[ipv6] = (
-                self.data[ip].apply(self._to_ipv6)
-                    .apply(self.__ip_to_int)
-                    .astype("string").str.replace(".0", "", regex=False)
+                self.data[ip]
+                .apply(self._to_ipv6)
+                .apply(self.__ip_to_int)
+                .astype("string")
+                .str.replace(".0", "", regex=False)
             )
             self.data = self.data.drop(columns=ip)
             self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS

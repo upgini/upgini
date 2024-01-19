@@ -5,12 +5,12 @@ import pandas as pd
 from requests import get
 
 from upgini.metadata import SearchKey
+
 # from upgini.resource_bundle import bundle
 # from upgini.utils.track_info import get_track_metrics
 
 
 class IpToCountrySearchKeyConverter:
-
     url = "http://ip-api.com/json/{}"
 
     def __init__(

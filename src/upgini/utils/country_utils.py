@@ -22,7 +22,9 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
             return df
 
         df[country_column] = (
-            df[country_column].astype("string").str.upper()
+            df[country_column]
+            .astype("string")
+            .str.upper()
             .map(CountrySearchKeyDetector.COUNTRIES)
             .fillna(df[country_column])
         )

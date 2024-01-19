@@ -4,13 +4,7 @@ import time
 
 
 class Spinner:
-
-    DEFAULT_FRAMES = [
-        "-",
-        "\\",
-        "|",
-        "/"
-    ]
+    DEFAULT_FRAMES = ["-", "\\", "|", "/"]
 
     def __init__(self, frames: List[str] = DEFAULT_FRAMES, step_time: float = 0.2):
         self.stop = False

@@ -76,9 +76,7 @@ RandomUnderSampler # doctest: +NORMALIZE_WHITESPACE
     """
 
     @_deprecate_positional_args
-    def __init__(
-        self, *, sampling_strategy="auto", random_state=None, replacement=False
-    ):
+    def __init__(self, *, sampling_strategy="auto", random_state=None, replacement=False):
         super().__init__(sampling_strategy=sampling_strategy)
         self.random_state = random_state
         self.replacement = replacement

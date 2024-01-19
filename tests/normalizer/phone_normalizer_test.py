@@ -78,15 +78,7 @@ def test_phone_prefix_normalization():
                 "123",
                 "abc",
             ],
-            "country": [
-                "US",
-                "EG",
-                "DZ",
-                "CN",
-                "RU",
-                "GB",
-                "Unknown"
-            ],
+            "country": ["US", "EG", "DZ", "CN", "RU", "GB", "Unknown"],
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
@@ -117,15 +109,7 @@ def test_float_string_phone_prefix_normalization():
                 "123.0",
                 "",
             ],
-            "country": [
-                "US",
-                "EG",
-                "DZ",
-                "CN",
-                "RU",
-                "GB",
-                "Unknown"
-            ],
+            "country": ["US", "EG", "DZ", "CN", "RU", "GB", "Unknown"],
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )

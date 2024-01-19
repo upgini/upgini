@@ -2,8 +2,8 @@ from typing import Tuple
 
 
 class CustomFallbackProgressBar:
-    """Progressbar supports displaying a progressbar like element
-    """
+    """Progressbar supports displaying a progressbar like element"""
+
     def __init__(self, total=100):
         """Creates a new progressbar
 
@@ -20,12 +20,9 @@ class CustomFallbackProgressBar:
 
     def __repr__(self):
         fraction = self.progress / self.total
-        filled = '=' * int(fraction * self.text_width)
-        rest = ' ' * (self.text_width - len(filled))
-        return '[{}{}] {}% {} {}'.format(
-            filled, rest,
-            self.progress, self._stage, self._eta
-        )
+        filled = "=" * int(fraction * self.text_width)
+        rest = " " * (self.text_width - len(filled))
+        return "[{}{}] {}% {} {}".format(filled, rest, self.progress, self._stage, self._eta)
 
     def display(self):
         print(self)

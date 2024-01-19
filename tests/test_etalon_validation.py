@@ -58,9 +58,14 @@ def test_string_ip_to_int_conversion():
             {"ip": None},
         ]
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip", )], meaning_types={
-        "ip": FileColumnMeaningType.IP_ADDRESS,
-    })
+    dataset = Dataset(
+        "test",
+        df=df,
+        search_keys=[("ip",)],
+        meaning_types={
+            "ip": FileColumnMeaningType.IP_ADDRESS,
+        },
+    )
     dataset._Dataset__rename_columns()
     dataset._Dataset__convert_ip()
     assert dataset.data["ip_bb9af5_v4"].dtype == "Int64"
@@ -77,7 +82,7 @@ def test_python_ip_to_int_conversion():
             {"ip": ipaddress.ip_address("192.168.1.1")},
         ]
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip", )])
+    dataset = Dataset("test", df=df, search_keys=[("ip",)])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -91,7 +96,7 @@ def test_python_ip_to_int_conversion():
 
 def test_ip_v6_conversion():
     df = pd.DataFrame({"ip": ["::cf:befe:525b"]})
-    dataset = Dataset("test", df=df, search_keys=[("ip", )])
+    dataset = Dataset("test", df=df, search_keys=[("ip",)])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -107,7 +112,7 @@ def test_int_ip_to_int_conversion():
     df = pd.DataFrame(
         {"ip": [3232235777, 892262568539]},
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip", )])  # type: ignore
+    dataset = Dataset("test", df=df, search_keys=[("ip",)])  # type: ignore
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
     }
@@ -615,9 +620,7 @@ def test_columns_renaming():
 
     df = pd.concat([df1, df2], axis=1)
 
-    dataset = Dataset(
-        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)]
-    )
+    dataset = Dataset("tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)])
     dataset._Dataset__rename_columns()
     print(dataset)
     assert set(dataset.data.columns.to_list()) == {"feature1_422b73", "date_0e8763", "feature1_422b73_0"}
@@ -632,9 +635,7 @@ def test_too_long_columns():
         }
     )
 
-    dataset = Dataset(
-        "tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)]
-    )
+    dataset = Dataset("tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)])
     dataset._Dataset__rename_columns()
     print(dataset)
     assert set(dataset.data.columns.to_list()) == {

@@ -7,7 +7,6 @@ from upgini.errors import ValidationError
 
 
 class PhoneNormalizer:
-
     def __init__(self, df: pd.DataFrame, phone_column_name: str, country_column_name: Optional[str] = None):
         self.df = df
         self.phone_column_name = phone_column_name
@@ -78,7 +77,7 @@ class PhoneNormalizer:
         try:
             value = str(value)
             if value.endswith(".0"):
-                value = value[:len(value) - 2]
+                value = value[: len(value) - 2]
             numeric_filter = filter(str.isdigit, value)
             numeric_string = "".join(numeric_filter)
             return PhoneNormalizer.validate_length(int(numeric_string))
@@ -337,5 +336,5 @@ class PhoneNormalizer:
         "PF": ("689", 7),
         "TK": ("690", 7),
         "FM": ("691", 7),
-        "MH": ("692", 7)
-        }
+        "MH": ("692", 7),
+    }

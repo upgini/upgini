@@ -79,16 +79,12 @@ class SearchTask:
             with Spinner():
                 if self.PROTECT_FROM_RATE_LIMIT:
                     time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-                self.summary = self.rest_client.search_task_summary_v2(
-                    trace_id, search_task_id
-                )
+                self.summary = self.rest_client.search_task_summary_v2(trace_id, search_task_id)
                 while self.summary.status not in completed_statuses and (
                     not check_fit or "VALIDATION" not in self.summary.status
                 ):
                     time.sleep(self.POLLING_DELAY_SECONDS)
-                    self.summary = self.rest_client.search_task_summary_v2(
-                        trace_id, search_task_id
-                    )
+                    self.summary = self.rest_client.search_task_summary_v2(trace_id, search_task_id)
                     if self.summary.status in failed_statuses:
                         self.logger.error(f"Search {search_task_id} failed with status {self.summary.status}")
                         raise RuntimeError(bundle.get("search_task_failed_status"))
@@ -130,9 +126,7 @@ class SearchTask:
             for provider_summary in self.summary.initial_important_providers:
                 if provider_summary.status == "COMPLETED":
                     self.provider_metadata_v2.append(
-                        self.rest_client.get_provider_search_metadata_v3(
-                            provider_summary.ads_search_task_id, trace_id
-                        )
+                        self.rest_client.get_provider_search_metadata_v3(provider_summary.ads_search_task_id, trace_id)
                     )
                     if provider_summary.unused_features_for_generation is not None:
                         self.unused_features_for_generation.extend(provider_summary.unused_features_for_generation)
@@ -271,7 +265,7 @@ class SearchTask:
             self.rest_client._refresh_token,
             trace_id,
             self.search_task_id,
-            self.PROTECT_FROM_RATE_LIMIT
+            self.PROTECT_FROM_RATE_LIMIT,
         )
 
     def get_max_initial_eval_set_hit_rate_v2(self) -> Optional[Dict[int, float]]:

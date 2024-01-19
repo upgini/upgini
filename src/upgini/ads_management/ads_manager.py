@@ -7,7 +7,6 @@ import pandas as pd
 
 
 class AdsManager:
-
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
 
     def __init__(self, api_key: Optional[str] = None, backend_url: Optional[str] = None):

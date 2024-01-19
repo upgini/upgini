@@ -127,7 +127,8 @@ def test_multivariate_timeseries_detection():
 
 
 def test_multivariate_time_series():
-    df = pd.DataFrame({
+    df = pd.DataFrame(
+        {
             "date": [
                 "2020-01-01 00:00:00",
                 "2020-01-01 00:00:02",
@@ -135,44 +136,49 @@ def test_multivariate_time_series():
                 "2020-01-01 00:00:06",
                 "2020-01-01 00:00:08",
             ]
-        })
+        }
+    )
     assert not is_blocked_time_series(df, "date", ["date"])
 
-    df = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2020-02-01")
-    })
+    df = pd.DataFrame({"date": pd.date_range("2020-01-01", "2020-02-01")})
     assert not is_blocked_time_series(df, "date", ["date"])
 
-    df = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2021-01-01")
-    })
+    df = pd.DataFrame({"date": pd.date_range("2020-01-01", "2021-01-01")})
     assert is_blocked_time_series(df, "date", ["date"])
 
-    df1 = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2021-01-01"),
-        "feature1": np.random.randint(0, 1000, 367),
-        "feature2": np.random.randint(0, 1000, 367)
-    })
-    df2 = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2021-01-01"),
-        "feature1": np.random.randint(0, 1000, 367),
-        "feature2": np.random.randint(0, 1000, 367)
-    })
+    df1 = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", "2021-01-01"),
+            "feature1": np.random.randint(0, 1000, 367),
+            "feature2": np.random.randint(0, 1000, 367),
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", "2021-01-01"),
+            "feature1": np.random.randint(0, 1000, 367),
+            "feature2": np.random.randint(0, 1000, 367),
+        }
+    )
     df = pd.concat([df1, df2])
     assert is_blocked_time_series(df, "date", ["date"])
 
-    df1 = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2021-01-01"),
-        "feature1": np.random.randint(0, 1000, 367),
-        "feature2": np.random.randint(0, 1000, 367),
-        "feature3": np.random.randint(0, 1000, 367),
-    })
-    df2 = pd.DataFrame({
-        "date": pd.date_range("2020-01-01", "2021-01-01"),
-        "feature1": np.random.randint(0, 1000, 367),
-        "feature2": np.random.randint(0, 1000, 367),
-        "feature3": np.random.randint(0, 1000, 367),
-    })
+    df1 = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", "2021-01-01"),
+            "feature1": np.random.randint(0, 1000, 367),
+            "feature2": np.random.randint(0, 1000, 367),
+            "feature3": np.random.randint(0, 1000, 367),
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", "2021-01-01"),
+            "feature1": np.random.randint(0, 1000, 367),
+            "feature2": np.random.randint(0, 1000, 367),
+            "feature3": np.random.randint(0, 1000, 367),
+        }
+    )
     df = pd.concat([df1, df2])
     assert not is_blocked_time_series(df, "date", ["date"])
 

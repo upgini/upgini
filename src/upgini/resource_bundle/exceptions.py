@@ -9,7 +9,6 @@ class MalformedResourceBundleError(ResourceBundleError):
 
 
 class NotInResourceBundleError(ResourceBundleError):
-
     def __init__(self, bundle_name: str, key: str):
         """
         Error that is raised when a key could not be found in a ResourceBundle.
