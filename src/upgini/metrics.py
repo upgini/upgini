@@ -240,10 +240,11 @@ class EstimatorWrapper:
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
 
         if groups is not None:
+            X = X.copy()
             X["__groups"] = groups
             X, y = self._remove_empty_target_rows(X, y)
             groups = X["__groups"]
-            X.drop(columns="__groups", inplace=True)
+            X = X.drop(columns="__groups")
         else:
             X, y = self._remove_empty_target_rows(X, y)
 
