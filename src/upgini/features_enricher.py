@@ -1308,7 +1308,8 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys, self.cv)
-        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys, self.cv)
+        enriched_X_extended, _ = self._extend_x(enriched_X, is_demo_dataset)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X_extended, y_sampled, search_keys, self.cv)
 
         group_columns = sorted(self._get_group_columns(search_keys))
         groups = (
@@ -1333,8 +1334,9 @@ class FeaturesEnricher(TransformerMixin):
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
             eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys, self.cv)
+            enriched_eval_X_extended, _ = self._extend_x(enriched_eval_X, is_demo_dataset)
             enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_keys(
-                enriched_eval_X, eval_y_sampled, search_keys, self.cv
+                enriched_eval_X_extended, eval_y_sampled, search_keys, self.cv
             )
             fitting_eval_X = eval_X_sorted[client_features].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[
