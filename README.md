@@ -3,7 +3,7 @@
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>--> 
 <h2 align="center"> <a href="https://upgini.com/">Upgini • Intelligent data search & enrichment for Machine Learning</a></h2>
-<p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>optimized for ML models with LLMs and other neural networks</b> </p>
+<p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>including open & commercial LLMs</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb"><strong>Quick Start in Colab »</strong></a> |
@@ -27,7 +27,7 @@
 [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
-**Upgini** is an intelligent data search engine with a Python library that helps you find and add relevant features to your ML pipeline from hundreds of public, community, and premium external data sources. Under the hood, Upgini automatically optimizes all connected data sources by [generating an optimal set of machine ML features from the source data using large language models (LLMs), GraphNNs and recurrent neural networks (RNNs)](https://upgini.com/#optimized_external_data).   
+**Upgini** is an intelligent data search engine with a Python library that helps you find and add relevant features to your ML pipeline from hundreds of public, community, and premium external data sources. Under the hood, Upgini automatically optimizes all connected data sources by [generating an optimal set of machine ML features using large language models (LLMs), GraphNNs and recurrent neural networks (RNNs)](https://upgini.com/#optimized_external_data).   
 
 **Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient enrichment tools for external data blocks massive adoption of external features in ML pipelines. We want radically simplify features search and enrichment to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
 
@@ -35,7 +35,7 @@
 
 ## 🚀 Awesome features
 ⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement  
-⭐️ Data source optimizations: automated feature generation with Large Language Models' data augmentation, RNNs, GraphNN; multiple data source ensembling  
+⭐️ Automated feature generation from the sources: feature generation with Large Language Models' data augmentation, RNNs, GraphNN; multiple data source ensembling  
 ⭐️ *Automatic search key augmentation* from all connected sources. If you do not have all search keys in your search request, such as postal/zip code, Upgini will try to add those keys based on the provided set of search keys. This will broaden the search across all available data sources   
 ⭐️ Calculate *accuracy metrics and uplifts* after enrichment existing ML model with external features   
 ⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
