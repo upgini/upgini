@@ -2,8 +2,8 @@
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : low-code feature search and enrichment library for machine learning </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>--> 
-<h2 align="center"> <a href="https://upgini.com/">Upgini • Intelligent data search & enrichment for Machine Learning</a></h2>
-<p align="center"> <b>Easily find and add relevant features to your ML pipeline from</br> hundreds of public, community and premium external data sources, </br>including open & commercial LLMs</b> </p>
+<h2 align="center"> <a href="https://upgini.com/">Upgini • Intelligent data search & enrichment for Machine Learning and AI</a></h2>
+<p align="center"> <b>Easily find and add relevant features to your ML & AI pipeline from</br> hundreds of public, community and premium external data sources, </br>including open & commercial LLMs</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb"><strong>Quick Start in Colab »</strong></a> |
