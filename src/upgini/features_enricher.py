@@ -40,6 +40,7 @@ from upgini.metadata import (
     EVAL_SET_INDEX,
     ORIGINAL_INDEX,
     RENAMED_INDEX,
+    SORT_ID,
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
@@ -1299,7 +1300,11 @@ class FeaturesEnricher(TransformerMixin):
             c
             for c in X_sampled.columns.to_list()
             if c
-            not in (excluding_search_keys + list(self.fit_dropped_features) + [DateTimeSearchKeyConverter.DATETIME_COL])
+            not in (
+                excluding_search_keys
+                + list(self.fit_dropped_features)
+                + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID]
+            )
         ]
 
         filtered_enriched_features = self.__filtered_enriched_features(
@@ -1307,11 +1312,10 @@ class FeaturesEnricher(TransformerMixin):
             max_features,
         )
 
-        X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys, self.cv)
-        enriched_X_extended, _ = self._extend_x(enriched_X, is_demo_dataset)
-        enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X_extended, y_sampled, search_keys, self.cv)
+        X_sorted, y_sorted = self._sort_by_system_record_id(X_sampled, y_sampled, self.cv)
+        enriched_X_sorted, enriched_y_sorted = self._sort_by_system_record_id(enriched_X, y_sampled, self.cv)
 
-        group_columns = sorted(self._get_group_columns(search_keys))
+        group_columns = sorted(self._get_group_columns(enriched_X_sorted, search_keys))
         groups = (
             None
             if not group_columns or self.cv != CVType.group_k_fold
@@ -1333,10 +1337,9 @@ class FeaturesEnricher(TransformerMixin):
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
-            eval_X_sorted, eval_y_sorted = self._sort_by_keys(eval_X_sampled, eval_y_sampled, search_keys, self.cv)
-            enriched_eval_X_extended, _ = self._extend_x(enriched_eval_X, is_demo_dataset)
-            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_keys(
-                enriched_eval_X_extended, eval_y_sampled, search_keys, self.cv
+            eval_X_sorted, eval_y_sorted = self._sort_by_system_record_id(eval_X_sampled, eval_y_sampled, self.cv)
+            enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_system_record_id(
+                enriched_eval_X, eval_y_sampled, self.cv
             )
             fitting_eval_X = eval_X_sorted[client_features].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[
@@ -1472,19 +1475,15 @@ class FeaturesEnricher(TransformerMixin):
             self.df_with_original_index,
             fit_features,
             rows_to_drop=rows_to_drop,
+            drop_system_record_id=False,
         )
 
-        original_df_sampled = self.df_with_original_index[
-            self.df_with_original_index[SYSTEM_RECORD_ID].isin(fit_features[SYSTEM_RECORD_ID])
-        ]
-        enriched_X = drop_existing_columns(enriched_Xy, TARGET)
-        if EVAL_SET_INDEX in original_df_sampled.columns:
-            Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == 0")
-        else:
-            Xy_sampled = original_df_sampled
-        X_sampled = drop_existing_columns(Xy_sampled, [SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET])
+        x_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
+        X_sampled = enriched_Xy[x_columns].copy()
+        y_sampled = enriched_Xy[TARGET].copy()
+        enriched_X = drop_existing_columns(enriched_Xy, [TARGET, EVAL_SET_INDEX])
+
         search_keys = self.fit_search_keys
-        y_sampled = Xy_sampled[TARGET].copy()
 
         self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
         self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
@@ -1497,10 +1496,9 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             for idx in range(len(eval_set)):
-                enriched_eval_X = drop_existing_columns(enriched_eval_sets[idx + 1], TARGET)
-                eval_Xy_sampled = original_df_sampled.query(f"{EVAL_SET_INDEX} == {idx + 1}")
-                eval_X_sampled = drop_existing_columns(eval_Xy_sampled, [SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET])
-                eval_y_sampled = eval_Xy_sampled[TARGET].copy()
+                eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
+                eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
+                enriched_eval_X = enriched_eval_sets[idx + 1].drop(columns=[TARGET, EVAL_SET_INDEX])
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
@@ -1544,28 +1542,23 @@ class FeaturesEnricher(TransformerMixin):
                     n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state
                 )
 
-            X_sampled = (
-                df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0").copy().drop(columns=[EVAL_SET_INDEX, TARGET])
-            )
-            X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
-            y_sampled = df_with_eval_set_index.query(f"{EVAL_SET_INDEX} == 0").copy()[TARGET]
+            df_extended, search_keys = self._extend_x(df_with_eval_set_index, is_demo_dataset)
+
             eval_set_sampled_dict = dict()
-            for idx in range(len(eval_set)):
-                eval_x_sampled = (
-                    df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)]
-                    .copy()
-                    .drop(columns=[EVAL_SET_INDEX, TARGET])
-                )
-                eval_x_sampled, _ = self._extend_x(eval_x_sampled, is_demo_dataset)
-                eval_y_sampled = df_with_eval_set_index[df_with_eval_set_index[EVAL_SET_INDEX] == (idx + 1)].copy()[
-                    TARGET
-                ]
-                eval_set_sampled_dict[idx] = (eval_x_sampled, eval_y_sampled)
 
-            df_with_eval_set_index.drop(columns=TARGET, inplace=True)
+            df_extended = self.__add_fit_system_record_id(df_extended, dict(), search_keys)
 
-            enriched = self.transform(
-                df_with_eval_set_index,
+            x_columns = [
+                c
+                for c in df_extended.columns
+                if c not in [TARGET, EVAL_SET_INDEX, DateTimeSearchKeyConverter.DATETIME_COL]
+            ]
+
+            tmp_target_name = "__target"
+            df_extended.rename(columns={SYSTEM_RECORD_ID: SORT_ID, TARGET: tmp_target_name}, inplace=True)
+
+            enriched_df = self.transform(
+                df_extended,
                 exclude_features_sources=exclude_features_sources,
                 silent_mode=True,
                 trace_id=trace_id,
@@ -1573,16 +1566,21 @@ class FeaturesEnricher(TransformerMixin):
                 progress_bar=progress_bar,
                 progress_callback=progress_callback,
             )
-            if enriched is None:
+            if enriched_df is None:
                 return None
 
-            enriched_X = enriched[enriched[EVAL_SET_INDEX] == 0].copy()
-            enriched_X.drop(columns=EVAL_SET_INDEX, inplace=True)
+            enriched_df.rename(columns={SORT_ID: SYSTEM_RECORD_ID, tmp_target_name: TARGET}, inplace=True)
+
+            enriched_Xy = enriched_df.query(f"{EVAL_SET_INDEX} == 0")
+            X_sampled = enriched_Xy[x_columns].copy()
+            y_sampled = enriched_Xy[TARGET].copy()
+            enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX])
 
             for idx in range(len(eval_set)):
-                enriched_eval_x = enriched[enriched[EVAL_SET_INDEX] == (idx + 1)].copy()
-                enriched_eval_x.drop(columns=EVAL_SET_INDEX, inplace=True)
-                eval_x_sampled, eval_y_sampled = eval_set_sampled_dict[idx]
+                enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
+                eval_x_sampled = enriched_eval_xy[x_columns].copy()
+                eval_y_sampled = enriched_eval_xy[TARGET].copy()
+                enriched_eval_x = enriched_eval_xy.drop(columns=[TARGET, EVAL_SET_INDEX])
                 eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
         else:
             self.logger.info("Transform without eval_set")
@@ -1594,14 +1592,17 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
                 df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
 
-            X_sampled = df.copy().drop(columns=TARGET)
-            X_sampled, search_keys = self._extend_x(X_sampled, is_demo_dataset)
-            y_sampled = df.copy()[TARGET]
+            df_extended, search_keys = self._extend_x(df, is_demo_dataset)
 
-            df.drop(columns=TARGET, inplace=True)
+            df_extended = self.__add_fit_system_record_id(df_extended, dict(), search_keys)
 
-            enriched_X = self.transform(
-                df,
+            x_columns = [c for c in df_extended if c not in [TARGET, DateTimeSearchKeyConverter.DATETIME_COL]]
+
+            tmp_target_name = "__target"
+            df_extended.rename(columns={SYSTEM_RECORD_ID: SORT_ID, TARGET: tmp_target_name}, inplace=True)
+
+            enriched_Xy = self.transform(
+                df_extended,
                 exclude_features_sources=exclude_features_sources,
                 silent_mode=True,
                 trace_id=trace_id,
@@ -1609,8 +1610,14 @@ class FeaturesEnricher(TransformerMixin):
                 progress_bar=progress_bar,
                 progress_callback=progress_callback,
             )
-            if enriched_X is None:
+            if enriched_Xy is None:
                 return None
+
+            enriched_Xy.rename(columns={SORT_ID: SYSTEM_RECORD_ID, tmp_target_name: TARGET}, inplace=True)
+
+            X_sampled = enriched_Xy[x_columns].copy()  # check that all columns are present
+            y_sampled = enriched_Xy[TARGET].copy()
+            enriched_X = enriched_Xy.drop(columns=TARGET)
 
         self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys)
 
@@ -2155,7 +2162,7 @@ class FeaturesEnricher(TransformerMixin):
 
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
-            df=df,  # type: ignore
+            df=df,
             model_task_type=model_task_type,
             date_format=self.date_format,
             random_state=self.random_state,
@@ -2325,7 +2332,7 @@ class FeaturesEnricher(TransformerMixin):
         elif (
             self.cv is None
             and model_task_type != ModelTaskType.REGRESSION
-            and self._get_group_columns(self.fit_search_keys)
+            and self._get_group_columns(df, self.fit_search_keys)
         ):
             msg = bundle.get("group_k_fold_in_classification")
             self.__override_cv(CVType.group_k_fold, msg, print_warning=self.cv is not None)
@@ -2511,6 +2518,23 @@ class FeaturesEnricher(TransformerMixin):
         return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
+    def _sort_by_system_record_id(
+        X: pd.DataFrame, y: pd.Series, cv: Optional[CVType]
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        if cv not in [CVType.time_series, CVType.blocked_time_series]:
+            Xy = X.copy()
+            Xy[TARGET] = y
+            Xy = Xy.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
+            X = Xy.drop(columns=TARGET)
+            y = Xy[TARGET].copy()
+
+        if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
+            X.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
+
+        return X, y
+
+    # Deprecated
+    @staticmethod
     def _sort_by_keys(
         X: pd.DataFrame, y: pd.Series, search_keys: Dict[str, SearchKey], cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
@@ -2648,8 +2672,12 @@ class FeaturesEnricher(TransformerMixin):
                 return col
 
     @staticmethod
-    def _get_group_columns(search_keys: Dict[str, SearchKey]) -> List[str]:
-        return [col for col, t in search_keys.items() if t not in [SearchKey.DATE, SearchKey.DATETIME]]
+    def _get_group_columns(df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> List[str]:
+        return [
+            col
+            for col, t in search_keys.items()
+            if t not in [SearchKey.DATE, SearchKey.DATETIME] and df[col].nunique() > 1
+        ]
 
     @staticmethod
     def _get_email_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
@@ -2686,7 +2714,15 @@ class FeaturesEnricher(TransformerMixin):
                 date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
-            other_search_keys = sorted([sk for sk in search_keys.keys() if sk != date_column and sk in df.columns])
+            other_search_keys = sorted(
+                [
+                    sk
+                    for sk, key_type in search_keys.items()
+                    if key_type not in [SearchKey.DATE, SearchKey.DATETIME]
+                    and sk in df.columns
+                    and df[sk].nunique() > 1  # don't use constant keys for hash
+                ]
+            )
 
             search_keys_hash = "search_keys_hash"
             if len(other_search_keys) > 0:
@@ -2753,6 +2789,7 @@ class FeaturesEnricher(TransformerMixin):
         X: Optional[pd.DataFrame] = None,
         is_transform=False,
         rows_to_drop: Optional[pd.DataFrame] = None,
+        drop_system_record_id=True,
     ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")

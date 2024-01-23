@@ -318,6 +318,7 @@ class EstimatorWrapper:
         X: pd.DataFrame,
         scoring: Union[Callable, str, None] = None,
         cat_features: Optional[List[str]] = None,
+        text_features: Optional[List[str]] = None,
         add_params: Optional[Dict[str, Any]] = None,
         groups: Optional[List[str]] = None,
     ) -> "EstimatorWrapper":
