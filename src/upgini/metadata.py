@@ -305,3 +305,4 @@ class CVType(Enum):
     group_k_fold = "group_k_fold"
     time_series = "time_series"
     blocked_time_series = "blocked_time_series"
+    not_set = "not_set"

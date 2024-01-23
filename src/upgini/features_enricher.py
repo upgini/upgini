@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+import dataclasses
 import gc
 import hashlib
 import itertools
@@ -21,6 +23,7 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection._split import GroupsConsumerMixin
 
 from upgini.autofe.feature import Feature
 from upgini.data_source.data_source_publisher import CommercialSchema
@@ -58,7 +61,7 @@ from upgini.utils.custom_loss_utils import (
     get_additional_params_custom_loss,
     get_runtime_params_custom_loss,
 )
-from upgini.utils.cv_utils import CVConfig
+from upgini.utils.cv_utils import CVConfig, get_groups
 from upgini.utils.datetime_utils import (
     DateTimeSearchKeyConverter,
     is_blocked_time_series,
@@ -916,6 +919,7 @@ class FeaturesEnricher(TransformerMixin):
                     fitting_eval_set_dict,
                     search_keys,
                     groups,
+                    _cv,
                 ) = prepared_data
 
                 gc.collect()
@@ -931,16 +935,6 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
-                    _cv = cv or self.cv
-                    if groups is None and _cv == CVType.group_k_fold:
-                        self.logger.info("Replacing group_k_fold with k_fold as no groups were found")
-                        _cv = CVType.k_fold
-                    if not isinstance(_cv, BaseCrossValidator):
-                        date_column = self._get_date_column(search_keys)
-                        date_series = validated_X[date_column] if date_column is not None else None
-                        _cv = CVConfig(
-                            _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold()
-                        ).get_cv()
 
                     wrapper = EstimatorWrapper.create(
                         estimator,
@@ -1250,6 +1244,27 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Passed X, y and eval_set that differs from passed on fit. Transform will be used")
             return False, X, y, checked_eval_set
 
+    def _get_cv_and_groups(
+        self,
+        X: pd.DataFrame,
+        cv_override: Union[BaseCrossValidator, CVType, str, None],
+        search_keys: Dict[str, SearchKey],
+    ) -> Tuple[BaseCrossValidator, Optional[np.ndarray]]:
+        _cv = cv_override or self.cv
+        group_columns = sorted(self._get_group_columns(search_keys))
+        groups = None
+
+        if not isinstance(_cv, BaseCrossValidator):
+            date_column = self._get_date_column(search_keys)
+            date_series = X[date_column] if date_column is not None else None
+            _cv, groups = CVConfig(
+                _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold(), group_columns=group_columns
+            ).get_cv_and_groups(X)
+        elif isinstance(_cv, GroupsConsumerMixin):
+            groups = get_groups(X, group_columns)
+
+        return _cv, groups
+
     def _prepare_data_for_metrics(
         self,
         trace_id: str,
@@ -1260,6 +1275,7 @@ class FeaturesEnricher(TransformerMixin):
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
+        cv_override: Union[BaseCrossValidator, CVType, str, None] = None,
         search_keys_for_metrics: Optional[List[str]] = None,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
@@ -1275,7 +1291,7 @@ class FeaturesEnricher(TransformerMixin):
             else None
         )
 
-        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = self._sample_data_for_metrics(
+        sampled_data = self._sample_data_for_metrics(
             trace_id,
             validated_X,
             validated_y,
@@ -1287,6 +1303,7 @@ class FeaturesEnricher(TransformerMixin):
             progress_bar,
             progress_callback,
         )
+        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys = dataclasses.astuple(sampled_data)
 
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
@@ -1306,14 +1323,7 @@ class FeaturesEnricher(TransformerMixin):
         X_sorted, y_sorted = self._sort_by_keys(X_sampled, y_sampled, search_keys, self.cv)
         enriched_X_sorted, enriched_y_sorted = self._sort_by_keys(enriched_X, y_sampled, search_keys, self.cv)
 
-        group_columns = sorted(self._get_group_columns(search_keys))
-        groups = (
-            None
-            if not group_columns or self.cv != CVType.group_k_fold
-            else reduce(
-                lambda left, right: left + "_" + right, [enriched_X_sorted[c].astype(str) for c in group_columns]
-            ).factorize()[0]
-        )
+        cv, groups = self._get_cv_and_groups(enriched_X_sorted, cv_override, search_keys)
 
         existing_filtered_enriched_features = [c for c in filtered_enriched_features if c in enriched_X_sorted.columns]
 
@@ -1357,11 +1367,16 @@ class FeaturesEnricher(TransformerMixin):
             fitting_eval_set_dict,
             search_keys,
             groups,
+            cv,
         )
 
-    _SampledDataForMetrics = namedtuple(
-        "_SampledDataForMetrics", "X_sampled y_sampled enriched_X eval_set_sampled_dict search_keys"
-    )
+    @dataclass
+    class _SampledDataForMetrics:
+        X_sampled: pd.DataFrame
+        y_sampled: pd.Series
+        enriched_X: pd.DataFrame
+        eval_set_sampled_dict: Dict[int, Tuple[pd.DataFrame, pd.Series]]
+        search_keys: Dict[str, SearchKey]
 
     def _sample_data_for_metrics(
         self,
@@ -1616,7 +1631,11 @@ class FeaturesEnricher(TransformerMixin):
     ):
         search_keys = {k: v for k, v in search_keys.items() if k in X_sampled.columns.to_list()}
         return FeaturesEnricher._SampledDataForMetrics(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys
+            X_sampled=X_sampled,
+            y_sampled=y_sampled,
+            enriched_X=enriched_X,
+            eval_set_sampled_dict=eval_set_sampled_dict,
+            search_keys=search_keys,
         )
 
     def get_search_id(self) -> Optional[str]:
