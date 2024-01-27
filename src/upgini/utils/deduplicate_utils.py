@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
-from upgini.metadata import TARGET, ModelTaskType, SearchKey
+from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.target_utils import define_task
@@ -35,8 +35,15 @@ def remove_fintech_duplicates(
     if len(personal_cols) == 0:
         return need_full_deduplication, df
 
-    grouped_by_personal_cols = df.groupby(personal_cols, group_keys=False)
+    sub_df = df[personal_cols + [date_col, TARGET]]
 
+    # Fast check for duplicates by personal keys
+    if not sub_df[personal_cols].duplicated().any():
+        return need_full_deduplication, df
+
+    grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
+
+    # counts of diff dates by set of personal keys
     uniques = grouped_by_personal_cols[date_col].nunique()
     total = len(uniques)
     diff_dates = len(uniques[uniques > 1])
@@ -47,33 +54,84 @@ def remove_fintech_duplicates(
 
     need_full_deduplication = False
 
-    duplicates = df.duplicated(personal_cols, keep=False)
-    duplicate_rows = df[duplicates]
+    duplicates = sub_df.duplicated(personal_cols, keep=False)
+    duplicate_rows = sub_df[duplicates]
     if len(duplicate_rows) == 0:
         return need_full_deduplication, df
 
-    if grouped_by_personal_cols[TARGET].apply(lambda x: len(x.unique()) == 1).all():
+    # if there is no different target values in personal keys duplicate rows
+    nonunique_target_groups = grouped_by_personal_cols[TARGET].nunique() > 1
+    if nonunique_target_groups.sum() == 0:
         return need_full_deduplication, df
 
     def has_diff_target_within_60_days(rows):
         rows = rows.sort_values(by=date_col)
         return len(rows[rows[TARGET].ne(rows[TARGET].shift()) & (rows[date_col].diff() < 60 * 24 * 60 * 60 * 1000)]) > 0
 
-    df = DateTimeSearchKeyConverter(date_col).convert(df)
-    grouped_by_personal_cols = df.groupby(personal_cols, group_keys=False)
+    nonunique_target_rows = nonunique_target_groups[nonunique_target_groups].reset_index().drop(columns=TARGET)
+    sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
+
+    sub_df = DateTimeSearchKeyConverter(date_col).convert(sub_df)
+    grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
     rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
     if len(rows_with_diff_target) > 0:
-        perc = len(rows_with_diff_target) * 100 / len(df)
+        unique_keys_to_delete = rows_with_diff_target[personal_cols].drop_duplicates()
+        rows_to_remove = pd.merge(df.reset_index(), unique_keys_to_delete, on=personal_cols)
+        rows_to_remove = rows_to_remove.set_index(df.index.name or "index")
+        perc = len(rows_to_remove) * 100 / len(df)
         msg = bundle.get("dataset_diff_target_duplicates_fintech").format(
-            perc, len(rows_with_diff_target), rows_with_diff_target.index.to_list()
+            perc, len(rows_to_remove), rows_to_remove.index.to_list()
         )
         if not silent:
             print(msg)
         if logger:
             logger.warning(msg)
-        df = df[~df.index.isin(rows_with_diff_target.index)]
+        logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
+        df = df[~df.index.isin(rows_to_remove.index)]
+        logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
 
     return need_full_deduplication, df
+
+
+def clean_full_duplicates(
+    df: pd.DataFrame, logger: Optional[Logger] = None, silent=False
+) -> pd.DataFrame:
+    nrows = len(df)
+    if nrows == 0:
+        return df
+    # Remove absolute duplicates (exclude system_record_id)
+    unique_columns = df.columns.tolist()
+    if SYSTEM_RECORD_ID in unique_columns:
+        unique_columns.remove(SYSTEM_RECORD_ID)
+    if "sort_id" in unique_columns:
+        unique_columns.remove("sort_id")
+    logger.info(f"Dataset shape before clean duplicates: {df.shape}")
+    df = df.drop_duplicates(subset=unique_columns)
+    logger.info(f"Dataset shape after clean duplicates: {df.shape}")
+    nrows_after_full_dedup = len(df)
+    share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
+    if share_full_dedup > 0:
+        msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
+        logger.warning(msg)
+        # if not silent_mode:
+        #     print(msg)
+        # self.warning_counter.increment()
+    if TARGET in df.columns:
+        unique_columns.remove(TARGET)
+        marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
+        if marked_duplicates.sum() > 0:
+            dups_indices = df[marked_duplicates].index.to_list()
+            nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns))
+            num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
+            share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
+
+            msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
+            logger.warning(msg)
+            if not silent:
+                print(msg)
+            df = df.drop_duplicates(subset=unique_columns, keep=False)
+            logger.info(f"Dataset shape after clean invalid target duplicates: {df.shape}")
+    return df
 
 
 def _get_column_by_key(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> Optional[str]:

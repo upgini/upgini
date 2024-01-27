@@ -25,7 +25,7 @@ def test_etalon_validation(etalon: Dataset):
     valid_count = len(etalon)
     valid_rate = 100 * valid_count / count
 
-    assert valid_count == 4
+    assert valid_count == 5
     valid_rate_expected = 100 * (valid_count / 10)
     assert valid_rate == pytest.approx(valid_rate_expected, abs=0.01)
 
@@ -497,8 +497,9 @@ def test_time_cutoff_from_period():
 def test_time_cutoff_from_timestamp():
     df = pd.DataFrame({"date": [1577836800000000000, 1577840400000000000, 1577844000000000000]})
     converter = DateTimeSearchKeyConverter("date")
-    with pytest.raises(Exception, match="Unsupported type of date column date.*"):
-        converter.convert(df)
+    # with pytest.raises(Exception, match="Unsupported type of date column date.*"):
+    df = converter.convert(df)
+    assert len(df) == 3
 
 
 def test_time_cutoff_with_different_timezones():

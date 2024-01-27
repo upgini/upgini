@@ -2161,7 +2161,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-
             assert_frame_equal(actual_result_df, expected_result_df)
 
         for i in range(5):

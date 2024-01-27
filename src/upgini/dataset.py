@@ -36,14 +36,12 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
-    SearchKey,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils import combine_search_keys
-from upgini.utils.deduplicate_utils import remove_fintech_duplicates
 from upgini.utils.email_utils import EmailSearchKeyConverter
 
 try:
@@ -61,7 +59,7 @@ class Dataset:  # (pd.DataFrame):
     FIT_SAMPLE_THRESHOLD = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_ROWS = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
-    MIN_SAMPLE_THRESHOLD = 20_000
+    MIN_SAMPLE_THRESHOLD = 5_000
     IMBALANCE_THESHOLD = 0.4
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
@@ -816,20 +814,6 @@ class Dataset:  # (pd.DataFrame):
         self.__normalize_hem()
 
         self.__convert_features_types()
-
-        search_keys = {
-            col: SearchKey.from_meaning_type(key_type)
-            for col, key_type in self.meaning_types.items()
-            if SearchKey.from_meaning_type(key_type) is not None
-        }
-
-        if validate_target:
-            need_full_defuplication, self.data = remove_fintech_duplicates(self.data, search_keys, self.logger)
-        else:
-            need_full_defuplication = True
-
-        if need_full_defuplication:
-            self.__clean_duplicates(silent_mode)
 
         self.__validate_dataset(validate_target, silent_mode)
 

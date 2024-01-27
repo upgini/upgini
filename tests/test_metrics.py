@@ -147,6 +147,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     train = pd.read_parquet(os.path.join(BASE_DIR, "real_train.parquet"))
+    train.sort_index()
     X = train[["request_date", "score"]]
     y = train["target1"].rename("target")
     test = pd.read_parquet(os.path.join(BASE_DIR, "real_test.parquet"))
@@ -168,18 +169,25 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     enricher.eval_set = eval_set
 
     enriched_X = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_x.parquet"))
+
+    # TODO join enriched_X and X and y by index and then sort and add system_record_id
+    
+    enriched_X = enriched_X.sort_values(by="request_date").reset_index().rename(columns={"index": "system_record_id"})
     enriched_eval_x = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_eval_x.parquet"))
+    enriched_eval_x = enriched_eval_x.sort_values(by="request_date").reset_index().rename(columns={"index": "system_record_id"})
 
     sampled_Xy = X.copy()
     sampled_Xy["target"] = y
     sampled_Xy = sampled_Xy[sampled_Xy.index.isin(enriched_X.index)]
     sampled_X = sampled_Xy.drop(columns="target")
+    sampled_X = sampled_X.reset_index().rename(columns={"index": "system_record_id"})
     sampled_y = sampled_Xy["target"]
+    sampled_eval_x = eval_set[0][0].reset_index().rename(columns={"index": "system_record_id"})
     enricher._FeaturesEnricher__cached_sampled_datasets = (
         sampled_X,
         sampled_y,
         enriched_X,
-        {0: (eval_set[0][0], enriched_eval_x, eval_set[0][1])},
+        {0: (sampled_eval_x, enriched_eval_x, eval_set[0][1])},
         search_keys,
     )
 
