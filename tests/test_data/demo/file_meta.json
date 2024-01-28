@@ -1,0 +1,198 @@
+{
+    "name": "tds_0530b721-f478-4382-b8eb-a5d0b2076f7d",
+    "columns": [
+        {
+            "index": 0,
+            "name": "system_record_id",
+            "dataType": "INT",
+            "meaningType": "SYSTEM_RECORD_ID",
+            "originalName": "system_record_id"
+        },
+        {
+            "index": 1,
+            "name": "company_name_b48362",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Company Name"
+        },
+        {
+            "index": 2,
+            "name": "location_15b619",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Location"
+        },
+        {
+            "index": 3,
+            "name": "headquarters_ade0f7",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Headquarters"
+        },
+        {
+            "index": 4,
+            "name": "size_1af851",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Size"
+        },
+        {
+            "index": 5,
+            "name": "founded_6520e4",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "Founded"
+        },
+        {
+            "index": 6,
+            "name": "type_of_ownership_a589fc",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Type of ownership"
+        },
+        {
+            "index": 7,
+            "name": "industry_b44484",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Industry"
+        },
+        {
+            "index": 8,
+            "name": "sector_31a231",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Sector"
+        },
+        {
+            "index": 9,
+            "name": "revenue_c4b733",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "Revenue"
+        },
+        {
+            "index": 10,
+            "name": "company_txt_4c5666",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "company_txt"
+        },
+        {
+            "index": 11,
+            "name": "job_state_8718f5",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "job_state"
+        },
+        {
+            "index": 12,
+            "name": "same_state_780882",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "same_state"
+        },
+        {
+            "index": 13,
+            "name": "age_013f54",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "age"
+        },
+        {
+            "index": 14,
+            "name": "python_yn_247541",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "python_yn"
+        },
+        {
+            "index": 15,
+            "name": "spark_92f473",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "spark"
+        },
+        {
+            "index": 16,
+            "name": "aws_7d1507",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "aws"
+        },
+        {
+            "index": 17,
+            "name": "excel_faba1e",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "excel"
+        },
+        {
+            "index": 18,
+            "name": "job_simp_d49976",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "job_simp"
+        },
+        {
+            "index": 19,
+            "name": "desc_len_5edc7e",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "desc_len"
+        },
+        {
+            "index": 20,
+            "name": "num_comp_0beec6",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+            "originalName": "num_comp"
+        },
+        {
+            "index": 21,
+            "name": "postal_code_845c16",
+            "dataType": "STRING",
+            "meaningType": "POSTAL_CODE",
+            "originalName": "Postal_code"
+        },
+        {
+            "index": 22,
+            "name": "country_aff64e",
+            "dataType": "STRING",
+            "meaningType": "COUNTRY",
+            "originalName": "country"
+        },
+        {
+            "index": 23,
+            "name": "combined_8a92bc",
+            "dataType": "STRING",
+            "meaningType": "FEATURE",
+            "originalName": "combined"
+        },
+        {
+            "index": 24,
+            "name": "target",
+            "dataType": "DECIMAL",
+            "meaningType": "TARGET",
+            "originalName": "target"
+        }
+    ],
+    "searchKeys": [
+        [
+            "country_aff64e"
+        ],
+        [
+            "postal_code_845c16"
+        ],
+        [
+            "country_aff64e",
+            "postal_code_845c16"
+        ]
+    ],
+    "hierarchicalGroupKeys": [],
+    "hierarchicalSubgroupKeys": [],
+    "taskType": "REGRESSION",
+    "rowsCount": 464,
+    "checksumMD5": "57d172b58ad6156754d21f81a37071cf",
+    "digest": "0e06c5734f2648029eb004a29f40c90df1867f779c8913c5bee4a57ff4676b47"
+}

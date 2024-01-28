@@ -283,10 +283,18 @@ class Dataset:  # (pd.DataFrame):
                 self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
-    def __ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
+    def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
         try:
             if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
                 return int(ip)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
+        try:
+            if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
+                return str(int(ip))
         except Exception:
             pass
 
@@ -338,7 +346,7 @@ class Dataset:  # (pd.DataFrame):
 
             if self.data[ip].apply(self._is_ipv4).any():
                 ipv4 = ip + "_v4"
-                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self.__ip_to_int).astype("Int64")
+                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
                 self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
                 self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
                 search_keys.add(ipv4)
@@ -348,9 +356,9 @@ class Dataset:  # (pd.DataFrame):
             self.data[ipv6] = (
                 self.data[ip]
                 .apply(self._to_ipv6)
-                .apply(self.__ip_to_int)
-                .astype("string")
-                .str.replace(".0", "", regex=False)
+                .apply(self._ip_to_int_str)
+                # .astype("string")
+                # .str.replace(".0", "", regex=False)
             )
             self.data = self.data.drop(columns=ip)
             self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS
