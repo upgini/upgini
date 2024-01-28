@@ -357,7 +357,7 @@ class Dataset:  # (pd.DataFrame):
                 self.data[ip]
                 .apply(self._to_ipv6)
                 .apply(self._ip_to_int_str)
-                # .astype("string")
+                .astype("string")
                 # .str.replace(".0", "", regex=False)
             )
             self.data = self.data.drop(columns=ip)

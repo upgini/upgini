@@ -95,7 +95,7 @@ def test_python_ip_to_int_conversion():
 
 
 def test_ip_v6_conversion():
-    df = pd.DataFrame({"ip": ["::cf:befe:525b"]})
+    df = pd.DataFrame({"ip": ["::cf:befe:525b", "2806:2f0:92c0:ffa4:30eb:4982:b4e:8a97"]})
     dataset = Dataset("test", df=df, search_keys=[("ip",)])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
@@ -106,6 +106,7 @@ def test_ip_v6_conversion():
     assert "ip_bb9af5_v4" not in dataset.data.columns
     assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
     assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
+    assert dataset.data["ip_bb9af5_v6"].iloc[1] == "53200333237544187032231876373729151639"
 
 
 def test_int_ip_to_int_conversion():
