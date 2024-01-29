@@ -2418,7 +2418,12 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(bundle.get("x_non_unique_index"))
 
         if self.exclude_columns is not None:
-            validated_X = drop_existing_columns(validated_X, self.exclude_columns)
+            validated_X = validated_X.drop(columns=self.exclude_columns, errors="ignore")
+
+        if self.baseline_score_column:
+            validated_X[self.baseline_score_column] = validated_X[self.baseline_score_column].astype(
+                "float64", errors="ignore"
+            )
 
         if TARGET in validated_X.columns:
             raise ValidationError(bundle.get("x_contains_reserved_column_name").format(TARGET))
@@ -2498,6 +2503,15 @@ class FeaturesEnricher(TransformerMixin):
 
         if not validated_eval_X.index.is_unique:
             raise ValidationError(bundle.get("x_non_unique_index_eval_set"))
+
+        if self.exclude_columns is not None:
+            validated_eval_X = validated_eval_X.drop(columns=self.exclude_columns, errors="ignore")
+
+        if self.baseline_score_column:
+            validated_eval_X[self.baseline_score_column] = validated_eval_X[self.baseline_score_column].astype(
+                "float64", errors="ignore"
+            )
+
         if validated_eval_X.columns.to_list() != X.columns.to_list():
             if set(validated_eval_X.columns.to_list()) == set(X.columns.to_list()):
                 validated_eval_X = validated_eval_X[X.columns.to_list()]
