@@ -938,7 +938,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
-                    model_task_type = self.model_task_type or define_task(y_sorted, self.logger, silent=True)
+                    has_date = self._get_date_column(search_keys) is not None
+                    model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
                     _cv = cv or self.cv
                     if groups is None and _cv == CVType.group_k_fold:
                         self.logger.info("Replacing group_k_fold with k_fold as no groups were found")
@@ -1482,7 +1483,10 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.fit_search_keys
 
         rows_to_drop = None
-        task_type = self.model_task_type or define_task(self.df_with_original_index[TARGET], self.logger, silent=True)
+        has_date = self._get_date_column(search_keys) is not None
+        task_type = self.model_task_type or define_task(
+            self.df_with_original_index[TARGET], has_date, self.logger, silent=True
+        )
         if task_type == ModelTaskType.REGRESSION:
             target_outliers_df = self._search_task.get_target_outliers(trace_id)
             if target_outliers_df is not None and len(target_outliers_df) > 0:
@@ -1516,9 +1520,7 @@ class FeaturesEnricher(TransformerMixin):
         x_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
         X_sampled = enriched_Xy[x_columns].copy()
         y_sampled = enriched_Xy[TARGET].copy()
-        enriched_X = drop_existing_columns(enriched_Xy, [TARGET, EVAL_SET_INDEX])
-
-        search_keys = self.fit_search_keys
+        enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
 
         self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
         self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
@@ -2096,8 +2098,6 @@ class FeaturesEnricher(TransformerMixin):
 
         validate_scoring_argument(scoring)
 
-        self._validate_binary_observations(validated_y)
-
         self.__log_debug_information(
             X,
             y,
@@ -2114,11 +2114,14 @@ class FeaturesEnricher(TransformerMixin):
         self.fit_search_keys = self.search_keys.copy()
         self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys, is_demo_dataset)
 
+        has_date = self._get_date_column(self.fit_search_keys) is not None
+        model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
+        self._validate_binary_observations(validated_y, model_task_type)
+
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
 
         df = self.__correct_target(df)
 
-        model_task_type = self.model_task_type or define_task(df[self.TARGET_NAME], self.logger)
         self.runtime_parameters = get_runtime_params_custom_loss(
             self.loss, model_task_type, self.runtime_parameters, self.logger
         )
@@ -3424,8 +3427,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return search_keys
 
-    def _validate_binary_observations(self, y):
-        task_type = self.model_task_type or define_task(y, self.logger, silent=True)
+    def _validate_binary_observations(self, y, task_type: ModelTaskType):
         if task_type == ModelTaskType.BINARY and (y.value_counts() < 1000).any():
             msg = bundle.get("binary_small_dataset")
             self.logger.warning(msg)

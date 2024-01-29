@@ -17,7 +17,9 @@ def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, n
         return pd.Series(y).astype(str).astype("category").cat.codes.values
 
 
-def define_task(y: pd.Series, logger: Optional[logging.Logger] = None, silent: bool = False) -> ModelTaskType:
+def define_task(
+    y: pd.Series, has_date: bool = False, logger: Optional[logging.Logger] = None, silent: bool = False
+) -> ModelTaskType:
     if logger is None:
         logger = logging.getLogger()
     target = y.dropna()
@@ -33,15 +35,39 @@ def define_task(y: pd.Series, logger: Optional[logging.Logger] = None, silent: b
     if target_items == 2:
         task = ModelTaskType.BINARY
     else:
-        non_zero_target = target[target != 0]
-        target_ratio = target_items / len(non_zero_target)
-        if (target.dtype.kind == "f" and np.any(target != target.astype(int))) or (
-            is_numeric_dtype(target) and (target_items > 50 or target_ratio > 0.2)
-        ):
-            task = ModelTaskType.REGRESSION
-        else:
+        try:
+            target = pd.to_numeric(target)
+            is_numeric = True
+        except Exception:
+            is_numeric = False
+
+        # If any value is non numeric - multiclass
+        if not is_numeric:
             task = ModelTaskType.MULTICLASS
+        else:
+            if target.nunique() <= 50 and is_int_encoding(target.unique()):
+                task = ModelTaskType.MULTICLASS
+            elif has_date:
+                task = ModelTaskType.REGRESSION
+            else:
+                non_zero_target = target[target != 0]
+                target_items = non_zero_target.nunique()
+                target_ratio = target_items / len(non_zero_target)
+                if (
+                    (target.dtype.kind == "f" and np.any(target != target.astype(int)))  # any non integer
+                    or target_items > 50
+                    or target_ratio > 0.2
+                ):
+                    task = ModelTaskType.REGRESSION
+                else:
+                    task = ModelTaskType.MULTICLASS
     logger.info(f"Detected task type: {task}")
     if not silent:
         print(bundle.get("target_type_detected").format(task))
     return task
+
+
+def is_int_encoding(unique_values):
+    return set(unique_values) == set(range(len(unique_values))) or set(unique_values) == set(
+        range(1, len(unique_values) + 1)
+    )

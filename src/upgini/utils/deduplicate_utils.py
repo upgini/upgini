@@ -15,7 +15,8 @@ def remove_fintech_duplicates(
     # Base checks
     need_full_deduplication = True
 
-    if define_task(df[TARGET], silent=True) != ModelTaskType.BINARY:
+    date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+    if define_task(df[TARGET], date_col is not None, silent=True) != ModelTaskType.BINARY:
         return need_full_deduplication, df
 
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
