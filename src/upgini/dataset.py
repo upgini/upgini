@@ -664,12 +664,18 @@ class Dataset:  # (pd.DataFrame):
             for key in search_group
             if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
         ]
+        ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS)
+        if (
+            FileColumnMeaningType.IPV6_ADDRESS in self.etalon_def_checked
+            and ipv4_column is not None
+            and ipv4_column in keys_to_validate
+        ):
+            keys_to_validate.remove(ipv4_column)
+
         mandatory_columns = [target]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
         columns_to_validate = set([i for i in columns_to_validate if i is not None])
-
-        # TODO remove ipv4 from validation if ipv6 is presented
 
         nrows = len(self.data)
         validation_stats = {}

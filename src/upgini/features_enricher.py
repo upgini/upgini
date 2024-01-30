@@ -2088,12 +2088,15 @@ class FeaturesEnricher(TransformerMixin):
 
         if self.generate_features is not None and len(self.generate_features) > 0:
             x_columns = list(validated_X.columns)
+            checked_generate_features = []
             for gen_feature in self.generate_features:
                 if gen_feature not in x_columns:
-                    self.generate_features.remove(gen_feature)
                     msg = bundle.get("missing_generate_feature").format(gen_feature, x_columns)
                     print(msg)
                     self.logger.warning(msg)
+                else:
+                    checked_generate_features.append(gen_feature)
+            self.generate_features = checked_generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(self.generate_features)
 
         validate_scoring_argument(scoring)

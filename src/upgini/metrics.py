@@ -35,7 +35,7 @@ from upgini.utils.target_utils import correct_string_target
 
 DEFAULT_RANDOM_STATE = 42
 
-CATBOOST_PARAMS = {
+CATBOOST_REGRESSION_PARAMS = {
     "iterations": 250,
     "learning_rate": 0.05,
     "min_child_samples": 10,
@@ -46,6 +46,20 @@ CATBOOST_PARAMS = {
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
+}
+
+CATBOOST_BINARY_PARAMS = {
+    "iterations": 250,
+    "learning_rate": 0.05,
+    "min_child_samples": 10,
+    "max_depth": 5,
+    "early_stopping_rounds": 20,
+    "use_best_model": True,
+    "one_hot_max_size": 100,
+    "verbose": False,
+    "random_state": DEFAULT_RANDOM_STATE,
+    "allow_writing_files": False,
+    "auto_class_weights": "Balanced",
 }
 
 CATBOOST_MULTICLASS_PARAMS = {
@@ -63,7 +77,7 @@ CATBOOST_MULTICLASS_PARAMS = {
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
     "allow_writing_files": False,
-    # "early_stopping_rounds": 20,
+    "auto_class_weights": "Balanced",
 }
 
 LIGHTGBM_PARAMS = {
@@ -347,11 +361,11 @@ class EstimatorWrapper:
                 params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(params, CATBOOST_PARAMS)
+                params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
             else:
