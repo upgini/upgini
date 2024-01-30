@@ -61,6 +61,7 @@ def define_task(
                     task = ModelTaskType.REGRESSION
                 else:
                     task = ModelTaskType.MULTICLASS
+
     logger.info(f"Detected task type: {task}")
     if not silent:
         print(bundle.get("target_type_detected").format(task))

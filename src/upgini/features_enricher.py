@@ -866,12 +866,6 @@ class FeaturesEnricher(TransformerMixin):
                 effective_X = X if X is not None else self.X
                 effective_eval_set = eval_set if eval_set is not None else self.eval_set
 
-                effective_X = X if X is not None else self.X
-                effective_eval_set = eval_set if eval_set is not None else self.eval_set
-
-                effective_X = X if X is not None else self.X
-                effective_eval_set = eval_set if eval_set is not None else self.eval_set
-
                 validate_scoring_argument(scoring)
 
                 self._validate_baseline_score(effective_X, effective_eval_set)
