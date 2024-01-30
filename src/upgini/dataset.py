@@ -59,7 +59,7 @@ class Dataset:  # (pd.DataFrame):
     FIT_SAMPLE_THRESHOLD = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_ROWS = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
-    MIN_SAMPLE_THRESHOLD = 20_000
+    MIN_SAMPLE_THRESHOLD = 5_000
     IMBALANCE_THESHOLD = 0.4
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
@@ -283,10 +283,18 @@ class Dataset:  # (pd.DataFrame):
                 self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod
-    def __ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
+    def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
         try:
             if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
                 return int(ip)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
+        try:
+            if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
+                return str(int(ip))
         except Exception:
             pass
 
@@ -338,7 +346,7 @@ class Dataset:  # (pd.DataFrame):
 
             if self.data[ip].apply(self._is_ipv4).any():
                 ipv4 = ip + "_v4"
-                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self.__ip_to_int).astype("Int64")
+                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
                 self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
                 self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
                 search_keys.add(ipv4)
@@ -348,9 +356,9 @@ class Dataset:  # (pd.DataFrame):
             self.data[ipv6] = (
                 self.data[ip]
                 .apply(self._to_ipv6)
-                .apply(self.__ip_to_int)
+                .apply(self._ip_to_int_str)
                 .astype("string")
-                .str.replace(".0", "", regex=False)
+                # .str.replace(".0", "", regex=False)
             )
             self.data = self.data.drop(columns=ip)
             self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS
@@ -656,6 +664,14 @@ class Dataset:  # (pd.DataFrame):
             for key in search_group
             if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
         ]
+        ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS)
+        if (
+            FileColumnMeaningType.IPV6_ADDRESS in self.etalon_def_checked
+            and ipv4_column is not None
+            and ipv4_column in keys_to_validate
+        ):
+            keys_to_validate.remove(ipv4_column)
+
         mandatory_columns = [target]
         columns_to_validate = mandatory_columns.copy()
         columns_to_validate.extend(keys_to_validate)
@@ -812,8 +828,6 @@ class Dataset:  # (pd.DataFrame):
         self.__normalize_hem()
 
         self.__convert_features_types()
-
-        self.__clean_duplicates(silent_mode)
 
         self.__validate_dataset(validate_target, silent_mode)
 

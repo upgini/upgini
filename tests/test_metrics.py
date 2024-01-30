@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 
 import numpy as np
@@ -143,14 +144,15 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(BASE_DIR, "real_enriched_x.parquet")
+    path_to_mock_features = os.path.join(BASE_DIR, "real_train_df.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
-    train = pd.read_parquet(os.path.join(BASE_DIR, "real_train.parquet"))
-    X = train[["request_date", "score"]]
-    y = train["target1"].rename("target")
-    test = pd.read_parquet(os.path.join(BASE_DIR, "real_test.parquet"))
-    eval_set = [(test[["request_date", "score"]], test["target1"].rename("target"))]
+    # train = pd.read_parquet(os.path.join(BASE_DIR, "real_train.parquet"))
+    # train.sort_index()
+    # X = train[["request_date", "score"]]
+    # y = train["target1"].rename("target")
+    # test = pd.read_parquet(os.path.join(BASE_DIR, "real_test.parquet"))
+    # eval_set = [(test[["request_date", "score"]], test["target1"].rename("target"))]
 
     search_keys = {"request_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
@@ -163,23 +165,25 @@ def test_real_case_metric_binary(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.X = X
-    enricher.y = y
-    enricher.eval_set = eval_set
+    train = pd.read_parquet(os.path.join(BASE_DIR, "real_train_df.parquet"))
+    enricher.X = train.drop(columns=["system_record_id", "target1"])
+    enricher.y = train["target1"]
 
-    enriched_X = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_x.parquet"))
-    enriched_eval_x = pd.read_parquet(os.path.join(BASE_DIR, "real_enriched_eval_x.parquet"))
+    test = pd.read_parquet(os.path.join(BASE_DIR, "real_test_df.parquet"))
+    enricher.eval_set = [(test.drop(columns=["system_record_id", "target1"]), test["target1"])]
 
-    sampled_Xy = X.copy()
-    sampled_Xy["target"] = y
-    sampled_Xy = sampled_Xy[sampled_Xy.index.isin(enriched_X.index)]
-    sampled_X = sampled_Xy.drop(columns="target")
-    sampled_y = sampled_Xy["target"]
+    enriched_X = train.drop(columns="target1")
+    sampled_X = enriched_X
+    sampled_y = train["target1"]
+
+    enriched_eval_X = test.drop(columns="target1")
+    sampled_eval_X = enriched_eval_X
+    sampled_eval_y = test["target1"]
     enricher._FeaturesEnricher__cached_sampled_datasets = (
         sampled_X,
         sampled_y,
         enriched_X,
-        {0: (eval_set[0][0], enriched_eval_x, eval_set[0][1])},
+        {0: (sampled_eval_X, enriched_eval_X, sampled_eval_y)},
         search_keys,
     )
 
@@ -191,7 +195,79 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment],
             rows_header: [28000, 2505],
             target_mean_header: [0.8825, 0.8854],
-            baseline_gini: [0.486038, 0.450277],
+            baseline_gini: [0.490289, 0.462662],
+        }
+    )
+
+    assert_frame_equal(expected_metrics, metrics)
+
+
+def test_demo_metrics(requests_mock: Mocker):
+    BASE_DIR = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/demo/",
+    )
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+    )
+    with open(os.path.join(BASE_DIR, "file_meta.json"), "r") as f:
+        file_meta = json.load(f)
+    requests_mock.get(
+        url + f"/public/api/v2/search/{search_task_id}/metadata",
+        json=file_meta
+    )
+    provider_meta = ProviderTaskMetadataV2.parse_file(os.path.join(BASE_DIR, "provider_meta.json"))
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        provider_meta
+    )
+    mock_raw_features(requests_mock, url, search_task_id, os.path.join(BASE_DIR, "x_enriched.parquet"))
+
+    search_keys = {"country": SearchKey.COUNTRY, "Postal_code": SearchKey.POSTAL_CODE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        generate_features=['combined', 'company_txt'],
+        search_id=search_task_id,
+        logs_enabled=False,
+    )
+
+    x_sampled = pd.read_parquet(os.path.join(BASE_DIR, "x_sampled.parquet"))
+    y_sampled = pd.read_parquet(os.path.join(BASE_DIR, "y_sampled.parquet"))["target"]
+    enriched_X = pd.read_parquet(os.path.join(BASE_DIR, "x_enriched.parquet"))
+
+    enricher.X = x_sampled.drop(columns="system_record_id")
+    enricher.y = y_sampled
+
+    enricher._FeaturesEnricher__cached_sampled_datasets = (
+        x_sampled,
+        y_sampled,
+        enriched_X,
+        dict(),
+        search_keys,
+    )
+
+    metrics = enricher.calculate_metrics(scoring="mean_absolute_error")
+    print(metrics)
+
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: [train_segment],
+            rows_header: [464],
+            target_mean_header: [100.7802],
+            baseline_mae: [21.5089],
+            enriched_mae: [20.8841],
+            uplift: [0.624774],
         }
     )
 
@@ -639,6 +715,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
+    # TODO replace with input dataset with date search key and regression target
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df_train = df[0:500]
     X = df_train[["phone", "feature1"]]
@@ -669,23 +746,23 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     assert metrics_df.loc[0, segment_header] == train_segment
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
-    assert metrics_df.loc[0, baseline_RMSLE] == approx(0.487498)
-    assert metrics_df.loc[0, enriched_RMSLE] == approx(0.441673)
-    assert metrics_df.loc[0, uplift] == approx(0.045825)
+    assert metrics_df.loc[0, baseline_RMSLE] == approx(0.457746)
+    assert metrics_df.loc[0, enriched_RMSLE] == approx(0.463769)
+    assert metrics_df.loc[0, uplift] == approx(-0.006023)
 
     assert metrics_df.loc[1, segment_header] == eval_1_segment
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
-    assert metrics_df.loc[1, baseline_RMSLE] == approx(0.499389)
-    assert metrics_df.loc[1, enriched_RMSLE] == approx(0.475467)
-    assert metrics_df.loc[1, uplift] == approx(0.023922)
+    assert metrics_df.loc[1, baseline_RMSLE] == approx(0.501729)
+    assert metrics_df.loc[1, enriched_RMSLE] == approx(0.480895)
+    assert metrics_df.loc[1, uplift] == approx(0.020834)
 
     assert metrics_df.loc[2, segment_header] == eval_2_segment
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
-    assert metrics_df.loc[2, baseline_RMSLE] == approx(0.497084)
-    assert metrics_df.loc[2, enriched_RMSLE] == approx(0.492340)
-    assert metrics_df.loc[2, uplift] == approx(0.004744)
+    assert metrics_df.loc[2, baseline_RMSLE] == approx(0.492452)
+    assert metrics_df.loc[2, enriched_RMSLE] == approx(0.495043)
+    assert metrics_df.loc[2, uplift] == approx(-0.002591)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -1270,23 +1347,23 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
     assert metrics_df.loc[0, segment_header] == train_segment
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
-    assert metrics_df.loc[0, baseline_gini] == approx(0.103614)
-    assert metrics_df.loc[0, enriched_gini] == approx(0.090759)
-    assert metrics_df.loc[0, uplift] == approx(-0.012855)
+    assert metrics_df.loc[0, baseline_gini] == approx(0.116841)
+    assert metrics_df.loc[0, enriched_gini] == approx(0.076030)
+    assert metrics_df.loc[0, uplift] == approx(-0.040811)
 
     assert metrics_df.loc[1, segment_header] == eval_1_segment
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
-    assert metrics_df.loc[1, baseline_gini] == approx(-0.109605)
-    assert metrics_df.loc[1, enriched_gini] == approx(-0.011860)
-    assert metrics_df.loc[1, uplift] == approx(0.097746)
+    assert metrics_df.loc[1, baseline_gini] == approx(-0.078160)
+    assert metrics_df.loc[1, enriched_gini] == approx(-0.029288)
+    assert metrics_df.loc[1, uplift] == approx(0.048873)
 
     assert metrics_df.loc[2, segment_header] == eval_2_segment
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
-    assert metrics_df.loc[2, baseline_gini] == approx(-0.008801)
-    assert metrics_df.loc[2, enriched_gini] == approx(-0.011220)
-    assert metrics_df.loc[2, uplift] == approx(-0.002419)
+    assert metrics_df.loc[2, baseline_gini] == approx(-0.013484)
+    assert metrics_df.loc[2, enriched_gini] == approx(-0.017486)
+    assert metrics_df.loc[2, uplift] == approx(-0.004002)
 
 
 def approx(value: float):

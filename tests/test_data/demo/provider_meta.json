@@ -1,0 +1,1089 @@
+{
+    "features": [
+        {
+            "name": "f_car_ownership_country_postal_cluster_7_cnt_to_all_cnt_6fb29c62",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 95.47413793103449,
+            "shap_value": 0.0031494468074462793,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "Car ownership data",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_telecom_country_postal_cells_10km_days_from_update_max_e92568d8",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.0025506459209815773,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "World mobile network coverage",
+            "data_source_link": "https://upgini.com/#data_sources",
+            "doc_link": "https://docs.upgini.com/public/telecom/cell_towers_radius_ads#f_telecom_country_postal_cells_10km_days_from_update_max_e92568d8"
+        },
+        {
+            "name": "f_telecom_country_postal_cells_CDMA_5km_samples_max_ca41aa64",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.017829073462989425,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "World mobile network coverage",
+            "data_source_link": "https://upgini.com/#data_sources",
+            "doc_link": "https://docs.upgini.com/public/telecom/cell_towers_radius_ads#f_telecom_country_postal_cells_CDMA_5km_samples_max_ca41aa64"
+        },
+        {
+            "name": "f_marketing_country_postal_home_value_kusd_avg_596dc586",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 83.1896551724138,
+            "shap_value": 0.020400228305169733,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "Public customer profile",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_marketing_country_postal_income_75000_99999_prc_0dd8c665",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 83.1896551724138,
+            "shap_value": 0.012194240635146094,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "Public customer profile",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_marketing_country_postal_person_ethnic_code_asia_prc_41ba8f22",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 83.1896551724138,
+            "shap_value": 0.02229556328370952,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "Public customer profile",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_location_country_postal_poi_leisure_pitch_10km_cnt_0f288211",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.0051778936282335705,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "POI data OpenStreetMap",
+            "data_source_link": "https://upgini.com/#data_sources",
+            "doc_link": "https://docs.upgini.com/public/osm/postal_code_poi_10km_cnt#f_location_country_postal_poi_leisure_pitch_10km_cnt_0f288211"
+        },
+        {
+            "name": "f_location_country_postal_realty_price_1bedroom_d35b6a53",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 59.26724137931034,
+            "shap_value": 0.0042891272181163,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "World house prices data",
+            "data_source_link": "https://upgini.com/#data_sources",
+            "doc_link": "https://docs.upgini.com/public/realty/realty_source_2#f_location_country_postal_realty_price_1bedroom_d35b6a53"
+        },
+        {
+            "name": "f_telecom_country_postal_cells_UMTS_20km_cnt_to_cells_cnt_31442e61",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.009115001887861757,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "World mobile network coverage",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_telecom_country_postal_cells_UMTS_20km_range_stddev_c850530d",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.07288049755118405,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "World mobile network coverage",
+            "data_source_link": "https://upgini.com/#data_sources"
+        },
+        {
+            "name": "f_location_country_postal_poi_shopping_mall_10km_cnt_to_population_6106427e",
+            "type": "numerical",
+            "source": "ads",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.0016176115427706382,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "POI data OpenStreetMap",
+            "data_source_link": "https://upgini.com/#data_sources",
+            "doc_link": "https://docs.upgini.com/public/osm/postal_code_poi_10km_cnt_to_population_kontur#f_location_country_postal_poi_shopping_mall_10km_cnt_to_population_6106427e"
+        },
+        {
+            "name": "age",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "aws",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "desc_len",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "excel",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Founded",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "num_comp",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "python_yn",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "same_state",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "spark",
+            "type": "numerical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "combined_8a92bc_n_characters",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_n_sentences",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_n_tokens",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_n_unique_tokens",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_proportion_unique_tokens",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_sentence_length_mean",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_sentence_length_median",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_sentence_length_std",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_sentiment_rating",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_syllables_per_token_mean",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_syllables_per_token_median",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_syllables_per_token_std",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_token_length_mean",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_token_length_median",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined_8a92bc_token_length_std",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0,
+            "data_provider": "Upgini",
+            "data_provider_link": "https://upgini.com",
+            "data_source": "LLM with external data augmentation"
+        },
+        {
+            "name": "combined",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Company Name",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "company_txt",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "country",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Headquarters",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Industry",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "job_simp",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.16126214732993152
+        },
+        {
+            "name": "job_state",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Location",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Postal_code",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 97.84482758620689,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Revenue",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Sector",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Size",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "Type of ownership",
+            "type": "categorical",
+            "source": "etalon",
+            "hit_rate": 100.0,
+            "shap_value": 0.0
+        },
+        {
+            "name": "f_autofe_div_654b1daf",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 61.422413793103445,
+            "shap_value": 0.015864007862265033,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World demographic data</a>,<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "f_autofe_div_bf8fe17f",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.00589806703237181,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World mobile network coverage</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "f_autofe_div_e13a6111",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 72.41379310344827,
+            "shap_value": 0.009267973964163784,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World mobile network coverage</a>,<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "f_autofe_mul_57e12696",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 96.98275862068965,
+            "shap_value": 0.005585513177516382,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World demographic data</a>,<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World mobile network coverage</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "f_autofe_div_dbdea04a",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 77.80172413793103,
+            "shap_value": 0.03663017820651985,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World demographic data</a>,<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World mobile network coverage</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "f_autofe_mul_a17058e0",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 95.25862068965517,
+            "shap_value": 0.006910069756022121,
+            "commercial_schema": "Trial",
+            "data_provider": "Upgini",
+            "data_providers": [
+                "Upgini"
+            ],
+            "data_provider_link": "https://upgini.com",
+            "data_provider_links": [
+                "https://upgini.com"
+            ],
+            "data_source": "AutoFE: features from <a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>World mobile network coverage</a>",
+            "doc_link": ""
+        },
+        {
+            "name": "company_txt_4c5666_org_emb14",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0011315533784712712
+        },
+        {
+            "name": "company_txt_4c5666_org_emb209",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0016928300237658107
+        },
+        {
+            "name": "company_txt_4c5666_org_emb424",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0023557827138423267
+        },
+        {
+            "name": "company_txt_4c5666_org_emb710",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.00602520461613169
+        },
+        {
+            "name": "company_txt_4c5666_org_emb788",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.003200689315984131
+        },
+        {
+            "name": "company_txt_4c5666_org_emb793",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0017447677962224822
+        },
+        {
+            "name": "company_txt_4c5666_org_emb1207",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0016384401312200042
+        },
+        {
+            "name": "company_txt_4c5666_org_emb1403",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.008112063709076158
+        },
+        {
+            "name": "company_txt_4c5666_org_emb1416",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0041179482078302545
+        },
+        {
+            "name": "company_txt_4c5666_org_emb1489",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.00649202161656651
+        },
+        {
+            "name": "company_txt_4c5666_org_emb1530",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.002873909311679698
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb117",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.010043932912400445
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb220",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.003094316684689461
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb267",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.005199475885769783
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb410",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.0036279884962276414
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb412",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.004355688561645998
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb576",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.003559678025123806
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb581",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.00397639143035984
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb803",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.003085286231817933
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb816",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.007975980327632831
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb922",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.0036725265515776444
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb968",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.0048545805596524735
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb989",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.002449127050014878
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb1022",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.002932628853624194
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb1039",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.002522207072673168
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb1359",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.0027422687277628365
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb1481",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.008065098053480085
+        },
+        {
+            "name": "combined_8a92bc_keywords_list_emb1531",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 99.35344827586206,
+            "shap_value": 0.002134766010110935
+        },
+        {
+            "name": "combined_8a92bc_emb4",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.024170287186080195
+        },
+        {
+            "name": "combined_8a92bc_emb43",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0029562184532236197
+        },
+        {
+            "name": "combined_8a92bc_emb56",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.006174055706148826
+        },
+        {
+            "name": "combined_8a92bc_emb113",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0063651338514147775
+        },
+        {
+            "name": "combined_8a92bc_emb157",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0027456791827607237
+        },
+        {
+            "name": "combined_8a92bc_emb365",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.004621400429821148
+        },
+        {
+            "name": "combined_8a92bc_emb394",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0055329961703124405
+        },
+        {
+            "name": "combined_8a92bc_emb447",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0020138115103185165
+        },
+        {
+            "name": "combined_8a92bc_emb448",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.003840179267171134
+        },
+        {
+            "name": "combined_8a92bc_emb462",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.02175154291766065
+        },
+        {
+            "name": "combined_8a92bc_emb480",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0036200378210239025
+        },
+        {
+            "name": "combined_8a92bc_emb643",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.00410060738005875
+        },
+        {
+            "name": "combined_8a92bc_emb739",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.009974438063418883
+        },
+        {
+            "name": "combined_8a92bc_emb933",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.0024795059368588144
+        },
+        {
+            "name": "combined_8a92bc_emb978",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.06076502420731988
+        },
+        {
+            "name": "combined_8a92bc_emb1000",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.009895390691101829
+        },
+        {
+            "name": "combined_8a92bc_emb1001",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.005286560420770959
+        },
+        {
+            "name": "combined_8a92bc_emb1064",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.017534197721921586
+        },
+        {
+            "name": "combined_8a92bc_emb1194",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.005485687921554906
+        },
+        {
+            "name": "combined_8a92bc_emb1253",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.003810454328215237
+        },
+        {
+            "name": "combined_8a92bc_emb1289",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.014768188069638484
+        },
+        {
+            "name": "combined_8a92bc_emb1454",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.004963455881136332
+        },
+        {
+            "name": "combined_8a92bc_emb1492",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.002705993882690861
+        },
+        {
+            "name": "combined_8a92bc_emb1500",
+            "type": "numerical",
+            "source": "generated",
+            "hit_rate": 100.0,
+            "shap_value": 0.005835413220123557
+        }
+    ],
+    "hit_rate_metrics": {
+        "etalon_row_count": 464,
+        "max_hit_count": 464,
+        "join_flags_count": {
+            "join_flag_buildings_ads_1561193054": 358,
+            "join_flag_car_ownership_country_postal_ads_llm_47803154": 443,
+            "join_flag_cell_towers_ads_operator_1531805910": 450,
+            "join_flag_cell_towers_radius_ads_2080176541": 450,
+            "join_flag_census_data_zip_ads_574100094": 305,
+            "join_flag_distance_cities_300k_2098794757": 450,
+            "join_flag_distance_region_capital_263209360": 450,
+            "join_flag_ip2location_country_info_1764073200": 464,
+            "join_flag_population_ads_1682155469": 450,
+            "join_flag_population_ads_826694281": 449,
+            "join_flag_population_country_1068754481": 464,
+            "join_flag_population_us_1540271188": 392,
+            "join_flag_postal_code_ads_872513030": 386,
+            "join_flag_postal_code_buildings_500m_distance_avg_250319584": 361,
+            "join_flag_postal_code_landuse_1km_area_585329652": 450,
+            "join_flag_postal_code_landuse_2km_area_413200106": 450,
+            "join_flag_postal_code_landuse_4km_area_1015844280": 450,
+            "join_flag_postal_code_poi_10km_cnt_1806710504": 450,
+            "join_flag_postal_code_poi_10km_cnt_to_population_281289688": 449,
+            "join_flag_postal_code_poi_1km_cnt_175726934": 450,
+            "join_flag_postal_code_poi_1km_cnt_to_population_128402797": 449,
+            "join_flag_postal_code_poi_1km_cnt_to_population_kontur_299522008": 450,
+            "join_flag_postal_code_poi_2km_cnt_2072055704": 450,
+            "join_flag_postal_code_poi_2km_cnt_to_population_303619917": 449,
+            "join_flag_postal_code_poi_5km_cnt_1046005976": 450,
+            "join_flag_postal_code_poi_5km_cnt_to_population_1304786262": 449,
+            "join_flag_postal_code_poi_5km_cnt_to_population_kontur_711873181": 450,
+            "join_flag_realty_source_1_228631439": 378,
+            "join_flag_realty_source_2_1018200655": 367,
+            "join_flag_vio_emails_zip_690555369": 453,
+            "join_flag_buildings_ads_333960070": 350,
+            "join_flag_car_ownership_country_postal_ads_46665665": 443,
+            "join_flag_cell_towers_mls_radius_ads_8426821": 450,
+            "join_flag_pochta_country_postal_ads_921281970": 0,
+            "join_flag_postal_code_poi_10km_cnt_to_population_kontur_724785287": 450,
+            "join_flag_postal_code_poi_2km_cnt_to_population_kontur_587216646": 450,
+            "join_flag_postal_code_poi_distances_292269309": 450,
+            "join_flag_postal_code_roads_1km_length_448248585": 450,
+            "join_flag_postal_code_roads_2km_length_726522370": 450,
+            "join_flag_postal_code_roads_4km_length_1017079254": 450,
+            "join_flag_vio_zip_1763202620": 439
+        },
+        "hit_rate": 1.0,
+        "hit_rate_percent": 100.0
+    },
+    "zero_hit_rate_search_keys": [],
+    "features_used_for_embeddings": [
+        "combined_8a92bc",
+        "company_txt_4c5666"
+    ],
+    "shuffle_kfold": true,
+    "generated_features": [
+        {
+            "formula": "(cell_towers_mls_radius_ads_8426821_telecom_country_postal_cells_UMTS_10km_range_max/cell_towers_radius_ads_2080176541_telecom_country_postal_cells_LTE_5km_samples_avg)",
+            "display_index": "bf8fe17f",
+            "base_columns": [
+                {
+                    "original_name": "cell_towers_mls_radius_ads_8426821_telecom_country_postal_cells_UMTS_10km_range_max",
+                    "hashed_name": "f_telecom_country_postal_cells_UMTS_10km_range_max_10145fba",
+                    "ads_definition_id": "6dd7965f-a8e5-427b-a55f-f95b25a52f53",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "cell_towers_radius_ads_2080176541_telecom_country_postal_cells_LTE_5km_samples_avg",
+                    "hashed_name": "f_telecom_country_postal_cells_LTE_5km_samples_avg_8c4e75b4",
+                    "ads_definition_id": "44018553-3ae8-4a5c-8743-bc6aecd07a62",
+                    "is_augmented": false
+                }
+            ]
+        },
+        {
+            "formula": "(cell_towers_radius_ads_2080176541_telecom_country_postal_cells_UMTS_1km_samples_avg*cell_towers_radius_ads_2080176541_telecom_country_postal_cells_CDMA_5km_range_max_min_dif)",
+            "display_index": "a17058e0",
+            "base_columns": [
+                {
+                    "original_name": "cell_towers_radius_ads_2080176541_telecom_country_postal_cells_UMTS_1km_samples_avg",
+                    "hashed_name": "f_telecom_country_postal_cells_UMTS_1km_samples_avg_738dfcbb",
+                    "ads_definition_id": "44018553-3ae8-4a5c-8743-bc6aecd07a62",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "cell_towers_radius_ads_2080176541_telecom_country_postal_cells_CDMA_5km_range_max_min_dif",
+                    "hashed_name": "f_telecom_country_postal_cells_CDMA_5km_range_max_min_dif_0915ec0e",
+                    "ads_definition_id": "44018553-3ae8-4a5c-8743-bc6aecd07a62",
+                    "is_augmented": false
+                }
+            ]
+        },
+        {
+            "formula": "(cell_towers_radius_ads_2080176541_telecom_country_postal_cells_UMTS_1km_samples_avg/postal_code_poi_10km_cnt_to_population_kontur_724785287_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population)",
+            "display_index": "e13a6111",
+            "base_columns": [
+                {
+                    "original_name": "cell_towers_radius_ads_2080176541_telecom_country_postal_cells_UMTS_1km_samples_avg",
+                    "hashed_name": "f_telecom_country_postal_cells_UMTS_1km_samples_avg_738dfcbb",
+                    "ads_definition_id": "44018553-3ae8-4a5c-8743-bc6aecd07a62",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "postal_code_poi_10km_cnt_to_population_kontur_724785287_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population",
+                    "hashed_name": "f_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population_689648d6",
+                    "ads_definition_id": "4523704d-e602-482a-9111-5ac6677ea325",
+                    "is_augmented": false
+                }
+            ]
+        },
+        {
+            "formula": "(population_us_1540271188_location_country_postal_b01001e35/cell_towers_mls_radius_ads_8426821_telecom_country_postal_cells_UMTS_1km_range_avg)",
+            "display_index": "dbdea04a",
+            "base_columns": [
+                {
+                    "original_name": "population_us_1540271188_location_country_postal_b01001e35",
+                    "hashed_name": "f_location_country_postal_b01001e35_b41d3a4c",
+                    "ads_definition_id": "b3df5777-9f8b-4796-a3e7-8c68932a6cf4",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "cell_towers_mls_radius_ads_8426821_telecom_country_postal_cells_UMTS_1km_range_avg",
+                    "hashed_name": "f_telecom_country_postal_cells_UMTS_1km_range_avg_7627d8d0",
+                    "ads_definition_id": "6dd7965f-a8e5-427b-a55f-f95b25a52f53",
+                    "is_augmented": false
+                }
+            ]
+        },
+        {
+            "formula": "(population_us_1540271188_location_country_postal_b24080e2/postal_code_poi_10km_cnt_to_population_kontur_724785287_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population)",
+            "display_index": "654b1daf",
+            "base_columns": [
+                {
+                    "original_name": "population_us_1540271188_location_country_postal_b24080e2",
+                    "hashed_name": "f_location_country_postal_b24080e2_ddb601b9",
+                    "ads_definition_id": "b3df5777-9f8b-4796-a3e7-8c68932a6cf4",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "postal_code_poi_10km_cnt_to_population_kontur_724785287_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population",
+                    "hashed_name": "f_location_country_postal_poi_tourism_tourist_guidepost_10km_cnt_to_population_689648d6",
+                    "ads_definition_id": "4523704d-e602-482a-9111-5ac6677ea325",
+                    "is_augmented": false
+                }
+            ]
+        },
+        {
+            "formula": "(vio_emails_zip_690555369_email_country_postal_male_share*cell_towers_radius_ads_2080176541_telecom_country_postal_cells_LTE_5km_samples_avg)",
+            "display_index": "57e12696",
+            "base_columns": [
+                {
+                    "original_name": "vio_emails_zip_690555369_email_country_postal_male_share",
+                    "hashed_name": "f_email_country_postal_male_share_52bacefb",
+                    "ads_definition_id": "89b78749-6926-4731-ba3e-9aea7cf64af3",
+                    "is_augmented": false
+                },
+                {
+                    "original_name": "cell_towers_radius_ads_2080176541_telecom_country_postal_cells_LTE_5km_samples_avg",
+                    "hashed_name": "f_telecom_country_postal_cells_LTE_5km_samples_avg_8c4e75b4",
+                    "ads_definition_id": "44018553-3ae8-4a5c-8743-bc6aecd07a62",
+                    "is_augmented": false
+                }
+            ]
+        }
+    ]
+}

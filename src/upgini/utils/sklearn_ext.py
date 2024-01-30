@@ -21,6 +21,7 @@ from sklearn.metrics._scorer import _MultimetricScorer
 from sklearn.model_selection import check_cv
 from sklearn.utils.fixes import np_version, parse_version
 from sklearn.utils.validation import indexable
+# from sklearn.model_selection import cross_validate as original_cross_validate
 
 _DEFAULT_TAGS = {
     "non_deterministic": False,
@@ -313,21 +314,23 @@ def cross_validate(
         return ret
     except Exception:
         logging.exception("Failed to execute overriden cross_validate. Fallback to original")
-        return cross_validate(
-            estimator,
-            X,
-            y,
-            groups=groups,
-            scoring=scoring,
-            cv=cv,
-            n_jobs=n_jobs,
-            verbose=verbose,
-            fit_params=fit_params,
-            pre_dispatch=pre_dispatch,
-            return_train_score=return_train_score,
-            return_estimator=return_estimator,
-            error_score=error_score,
-        )
+        raise
+        # fit_params["use_best_model"] = False
+        # return original_cross_validate(
+        #     estimator,
+        #     X,
+        #     y,
+        #     groups=groups,
+        #     scoring=scoring,
+        #     cv=cv,
+        #     n_jobs=n_jobs,
+        #     verbose=verbose,
+        #     fit_params=fit_params,
+        #     pre_dispatch=pre_dispatch,
+        #     return_train_score=return_train_score,
+        #     return_estimator=return_estimator,
+        #     error_score=error_score,
+        # )
 
 
 def _fit_and_score(

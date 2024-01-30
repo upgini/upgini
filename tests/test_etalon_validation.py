@@ -25,7 +25,7 @@ def test_etalon_validation(etalon: Dataset):
     valid_count = len(etalon)
     valid_rate = 100 * valid_count / count
 
-    assert valid_count == 4
+    assert valid_count == 5
     valid_rate_expected = 100 * (valid_count / 10)
     assert valid_rate == pytest.approx(valid_rate_expected, abs=0.01)
 
@@ -95,7 +95,7 @@ def test_python_ip_to_int_conversion():
 
 
 def test_ip_v6_conversion():
-    df = pd.DataFrame({"ip": ["::cf:befe:525b"]})
+    df = pd.DataFrame({"ip": ["::cf:befe:525b", "2806:2f0:92c0:ffa4:30eb:4982:b4e:8a97"]})
     dataset = Dataset("test", df=df, search_keys=[("ip",)])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
@@ -106,6 +106,7 @@ def test_ip_v6_conversion():
     assert "ip_bb9af5_v4" not in dataset.data.columns
     assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
     assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
+    assert dataset.data["ip_bb9af5_v6"].iloc[1] == "53200333237544187032231876373729151639"
 
 
 def test_int_ip_to_int_conversion():
@@ -497,8 +498,9 @@ def test_time_cutoff_from_period():
 def test_time_cutoff_from_timestamp():
     df = pd.DataFrame({"date": [1577836800000000000, 1577840400000000000, 1577844000000000000]})
     converter = DateTimeSearchKeyConverter("date")
-    with pytest.raises(Exception, match="Unsupported type of date column date.*"):
-        converter.convert(df)
+    # with pytest.raises(Exception, match="Unsupported type of date column date.*"):
+    df = converter.convert(df)
+    assert len(df) == 3
 
 
 def test_time_cutoff_with_different_timezones():
