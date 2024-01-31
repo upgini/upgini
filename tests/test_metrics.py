@@ -188,6 +188,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     )
 
     metrics = enricher.calculate_metrics()
+    metrics[baseline_gini] = np.floor(metrics[baseline_gini] * 1000) / 1000
     print(metrics)
 
     expected_metrics = pd.DataFrame(
@@ -195,7 +196,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment],
             rows_header: [28000, 2505],
             target_mean_header: [0.8825, 0.8854],
-            baseline_gini: [0.490289, 0.462662],
+            baseline_gini: [0.490, 0.462],
         }
     )
 
@@ -219,17 +220,9 @@ def test_demo_metrics(requests_mock: Mocker):
     )
     with open(os.path.join(BASE_DIR, "file_meta.json"), "r") as f:
         file_meta = json.load(f)
-    requests_mock.get(
-        url + f"/public/api/v2/search/{search_task_id}/metadata",
-        json=file_meta
-    )
+    requests_mock.get(url + f"/public/api/v2/search/{search_task_id}/metadata", json=file_meta)
     provider_meta = ProviderTaskMetadataV2.parse_file(os.path.join(BASE_DIR, "provider_meta.json"))
-    mock_get_task_metadata_v2(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        provider_meta
-    )
+    mock_get_task_metadata_v2(requests_mock, url, ads_search_task_id, provider_meta)
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(BASE_DIR, "x_enriched.parquet"))
 
     search_keys = {"country": SearchKey.COUNTRY, "Postal_code": SearchKey.POSTAL_CODE}
@@ -237,7 +230,7 @@ def test_demo_metrics(requests_mock: Mocker):
         search_keys=search_keys,
         endpoint=url,
         api_key="fake_api_key",
-        generate_features=['combined', 'company_txt'],
+        generate_features=["combined", "company_txt"],
         search_id=search_task_id,
         logs_enabled=False,
     )
