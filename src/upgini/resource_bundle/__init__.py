@@ -8,7 +8,7 @@ import os
 import re
 from os import PathLike
 from pathlib import Path
-from typing import KeysView, Sequence
+from typing import KeysView, Optional, Sequence
 
 from .exceptions import MalformedResourceBundleError, NotInResourceBundleError
 
@@ -221,3 +221,16 @@ def get_bundle(bundle_name: str, locale: str | Sequence[str | str] = None, path:
 
 
 bundle = ResourceBundle("strings", None, path=os.path.dirname(os.path.realpath(__file__)))
+custom_bundles = dict()
+
+
+def get_custom_bundle(custom_cfg: Optional[str] = None) -> "ResourceBundle":
+    global custom_bundles
+    if custom_cfg is not None:
+        custom_bundle = custom_bundles.get(custom_cfg)
+        if custom_bundle is None:
+            custom_bundle = ResourceBundle("strings", custom_cfg, path=os.path.dirname(os.path.realpath(__file__)))
+            custom_bundles[custom_cfg] = custom_bundle
+        return custom_bundle
+    else:
+        return bundle

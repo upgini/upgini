@@ -38,7 +38,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
-from upgini.resource_bundle import bundle
+from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils import combine_search_keys
@@ -81,8 +81,10 @@ class Dataset:  # (pd.DataFrame):
         rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
         warning_counter: Optional[WarningCounter] = None,
+        bundle: Optional[ResourceBundle] = None,
         **kwargs,
     ):
+        self.bundle = bundle or get_custom_bundle()
         if df is not None:
             data = df.copy()
         elif path is not None:
@@ -95,13 +97,13 @@ class Dataset:  # (pd.DataFrame):
                 kwargs["sep"] = sep
                 data = pd.read_csv(path, **kwargs)
         else:
-            raise ValueError(bundle.get("dataset_dataframe_or_path_empty"))
+            raise ValueError(self.bundle.get("dataset_dataframe_or_path_empty"))
         if isinstance(data, pd.DataFrame):
             self.data = data
         elif isinstance(data, pd.io.parsers.TextFileReader):  # type: ignore
-            raise ValueError(bundle.get("dataset_dataframe_iterator"))
+            raise ValueError(self.bundle.get("dataset_dataframe_iterator"))
         else:
-            raise ValueError(bundle.get("dataset_dataframe_not_pandas"))
+            raise ValueError(self.bundle.get("dataset_dataframe_not_pandas"))
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
@@ -134,14 +136,14 @@ class Dataset:  # (pd.DataFrame):
     @property
     def meaning_types_checked(self) -> Dict[str, FileColumnMeaningType]:
         if self.meaning_types is None:
-            raise ValueError(bundle.get("dataset_empty_meaning_types"))
+            raise ValueError(self.bundle.get("dataset_empty_meaning_types"))
         else:
             return self.meaning_types
 
     @property
     def search_keys_checked(self) -> List[Tuple[str, ...]]:
         if self.search_keys is None:
-            raise ValueError(bundle.get("dataset_empty_search_keys"))
+            raise ValueError(self.bundle.get("dataset_empty_search_keys"))
         else:
             return self.search_keys
 
@@ -156,11 +158,11 @@ class Dataset:  # (pd.DataFrame):
 
     def __validate_min_rows_count(self):
         if len(self.data) < self.MIN_ROWS_COUNT:
-            raise ValidationError(bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
+            raise ValidationError(self.bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
 
     def __validate_max_row_count(self):
         if len(self.data) > self.MAX_ROWS:
-            raise ValidationError(bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
+            raise ValidationError(self.bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
 
     def __rename_columns(self):
         # self.logger.info("Replace restricted symbols in column names")
@@ -175,7 +177,7 @@ class Dataset:  # (pd.DataFrame):
             new_column = str(column)
             suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
             if len(new_column) == 0:
-                raise ValidationError(bundle.get("dataset_empty_column_names"))
+                raise ValidationError(self.bundle.get("dataset_empty_column_names"))
             # db limit for column length
             if len(new_column) > 250:
                 new_column = new_column[:250]
@@ -235,7 +237,7 @@ class Dataset:  # (pd.DataFrame):
         nrows_after_full_dedup = len(self.data)
         share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
         if share_full_dedup > 0:
-            msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
+            msg = self.bundle.get("dataset_full_duplicates").format(share_full_dedup)
             self.logger.warning(msg)
             # if not silent_mode:
             #     print(msg)
@@ -250,7 +252,9 @@ class Dataset:  # (pd.DataFrame):
                 num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
                 share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
 
-                msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
+                msg = self.bundle.get("dataset_diff_target_duplicates").format(
+                    share_tgt_dedup, num_dup_rows, dups_indices
+                )
                 self.logger.warning(msg)
                 if not silent_mode:
                     print(msg)
@@ -342,7 +346,7 @@ class Dataset:  # (pd.DataFrame):
 
             self.data[ip] = self.data[ip].apply(self._safe_ip_parse)
             if self.data[ip].isnull().all():
-                raise ValidationError(bundle.get("invalid_ip").format(ip))
+                raise ValidationError(self.bundle.get("invalid_ip").format(ip))
 
             if self.data[ip].apply(self._is_ipv4).any():
                 ipv4 = ip + "_v4"
@@ -379,7 +383,7 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace("UK", "GB", regex=False)
             )
             if (self.data[iso_code] == "").all():
-                raise ValidationError(bundle.get("invalid_country").format(iso_code))
+                raise ValidationError(self.bundle.get("invalid_country").format(iso_code))
 
     def __normalize_postal_code(self):
         postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
@@ -402,7 +406,7 @@ class Dataset:  # (pd.DataFrame):
                 .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
             )
             if (self.data[postal_code] == "").all():
-                raise ValidationError(bundle.get("invalid_postal_code").format(postal_code))
+                raise ValidationError(self.bundle.get("invalid_postal_code").format(postal_code))
 
     def __normalize_hem(self):
         hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
@@ -420,9 +424,9 @@ class Dataset:  # (pd.DataFrame):
                 self.data.drop(index=old_subset.index, inplace=True)  # type: ignore
                 self.logger.info(f"df after dropping old rows: {self.data.shape}")
                 if len(self.data) == 0:
-                    raise ValidationError(bundle.get("dataset_all_dates_old"))
+                    raise ValidationError(self.bundle.get("dataset_all_dates_old"))
                 else:
-                    msg = bundle.get("dataset_drop_old_dates")
+                    msg = self.bundle.get("dataset_drop_old_dates")
                     self.logger.warning(msg)
                     if not silent_mode:
                         print(msg)
@@ -458,10 +462,10 @@ class Dataset:  # (pd.DataFrame):
                     target = target.astype("category").cat.codes
                 except ValueError:
                     self.logger.exception("Failed to cast target to category codes for binary task type")
-                    raise ValidationError(bundle.get("dataset_invalid_target_type").format(target.dtype))
+                    raise ValidationError(self.bundle.get("dataset_invalid_target_type").format(target.dtype))
             target_classes_count = target.nunique()
             if target_classes_count != 2:
-                msg = bundle.get("dataset_invalid_binary_target").format(target_classes_count)
+                msg = self.bundle.get("dataset_invalid_binary_target").format(target_classes_count)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
         elif self.task_type == ModelTaskType.MULTICLASS:
@@ -470,21 +474,21 @@ class Dataset:  # (pd.DataFrame):
                     target = self.data[target_column].astype("category").cat.codes
                 except Exception:
                     self.logger.exception("Failed to cast target to category codes for multiclass task type")
-                    raise ValidationError(bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
+                    raise ValidationError(self.bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
                     self.data[target_column] = self.data[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for regression task type")
-                    raise ValidationError(bundle.get("dataset_invalid_regression_target").format(target.dtype))
+                    raise ValidationError(self.bundle.get("dataset_invalid_regression_target").format(target.dtype))
         elif self.task_type == ModelTaskType.TIMESERIES:
             if not is_float_dtype(target):
                 try:
                     self.data[target_column] = self.data[target_column].astype("float")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for timeseries task type")
-                    raise ValidationError(bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
+                    raise ValidationError(self.bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
 
     def __resample(self):
         # self.logger.info("Resampling etalon")
@@ -505,7 +509,7 @@ class Dataset:  # (pd.DataFrame):
             target_classes_count = target.nunique()
 
             if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
-                msg = bundle.get("dataset_to_many_multiclass_targets").format(
+                msg = self.bundle.get("dataset_to_many_multiclass_targets").format(
                     target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
                 )
                 self.logger.warning(msg)
@@ -519,7 +523,7 @@ class Dataset:  # (pd.DataFrame):
                     min_class_value = v
 
             if min_class_count < self.MIN_TARGET_CLASS_ROWS:
-                msg = bundle.get("dataset_rarest_class_less_min").format(
+                msg = self.bundle.get("dataset_rarest_class_less_min").format(
                     min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
                 )
                 self.logger.warning(msg)
@@ -529,7 +533,7 @@ class Dataset:  # (pd.DataFrame):
             min_class_threshold = min_class_percent * count
 
             if min_class_count < min_class_threshold:
-                msg = bundle.get("dataset_rarest_class_less_threshold").format(
+                msg = self.bundle.get("dataset_rarest_class_less_threshold").format(
                     min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
                 )
                 self.logger.warning(msg)
@@ -543,7 +547,7 @@ class Dataset:  # (pd.DataFrame):
                     quantile25_idx = int(0.75 * len(classes))
                     quantile25_class = classes[quantile25_idx]
                     count_of_quantile25_class = len(target[target == quantile25_class])
-                    msg = bundle.get("imbalance_multiclass").format(quantile25_class, count_of_quantile25_class)
+                    msg = self.bundle.get("imbalance_multiclass").format(quantile25_class, count_of_quantile25_class)
                     self.logger.warning(msg)
                     print(msg)
                     # 25% and lower classes will stay as is. Higher classes will be downsampled
@@ -621,7 +625,7 @@ class Dataset:  # (pd.DataFrame):
                 del self.meaning_types_checked[f]
 
         if removed_features:
-            msg = bundle.get("dataset_date_features").format(removed_features)
+            msg = self.bundle.get("dataset_date_features").format(removed_features)
             self.logger.warning(msg)
             if not silent_mode:
                 print(msg)
@@ -629,7 +633,7 @@ class Dataset:  # (pd.DataFrame):
 
     def __validate_features_count(self):
         if len(self.__features()) > self.MAX_FEATURES_COUNT:
-            msg = bundle.get("dataset_too_many_features").format(self.MAX_FEATURES_COUNT)
+            msg = self.bundle.get("dataset_too_many_features").format(self.MAX_FEATURES_COUNT)
             self.logger.warning(msg)
             raise ValidationError(msg)
 
@@ -646,14 +650,14 @@ class Dataset:  # (pd.DataFrame):
         target = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
         if validate_target:
             if target is None:
-                raise ValidationError(bundle.get("dataset_missing_target"))
+                raise ValidationError(self.bundle.get("dataset_missing_target"))
 
             target_value = self.__target_value()
             target_items = target_value.nunique()
             if target_items == 1:
-                raise ValidationError(bundle.get("dataset_constant_target"))
+                raise ValidationError(self.bundle.get("dataset_constant_target"))
             elif target_items == 0:
-                raise ValidationError(bundle.get("dataset_empty_target"))
+                raise ValidationError(self.bundle.get("dataset_empty_target"))
 
             # if self.task_type != ModelTaskType.MULTICLASS:
             #     self.data[target] = self.data[target].apply(pd.to_numeric, errors="coerce")
@@ -682,11 +686,11 @@ class Dataset:  # (pd.DataFrame):
         self.data["valid_keys"] = 0
         self.data["valid_mandatory"] = True
 
-        all_valid_status = bundle.get("validation_all_valid_status")
-        some_invalid_status = bundle.get("validation_some_invalid_status")
-        all_invalid_status = bundle.get("validation_all_invalid_status")
-        all_valid_message = bundle.get("validation_all_valid_message")
-        invalid_message = bundle.get("validation_invalid_message")
+        all_valid_status = self.bundle.get("validation_all_valid_status")
+        some_invalid_status = self.bundle.get("validation_some_invalid_status")
+        all_invalid_status = self.bundle.get("validation_all_invalid_status")
+        all_valid_message = self.bundle.get("validation_all_valid_message")
+        invalid_message = self.bundle.get("validation_invalid_message")
 
         for col in columns_to_validate:
             self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
@@ -727,9 +731,9 @@ class Dataset:  # (pd.DataFrame):
         if not silent_mode:
             df_stats = pd.DataFrame.from_dict(validation_stats, orient="index")
             df_stats.reset_index(inplace=True)
-            name_header = bundle.get("validation_column_name_header")
-            status_header = bundle.get("validation_status_header")
-            description_header = bundle.get("validation_descr_header")
+            name_header = self.bundle.get("validation_column_name_header")
+            status_header = self.bundle.get("validation_status_header")
+            description_header = self.bundle.get("validation_descr_header")
             df_stats.columns = [name_header, status_header, description_header]
             try:
                 import html
@@ -738,11 +742,11 @@ class Dataset:  # (pd.DataFrame):
 
                 _ = get_ipython()  # type: ignore
 
-                text_color = bundle.get("validation_text_color")
+                text_color = self.bundle.get("validation_text_color")
                 colormap = {
-                    all_valid_status: bundle.get("validation_all_valid_color"),
-                    some_invalid_status: bundle.get("validation_some_invalid_color"),
-                    all_invalid_status: bundle.get("validation_all_invalid_color"),
+                    all_valid_status: self.bundle.get("validation_all_valid_color"),
+                    some_invalid_status: self.bundle.get("validation_some_invalid_color"),
+                    all_invalid_status: self.bundle.get("validation_all_invalid_color"),
                 }
 
                 def map_color(text) -> str:
@@ -766,31 +770,33 @@ class Dataset:  # (pd.DataFrame):
                 print(df_stats)
 
         if len(self.data) == 0:
-            raise ValidationError(bundle.get("all_search_keys_invalid"))
+            raise ValidationError(self.bundle.get("all_search_keys_invalid"))
 
     def __validate_meaning_types(self, validate_target: bool):
         # self.logger.info("Validating meaning types")
         if self.meaning_types is None or len(self.meaning_types) == 0:
-            raise ValueError(bundle.get("dataset_missing_meaning_types"))
+            raise ValueError(self.bundle.get("dataset_missing_meaning_types"))
 
         if SYSTEM_RECORD_ID not in self.data.columns:
             raise ValueError("Internal error")
 
         for column in self.meaning_types:
             if column not in self.data.columns:
-                raise ValueError(bundle.get("dataset_missing_meaning_column").format(column, self.data.columns))
+                raise ValueError(self.bundle.get("dataset_missing_meaning_column").format(column, self.data.columns))
         if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
-            raise ValueError(bundle.get("dataset_missing_target"))
+            raise ValueError(self.bundle.get("dataset_missing_target"))
 
     def __validate_search_keys(self):
         # self.logger.info("Validating search keys")
         if self.search_keys is None or len(self.search_keys) == 0:
-            raise ValueError(bundle.get("dataset_missing_search_keys"))
+            raise ValueError(self.bundle.get("dataset_missing_search_keys"))
         for keys_group in self.search_keys:
             for key in keys_group:
                 if key not in self.data.columns:
                     showing_columns = set(self.data.columns) - SYSTEM_COLUMNS
-                    raise ValidationError(bundle.get("dataset_missing_search_key_column").format(key, showing_columns))
+                    raise ValidationError(
+                        self.bundle.get("dataset_missing_search_key_column").format(key, showing_columns)
+                    )
 
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
         # self.logger.info("Validating dataset")
@@ -895,7 +901,7 @@ class Dataset:  # (pd.DataFrame):
         elif is_string_dtype(pandas_data_type):
             return DataType.STRING
         else:
-            msg = bundle.get("dataset_invalid_column_type").format(column_name, pandas_data_type)
+            msg = self.bundle.get("dataset_invalid_column_type").format(column_name, pandas_data_type)
             self.logger.warning(msg)
             raise ValidationError(msg)
 
@@ -926,7 +932,7 @@ class Dataset:  # (pd.DataFrame):
                 for key in filter_features
                 if key not in {"min_importance", "max_psi", "max_count", "selected_features"}
             ]:
-                raise ValidationError(bundle.get("dataset_invalid_filter"))
+                raise ValidationError(self.bundle.get("dataset_invalid_filter"))
             feature_filter = FeaturesFilter(
                 minImportance=filter_features.get("min_importance"),
                 maxPSI=filter_features.get("max_psi"),
@@ -1017,7 +1023,7 @@ class Dataset:  # (pd.DataFrame):
                     trace_id, parquet_file_path, file_metadata, file_metrics, search_customization
                 )
                 # if progress_bar is not None:
-                #     progress_bar.progress = (6.0, bundle.get(ProgressStage.MATCHING.value))
+                #     progress_bar.progress = (6.0, self.bundle.get(ProgressStage.MATCHING.value))
                 # if progress_callback is not None:
                 #     progress_callback(SearchProgress(6.0, ProgressStage.MATCHING))
                 self.file_upload_id = search_task_response.file_upload_id
@@ -1088,7 +1094,7 @@ class Dataset:  # (pd.DataFrame):
                 )
                 self.file_upload_id = search_task_response.file_upload_id
         # if progress_bar is not None:
-        #     progress_bar.progress = (6.0, bundle.get(ProgressStage.ENRICHING.value))
+        #     progress_bar.progress = (6.0, self.bundle.get(ProgressStage.ENRICHING.value))
         # if progress_callback is not None:
         #     progress_callback(SearchProgress(6.0, ProgressStage.ENRICHING))
 
@@ -1108,5 +1114,5 @@ class Dataset:  # (pd.DataFrame):
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
-            raise ValidationError(bundle.get("dataset_too_big_file"))
+            raise ValidationError(self.bundle.get("dataset_too_big_file"))
         return parquet_file_path
