@@ -11,8 +11,6 @@ import sys
 import tempfile
 import time
 import uuid
-from collections import namedtuple
-from functools import reduce
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
