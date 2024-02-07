@@ -4,13 +4,18 @@ from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
-from upgini.resource_bundle import bundle
+from upgini.resource_bundle import ResourceBundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.target_utils import define_task
 
 
 def remove_fintech_duplicates(
-    df: pd.DataFrame, search_keys: Dict[str, SearchKey], logger: Optional[Logger] = None, silent=False
+    df: pd.DataFrame,
+    search_keys: Dict[str, SearchKey],
+    date_format: Optional[str] = None,
+    logger: Optional[Logger] = None,
+    silent=False,
+    bundle: ResourceBundle = None,
 ) -> Tuple[bool, pd.DataFrame]:
     # Base checks
     need_full_deduplication = True
@@ -72,7 +77,7 @@ def remove_fintech_duplicates(
     nonunique_target_rows = nonunique_target_groups[nonunique_target_groups].reset_index().drop(columns=TARGET)
     sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
 
-    sub_df = DateTimeSearchKeyConverter(date_col).convert(sub_df)
+    sub_df = DateTimeSearchKeyConverter(date_col, date_format=date_format, logger=logger, bundle=bundle).convert(sub_df)
     grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
     rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
     if len(rows_with_diff_target) > 0:
@@ -95,7 +100,7 @@ def remove_fintech_duplicates(
 
 
 def clean_full_duplicates(
-    df: pd.DataFrame, logger: Optional[Logger] = None, silent=False
+    df: pd.DataFrame, logger: Optional[Logger] = None, silent=False, bundle: ResourceBundle = None
 ) -> pd.DataFrame:
     nrows = len(df)
     if nrows == 0:

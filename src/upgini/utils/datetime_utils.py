@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 
 from upgini.errors import ValidationError
+from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 
 DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%y", "%d.%m.%Y", "%m.%d.%y", "%m.%d.%Y", "%Y-%m-%dT%H:%M:%S.%f"]
 
@@ -18,7 +19,13 @@ DATETIME_PATTERN = r"^[\d\s\.\-:T]+$"
 class DateTimeSearchKeyConverter:
     DATETIME_COL = "_date_time"
 
-    def __init__(self, date_column: str, date_format: Optional[str] = None, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        date_column: str,
+        date_format: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
+        bundle: ResourceBundle = None,
+    ):
         self.date_column = date_column
         self.date_format = date_format
         if logger is not None:
@@ -27,6 +34,7 @@ class DateTimeSearchKeyConverter:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
+        self.bundle = bundle or get_custom_bundle()
 
     @staticmethod
     def _int_to_opt(i: int) -> Optional[int]:
@@ -71,10 +79,10 @@ class DateTimeSearchKeyConverter:
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="us")
             elif df[self.date_column].apply(lambda x: 10**11 < x < 10**14).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ms")
-            elif df[self.date_column].apply(lambda x: 0 < x < 10*11).all():
+            elif df[self.date_column].apply(lambda x: 0 < x < 10 * 11).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
             else:
-                msg = f"Unsupported type of date column {self.date_column}. Convert to datetime please."
+                msg = self.bundle.get("unsupported_date_type").format(self.date_column)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
 
@@ -121,10 +129,7 @@ class DateTimeSearchKeyConverter:
                     return pd.to_datetime(df[self.date_column], format=date_format)
                 except ValueError:
                     pass
-            raise ValidationError(
-                f"Failed to parse date in column `{self.date_column}`. "
-                "Try to pass explicit date format in date_format argument of FeaturesEnricher constructor"
-            )
+            raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:

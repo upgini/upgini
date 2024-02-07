@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import dataclasses
 import gc
 import hashlib
@@ -11,6 +10,7 @@ import sys
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
@@ -51,7 +51,7 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.metrics import EstimatorWrapper, validate_scoring_argument
-from upgini.resource_bundle import ResourceBundle, get_custom_bundle, bundle
+from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils import combine_search_keys
@@ -1027,9 +1027,9 @@ class FeaturesEnricher(TransformerMixin):
                     if etalon_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
                     if enriched_metric is not None:
-                        train_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
-                            enriched_metric
-                        )
+                        train_metrics[
+                            self.bundle.get("quality_metrics_enriched_header").format(metric)
+                        ] = enriched_metric
                     if uplift is not None:
                         train_metrics[self.bundle.get("quality_metrics_uplift_header")] = uplift
                     metrics = [train_metrics]
@@ -1098,13 +1098,13 @@ class FeaturesEnricher(TransformerMixin):
                                     np.mean(effective_eval_set[idx][1]), 4
                                 )
                             if etalon_eval_metric is not None:
-                                eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
-                                    etalon_eval_metric
-                                )
+                                eval_metrics[
+                                    self.bundle.get("quality_metrics_baseline_header").format(metric)
+                                ] = etalon_eval_metric
                             if enriched_eval_metric is not None:
-                                eval_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
-                                    enriched_eval_metric
-                                )
+                                eval_metrics[
+                                    self.bundle.get("quality_metrics_enriched_header").format(metric)
+                                ] = enriched_eval_metric
                             if eval_uplift is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_uplift_header")] = eval_uplift
 
@@ -1205,7 +1205,7 @@ class FeaturesEnricher(TransformerMixin):
         generated_features = []
         date_column = self._get_date_column(search_keys)
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
             extended_X = converter.convert(extended_X, keep_time=True)
             generated_features.extend(converter.generated_features)
         email_column = self._get_email_column(search_keys)
@@ -1584,7 +1584,12 @@ class FeaturesEnricher(TransformerMixin):
                 df_with_eval_set_index = pd.concat([df_with_eval_set_index, eval_df_with_index])
 
             _, df_with_eval_set_index = remove_fintech_duplicates(
-                df_with_eval_set_index, self.search_keys, self.logger, silent=True
+                df_with_eval_set_index,
+                self.search_keys,
+                date_format=self.date_format,
+                logger=self.logger,
+                silent=True,
+                bundle=self.bundle,
             )
 
             # downsample if need to eval_set threshold
@@ -1827,7 +1832,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = []
             date_column = self._get_date_column(search_keys)
             if date_column is not None:
-                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
                 df = converter.convert(df)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
@@ -1885,7 +1890,9 @@ class FeaturesEnricher(TransformerMixin):
 
             df_without_features = df.drop(columns=non_keys_columns)
 
-            df_without_features = clean_full_duplicates(df_without_features, self.logger, silent=silent_mode)
+            df_without_features = clean_full_duplicates(
+                df_without_features, self.logger, silent=silent_mode, bundle=self.bundle
+            )
 
             del df
             gc.collect()
@@ -2165,9 +2172,11 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, self.fit_search_keys)
 
-        need_full_defuplication, df = remove_fintech_duplicates(df, self.fit_search_keys, self.logger)
+        need_full_defuplication, df = remove_fintech_duplicates(
+            df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
+        )
         if need_full_defuplication:
-            df = clean_full_duplicates(df, self.logger)
+            df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
 
         date_column = self._get_date_column(self.fit_search_keys)
         self.__adjust_cv(df, date_column, model_task_type)
@@ -2175,7 +2184,7 @@ class FeaturesEnricher(TransformerMixin):
         self.fit_generated_features = []
 
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger)
+            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
             df = converter.convert(df, keep_time=True)
             self.logger.info(f"Date column after convertion: {df[date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
@@ -3104,9 +3113,9 @@ class FeaturesEnricher(TransformerMixin):
                 return None
             features_meta = self._search_task.get_all_features_metadata_v2()
 
-            def get_feature_by_display_index(idx):
+            def get_feature_by_display_index(idx, op):
                 for m in features_meta:
-                    if m.name.endswith(str(idx)):
+                    if m.name.endswith(f"_{op}_{idx}"):
                         return m
 
             descriptions = []
@@ -3117,7 +3126,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 description = dict()
 
-                feature_meta = get_feature_by_display_index(m.display_index)
+                feature_meta = get_feature_by_display_index(
+                    m.display_index, autofe_feature.op.alias or autofe_feature.op.name
+                )
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
