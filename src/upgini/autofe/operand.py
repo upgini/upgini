@@ -59,12 +59,14 @@ class PandasOperand(Operand, abc.ABC):
         df_from.loc[np.nan] = np.nan
         return df_to.fillna(np.nan).apply(lambda x: df_from.loc[x])
 
-    def _round_value(self, value: Union[pd.Series, pd.DataFrame]) -> Union[pd.Series, pd.DataFrame]:
+    def _round_value(
+        self, value: Union[pd.Series, pd.DataFrame], precision: Optional[int] = None
+    ) -> Union[pd.Series, pd.DataFrame]:
         if isinstance(value, pd.DataFrame):
             return value.apply(self._round_value, axis=1)
 
         if np.issubdtype(value.dtype, np.floating):
-            precision = np.finfo(value.dtype).precision
+            precision = precision or np.finfo(value.dtype).precision
             return np.trunc(value * 10**precision) / (10**precision)
         else:
             return value
