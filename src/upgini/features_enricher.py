@@ -1266,7 +1266,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: Dict[str, SearchKey],
     ) -> Tuple[BaseCrossValidator, Optional[np.ndarray]]:
         _cv = cv_override or self.cv
-        group_columns = sorted(self._get_group_columns(search_keys))
+        group_columns = sorted(self._get_group_columns(X, search_keys))
         groups = None
 
         if not isinstance(_cv, BaseCrossValidator):

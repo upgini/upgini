@@ -58,6 +58,10 @@ class CVConfig:
             return BlockedTimeSeriesSplit(n_splits=self.n_folds, test_size=self.test_size), None
         elif self.cv_type == CVType.group_k_fold and self.group_columns:
             groups = get_groups(X, self.group_columns)
+
+            if groups is None or np.unique(groups).size < 2:
+                return KFold(n_splits=self.n_folds, shuffle=self.shuffle_kfold, random_state=self.random_state), None
+
             if self.shuffle_kfold:
                 return (
                     GroupShuffleSplit(n_splits=self.n_folds, test_size=self.test_size, random_state=self.random_state),
