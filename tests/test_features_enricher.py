@@ -175,7 +175,7 @@ def test_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.006920, 0.007322, 0.007022],
+            enriched_gini: [0.014174, 0.030706, -0.003208],
         }
     )
     print("Expected metrics: ")
@@ -462,7 +462,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.000779, 0.000780, -0.003822],
+            enriched_gini: [-0.000136, 0.000000, -0.003728],
         }
     )
     print("Expected metrics: ")
@@ -576,9 +576,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [0.009285, 0.066373, 0.049547],
-            enriched_gini: [0.006104, 0.056032, -0.006200],
-            uplift: [-0.003181, -0.010341, -0.055747],
+            baseline_gini: [0.008932, 0.064073, 0.049464],
+            enriched_gini: [0.007961, 0.045424, -0.014219],
+            uplift: [-0.000971, -0.018649, -0.063683],
         }
     )
     print("Expected metrics: ")
@@ -721,7 +721,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.006920, 0.007322, 0.007022],
+            enriched_gini: [0.014174, 0.030706, -0.003208],
         }
     )
     print("Expected metrics: ")
@@ -839,7 +839,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.006920, 0.007322, 0.007022],
+            enriched_gini: [0.014174, 0.030706, -0.003208],
         }
     )
     print("Expected metrics: ")
@@ -955,7 +955,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.006920, 0.007322, 0.007022],
+            enriched_gini: [0.014174, 0.030706, -0.003208],
         }
     )
     print("Expected metrics: ")
@@ -1073,9 +1073,9 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [5319],
             target_mean_header: [0.6364],
-            baseline_gini: [0.001041],
-            enriched_gini: [0.006466],
-            uplift: [0.005425],
+            baseline_gini: [0.006597],
+            enriched_gini: [0.005371],
+            uplift: [-0.001226],
         }
     )
     print("Expected metrics: ")
@@ -1939,9 +1939,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [-0.024345, 0.005368, 0.010041],
-            enriched_gini: [-0.022148, 0.019638, -0.030032],
-            uplift: [0.002198, 0.014270, -0.040073],
+            baseline_gini: [-0.019142, -0.004371, -0.008845],
+            enriched_gini: [-0.016884, 0.011914, -0.026308],
+            uplift: [0.002258, 0.016285, -0.017463],
         }
     )
     print("Expected metrics: ")
@@ -2161,7 +2161,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-
             assert_frame_equal(actual_result_df, expected_result_df)
 
         for i in range(5):

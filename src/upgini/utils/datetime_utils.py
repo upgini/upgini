@@ -61,9 +61,22 @@ class DateTimeSearchKeyConverter:
         elif is_period_dtype(df[self.date_column]):
             df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
         elif is_numeric_dtype(df[self.date_column]):
-            msg = f"Unsupported type of date column {self.date_column}. Convert to datetime please."
-            self.logger.warning(msg)
-            raise ValidationError(msg)
+            # 315532801 - 2524608001    - seconds
+            # 315532801000 - 2524608001000 - milliseconds
+            # 315532801000000 - 2524608001000000 - microseconds
+            # 315532801000000000 - 2524608001000000000 - nanoseconds
+            if df[self.date_column].apply(lambda x: 10**16 < x).all():
+                df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ns")
+            elif df[self.date_column].apply(lambda x: 10**14 < x < 10**16).all():
+                df[self.date_column] = pd.to_datetime(df[self.date_column], unit="us")
+            elif df[self.date_column].apply(lambda x: 10**11 < x < 10**14).all():
+                df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ms")
+            elif df[self.date_column].apply(lambda x: 0 < x < 10*11).all():
+                df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
+            else:
+                msg = f"Unsupported type of date column {self.date_column}. Convert to datetime please."
+                self.logger.warning(msg)
+                raise ValidationError(msg)
 
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features

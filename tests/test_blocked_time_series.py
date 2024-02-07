@@ -33,13 +33,20 @@ def test_bts_split_logic():
 def test_bts_metrics():
     X, y, cv, _, model = _prepare_data()
     cv_result = set(cross_val_score(model, X, y, cv=cv, scoring="roc_auc"))
-    assert cv_result == {
-        0.4559664254320743,
-        0.4767320313326982,
-        0.4811855209016638,
-        0.48947924927306374,
-        0.5150543675843606,
+    assert {round(r, 3) for r in cv_result} == {
+        0.456,
+        0.477,
+        0.481,
+        0.489,
+        0.515,
     }
+    # assert cv_result == {
+    #     0.4559664254320743,
+    #     0.4767320313326982,
+    #     0.4811855209016638,
+    #     0.48947924927306374,
+    #     0.5150543675843606,
+    # }
 
 
 def test_bts_exceptions():

@@ -4,13 +4,14 @@ from typing import Dict, List, Optional, Set
 from pydantic import BaseModel
 
 SYSTEM_RECORD_ID = "system_record_id"
+SORT_ID = "sort_id"
 EVAL_SET_INDEX = "eval_set_index"
 TARGET = "target"
 COUNTRY = "country_iso_code"
 RENAMED_INDEX = "index_col"
 DEFAULT_INDEX = "index"
 ORIGINAL_INDEX = "original_index"
-SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY}
+SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, EVAL_SET_INDEX, TARGET, COUNTRY, SORT_ID}
 
 
 class FileColumnMeaningType(Enum):

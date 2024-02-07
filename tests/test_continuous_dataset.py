@@ -1,4 +1,5 @@
 import os
+from typing import Dict
 
 import pandas as pd
 import pytest
@@ -13,7 +14,7 @@ FIXTURE_DIR = os.path.join(
 
 
 @pytest.fixture
-def etalon_definition():
+def etalon_definition() -> Dict[str, FileColumnMeaningType]:
     return {
         "phone_num": FileColumnMeaningType.MSISDN,
         "rep_date": FileColumnMeaningType.DATE,
@@ -27,9 +28,11 @@ def etalon_search_keys():
 
 
 @pytest.mark.datafiles(os.path.join(FIXTURE_DIR, "data.csv.gz"))
-def test_continuous_dataset(datafiles, etalon_definition, etalon_search_keys):
+def test_continuous_dataset(datafiles, etalon_definition: Dict[str, FileColumnMeaningType], etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
-    df = df.reset_index().rename(columns={"index": "system_record_id"})
+    df = df.reset_index().rename(columns={"index": "system_record_id", "score": "target"})
+    del etalon_definition["score"]
+    etalon_definition["target"] = FileColumnMeaningType.TARGET
     converter = DateTimeSearchKeyConverter("rep_date")
     df = converter.convert(df)
     ds = Dataset(
