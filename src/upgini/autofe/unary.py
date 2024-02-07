@@ -22,10 +22,10 @@ class Log(PandasOperand):
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return self._round_value(np.log(np.abs(data.replace(0, np.nan))))
+        return self._round_value(np.log(np.abs(data.replace(0, np.nan))), 10)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        return self._round_value(np.log(data.replace(0, np.nan).abs()))
+        return self._round_value(np.log(data.replace(0, np.nan).abs()), 10)
 
 
 class Sqrt(PandasOperand):
