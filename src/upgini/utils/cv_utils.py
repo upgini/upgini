@@ -59,7 +59,7 @@ class CVConfig:
         elif self.cv_type == CVType.group_k_fold and self.group_columns:
             groups = get_groups(X, self.group_columns)
 
-            if groups is None or np.unique(groups).size < 2:
+            if groups is None or np.unique(groups).size < self.n_folds:
                 return KFold(n_splits=self.n_folds, shuffle=self.shuffle_kfold, random_state=self.random_state), None
 
             if self.shuffle_kfold:
