@@ -32,6 +32,7 @@ class OnlineUploadingType(Enum):
 
 class DataSourcePublisher:
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
+    ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Anually"]
     DEFAULT_GENERATE_EMBEDDINGS = []
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):
@@ -46,12 +47,14 @@ class DataSourcePublisher:
         self,
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
+        update_frequency: str,
         secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
         sort_column: Optional[str] = None,
         date_format: Optional[str] = None,
         exclude_columns: Optional[List[str]] = None,
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
+        join_date_abs_limit_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
         exclude_from_autofe_generation: Optional[List[str]] = None,
@@ -71,6 +74,11 @@ class DataSourcePublisher:
                     raise ValidationError("Empty search keys")
                 if SearchKey.DATE in search_keys.values() and date_format is None:
                     raise ValidationError("date_format is required for DATE search key")
+                if update_frequency not in self.ACCEPTABLE_UPDATE_FREQUENCIES:
+                    raise ValidationError(
+                        f"Invalid update frequency: {update_frequency}. "
+                        f"Available values: {self.ACCEPTABLE_UPDATE_FREQUENCIES}"
+                    )
 
                 request = {
                     "dataTableUri": data_table_uri,
@@ -79,6 +87,8 @@ class DataSourcePublisher:
                     "excludeColumns": exclude_columns,
                     "hashFeatureNames": str(hash_feature_names).lower(),
                     "snapshotFrequencyDays": snapshot_frequency_days,
+                    "joinDateAbsLimitDays": join_date_abs_limit_days,
+                    "updateFrequency": update_frequency,
                     "featuresForEmbeddings": features_for_embeddings,
                     "forceGeneration": str(_force_generation).lower(),
                 }
@@ -189,6 +199,7 @@ class DataSourcePublisher:
         provider_link: Optional[str] = None,
         source: Optional[str] = None,
         source_link: Optional[str] = None,
+        update_frequency: Optional[str] = None,
         client_emails: Optional[List[str]] = None,
     ):
         trace_id = str(uuid.uuid4())
@@ -200,6 +211,11 @@ class DataSourcePublisher:
                     data_table_ids = [data_table_ids]
                 if not isinstance(data_table_ids, list):
                     raise ValidationError("data_table_ids should be string or list of strings")
+                if update_frequency is not None and update_frequency not in self.ACCEPTABLE_UPDATE_FREQUENCIES:
+                    raise ValidationError(
+                        f"Invalid update frequency: {update_frequency}. "
+                        f"Available values: {self.ACCEPTABLE_UPDATE_FREQUENCIES}"
+                    )
                 # if listing_type == ListingType.PRIVATE and (client_emails is None or len(client_emails) == 0):
                 #     raise ValidationError("Empty client emails for private data tables")
                 # if listing_type not in [ListingType.PRIVATE, ListingType.TRIAL] and client_emails is not None:
@@ -226,6 +242,8 @@ class DataSourcePublisher:
                     request["source"] = source
                 if source_link is not None:
                     request["sourceLink"] = source_link
+                if update_frequency is not None:
+                    request["updateFrequency"] = update_frequency
                 if client_emails is not None:
                     request["clientEmails"] = client_emails
                 self.logger.info(f"Activating data tables with request {request}")

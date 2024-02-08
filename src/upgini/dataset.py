@@ -662,15 +662,15 @@ class Dataset:  # (pd.DataFrame):
             # if self.task_type != ModelTaskType.MULTICLASS:
             #     self.data[target] = self.data[target].apply(pd.to_numeric, errors="coerce")
 
-        keys_to_validate = [
+        keys_to_validate = {
             key
             for search_group in self.search_keys_checked
             for key in search_group
             if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
-        ]
-        ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS)
+        }
+        ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
-            FileColumnMeaningType.IPV6_ADDRESS in self.etalon_def_checked
+            FileColumnMeaningType.IPV6_ADDRESS.value in self.etalon_def_checked
             and ipv4_column is not None
             and ipv4_column in keys_to_validate
         ):
