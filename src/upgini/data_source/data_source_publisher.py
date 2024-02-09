@@ -32,7 +32,7 @@ class OnlineUploadingType(Enum):
 
 class DataSourcePublisher:
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
-    ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Anually"]
+    ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Annually"]
     DEFAULT_GENERATE_EMBEDDINGS = []
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):

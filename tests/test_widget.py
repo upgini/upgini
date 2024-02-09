@@ -98,7 +98,7 @@ def run_search(
         columns={"Source": included_in_data_listings_header, "Feature name": field_column_header}
     )
     relevant_fields = relevant_fields.query("Provider != ''")
-    relevant_fields = relevant_fields.drop(columns=["Coverage %", "Feature type"])
+    relevant_fields = relevant_fields.drop(columns=["Coverage %", "Feature type"], errors="ignore")
 
     raw_relevant_fields = relevant_fields.copy()
 
@@ -294,6 +294,7 @@ def test_widget(requests_mock: Mocker):
                     data_source="Calendar data",
                     data_source_link="https://upgini.com/#data_sources",
                     doc_link="https://docs.upgini.com/public/calendar/calendar#f_events_date_month_sin4_81a273ac",
+                    update_frequency="Daily",
                 ),
                 FeaturesMetadataV2(
                     name="f_ip_company_name_emb145_e56eb2a3",
@@ -306,6 +307,7 @@ def test_widget(requests_mock: Mocker):
                     data_provider_link="https://ipinfo.io",
                     data_source="Company IP Address Data",
                     data_source_link="https://app.snowflake.com/marketplace/listing/GZSTZ3VDMFU/?referer=upgini",
+                    update_frequency="Monthly",
                 ),
                 FeaturesMetadataV2(
                     name="f_ip_company_name_emb54_805ee5b8",
@@ -318,6 +320,7 @@ def test_widget(requests_mock: Mocker):
                     data_provider_link="https://ipinfo.io",
                     data_source="Company IP Address Data",
                     data_source_link="https://app.snowflake.com/marketplace/listing/GZSTZ3VDMFU/?referer=upgini",
+                    update_frequency="Monthly",
                 ),
                 FeaturesMetadataV2(
                     name="f_ip_operator_5d5fc3f3",
@@ -330,6 +333,7 @@ def test_widget(requests_mock: Mocker):
                     data_provider_link="https://ipinfo.io",
                     data_source="IP Address Data for Mobile Carrier Detection",
                     data_source_link="https://app.snowflake.com/marketplace/listing/GZSTZ3VDMF6/?referer=upgini",
+                    update_frequency="Monthly",
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
