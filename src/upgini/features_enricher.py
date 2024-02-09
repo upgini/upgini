@@ -152,7 +152,20 @@ class FeaturesEnricher(TransformerMixin):
             bundle.get("features_info_value_preview"),
             bundle.get("features_info_provider"),
             bundle.get("features_info_source"),
+            # bundle.get("features_info_commercial_schema"),
+            bundle.get("features_info_update_frequency"),
+        ]
+    )
+    EMPTY_INTERNAL_FEATURES_INFO = pd.DataFrame(
+        columns=[
+            bundle.get("features_info_name"),
+            bundle.get("features_info_shap"),
+            bundle.get("features_info_hitrate"),
+            bundle.get("features_info_value_preview"),
+            bundle.get("features_info_provider"),
+            bundle.get("features_info_source"),
             bundle.get("features_info_commercial_schema"),
+            bundle.get("features_info_update_frequency"),
         ]
     )
     EMPTY_DATA_SOURCES = pd.DataFrame(
@@ -233,7 +246,7 @@ class FeaturesEnricher(TransformerMixin):
         self._search_task: Optional[SearchTask] = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._features_info_without_links: pd.DataFrame = self.EMPTY_FEATURES_INFO
-        self._internal_features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
+        self._internal_features_info: pd.DataFrame = self.EMPTY_INTERNAL_FEATURES_INFO
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
@@ -1179,20 +1192,17 @@ class FeaturesEnricher(TransformerMixin):
         self, commercial_schema: str, exclude_features_sources: Optional[List[str]]
     ) -> List[str]:
         if exclude_features_sources:
-            filtered_features_info = self.features_info[
-                ~self.features_info[self.bundle.get("features_info_name")].isin(exclude_features_sources)
+            filtered_features_info = self._internal_features_info[
+                ~self._internal_features_info[self.bundle.get("features_info_name")].isin(exclude_features_sources)
             ]
         else:
-            filtered_features_info = self.features_info
+            filtered_features_info = self._internal_features_info
         return list(
             filtered_features_info.loc[
                 filtered_features_info[self.bundle.get("features_info_commercial_schema")] == commercial_schema,
                 self.bundle.get("features_info_name"),
             ].values
         )
-
-    def _has_trial_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
-        return self._has_features_with_commercial_schema(CommercialSchema.TRIAL.value, exclude_features_sources)
 
     def _has_paid_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
@@ -1796,15 +1806,16 @@ class FeaturesEnricher(TransformerMixin):
 
             is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
 
-            if (
-                self._has_trial_features(exclude_features_sources)
-                and not metrics_calculation
-                and not self.__is_registered
-                and not is_demo_dataset
-            ):
-                msg = self.bundle.get("transform_with_trial_features")
-                self.logger.warning(msg)
-                print(msg)
+            # No more trial features functionality
+            # if (
+            #     self._has_trial_features(exclude_features_sources)
+            #     and not metrics_calculation
+            #     and not self.__is_registered
+            #     and not is_demo_dataset
+            # ):
+            #     msg = self.bundle.get("transform_with_trial_features")
+            #     self.logger.warning(msg)
+            #     print(msg)
 
             columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
             if len(columns_to_drop) > 0:
@@ -2022,14 +2033,14 @@ class FeaturesEnricher(TransformerMixin):
             if len(
                 filtered_features[
                     filtered_features[comm_schema_header].isin(
-                        [CommercialSchema.PAID.value, CommercialSchema.TRIAL.value]
+                        [CommercialSchema.PAID.value]
                     )
                 ]
             ):
                 return []
             excluded_features = external_features[~external_features.index.isin(filtered_features.index)].copy()
             excluded_features = excluded_features[
-                excluded_features[comm_schema_header].isin([CommercialSchema.PAID.value, CommercialSchema.TRIAL.value])
+                excluded_features[comm_schema_header].isin([CommercialSchema.PAID.value])
             ]
             return excluded_features[feature_name_header].values.tolist()
 
@@ -3050,11 +3061,6 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 feature_name = internal_feature_name
 
-            commercial_schema = (
-                "Premium"
-                if feature_meta.commercial_schema in ["Trial", "Paid"] or feature_meta.commercial_schema is None
-                else feature_meta.commercial_schema
-            )
             features_info.append(
                 {
                     self.bundle.get("features_info_name"): feature_name,
@@ -3063,7 +3069,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.bundle.get("features_info_value_preview"): feature_sample,
                     self.bundle.get("features_info_provider"): provider,
                     self.bundle.get("features_info_source"): source,
-                    self.bundle.get("features_info_commercial_schema"): commercial_schema,
+                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
                 }
             )
             features_info_without_links.append(
@@ -3074,7 +3080,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.bundle.get("features_info_value_preview"): feature_sample,
                     self.bundle.get("features_info_provider"): internal_provider,
                     self.bundle.get("features_info_source"): internal_source,
-                    self.bundle.get("features_info_commercial_schema"): commercial_schema,
+                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
                 }
             )
             internal_features_info.append(
@@ -3089,6 +3095,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.bundle.get("features_info_source"): internal_source,
                     "source_link": feature_meta.data_source_link,
                     self.bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
+                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
                 }
             )
 
