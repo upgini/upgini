@@ -95,7 +95,17 @@ def test_python_ip_to_int_conversion():
 
 
 def test_ip_v6_conversion():
-    df = pd.DataFrame({"ip": ["::cf:befe:525b", "2806:2f0:92c0:ffa4:30eb:4982:b4e:8a97"]})
+    df = pd.DataFrame(
+        {
+            "ip": [
+                "::cf:befe:525b",
+                "2806:2f0:92c0:ffa4:30eb:4982:b4e:8a97",
+                "2401:4900:3FC2:2CE6::C34:8174",
+                "2409:4081:E14:CF75::F40A:B0F",
+                "2402:8100:2102:AE2D::3CE0:E351",
+            ]
+        }
+    )
     dataset = Dataset("test", df=df, search_keys=[("ip",)])
     dataset.meaning_types = {
         "ip": FileColumnMeaningType.IP_ADDRESS,
@@ -107,6 +117,9 @@ def test_ip_v6_conversion():
     assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
     assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
     assert dataset.data["ip_bb9af5_v6"].iloc[1] == "53200333237544187032231876373729151639"
+    assert dataset.data["ip_bb9af5_v6"].iloc[2] == "47858880780748872078732893423110750580"
+    assert dataset.data["ip_bb9af5_v6"].iloc[3] == "47900246818989331262222645018619415311"
+    assert dataset.data["ip_bb9af5_v6"].iloc[4] == "47865208883029157842893923520652305233"
 
 
 def test_int_ip_to_int_conversion():
