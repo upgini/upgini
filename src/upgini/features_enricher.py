@@ -215,7 +215,7 @@ class FeaturesEnricher(TransformerMixin):
         if logs_enabled:
             self.logger = LoggerFactory().get_logger(endpoint, self._api_key, client_ip, client_visitorid)
         else:
-            self.logger = logging.getLogger()
+            self.logger = logging.getLogger("muted_logger")
             self.logger.setLevel("FATAL")
 
         if len(kwargs) > 0:

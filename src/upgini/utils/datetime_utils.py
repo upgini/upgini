@@ -31,7 +31,7 @@ class DateTimeSearchKeyConverter:
         if logger is not None:
             self.logger = logger
         else:
-            self.logger = logging.getLogger()
+            self.logger = logging.getLogger("muted_logger")
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
         self.bundle = bundle or get_custom_bundle()

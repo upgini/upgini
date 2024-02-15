@@ -6,8 +6,10 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import ModelTaskType
-from upgini.resource_bundle import bundle
+from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
+from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
+from upgini.sampler.random_under_sampler import RandomUnderSampler
+from upgini.utils.warning_counter import WarningCounter
 
 
 def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, np.ndarray]:
@@ -72,3 +74,109 @@ def is_int_encoding(unique_values):
     return set(unique_values) == set(range(len(unique_values))) or set(unique_values) == set(
         range(1, len(unique_values) + 1)
     )
+
+
+def balance_undersample(
+    df: pd.DataFrame,
+    target_column: str,
+    task_type: ModelTaskType,
+    random_state: int,
+    imbalance_threshold: int = 0.2,
+    min_sample_threshold: int = 5000,
+    binary_bootstrap_loops: int = 5,
+    multiclass_bootstrap_loops: int = 2,
+    logger: Optional[logging.Logger] = None,
+    bundle: Optional[ResourceBundle] = None,
+    warning_counter: Optional[WarningCounter] = None,
+) -> pd.DataFrame:
+    if logger is None:
+        logger = logging.getLogger("muted_logger")
+        logger.setLevel("FATAL")
+    bundle = bundle or get_custom_bundle()
+    if SYSTEM_RECORD_ID not in df.columns:
+        raise Exception("System record id must be presented for undersampling")
+
+    count = len(df)
+    target = df[target_column].copy()
+    target_classes_count = target.nunique()
+
+    vc = target.value_counts()
+    max_class_value = vc.index[0]
+    min_class_value = vc.index[len(vc) - 1]
+    max_class_count = vc[max_class_value]
+    min_class_count = vc[min_class_value]
+
+    min_class_percent = imbalance_threshold / target_classes_count
+    min_class_threshold = min_class_percent * count
+
+    resampled_data = df
+    df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
+    if task_type == ModelTaskType.MULTICLASS:
+        # Sort classes by rows count and find 25% quantile class
+        classes = vc.index
+        quantile25_idx = int(0.75 * len(classes)) - 1
+        quantile25_class = classes[quantile25_idx]
+        quantile25_class_cnt = vc[quantile25_class]
+
+        if max_class_count > (quantile25_class_cnt * multiclass_bootstrap_loops):
+            msg = bundle.get("imbalance_multiclass").format(quantile25_class, quantile25_class_cnt)
+            logger.warning(msg)
+            print(msg)
+            if warning_counter:
+                warning_counter.increment()
+
+            # 25% and lower classes will stay as is. Higher classes will be downsampled
+            sample_strategy = dict()
+            for class_idx in range(quantile25_idx):
+                # compare class count with count_of_quantile25_class * 2
+                class_value = classes[class_idx]
+                class_count = vc[class_value]
+                sample_strategy[class_value] = min(class_count, quantile25_class_cnt * multiclass_bootstrap_loops)
+            sampler = RandomUnderSampler(
+                sampling_strategy=sample_strategy, random_state=random_state
+            )
+            X = df[SYSTEM_RECORD_ID]
+            X = X.to_frame(SYSTEM_RECORD_ID)
+            new_x, _ = sampler.fit_resample(X, target)  # type: ignore
+
+            resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
+    elif task_type == ModelTaskType.BINARY and min_class_count < min_sample_threshold / 2:
+        msg = bundle.get("dataset_rarest_class_less_threshold").format(
+            min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
+        )
+        logger.warning(msg)
+        print(msg)
+        if warning_counter:
+            warning_counter.increment()
+
+        # fill up to min_sample_threshold by majority class
+        minority_class = df[df[target_column] == min_class_value]
+        majority_class = df[df[target_column] != min_class_value]
+        sampled_majority_class = majority_class.sample(
+            n=min_sample_threshold - min_class_count, random_state=random_state
+        )
+        resampled_data = df[
+            (df[SYSTEM_RECORD_ID].isin(minority_class[SYSTEM_RECORD_ID]))
+            | (df[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))
+        ]
+
+    elif max_class_count > min_class_count * binary_bootstrap_loops:
+        msg = bundle.get("dataset_rarest_class_less_threshold").format(
+            min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
+        )
+        logger.warning(msg)
+        print(msg)
+        if warning_counter:
+            warning_counter.increment()
+
+        sampler = RandomUnderSampler(
+            sampling_strategy={max_class_value: binary_bootstrap_loops * min_class_count}, random_state=random_state
+        )
+        X = df[SYSTEM_RECORD_ID]
+        X = X.to_frame(SYSTEM_RECORD_ID)
+        new_x, _ = sampler.fit_resample(X, target)  # type: ignore
+
+        resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
+
+    logger.info(f"Shape after rebalance resampling: {resampled_data}")
+    return resampled_data

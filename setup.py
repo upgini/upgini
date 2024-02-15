@@ -40,7 +40,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.251"
+version = "1.1.252"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
@@ -62,7 +62,6 @@ try:
             "Intended Audience :: Telecommunications Industry",
             "License :: OSI Approved :: BSD License",
             "Operating System :: OS Independent",
-            "Programming Language :: Python :: 3.7",
             "Programming Language :: Python :: 3.8",
             "Programming Language :: Python :: 3.9",
             "Programming Language :: Python :: 3.10",
@@ -74,7 +73,7 @@ try:
         package_dir={"": "src"},
         packages=find_packages(where="src"),
         package_data={"": ["strings.properties", "strings_widget.properties", "fingerprint.js"]},
-        python_requires=">=3.7,<3.11",
+        python_requires=">=3.8,<3.11",
         install_requires=[
             "python-dateutil>=2.8.0",
             "requests>=2.8.0",

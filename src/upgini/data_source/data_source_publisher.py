@@ -40,7 +40,7 @@ class DataSourcePublisher:
         if logs_enabled:
             self.logger = LoggerFactory().get_logger(endpoint, api_key)
         else:
-            self.logger = logging.getLogger()
+            self.logger = logging.getLogger("muted_logger")
             self.logger.setLevel("FATAL")
 
     def place(
