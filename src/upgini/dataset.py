@@ -535,6 +535,7 @@ class Dataset:  # (pd.DataFrame):
                     df=train_segment,
                     target_column=target_column,
                     task_type=self.task_type,
+                    random_state=self.random_state,
                     imbalance_threshold=self.IMBALANCE_THESHOLD,
                     binary_bootstrap_loops=self.BINARY_BOOTSTRAP_LOOPS,
                     multiclass_bootstrap_loops=self.MULTICLASS_BOOTSTRAP_LOOPS,
