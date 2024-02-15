@@ -140,7 +140,7 @@ def balance_undersample(
             new_x, _ = sampler.fit_resample(X, target)  # type: ignore
 
             resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
-    elif task_type == ModelTaskType.BINARY and min_class_count < min_sample_threshold / 2:
+    elif len(df) > min_sample_threshold and min_class_count < min_sample_threshold / 2:
         msg = bundle.get("dataset_rarest_class_less_threshold").format(
             min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
         )
@@ -152,8 +152,9 @@ def balance_undersample(
         # fill up to min_sample_threshold by majority class
         minority_class = df[df[target_column] == min_class_value]
         majority_class = df[df[target_column] != min_class_value]
+        sample_size = min(len(majority_class, min_sample_threshold - min_class_count))
         sampled_majority_class = majority_class.sample(
-            n=min_sample_threshold - min_class_count, random_state=random_state
+            n=sample_size, random_state=random_state
         )
         resampled_data = df[
             (df[SYSTEM_RECORD_ID].isin(minority_class[SYSTEM_RECORD_ID]))
