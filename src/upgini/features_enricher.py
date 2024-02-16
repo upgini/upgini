@@ -2806,8 +2806,9 @@ class FeaturesEnricher(TransformerMixin):
         # save original order or rows
         original_index_name = df.index.name
         index_name = df.index.name or DEFAULT_INDEX
-        df = df.reset_index().reset_index(drop=True)
-        df = df.rename(columns={index_name: ORIGINAL_INDEX})
+        original_order_name = "original_order"
+        df = df.reset_index().rename(columns={index_name: ORIGINAL_INDEX})
+        df = df.reset_index().rename(columns={DEFAULT_INDEX: original_order_name})
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
@@ -2847,7 +2848,7 @@ class FeaturesEnricher(TransformerMixin):
         # return original order
         df = df.set_index(ORIGINAL_INDEX)
         df.index.name = original_index_name
-        # df = df.sort_index()
+        df = df.sort_values(by=original_order_name).drop(columns=original_order_name)
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
