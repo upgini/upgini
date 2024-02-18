@@ -3022,6 +3022,7 @@ class FeaturesEnricher(TransformerMixin):
         return result_train, result_eval_sets
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
+        llm_source = "LLM with external data augmentation"
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
@@ -3076,6 +3077,8 @@ class FeaturesEnricher(TransformerMixin):
                     return ""
                 elif not link:
                     return value
+                elif value == llm_source:
+                    return value
                 else:
                     return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
 
@@ -3092,7 +3095,7 @@ class FeaturesEnricher(TransformerMixin):
                 provider = to_anchor("https://upgini.com", "Upgini")
 
             internal_source = feature_meta.data_source or (
-                "LLM with external data augmentation"
+                llm_source
                 if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
                 else ""
             )
