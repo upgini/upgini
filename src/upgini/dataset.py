@@ -15,9 +15,9 @@ from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
     is_numeric_dtype,
+    is_period_dtype,
     is_string_dtype,
 )
-from pandas.core.dtypes.common import is_period_dtype
 
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
@@ -41,7 +41,7 @@ from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
-from upgini.utils import combine_search_keys
+from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
 from upgini.utils.email_utils import EmailSearchKeyConverter
 
 try:
@@ -222,45 +222,6 @@ class Dataset:  # (pd.DataFrame):
                 if max_length > self.MAX_STRING_FEATURE_LENGTH:
                     self.data[col] = self.data[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
 
-    def __clean_duplicates(self, silent_mode: bool = False):
-        """Clean DataSet from full duplicates."""
-        # self.logger.info("Clean full duplicates")
-        nrows = len(self.data)
-        if nrows == 0:
-            return
-        # Remove absolute duplicates (exclude system_record_id)
-        unique_columns = self.data.columns.tolist()
-        unique_columns.remove(SYSTEM_RECORD_ID)
-        self.logger.info(f"Dataset shape before clean duplicates: {self.data.shape}")
-        self.data.drop_duplicates(subset=unique_columns, inplace=True)
-        self.logger.info(f"Dataset shape after clean duplicates: {self.data.shape}")
-        nrows_after_full_dedup = len(self.data)
-        share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
-        if share_full_dedup > 0:
-            msg = self.bundle.get("dataset_full_duplicates").format(share_full_dedup)
-            self.logger.warning(msg)
-            # if not silent_mode:
-            #     print(msg)
-            # self.warning_counter.increment()
-        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value)
-        if target_column is not None:
-            unique_columns.remove(target_column)
-            marked_duplicates = self.data.duplicated(subset=unique_columns, keep=False)
-            if marked_duplicates.sum() > 0:
-                dups_indices = self.data[marked_duplicates].index.to_list()
-                nrows_after_tgt_dedup = len(self.data.drop_duplicates(subset=unique_columns))
-                num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
-                share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
-
-                msg = self.bundle.get("dataset_diff_target_duplicates").format(
-                    share_tgt_dedup, num_dup_rows, dups_indices
-                )
-                self.logger.warning(msg)
-                if not silent_mode:
-                    print(msg)
-                self.data.drop_duplicates(subset=unique_columns, keep=False, inplace=True)
-                self.logger.info(f"Dataset shape after clean invalid target duplicates: {self.data.shape}")
-
     def __convert_bools(self):
         """Convert bool columns True -> 1, False -> 0"""
         # self.logger.info("Converting bool to int")
@@ -278,12 +239,10 @@ class Dataset:  # (pd.DataFrame):
     def __correct_decimal_comma(self):
         """Check DataSet for decimal commas and fix them"""
         # self.logger.info("Correct decimal commas")
-        tmp = self.data.head(10)
-        # all columns with sep="," will have dtype == 'object', i.e string
-        # sep="." will be casted to numeric automatically
-        cls_to_check = [i for i in tmp.columns if is_string_dtype(tmp[i])]
-        for col in cls_to_check:
-            if tmp[col].astype("string").str.match("^[0-9]+,[0-9]*$").any():
+        columns_to_fix = find_numbers_with_decimal_comma(self.data)
+        if len(columns_to_fix) > 0:
+            self.logger.warning(f"Convert strings with decimal comma to float: {columns_to_fix}")
+            for col in columns_to_fix:
                 self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
 
     @staticmethod

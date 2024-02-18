@@ -55,11 +55,19 @@ class FeaturesValidator:
         return empty_or_constant_features
 
     @staticmethod
-    def find_high_cardinality(df: pd.DataFrame):
+    def find_high_cardinality(df: pd.DataFrame) -> List[str]:
         # Remove high cardinality columns
         row_count = df.shape[0]
         return [
             i
             for i in df
             if (is_string_dtype(df[i]) or is_integer_dtype(df[i])) and (df[i].nunique() / row_count >= 0.9)
+        ]
+
+    @staticmethod
+    def find_constant_features(df: pd.DataFrame) -> List[str]:
+        return [
+            i
+            for i in df
+            if df[i].nunique() == 1
         ]

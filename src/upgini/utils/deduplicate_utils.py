@@ -1,5 +1,5 @@
 from logging import Logger
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -16,17 +16,15 @@ def remove_fintech_duplicates(
     logger: Optional[Logger] = None,
     silent=False,
     bundle: ResourceBundle = None,
-) -> Tuple[bool, pd.DataFrame]:
+) -> pd.DataFrame:
     # Base checks
-    need_full_deduplication = True
-
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
     if define_task(df[TARGET], date_col is not None, silent=True) != ModelTaskType.BINARY:
-        return need_full_deduplication, df
+        return df
 
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
     if date_col is None:
-        return need_full_deduplication, df
+        return df
 
     personal_cols = []
     phone_col = _get_column_by_key(search_keys, SearchKey.PHONE)
@@ -39,13 +37,13 @@ def remove_fintech_duplicates(
     if hem_col:
         personal_cols.append(hem_col)
     if len(personal_cols) == 0:
-        return need_full_deduplication, df
+        return df
 
     sub_df = df[personal_cols + [date_col, TARGET]]
 
     # Fast check for duplicates by personal keys
     if not sub_df[personal_cols].duplicated().any():
-        return need_full_deduplication, df
+        return df
 
     grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
 
@@ -54,21 +52,19 @@ def remove_fintech_duplicates(
     total = len(uniques)
     diff_dates = len(uniques[uniques > 1])
     if diff_dates / total >= 0.6:
-        return need_full_deduplication, df
+        return df
 
     # Additional checks
-
-    need_full_deduplication = False
 
     duplicates = sub_df.duplicated(personal_cols, keep=False)
     duplicate_rows = sub_df[duplicates]
     if len(duplicate_rows) == 0:
-        return need_full_deduplication, df
+        return df
 
     # if there is no different target values in personal keys duplicate rows
     nonunique_target_groups = grouped_by_personal_cols[TARGET].nunique() > 1
     if nonunique_target_groups.sum() == 0:
-        return need_full_deduplication, df
+        return df
 
     def has_diff_target_within_60_days(rows):
         rows = rows.sort_values(by=date_col)
@@ -96,7 +92,7 @@ def remove_fintech_duplicates(
         df = df[~df.index.isin(rows_to_remove.index)]
         logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
 
-    return need_full_deduplication, df
+    return df
 
 
 def clean_full_duplicates(
