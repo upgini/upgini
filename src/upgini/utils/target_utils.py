@@ -152,7 +152,7 @@ def balance_undersample(
         # fill up to min_sample_threshold by majority class
         minority_class = df[df[target_column] == min_class_value]
         majority_class = df[df[target_column] != min_class_value]
-        sample_size = min(len(majority_class, min_sample_threshold - min_class_count))
+        sample_size = min(len(majority_class), min_sample_threshold - min_class_count)
         sampled_majority_class = majority_class.sample(
             n=sample_size, random_state=random_state
         )
