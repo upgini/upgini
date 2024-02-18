@@ -16,7 +16,13 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype, is_string_dtype
+from pandas.api.types import (
+    is_bool,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_period_dtype,
+    is_string_dtype,
+)
 from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
@@ -54,7 +60,7 @@ from upgini.metrics import EstimatorWrapper, validate_scoring_argument
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
-from upgini.utils import combine_search_keys
+from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
 from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.custom_loss_utils import (
     get_additional_params_custom_loss,
@@ -1323,16 +1329,52 @@ class FeaturesEnricher(TransformerMixin):
         fitting_X = X_sorted[client_features].copy()
         fitting_enriched_X = enriched_X_sorted[client_features + existing_filtered_enriched_features].copy()
 
-        # Detect and drop high cardinality columns in train
-        columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
-        columns_with_high_cardinality = [
-            c for c in columns_with_high_cardinality if c not in (self.generate_features or [])
+        # Don't do this because one hot encoded client features will be removed
+        # # Detect and drop high cardinality columns in train
+        # columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
+        # columns_with_high_cardinality = [
+        #     c for c in columns_with_high_cardinality if c not in (self.generate_features or [])
+        # ]
+        # if len(columns_with_high_cardinality) > 0:
+        #     self.logger.warning(
+        #         f"High cardinality columns {columns_with_high_cardinality} will be dropped for metrics calculation"
+        #     )
+        #     fitting_X = fitting_X.drop(columns=columns_with_high_cardinality, errors="ignore")
+        #     fitting_enriched_X = fitting_enriched_X.drop(columns=columns_with_high_cardinality, errors="ignore")
+
+        # Detect and drop constant columns
+        constant_columns = FeaturesValidator.find_constant_features(fitting_X)
+        if len(constant_columns) > 0:
+            self.logger.warning(f"Constant columns {constant_columns} will be dropped for metrics calculation")
+            fitting_X = fitting_X.drop(columns=constant_columns, errors="ignore")
+            fitting_enriched_X = fitting_enriched_X.drop(columns=constant_columns, errors="ignore")
+
+        # Remove datetime features
+        datetime_features = [
+            f for f in fitting_X.columns if is_datetime64_any_dtype(fitting_X[f]) or is_period_dtype(fitting_X[f])
         ]
-        self.logger.info(
-            f"Columns {columns_with_high_cardinality} will be dropped for metrics calculation due to high cardinality"
-        )
-        fitting_X = fitting_X.drop(columns=columns_with_high_cardinality, errors="ignore")
-        fitting_enriched_X = fitting_enriched_X.drop(columns=columns_with_high_cardinality, errors="ignore")
+        if len(datetime_features) > 0:
+            self.logger.warning(self.bundle.get("dataset_date_features").format(datetime_features))
+            fitting_X = fitting_X.drop(columns=datetime_features, errors="ignore")
+            fitting_enriched_X = fitting_enriched_X.drop(columns=datetime_features, errors="ignore")
+
+        bool_columns = []
+        for col in fitting_X.columns:
+            if is_bool(fitting_X[col]):
+                bool_columns.append(col)
+                fitting_X[col] = fitting_X[col].astype(str)
+                fitting_enriched_X[col] = fitting_enriched_X[col].astype(str)
+        if len(bool_columns) > 0:
+            self.logger.warning(f"Bool columns {bool_columns} was converted to string for metrics calculation")
+
+        decimal_columns_to_fix = find_numbers_with_decimal_comma(fitting_X)
+        if len(decimal_columns_to_fix) > 0:
+            self.logger.warning(f"Convert strings with decimal comma to float: {decimal_columns_to_fix}")
+            for col in decimal_columns_to_fix:
+                fitting_X[col] = fitting_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                fitting_enriched_X[col] = (
+                    fitting_enriched_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                )
 
         fitting_eval_set_dict = dict()
         for idx, eval_tuple in eval_set_sampled_dict.items():
@@ -1346,11 +1388,31 @@ class FeaturesEnricher(TransformerMixin):
                 client_features + existing_filtered_enriched_features
             ].copy()
 
-            # Drop high cardinality columns in eval set
-            fitting_eval_X = fitting_eval_X.drop(columns=columns_with_high_cardinality, errors="ignore")
-            fitting_enriched_eval_X = fitting_enriched_eval_X.drop(
-                columns=columns_with_high_cardinality, errors="ignore"
-            )
+            # # Drop high cardinality features in eval set
+            # if len(columns_with_high_cardinality) > 0:
+            #     fitting_eval_X = fitting_eval_X.drop(columns=columns_with_high_cardinality, errors="ignore")
+            #     fitting_enriched_eval_X = fitting_enriched_eval_X.drop(
+            #         columns=columns_with_high_cardinality, errors="ignore"
+            #     )
+            # Drop constant features in eval_set
+            if len(constant_columns) > 0:
+                fitting_eval_X = fitting_eval_X.drop(columns=constant_columns, errors="ignore")
+                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(columns=constant_columns, errors="ignore")
+            # Drop datetime features in eval_set
+            if len(datetime_features) > 0:
+                fitting_eval_X = fitting_eval_X.drop(columns=datetime_features, errors="ignore")
+                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(columns=datetime_features, errors="ignore")
+            # Convert bool to string in eval_set
+            if len(bool_columns) > 0:
+                fitting_eval_X[col] = fitting_eval_X[col].astype(str)
+                fitting_enriched_eval_X[col] = fitting_enriched_eval_X[col].astype(str)
+            # Correct string features with decimal commas
+            if len(decimal_columns_to_fix) > 0:
+                for col in decimal_columns_to_fix:
+                    fitting_eval_X[col] = fitting_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    fitting_enriched_eval_X[col] = (
+                        fitting_enriched_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    )
 
             fitting_eval_set_dict[idx] = (
                 fitting_eval_X,
@@ -1398,6 +1460,7 @@ class FeaturesEnricher(TransformerMixin):
         elif len(self.feature_importances_) == 0:
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
+        # TODO save and check if dataset was deduplicated - use imbalance branch for such case
         elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__sample_balanced(eval_set, trace_id, remove_outliers_calc_metrics)
@@ -1437,6 +1500,8 @@ class FeaturesEnricher(TransformerMixin):
                 eval_xy[TARGET] = eval_y
                 eval_xy[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_xy])
+
+        df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
 
         num_samples = _num_samples(df)
         sample_threshold, sample_rows = (
@@ -1561,14 +1626,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df_with_index[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df_with_index])
 
-            _, df = remove_fintech_duplicates(
-                df,
-                self.search_keys,
-                date_format=self.date_format,
-                logger=self.logger,
-                silent=True,
-                bundle=self.bundle,
-            )
+            df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
 
             # downsample if need to eval_set threshold
             num_samples = _num_samples(df)
@@ -1653,9 +1711,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.__cached_sampled_datasets = (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, self.search_keys)
 
-        return self.__mk_sampled_data_tuple(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, self.search_keys
-        )
+        return self.__mk_sampled_data_tuple(X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, self.search_keys)
 
     def __mk_sampled_data_tuple(
         self,
@@ -2179,11 +2235,10 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, self.fit_search_keys)
 
-        need_full_defuplication, df = remove_fintech_duplicates(
+        df = remove_fintech_duplicates(
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
         )
-        if need_full_defuplication:
-            df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
+        df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
 
         date_column = self._get_date_column(self.fit_search_keys)
         self.__adjust_cv(df, date_column, model_task_type)
@@ -2806,8 +2861,9 @@ class FeaturesEnricher(TransformerMixin):
         # save original order or rows
         original_index_name = df.index.name
         index_name = df.index.name or DEFAULT_INDEX
-        df = df.reset_index().reset_index(drop=True)
-        df = df.rename(columns={index_name: ORIGINAL_INDEX})
+        original_order_name = "original_order"
+        df = df.reset_index().rename(columns={index_name: ORIGINAL_INDEX})
+        df = df.reset_index().rename(columns={DEFAULT_INDEX: original_order_name})
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
@@ -2847,7 +2903,7 @@ class FeaturesEnricher(TransformerMixin):
         # return original order
         df = df.set_index(ORIGINAL_INDEX)
         df.index.name = original_index_name
-        # df = df.sort_index()
+        df = df.sort_values(by=original_order_name).drop(columns=original_order_name)
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
         return df
