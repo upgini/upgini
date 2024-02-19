@@ -2136,6 +2136,8 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
         expected_result_df = (
             pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
         )
+        expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
+        expected_result_df["rep_date_f5d6bb"] = expected_result_df["rep_date_f5d6bb"].astype("Int64")
 
         def test(n_shuffles: int):
             train_df = initial_train_df.copy()
@@ -2161,8 +2163,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-            expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
-            actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
             # actual_result_df.to_parquet(expected_result_path)
             assert_frame_equal(actual_result_df, expected_result_df)
 
