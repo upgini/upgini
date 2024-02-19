@@ -141,7 +141,7 @@ def make_html_report(
     # )
     relevant_datasources_df = relevant_datasources_df.copy()
     relevant_datasources_df["action"] = (
-        f"""<a href="https://upgini.com/requet-a-quote?search-id={search_id}">"""
+        f"""<a href="https://upgini.com/request-a-quote?search-id={search_id}">"""
         """<button type="button">Request a quote</button></a>"""
     )
     relevant_datasources_df.rename(columns={"action": "&nbsp;"}, inplace=True)
@@ -297,7 +297,7 @@ def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"
 
 def show_request_quote_button():
     if not ipython_available():
-        print("https://upgini.com/requet-a-quote")
+        print("https://upgini.com/request-a-quote")
     else:
         import ipywidgets as widgets
         from IPython.display import Javascript, display
@@ -305,7 +305,7 @@ def show_request_quote_button():
         button = widgets.Button(description="Request a quote", button_style="danger")
 
         def on_button_clicked(b):
-            display(Javascript('window.open("https://upgini.com/requet-a-quote");'))
+            display(Javascript('window.open("https://upgini.com/request-a-quote");'))
 
         button.on_click(on_button_clicked)
 
