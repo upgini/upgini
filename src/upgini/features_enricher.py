@@ -3047,6 +3047,20 @@ class FeaturesEnricher(TransformerMixin):
         def list_or_single(lst: List[str], single: str):
             return lst or ([single] if single else [])
 
+        def to_anchor(link: str, value: str) -> str:
+            if not value:
+                return ""
+            elif not link:
+                return value
+            elif value == llm_source:
+                return value
+            else:
+                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
+
+        def make_links(names: List[str], links: List[str]):
+            all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
+            return ",".join(all_links)
+
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
@@ -3071,20 +3085,6 @@ class FeaturesEnricher(TransformerMixin):
                 feature_sample = ", ".join(feature_sample)
                 if len(feature_sample) > 30:
                     feature_sample = feature_sample[:30] + "..."
-
-            def to_anchor(link: str, value: str) -> str:
-                if not value:
-                    return ""
-                elif not link:
-                    return value
-                elif value == llm_source:
-                    return value
-                else:
-                    return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
-
-            def make_links(names: List[str], links: List[str]):
-                all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
-                return ",".join(all_links)
 
             internal_provider = feature_meta.data_provider or "Upgini"
             providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
