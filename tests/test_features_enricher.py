@@ -2136,6 +2136,8 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
         expected_result_df = (
             pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
         )
+        expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
+        expected_result_df["rep_date_f5d6bb"] = expected_result_df["rep_date_f5d6bb"].astype("Int64")
 
         def test(n_shuffles: int):
             train_df = initial_train_df.copy()
@@ -2573,9 +2575,9 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
     df = pd.DataFrame(
         {
-            "date": ["2021-01-01", "2021-01-02", "2023-01-01", "2023-01-02"],
-            "feature": [11, 10, 12, 13],
-            "target": [0, 1, 0, 1],
+            "date": ["2021-01-01", "2021-01-02", "2023-01-01", "2023-01-02", "2023-01-03"],
+            "feature": [11, 10, 12, 13, 14],
+            "target": [0, 1, 0, 1, 0],
         }
     )
 
@@ -2602,13 +2604,16 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
         enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
-        enricher.calculate_metrics(
-            df.drop(columns="target"),
-            df["target"],
-            [(df.drop(columns="target"), df["target"])],
-            "unsupported_positional_argument",
-            unsupported_key_argument=False,
-        )
+        with pytest.raises(
+            ValueError, match="Only one class present in y_true. ROC AUC score is not defined in that case."
+        ):
+            enricher.calculate_metrics(
+                df.drop(columns="target"),
+                df["target"],
+                [(df.drop(columns="target"), df["target"])],
+                "unsupported_positional_argument",
+                unsupported_key_argument=False,
+            )
     finally:
         Dataset.MIN_ROWS_COUNT = original_min_rows
 

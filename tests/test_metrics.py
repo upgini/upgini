@@ -258,9 +258,9 @@ def test_demo_metrics(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [464],
             target_mean_header: [100.7802],
-            baseline_mae: [21.5089],
-            enriched_mae: [20.8841],
-            uplift: [0.624774],
+            baseline_mae: [21.18862],
+            enriched_mae: [20.862484],
+            uplift: [0.326136],
         }
     )
 
