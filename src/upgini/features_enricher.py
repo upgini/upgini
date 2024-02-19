@@ -3022,6 +3022,7 @@ class FeaturesEnricher(TransformerMixin):
         return result_train, result_eval_sets
 
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
+        llm_source = "LLM with external data augmentation"
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
@@ -3045,6 +3046,20 @@ class FeaturesEnricher(TransformerMixin):
 
         def list_or_single(lst: List[str], single: str):
             return lst or ([single] if single else [])
+
+        def to_anchor(link: str, value: str) -> str:
+            if not value:
+                return ""
+            elif not link:
+                return value
+            elif value == llm_source:
+                return value
+            else:
+                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
+
+        def make_links(names: List[str], links: List[str]):
+            all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
+            return ",".join(all_links)
 
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
@@ -3071,18 +3086,6 @@ class FeaturesEnricher(TransformerMixin):
                 if len(feature_sample) > 30:
                     feature_sample = feature_sample[:30] + "..."
 
-            def to_anchor(link: str, value: str) -> str:
-                if not value:
-                    return ""
-                elif not link:
-                    return value
-                else:
-                    return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
-
-            def make_links(names: List[str], links: List[str]):
-                all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
-                return ",".join(all_links)
-
             internal_provider = feature_meta.data_provider or "Upgini"
             providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
             provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
@@ -3092,7 +3095,7 @@ class FeaturesEnricher(TransformerMixin):
                 provider = to_anchor("https://upgini.com", "Upgini")
 
             internal_source = feature_meta.data_source or (
-                "LLM with external data augmentation"
+                llm_source
                 if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
                 else ""
             )
