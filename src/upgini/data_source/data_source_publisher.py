@@ -79,6 +79,12 @@ class DataSourcePublisher:
                         f"Invalid update frequency: {update_frequency}. "
                         f"Available values: {self.ACCEPTABLE_UPDATE_FREQUENCIES}"
                     )
+                if (
+                    set(search_keys.values()) == {SearchKey.IP_RANGE_FROM, SearchKey.IP_RANGE_TO}
+                    or set(search_keys.values()) == {SearchKey.IPV6_RANGE_FROM, SearchKey.IPV6_RANGE_TO}
+                    or set(search_keys.values()) == {SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO}
+                ) and sort_column is None:
+                    raise ValidationError("Sort column is required for passed search keys")
 
                 request = {
                     "dataTableUri": data_table_uri,

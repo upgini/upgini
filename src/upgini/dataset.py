@@ -724,8 +724,10 @@ class Dataset:  # (pd.DataFrame):
                     + "".join("<tr>" + "".join(map(map_color, row[1:])) + "</tr>" for row in df_stats.itertuples())
                     + "</table>"
                 )
+                print()
                 display(HTML(html_stats))
             except (ImportError, NameError):
+                print()
                 print(df_stats)
 
         if len(self.data) == 0:

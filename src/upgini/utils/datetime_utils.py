@@ -11,7 +11,20 @@ from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 from upgini.errors import ValidationError
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 
-DATE_FORMATS = ["%Y-%m-%d", "%d.%m.%y", "%d.%m.%Y", "%m.%d.%y", "%m.%d.%Y", "%Y-%m-%dT%H:%M:%S.%f"]
+DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%d.%m.%y",
+    "%d.%m.%Y",
+    "%m.%d.%y",
+    "%m.%d.%Y",
+    "%Y/%m/%d",
+    "%y/%m/%d",
+    "%d/%m/%Y",
+    "%d/%m/%y",
+    "%m/%d/%Y",
+    "%m/%d/%y",
+    "%Y-%m-%dT%H:%M:%S.%f",
+]
 
 DATETIME_PATTERN = r"^[\d\s\.\-:T]+$"
 

@@ -1850,7 +1850,7 @@ class FeaturesEnricher(TransformerMixin):
                         msg = self.bundle.get("transform_usage_info").format(
                             transform_usage.limit, transform_usage.transformed_rows
                         )
-                        self.logger.info("transform_usage_warning")
+                        self.logger.info(msg)
                         print(msg)
 
             validated_X = self._validate_X(X, is_transform=True)
