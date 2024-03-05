@@ -309,13 +309,12 @@ class Dataset:  # (pd.DataFrame):
             if self.data[ip].isnull().all():
                 raise ValidationError(self.bundle.get("invalid_ip").format(ip))
 
-            if self.data[ip].apply(self._is_ipv4).any():
-                ipv4 = ip + "_v4"
-                self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
-                self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
-                self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
-                search_keys.add(ipv4)
-                self.columns_renaming[ipv4] = original_ip
+            ipv4 = ip + "_v4"
+            self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
+            self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
+            self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
+            search_keys.add(ipv4)
+            self.columns_renaming[ipv4] = original_ip
 
             ipv6 = ip + "_v6"
             self.data[ipv6] = (
