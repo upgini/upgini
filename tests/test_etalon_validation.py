@@ -220,7 +220,7 @@ def test_constant_and_empty_validation():
         }
     )
     warnings_counter = WarningCounter()
-    features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], warnings_counter)
+    features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], None, warnings_counter)
     assert features_to_drop == ["a", "b", "c"]
     assert warnings_counter.has_warnings()
 
@@ -230,14 +230,15 @@ def test_one_hot_encoding_validation():
         {
             "phone": np.random.randint(1, 99999999999, 1000),
             "a": np.random.randint(1, 10, 1000),
-            "b": np.random.rand(1000)
+            "b": np.random.rand(1000),
+            "text_feature": ["text_" + str(n) for n in np.random.rand(1000)],
         }
     )
     df = pd.get_dummies(df, columns=["a"])
     features_columns = df.columns.to_list()
     features_columns.remove("phone")
     warnings_counter = WarningCounter()
-    features_to_drop = FeaturesValidator().validate(df, features_columns, warnings_counter)
+    features_to_drop = FeaturesValidator().validate(df, features_columns, ["text_feature"], warnings_counter)
     assert features_to_drop == []
 
 
