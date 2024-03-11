@@ -258,9 +258,9 @@ def test_demo_metrics(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [464],
             target_mean_header: [100.7802],
-            baseline_mae: [21.18862],
-            enriched_mae: [20.862484],
-            uplift: [0.326136],
+            baseline_mae: [21.508906],
+            enriched_mae: [20.884132],
+            uplift: [0.624774],
         }
     )
 
@@ -341,15 +341,16 @@ def test_default_metric_binary(requests_mock: Mocker):
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
     df["feature_2_cat"] = np.random.randint(0, 10, len(df))
     df["feature_2_cat"] = df["feature_2_cat"].astype("string").astype("category")
+    df = df.reset_index().rename(columns={"index": "high_cardinality_feature"})
     df["date"] = pd.date_range(datetime.date(2020, 1, 1), periods=len(df))
     df_train = df[0:500]
-    X = df_train[["phone", "date", "feature1"]]
+    X = df_train[["phone", "date", "feature1", "high_cardinality_feature"]]
     y = df_train["target"]
     eval_1 = df[500:750]
     eval_2 = df[750:1000]
-    eval_X_1 = eval_1[["phone", "date", "feature1"]]
+    eval_X_1 = eval_1[["phone", "date", "feature1", "high_cardinality_feature"]]
     eval_y_1 = eval_1["target"]
-    eval_X_2 = eval_2[["phone", "date", "feature1"]]
+    eval_X_2 = eval_2[["phone", "date", "feature1", "high_cardinality_feature"]]
     eval_y_2 = eval_2["target"]
     eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
     enricher = FeaturesEnricher(

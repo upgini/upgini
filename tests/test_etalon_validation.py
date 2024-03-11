@@ -1,5 +1,4 @@
 import ipaddress
-import random
 from datetime import date, datetime
 
 import numpy as np
@@ -113,7 +112,8 @@ def test_ip_v6_conversion():
 
     dataset._Dataset__rename_columns()
     dataset._Dataset__convert_ip()
-    assert "ip_bb9af5_v4" not in dataset.data.columns
+    assert dataset.data["ip_bb9af5_v4"].dtype.name == "Int64"
+    assert dataset.data["ip_bb9af5_v4"].isna().all()
     assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
     assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
     assert dataset.data["ip_bb9af5_v6"].iloc[1] == "53200333237544187032231876373729151639"
@@ -212,18 +212,33 @@ def test_python_datetime_to_timestamp_conversion():
 
 def test_constant_and_empty_validation():
     df = pd.DataFrame(
-        [{"phone": random.randint(1, 99999999999), "a": 1, "b": None, "c": 0}] * 995
-        + [{"phone": random.randint(1, 99999999999), "a": 2, "b": 3, "c": 1}] * 5
+        {
+            "phone": np.random.randint(1, 99999999999, 1000),
+            "a": [1] * 995 + [2] * 5,
+            "b": [None] * 995 + [3] * 5,
+            "c": [0] * 995 + [1] * 5,
+        }
     )
-    dataset = Dataset("test4", df=df)  # type: ignore
-    dataset.meaning_types = {
-        "phone": FileColumnMeaningType.MSISDN,
-        "a": FileColumnMeaningType.FEATURE,
-        "b": FileColumnMeaningType.FEATURE,
-    }
     warnings_counter = WarningCounter()
     features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], warnings_counter)
     assert features_to_drop == ["a", "b", "c"]
+    assert warnings_counter.has_warnings()
+
+
+def test_one_hot_encoding_validation():
+    df = pd.DataFrame(
+        {
+            "phone": np.random.randint(1, 99999999999, 1000),
+            "a": np.random.randint(1, 10, 1000),
+            "b": np.random.rand(1000)
+        }
+    )
+    df = pd.get_dummies(df, columns=["a"])
+    features_columns = df.columns.to_list()
+    features_columns.remove("phone")
+    warnings_counter = WarningCounter()
+    features_to_drop = FeaturesValidator().validate(df, features_columns, warnings_counter)
+    assert features_to_drop == []
 
 
 def test_imbalanced_target():
