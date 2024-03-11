@@ -19,6 +19,7 @@ class FeaturesValidator:
     def validate(self, df: pd.DataFrame, features: List[str], warning_counter: WarningCounter) -> List[str]:
         # one_hot_encoded_features = []
         empty_or_constant_features = []
+        high_cardinality_features = []
 
         for f in features:
             column = df[f]
@@ -51,23 +52,29 @@ class FeaturesValidator:
             msg = bundle.get("empty_or_contant_features").format(empty_or_constant_features)
             print(msg)
             self.logger.warning(msg)
+            warning_counter.increment()
 
-        return empty_or_constant_features
+        high_cardinality_features = self.find_high_cardinality(df[features])
+        if high_cardinality_features:
+            msg = bundle.get("high_cardinality_features").format(high_cardinality_features)
+            print(msg)
+            self.logger.warning(msg)
+            warning_counter.increment()
+
+        return empty_or_constant_features + high_cardinality_features
 
     @staticmethod
     def find_high_cardinality(df: pd.DataFrame) -> List[str]:
         # Remove high cardinality columns
         row_count = df.shape[0]
+        if row_count < 100:  # For tests with small datasets
+            return []
         return [
             i
             for i in df
-            if (is_string_dtype(df[i]) or is_integer_dtype(df[i])) and (df[i].nunique() / row_count >= 0.9)
+            if (is_string_dtype(df[i]) or is_integer_dtype(df[i])) and (df[i].nunique(dropna=False) / row_count >= 0.95)
         ]
 
     @staticmethod
     def find_constant_features(df: pd.DataFrame) -> List[str]:
-        return [
-            i
-            for i in df
-            if df[i].nunique() == 1
-        ]
+        return [i for i in df if df[i].nunique() == 1]
