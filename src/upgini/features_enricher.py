@@ -27,7 +27,6 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
-from sklearn.model_selection._split import GroupsConsumerMixin
 
 from upgini.autofe.feature import Feature
 from upgini.data_source.data_source_publisher import CommercialSchema
@@ -1255,8 +1254,18 @@ class FeaturesEnricher(TransformerMixin):
             _cv, groups = CVConfig(
                 _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold(), group_columns=group_columns
             ).get_cv_and_groups(X)
-        elif isinstance(_cv, GroupsConsumerMixin):
-            groups = get_groups(X, group_columns)
+        else:
+            from sklearn import __version__ as sklearn_version
+            try:
+                from sklearn.model_selection._split import GroupsConsumerMixin
+
+                if isinstance(_cv, GroupsConsumerMixin):
+                    groups = get_groups(X, group_columns)
+            except ImportError:
+                print(f"WARNING: Unsupported scikit-learn version {sklearn_version}. Restart kernel and try again")
+                self.logger.exception(
+                    f"Failed to import GroupsConsumerMixin to check CV. Version of sklearn: {sklearn_version}"
+                )
 
         return _cv, groups
 
@@ -1388,11 +1397,11 @@ class FeaturesEnricher(TransformerMixin):
             ].copy()
 
             # # Drop high cardinality features in eval set
-            # if len(columns_with_high_cardinality) > 0:
-            #     fitting_eval_X = fitting_eval_X.drop(columns=columns_with_high_cardinality, errors="ignore")
-            #     fitting_enriched_eval_X = fitting_enriched_eval_X.drop(
-            #         columns=columns_with_high_cardinality, errors="ignore"
-            #     )
+            if len(columns_with_high_cardinality) > 0:
+                fitting_eval_X = fitting_eval_X.drop(columns=columns_with_high_cardinality, errors="ignore")
+                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(
+                    columns=columns_with_high_cardinality, errors="ignore"
+                )
             # Drop constant features in eval_set
             if len(constant_columns) > 0:
                 fitting_eval_X = fitting_eval_X.drop(columns=constant_columns, errors="ignore")
@@ -2275,7 +2284,9 @@ class FeaturesEnricher(TransformerMixin):
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
-        features_to_drop = FeaturesValidator(self.logger).validate(df, features_columns, self.warning_counter)
+        features_to_drop = FeaturesValidator(self.logger).validate(
+            df, features_columns, self.generate_features, self.warning_counter
+        )
         self.fit_dropped_features.update(features_to_drop)
         df = df.drop(columns=features_to_drop)
 

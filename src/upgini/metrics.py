@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
+import catboost
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
@@ -424,24 +425,35 @@ class CatBoostWrapper(EstimatorWrapper):
         X, y, groups, params = super()._prepare_to_fit(X, y)
 
         # Find embeddings
-        emb_pattern = r"(.+)_emb\d+"
-        self.emb_features = [c for c in X.columns if re.match(emb_pattern, c) and is_numeric_dtype(X[c])]
-        embedding_features = []
-        if len(self.emb_features) > 3:  # There is no reason to reduce embeddings dimension with less than 4
-            self.logger.info(
-                f"Embedding features count more than 3, so group them into one vector for CatBoost: {self.emb_features}"
-            )
-            X, embedding_features = self.group_embeddings(X)
-            params["embedding_features"] = embedding_features
+        if hasattr(CatBoostClassifier, "get_embedding_feature_indices"):
+            emb_pattern = r"(.+)_emb\d+"
+            self.emb_features = [c for c in X.columns if re.match(emb_pattern, c) and is_numeric_dtype(X[c])]
+            embedding_features = []
+            if len(self.emb_features) > 3:  # There is no reason to reduce embeddings dimension with less than 4
+                self.logger.info(
+                    "Embedding features count more than 3, so group them into one vector for CatBoost: "
+                    f"{self.emb_features}"
+                )
+                X, embedding_features = self.group_embeddings(X)
+                params["embedding_features"] = embedding_features
+            else:
+                self.logger.info(
+                    f"Embedding features count less than 3, so use them separately: {self.emb_features}"
+                )
+                self.emb_features = []
         else:
-            self.emb_features = []
+            self.logger.warning(f"Embedding features are not supported by Catboost version {catboost.__version__}")
 
         # Find text features from passed in generate_features
-        if self.text_features is not None:
-            self.logger.info(f"Passed text features for CatBoost: {self.text_features}")
-            self.text_features = [f for f in self.text_features if f in X.columns and not is_numeric_dtype(X[f])]
-            self.logger.info(f"Rest text features after checks: {self.text_features}")
-            params["text_features"] = self.text_features
+        if hasattr(CatBoostClassifier, "get_text_feature_indices"):
+            if self.text_features is not None:
+                self.logger.info(f"Passed text features for CatBoost: {self.text_features}")
+                self.text_features = [f for f in self.text_features if f in X.columns and not is_numeric_dtype(X[f])]
+                self.logger.info(f"Rest text features after checks: {self.text_features}")
+                params["text_features"] = self.text_features
+        else:
+            self.text_features = None
+            self.logger.warning(f"Text features are not supported by this Catboost version {catboost.__version__}")
 
         # Find rest categorical features
         self.cat_features = _get_cat_features(X, self.text_features, embedding_features)
