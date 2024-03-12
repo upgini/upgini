@@ -1681,7 +1681,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
         else:
             self.logger.info("Transform without eval_set")
-            df = self.X.copy()
+            df = validated_X.copy()
 
             df[TARGET] = validated_y
             num_samples = _num_samples(df)
