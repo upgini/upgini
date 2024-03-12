@@ -225,11 +225,11 @@ class Dataset:  # (pd.DataFrame):
                     self.data[col] = self.data[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
 
     def __convert_bools(self):
-        """Convert bool columns True -> 1, False -> 0"""
+        """Convert bool columns to string"""
         # self.logger.info("Converting bool to int")
         for col in self.data.columns:
             if is_bool(self.data[col]):
-                self.data[col] = self.data[col].astype("Int64")
+                self.data[col] = self.data[col].astype("str")
 
     def __convert_float16(self):
         """Convert float16 to float"""
