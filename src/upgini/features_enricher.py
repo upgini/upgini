@@ -1684,6 +1684,9 @@ class FeaturesEnricher(TransformerMixin):
             df = validated_X.copy()
 
             df[TARGET] = validated_y
+
+            df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
+
             num_samples = _num_samples(df)
             if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
                 self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
@@ -2884,19 +2887,20 @@ class FeaturesEnricher(TransformerMixin):
             sort_columns = [date_column] if date_column is not None else []
 
             other_search_keys = sorted(
-                [
-                    sk
-                    for sk, key_type in search_keys.items()
-                    if key_type not in [SearchKey.DATE, SearchKey.DATETIME]
-                    and sk in df.columns
-                    and df[sk].nunique() > 1  # don't use constant keys for hash
-                ]
+                [c for c in df.columns if c not in sort_columns and df[c].nunique() > 1]
+                # [
+                #     sk
+                #     for sk, key_type in search_keys.items()
+                #     if key_type not in [SearchKey.DATE, SearchKey.DATETIME]
+                #     and sk in df.columns
+                #     and df[sk].nunique() > 1  # don't use constant keys for hash
+                # ]
             )
 
             search_keys_hash = "search_keys_hash"
             if len(other_search_keys) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[sorted(other_search_keys)], index=False)
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[other_search_keys], index=False)
 
             df = df.sort_values(by=sort_columns)
 
