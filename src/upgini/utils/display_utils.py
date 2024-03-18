@@ -79,8 +79,22 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
 
     from IPython.display import HTML, display
 
-    table_tsv = urllib.parse.quote(internal_df.to_csv(index=False, sep="\t"), safe=",")
+    try:
+        table_tsv = urllib.parse.quote(internal_df.to_csv(index=False, sep="\t"), safe=",")
+    except Exception:
+        table_tsv = None
     email_subject = "Relevant external data sources from Upgini.com"
+
+    if table_tsv is not None:
+        copy_and_share = f"""
+            <div style="text-align: right">
+                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>\U0001F4C2 Copy</button>
+                <a href='mailto:<Share with...>?subject={email_subject}&body={table_tsv}'>
+                    <button>\U0001F4E8 Share</button>
+                </a>
+            </div>"""
+    else:
+        copy_and_share = ""
 
     table_html = make_table(df)
 
@@ -114,12 +128,7 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
         </style>
         <h2>{header}</h2>
         <div style="display:flex; flex-direction:column; align-items:flex-end; width: fit-content;">
-            <div style="text-align: right">
-                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>\U0001F4C2 Copy</button>
-                <a href='mailto:<Share with...>?subject={email_subject}&body={table_tsv}'>
-                    <button>\U0001F4E8 Share</button>
-                </a>
-            </div>
+            {copy_and_share}
             {table_html}
         </div>
         """
