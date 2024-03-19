@@ -2,7 +2,7 @@ from typing import Optional, Union
 import numpy as np
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
+from upgini.autofe.operand import PandasOperand
 
 
 class DateDiffMixin:
