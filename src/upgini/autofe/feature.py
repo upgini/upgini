@@ -305,7 +305,7 @@ class FeatureGroup:
         grouped_features = []
 
         def groupby_func(f: Feature) -> Tuple[Operand, Union[Column, Feature]]:
-            return (f.op, f.children[f.op.group_index])
+            return (f.op, f.children[0 if not f.op.is_vectorizable else f.op.group_index])
 
         for op_child, features in itertools.groupby(candidates, groupby_func):
             op, main_child = op_child
