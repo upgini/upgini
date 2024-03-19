@@ -1,11 +1,12 @@
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.testing import assert_frame_equal
 
 from upgini.errors import ValidationError
-from upgini.metadata import ModelTaskType
+from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType
 from upgini.resource_bundle import bundle
-from upgini.utils.target_utils import define_task
+from upgini.utils.target_utils import balance_undersample, define_task
 
 
 def test_invalid_target():
@@ -72,3 +73,62 @@ def test_define_regression_task_type():
     y = pd.Series([0.0, 3.0, 5.0, 0.0, 5.0, 0.0, 3.0])
     assert define_task(y, False) == ModelTaskType.REGRESSION
     assert define_task(y, True) == ModelTaskType.REGRESSION
+
+
+def test_balance_undersampling_binary():
+    df = pd.DataFrame({SYSTEM_RECORD_ID: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], TARGET: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]})
+    balanced_df = balance_undersample(
+        df, TARGET, ModelTaskType.BINARY, 42, imbalance_threshold=0.1, min_sample_threshold=2
+    )
+    # Get all minority class and 5x of majority class if minority class count (1)
+    # more or equal to min_sample_threshold/2 (1)
+    expected_df = pd.DataFrame({
+        SYSTEM_RECORD_ID: [1, 2, 3, 7, 9, 10],
+        TARGET: [0, 1, 0, 0, 0, 0]
+    })
+    assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
+
+    balanced_df = balance_undersample(
+        df, TARGET, ModelTaskType.BINARY, 42, imbalance_threshold=0.1, min_sample_threshold=8
+    )
+    # Get all minority class and fill up to min_sample_threshold (8) by majority class
+    expected_df = pd.DataFrame({
+        SYSTEM_RECORD_ID: [1, 2, 3, 4, 6, 7, 9, 10],
+        TARGET: [0, 1, 0, 0, 0, 0, 0, 0]
+    })
+    assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
+
+    df = pd.DataFrame({"system_record_id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], TARGET: [0, 1, 0, 0, 0, 0, 0, 0, 1, 0]})
+    balanced_df = balance_undersample(
+        df, "target", ModelTaskType.BINARY, 42, imbalance_threshold=0.1, min_sample_threshold=4
+    )
+    # Get full dataset if majority class count (8) less than x5 of minority class count (2)
+    assert_frame_equal(balanced_df, df)
+
+
+def test_balance_undersaampling_multiclass():
+    df = pd.DataFrame({
+        SYSTEM_RECORD_ID: [1, 2, 3, 4, 5, 6],
+        TARGET: ["a", "b", "c", "c", "b", "c"]
+        # a - 1, b - 2, c - 3
+    })
+    balanced_df = balance_undersample(
+        df, TARGET, ModelTaskType.MULTICLASS, 42, imbalance_threshold=0.1, min_sample_threshold=10
+    )
+    # Get full dataset if majority class count (3) less than x2 of 25% class (b) count (2)
+    assert_frame_equal(balanced_df, df)
+
+    df = pd.DataFrame({
+        SYSTEM_RECORD_ID: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        TARGET: ["a", "b", "c", "c", "c", "b", "c", "d", "d", "d", "c"]
+        # a - 1, b - 2, c - 5, d - 3
+    })
+    balanced_df = balance_undersample(
+        df, TARGET, ModelTaskType.MULTICLASS, 42, imbalance_threshold=0.1, min_sample_threshold=10
+    )
+    expected_df = pd.DataFrame({
+        SYSTEM_RECORD_ID: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11],
+        TARGET: ["a", "b", "c", "c", "c", "b", "d", "d", "d", "c"]
+    })
+    # Get all of 25% quantile class (b) and minor classes (a) and x2 (or all if less) of major classes
+    assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)

@@ -260,11 +260,13 @@ def test_imbalanced_target():
     }
     dataset.task_type = ModelTaskType.MULTICLASS
     dataset._Dataset__resample()
-    assert len(dataset) == 400
+    assert len(dataset) == 1800
     value_counts = dataset.data["target"].value_counts()
     assert len(value_counts) == 4
-    for label in dataset.data["target"].unique():
-        assert value_counts[label] == 100
+    assert value_counts["a"] == 100
+    assert value_counts["b"] == 400
+    assert value_counts["c"] == 500
+    assert value_counts["d"] == 800
 
 
 def test_fail_on_small_class_observations():
