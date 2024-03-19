@@ -39,10 +39,10 @@ from upgini.metadata import (
 )
 from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
-from upgini.sampler.random_under_sampler import RandomUnderSampler
 from upgini.search_task import SearchTask
 from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
 from upgini.utils.email_utils import EmailSearchKeyConverter
+from upgini.utils.target_utils import balance_undersample
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -61,6 +61,8 @@ class Dataset:  # (pd.DataFrame):
     FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
     MIN_SAMPLE_THRESHOLD = 5_000
     IMBALANCE_THESHOLD = 0.4
+    BINARY_BOOTSTRAP_LOOPS = 5
+    MULTICLASS_BOOTSTRAP_LOOPS = 2
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
@@ -460,10 +462,8 @@ class Dataset:  # (pd.DataFrame):
             self.task_type == ModelTaskType.BINARY and len(train_segment) > self.MIN_SAMPLE_THRESHOLD
         ):
             count = len(train_segment)
-            min_class_count = count
-            min_class_value = None
-            target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-            target = train_segment[target_column].copy()
+            target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
+            target = train_segment[target_column]
             target_classes_count = target.nunique()
 
             if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
@@ -473,12 +473,9 @@ class Dataset:  # (pd.DataFrame):
                 self.logger.warning(msg)
                 raise ValidationError(msg)
 
-            unique_target = target.unique()
-            for v in list(unique_target):  # type: ignore
-                current_class_count = len(train_segment.loc[target == v])
-                if current_class_count < min_class_count:
-                    min_class_count = current_class_count
-                    min_class_value = v
+            vc = target.value_counts()
+            min_class_value = vc.index[len(vc) - 1]
+            min_class_count = vc[min_class_value]
 
             if min_class_count < self.MIN_TARGET_CLASS_ROWS:
                 msg = self.bundle.get("dataset_rarest_class_less_min").format(
@@ -491,53 +488,19 @@ class Dataset:  # (pd.DataFrame):
             min_class_threshold = min_class_percent * count
 
             if min_class_count < min_class_threshold:
-                msg = self.bundle.get("dataset_rarest_class_less_threshold").format(
-                    min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
-                )
-                self.logger.warning(msg)
-                print(msg)
-                self.warning_counter.increment()
-
-                train_segment = train_segment.copy().sort_values(by=SYSTEM_RECORD_ID)
-                if self.task_type == ModelTaskType.MULTICLASS:
-                    # Sort classes by rows count and find 25% quantile class
-                    classes = target.value_counts().index
-                    quantile25_idx = int(0.75 * len(classes))
-                    quantile25_class = classes[quantile25_idx]
-                    count_of_quantile25_class = len(target[target == quantile25_class])
-                    msg = self.bundle.get("imbalance_multiclass").format(quantile25_class, count_of_quantile25_class)
-                    self.logger.warning(msg)
-                    print(msg)
-                    # 25% and lower classes will stay as is. Higher classes will be downsampled
-                    parts = []
-                    for class_idx in range(quantile25_idx):
-                        sampled = train_segment[train_segment[target_column] == classes[class_idx]].sample(
-                            n=count_of_quantile25_class, random_state=self.random_state
-                        )
-                        parts.append(sampled)
-                    for class_idx in range(quantile25_idx, len(classes)):
-                        parts.append(train_segment[train_segment[target_column] == classes[class_idx]])
-                    resampled_data = pd.concat(parts)
-                elif self.task_type == ModelTaskType.BINARY and min_class_count < self.MIN_SAMPLE_THRESHOLD / 2:
-                    minority_class = train_segment[train_segment[target_column] == min_class_value]
-                    majority_class = train_segment[train_segment[target_column] != min_class_value]
-                    sampled_majority_class = majority_class.sample(
-                        n=self.MIN_SAMPLE_THRESHOLD - min_class_count, random_state=self.random_state
-                    )
-                    resampled_data = train_segment[
-                        (train_segment[SYSTEM_RECORD_ID].isin(minority_class[SYSTEM_RECORD_ID]))
-                        | (train_segment[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))
-                    ]
-                else:
-                    sampler = RandomUnderSampler(random_state=self.random_state)
-                    X = train_segment[SYSTEM_RECORD_ID]
-                    X = X.to_frame(SYSTEM_RECORD_ID)
-                    new_x, _ = sampler.fit_resample(X, target)  # type: ignore
-                    resampled_data = train_segment[train_segment[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
-
-                self.data = resampled_data
-                self.logger.info(f"Shape after rebalance resampling: {self.data.shape}")
                 self.imbalanced = True
+                self.data = balance_undersample(
+                    df=train_segment,
+                    target_column=target_column,
+                    task_type=self.task_type,
+                    random_state=self.random_state,
+                    imbalance_threshold=self.IMBALANCE_THESHOLD,
+                    binary_bootstrap_loops=self.BINARY_BOOTSTRAP_LOOPS,
+                    multiclass_bootstrap_loops=self.MULTICLASS_BOOTSTRAP_LOOPS,
+                    logger=self.logger,
+                    bundle=self.bundle,
+                    warning_counter=self.warning_counter,
+                )
 
         # Resample over fit threshold
         if not self.imbalanced and EVAL_SET_INDEX in self.data.columns:
