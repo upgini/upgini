@@ -38,7 +38,10 @@ jobs:
       - run:
           no_output_timeout: 60m
           name: Run tox
-          command: tox
+          command: |
+            python3.10 -m venv .env10
+            source .env10/bin/activate
+            tox
       - store_test_results:
           path: test-results
       - store_artifacts:
