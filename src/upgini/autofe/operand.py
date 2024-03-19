@@ -73,6 +73,8 @@ class PandasOperand(Operand, abc.ABC):
 
 
 class VectorizableMixin(Operand):
+    group_index: int = 1
+
     def validate_calculation(self, input_columns: List[str], **kwargs) -> Tuple[str, List[str]]:
         if not kwargs.get(MAIN_COLUMN):
             raise ValueError(f"Expected argument {MAIN_COLUMN} for grouping operator {self.name} not found")

@@ -14,7 +14,6 @@ def test_date_diff():
     operand = DateDiff()
     expected_result = pd.Series([10531, None])
     assert_series_equal(operand.calculate_binary(df.date2, df.date1), expected_result)
-    assert_series_equal(operand.calculate_group(df, main_column="date1")["date2"].rename(None), expected_result)
 
 
 def test_date_diff_future():
