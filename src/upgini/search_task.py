@@ -57,7 +57,7 @@ class SearchTask:
         if logger is not None:
             self.logger = logger
         else:
-            self.logger = logging.getLogger()
+            self.logger = logging.getLogger("muted_logger")
             self.logger.setLevel("FATAL")
         self.provider_metadata_v2: Optional[List[ProviderTaskMetadataV2]] = None
         self.unused_features_for_generation: Optional[List[str]] = None

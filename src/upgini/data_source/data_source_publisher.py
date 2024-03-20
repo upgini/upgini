@@ -40,7 +40,7 @@ class DataSourcePublisher:
         if logs_enabled:
             self.logger = LoggerFactory().get_logger(endpoint, api_key)
         else:
-            self.logger = logging.getLogger()
+            self.logger = logging.getLogger("muted_logger")
             self.logger.setLevel("FATAL")
 
     def place(
@@ -170,6 +170,7 @@ class DataSourcePublisher:
                     print(msg)
                     self.logger.info(msg)
                     self._rest_client.stop_ads_management_task(task_id, trace_id)
+                raise
             except Exception:
                 self.logger.exception("Failed to register data table")
                 raise
@@ -289,6 +290,7 @@ class DataSourcePublisher:
                 raise ValidationError("One of arguments: bq_table_id or search_keys should be presented")
             if bq_table_id is not None and search_keys is not None:
                 raise ValidationError("Only one argument could be presented: bq_table_id or search_keys")
+            task_id = None
             try:
                 search_keys = [k.value.value for k in search_keys] if search_keys else None
                 request = {"bqTableId": bq_table_id, "searchKeys": search_keys}
@@ -303,6 +305,13 @@ class DataSourcePublisher:
                     raise Exception("Failed to register ADS: " + status_response["errorMessage"])
 
                 print("Uploading successfully finished")
+            except KeyboardInterrupt:
+                if task_id is not None:
+                    msg = f"Stopping AdsManagementTask {task_id}"
+                    print(msg)
+                    self.logger.info(msg)
+                    self._rest_client.stop_ads_management_task(task_id, trace_id)
+                raise
             except Exception:
                 self.logger.exception(f"Failed to upload table {bq_table_id}")
                 raise
