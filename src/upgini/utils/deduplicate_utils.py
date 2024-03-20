@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
-from upgini.metadata import SORT_ID, SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
+from upgini.metadata import EVAL_SET_INDEX, SORT_ID, SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import ResourceBundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.target_utils import define_task
@@ -78,20 +78,58 @@ def remove_fintech_duplicates(
     rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
     if len(rows_with_diff_target) > 0:
         unique_keys_to_delete = rows_with_diff_target[personal_cols].drop_duplicates()
-        rows_to_remove = pd.merge(df.reset_index(), unique_keys_to_delete, on=personal_cols)
-        rows_to_remove = rows_to_remove.set_index(df.index.name or "index")
-        perc = len(rows_to_remove) * 100 / len(df)
-        msg = bundle.get("dataset_diff_target_duplicates_fintech").format(
-            perc, len(rows_to_remove), rows_to_remove.index.to_list()
-        )
-        if not silent:
-            print(msg)
-        if logger:
-            logger.warning(msg)
-        logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
-        df = df[~df.index.isin(rows_to_remove.index)]
-        logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
+        if EVAL_SET_INDEX not in df.columns:
+            rows_to_remove = pd.merge(df.reset_index(), unique_keys_to_delete, on=personal_cols)
+            rows_to_remove = rows_to_remove.set_index(df.index.name or "index")
+            perc = len(rows_to_remove) * 100 / len(df)
+            msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
+                perc, len(rows_to_remove), rows_to_remove.index.to_list()
+            )
+            if not silent:
+                print(msg)
+            if logger:
+                logger.warning(msg)
+            logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
+            df = df[~df.index.isin(rows_to_remove.index)]
+            logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
+        else:
+            # Indices in train and eval_set can be the same so we remove rows from them separately
+            train = df.query(f"{EVAL_SET_INDEX} == 0")
+            train_rows_to_remove = pd.merge(train.reset_index(), unique_keys_to_delete, on=personal_cols)
+            train_rows_to_remove = train_rows_to_remove.set_index(train.index.name or "index")
+            train_perc = len(train_rows_to_remove) * 100 / len(train)
+            msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
+                train_perc, len(train_rows_to_remove), train_rows_to_remove.index.to_list()
+            )
+            if not silent:
+                print(msg)
+            if logger:
+                logger.warning(msg)
+            logger.info(f"Train dataset shape before clean fintech duplicates: {train.shape}")
+            train = train[~train.index.isin(train_rows_to_remove.index)]
+            logger.info(f"Train dataset shape after clean fintech duplicates: {train.shape}")
 
+            evals = [df.query(f"{EVAL_SET_INDEX} == {i}") for i in df[EVAL_SET_INDEX].unique() if i != 0]
+            new_evals = []
+            for i, eval in enumerate(evals):
+                eval_rows_to_remove = pd.merge(eval.reset_index(), unique_keys_to_delete, on=personal_cols)
+                eval_rows_to_remove = eval_rows_to_remove.set_index(eval.index.name or "index")
+                eval_perc = len(eval_rows_to_remove) * 100 / len(eval)
+                msg = bundle.get("dataset_eval_diff_target_duplicates_fintech").format(
+                    eval_perc, len(eval_rows_to_remove), i + 1, eval_rows_to_remove.index.to_list()
+                )
+                if not silent:
+                    print(msg)
+                if logger:
+                    logger.warning(msg)
+                logger.info(f"Eval {i + 1} dataset shape before clean fintech duplicates: {eval.shape}")
+                eval = eval[~eval.index.isin(eval_rows_to_remove.index)]
+                logger.info(f"Eval {i + 1} dataset shape after clean fintech duplicates: {eval.shape}")
+                new_evals.append(eval)
+
+            logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
+            df = pd.concat([train] + new_evals)
+            logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
     return df
 
 
@@ -101,14 +139,18 @@ def clean_full_duplicates(
     nrows = len(df)
     if nrows == 0:
         return df
-    # Remove absolute duplicates (exclude system_record_id)
+    # Remove full duplicates (exclude system_record_id, sort_id and eval_set_index)
     unique_columns = df.columns.tolist()
     if SYSTEM_RECORD_ID in unique_columns:
         unique_columns.remove(SYSTEM_RECORD_ID)
     if SORT_ID in unique_columns:
         unique_columns.remove(SORT_ID)
+    if EVAL_SET_INDEX in unique_columns:
+        unique_columns.remove(EVAL_SET_INDEX)
     logger.info(f"Dataset shape before clean duplicates: {df.shape}")
-    df = df.drop_duplicates(subset=unique_columns)
+    # Train segment goes first so if duplicates are found in train and eval set
+    # then we keep unique rows in train segment
+    df = df.drop_duplicates(subset=unique_columns, keep="first")
     logger.info(f"Dataset shape after clean duplicates: {df.shape}")
     nrows_after_full_dedup = len(df)
     share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
@@ -123,7 +165,7 @@ def clean_full_duplicates(
         marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
         if marked_duplicates.sum() > 0:
             dups_indices = df[marked_duplicates].index.to_list()
-            nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns))
+            nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns, keep=False))
             num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
             share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
 
@@ -133,6 +175,7 @@ def clean_full_duplicates(
                 print(msg)
             df = df.drop_duplicates(subset=unique_columns, keep=False)
             logger.info(f"Dataset shape after clean invalid target duplicates: {df.shape}")
+
     return df
 
 

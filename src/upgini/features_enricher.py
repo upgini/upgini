@@ -1256,6 +1256,7 @@ class FeaturesEnricher(TransformerMixin):
             ).get_cv_and_groups(X)
         else:
             from sklearn import __version__ as sklearn_version
+
             try:
                 from sklearn.model_selection._split import GroupsConsumerMixin
 
@@ -1921,6 +1922,7 @@ class FeaturesEnricher(TransformerMixin):
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
             non_keys_columns = [column for column in df.columns if column not in search_keys.keys()]
+            # Don't pass 
             if email_converted_to_hem:
                 non_keys_columns.append(email_column)
 
@@ -1942,6 +1944,7 @@ class FeaturesEnricher(TransformerMixin):
             if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(df, dict(), search_keys)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
+                non_keys_columns.append(SORT_ID)
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
@@ -2880,14 +2883,22 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
+            sort_exclude_columns = [original_order_name, ORIGINAL_INDEX, EVAL_SET_INDEX, TARGET, "__target"]
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 date_column = DateTimeSearchKeyConverter.DATETIME_COL
+                sort_exclude_columns.append(self._get_date_column(search_keys))
             else:
                 date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
-            other_search_keys = sorted(
-                [c for c in df.columns if c not in sort_columns and df[c].nunique() > 1]
+            other_columns = sorted(
+                [
+                    c
+                    for c in df.columns
+                    if c not in sort_columns
+                    and c not in sort_exclude_columns
+                    and df[c].nunique() > 1
+                ]
                 # [
                 #     sk
                 #     for sk, key_type in search_keys.items()
@@ -2898,9 +2909,9 @@ class FeaturesEnricher(TransformerMixin):
             )
 
             search_keys_hash = "search_keys_hash"
-            if len(other_search_keys) > 0:
+            if len(other_columns) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[other_search_keys], index=False)
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[other_columns], index=False)
 
             df = df.sort_values(by=sort_columns)
 
