@@ -43,9 +43,11 @@ class DateDiffFuture(PandasOperand, DateDiffMixin):
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
-        future = pd.to_datetime(dict(day=right.dt.day, month=right.dt.month, year=left.dt.year))
+        future = right + (left.dt.year - right.dt.year).apply(
+            lambda y: np.datetime64("NaT") if np.isnan(y) else pd.tseries.offsets.DateOffset(years=y)
+        )
         before = future[future < left]
-        future[future < left] = pd.to_datetime(dict(day=before.dt.day, month=before.dt.month, year=before.dt.year + 1))
+        future[future < left] = before + pd.tseries.offsets.DateOffset(years=1)
         diff = (future - left) / np.timedelta64(1, self.diff_unit)
 
         return diff
