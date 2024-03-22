@@ -34,8 +34,8 @@ class DateDiff(PandasOperand, DateDiffMixin):
         return x
 
 
-class DateDiffFuture(PandasOperand, DateDiffMixin):
-    name = "date_diff_future"
+class DateDiffType2(PandasOperand, DateDiffMixin):
+    name = "date_diff_type2"
     is_binary = True
     has_symmetry_importance = True
     is_vectorizable = False

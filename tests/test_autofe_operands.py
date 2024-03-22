@@ -1,5 +1,5 @@
 import pandas as pd
-from upgini.autofe.date import DateDiff, DateDiffFuture
+from upgini.autofe.date import DateDiff, DateDiffType2
 
 from datetime import datetime
 from pandas.testing import assert_series_equal
@@ -22,6 +22,6 @@ def test_date_diff_future():
         columns=["date1", "date2"],
     )
 
-    operand = DateDiffFuture()
+    operand = DateDiffType2()
     expected_result = pd.Series([61.0, 182.0])
     assert_series_equal(operand.calculate_binary(df.date2, df.date1), expected_result)
