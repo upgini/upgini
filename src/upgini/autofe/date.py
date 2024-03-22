@@ -1,11 +1,13 @@
-from typing import Optional, Union
+import abc
+from typing import List, Optional, Union
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from upgini.autofe.operand import PandasOperand
 
 
-class DateDiffMixin:
+class DateDiffMixin(BaseModel):
     diff_unit: str = "D"
     left_unit: Optional[str] = None
     right_unit: Optional[str] = None
@@ -38,7 +40,6 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
     name = "date_diff_type2"
     is_binary = True
     has_symmetry_importance = True
-    is_vectorizable = False
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
@@ -51,3 +52,25 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
         diff = (future - left) / np.timedelta64(1, self.diff_unit)
 
         return diff
+
+
+class DateListDiff(PandasOperand, DateDiffMixin):
+    def map_diff(self, left: np.datetime64, right: list) -> list:
+        return (left - self._convert_to_date(pd.Series(right), self.right_unit)) / np.timedelta64(1, self.diff_unit)
+
+    @abc.abstractmethod
+    def reduce(self, date_list: pd.Series) -> float:
+        pass
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        left = self._convert_to_date(left, self.left_unit)
+        return pd.Series(left.index.map(lambda i: self.reduce(self.map_diff(left.loc[i], right.loc[i]))))
+
+
+class DateDiffMin(DateListDiff):
+    name = "date_diff_min"
+    is_binary = True
+    has_symmetry_importance = True
+
+    def reduce(self, date_list: pd.Series) -> float:
+        return date_list[date_list >= 0].min()
