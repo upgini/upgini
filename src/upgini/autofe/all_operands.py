@@ -1,4 +1,5 @@
 from typing import Dict
+from upgini.autofe.date import DateDiff, DateDiffType2
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
 from upgini.autofe.operand import Operand
 from upgini.autofe.unary import Abs, Log, Residual, Sqrt, Square, Sigmoid, Floor, Freq
@@ -35,6 +36,8 @@ ALL_OPERANDS: Dict[str, Operand] = {
         Operand(name="GroupByThenNUnique", output_type="int", is_vectorizable=True, is_grouping=True),
         Operand(name="GroupByThenFreq", output_type="float", is_grouping=True),
         Sim(),
+        DateDiff(),
+        DateDiffType2(),
     ]
 }
 
