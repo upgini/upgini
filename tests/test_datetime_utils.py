@@ -1,7 +1,13 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from upgini.utils.datetime_utils import is_blocked_time_series, is_time_series
+from upgini.metadata import SearchKey
+from upgini.utils.datetime_utils import (
+    is_blocked_time_series,
+    is_time_series,
+    validate_dates_distribution,
+)
+from upgini.utils.warning_counter import WarningCounter
 
 pd.set_option("mode.chained_assignment", "raise")
 
@@ -183,3 +189,25 @@ def test_multivariate_time_series():
     assert not is_blocked_time_series(df, "date", ["date"])
 
     assert is_blocked_time_series(df, "date", ["date", "feature3"])
+
+
+def test_validate_dates_distribution():
+    df = pd.DataFrame({"date": ["2020-01-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40})
+    warning_counter = WarningCounter()
+    validate_dates_distribution(df, {}, warning_counter=warning_counter)
+    assert warning_counter.has_warnings()
+
+    df = pd.DataFrame({"date": ["2020-05-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40})
+    warning_counter = WarningCounter()
+    validate_dates_distribution(df, {}, warning_counter=warning_counter)
+    assert not warning_counter.has_warnings()
+
+    df = pd.DataFrame(
+        {
+            "date2": ["2020-05-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40,
+            "date1": ["2020-01-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40,
+        }
+    )
+    warning_counter = WarningCounter()
+    validate_dates_distribution(df, {"date1": SearchKey.DATE}, warning_counter=warning_counter)
+    assert warning_counter.has_warnings()

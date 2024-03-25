@@ -70,6 +70,7 @@ from upgini.utils.datetime_utils import (
     DateTimeSearchKeyConverter,
     is_blocked_time_series,
     is_time_series,
+    validate_dates_distribution,
 )
 from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
@@ -1256,6 +1257,7 @@ class FeaturesEnricher(TransformerMixin):
             ).get_cv_and_groups(X)
         else:
             from sklearn import __version__ as sklearn_version
+
             try:
                 from sklearn.model_selection._split import GroupsConsumerMixin
 
@@ -2214,6 +2216,10 @@ class FeaturesEnricher(TransformerMixin):
 
         self.fit_search_keys = self.search_keys.copy()
         self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys, is_demo_dataset)
+
+        validate_dates_distribution(
+            validated_X, self.fit_search_keys, self.logger, self.bundle, self.warning_counter
+        )
 
         has_date = self._get_date_column(self.fit_search_keys) is not None
         model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
