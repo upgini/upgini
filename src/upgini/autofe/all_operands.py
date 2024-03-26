@@ -1,5 +1,5 @@
 from typing import Dict
-from upgini.autofe.date import DateDiff, DateDiffType2
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
 from upgini.autofe.operand import Operand
 from upgini.autofe.unary import Abs, Log, Residual, Sqrt, Square, Sigmoid, Floor, Freq
@@ -38,6 +38,16 @@ ALL_OPERANDS: Dict[str, Operand] = {
         Sim(),
         DateDiff(),
         DateDiffType2(),
+        DateListDiff(aggregation="min"),
+        DateListDiff(aggregation="max"),
+        DateListDiff(aggregation="mean"),
+        DateListDiff(aggregation="nunique"),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=0, upper_bound=18),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=18, upper_bound=23),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=23, upper_bound=30),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=30, upper_bound=45),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=45, upper_bound=60),
+        DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=60),
     ]
 }
 
