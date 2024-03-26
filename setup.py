@@ -40,7 +40,7 @@ def send_log(msg: str):
 
 
 here = Path(__file__).parent.resolve()
-version = "1.1.265a1"
+version = "1.1.265"
 try:
     send_log(f"Start setup PyLib version {version}")
     setup(
