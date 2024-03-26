@@ -1923,7 +1923,7 @@ class FeaturesEnricher(TransformerMixin):
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
             non_keys_columns = [column for column in df.columns if column not in search_keys.keys()]
-            # Don't pass 
+
             if email_converted_to_hem:
                 non_keys_columns.append(email_column)
 
