@@ -1686,6 +1686,9 @@ class FeaturesEnricher(TransformerMixin):
             df = validated_X.copy()
 
             df[TARGET] = validated_y
+
+            df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
+
             num_samples = _num_samples(df)
             if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
                 self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
@@ -1920,6 +1923,7 @@ class FeaturesEnricher(TransformerMixin):
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
             non_keys_columns = [column for column in df.columns if column not in search_keys.keys()]
+            # Don't pass 
             if email_converted_to_hem:
                 non_keys_columns.append(email_column)
 
@@ -1941,6 +1945,7 @@ class FeaturesEnricher(TransformerMixin):
             if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(df, dict(), search_keys)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
+                non_keys_columns.append(SORT_ID)
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform or []))
 
@@ -2883,26 +2888,35 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
+            sort_exclude_columns = [original_order_name, ORIGINAL_INDEX, EVAL_SET_INDEX, TARGET, "__target"]
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 date_column = DateTimeSearchKeyConverter.DATETIME_COL
+                sort_exclude_columns.append(self._get_date_column(search_keys))
             else:
                 date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
-            other_search_keys = sorted(
+            other_columns = sorted(
                 [
-                    sk
-                    for sk, key_type in search_keys.items()
-                    if key_type not in [SearchKey.DATE, SearchKey.DATETIME]
-                    and sk in df.columns
-                    and df[sk].nunique() > 1  # don't use constant keys for hash
+                    c
+                    for c in df.columns
+                    if c not in sort_columns
+                    and c not in sort_exclude_columns
+                    and df[c].nunique() > 1
                 ]
+                # [
+                #     sk
+                #     for sk, key_type in search_keys.items()
+                #     if key_type not in [SearchKey.DATE, SearchKey.DATETIME]
+                #     and sk in df.columns
+                #     and df[sk].nunique() > 1  # don't use constant keys for hash
+                # ]
             )
 
             search_keys_hash = "search_keys_hash"
-            if len(other_search_keys) > 0:
+            if len(other_columns) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[sorted(other_search_keys)], index=False)
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[other_columns], index=False)
 
             df = df.sort_values(by=sort_columns)
 
