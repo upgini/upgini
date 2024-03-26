@@ -60,17 +60,50 @@ class DateListDiff(PandasOperand, DateDiffMixin):
     aggregation: str
 
     def __init__(self, **data: Any) -> None:
-        if "aggregation" in data and "name" not in data:
-            data["name"] = f"date_diff_{data['aggregation']}"
+        if "name" not in data:
+            data["name"] = f"date_diff_{data.get('aggregation')}"
         super().__init__(**data)
 
     def map_diff(self, left: np.datetime64, right: list) -> list:
         return (left - self._convert_to_date(pd.Series(right), self.right_unit)) / np.timedelta64(1, self.diff_unit)
 
-    def reduce(self, date_list: pd.Series) -> float:
-        return date_list[date_list > 0].aggregate(self.aggregation)
+    def reduce(self, diff_list: pd.Series) -> float:
+        return diff_list[diff_list > 0].aggregate(self.aggregation)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
 
         return pd.Series(left.index.map(lambda i: self.reduce(self.map_diff(left.loc[i], right.loc[i]))))
+
+
+class DateListDiffBounded(DateListDiff):
+    lower_bound: Optional[int]
+    upper_bound: Optional[int]
+    inclusive: Optional[str]
+
+    def __init__(self, **data: Any) -> None:
+        if "name" not in data:
+            inclusive = data.get("inclusive")
+            lower_bound = data.get("lower_bound")
+            upper_bound = data.get("upper_bound")
+            components = [
+                "date_diff",
+                data.get("diff_unit"),
+                str(lower_bound if lower_bound is not None else "minusinf"),
+                str(upper_bound if upper_bound is not None else "plusinf"),
+            ]
+            if inclusive:
+                components.append(inclusive)
+            components.append(data.get("aggregation"))
+            data["name"] = "_".join(components)
+        super().__init__(**data)
+
+    def reduce(self, diff_list: pd.Series) -> float:
+        return diff_list[
+            (diff_list > 0)
+            & (
+                diff_list.between(
+                    self.lower_bound or -np.inf, self.upper_bound or np.inf, inclusive=self.inclusive or "left"
+                )
+            )
+        ].aggregate(self.aggregation)
