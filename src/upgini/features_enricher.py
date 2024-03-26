@@ -2231,9 +2231,6 @@ class FeaturesEnricher(TransformerMixin):
         model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
         self._validate_binary_observations(validated_y, model_task_type)
 
-        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
-            self._validate_PSI(df.sort_values(by=maybe_date_column))
-
         self.runtime_parameters = get_runtime_params_custom_loss(
             self.loss, model_task_type, self.runtime_parameters, self.logger
         )
@@ -2244,10 +2241,13 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df = pd.concat([eval_X, eval_y], axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df])
-        
+
         df = self.__correct_target(df)
 
-        df = self.__handle_index_search_keys(df, self.fit_search_keys)        
+        df = self.__handle_index_search_keys(df, self.fit_search_keys)
+
+        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
+            self._validate_PSI(df.sort_values(by=maybe_date_column))
 
         if DEFAULT_INDEX in df.columns:
             msg = self.bundle.get("unsupported_index_column")
