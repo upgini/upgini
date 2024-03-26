@@ -4,7 +4,8 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from upgini.errors import ValidationError
-from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
 from upgini.utils.target_utils import balance_undersample, define_task
 
@@ -132,3 +133,39 @@ def test_balance_undersaampling_multiclass():
     })
     # Get all of 25% quantile class (b) and minor classes (a) and x2 (or all if less) of major classes
     assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
+
+
+def test_psi_calculation():
+    df = pd.DataFrame({
+        "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 1, 0, 1, 0, 1]
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert not enricher.warning_counter.has_warnings()
+
+    df = pd.DataFrame({
+        "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 0, 0, 1, 0, 1]
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert enricher.warning_counter._count == 1
+
+    df = pd.DataFrame({
+        "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+        "eval_set_index": [0] * 10 + [1] * 10,
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert enricher.warning_counter._count == 1
+
+    df = pd.DataFrame({
+        "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+        "eval_set_index": [0] * 10 + [1] * 10,
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert enricher.warning_counter._count == 2
