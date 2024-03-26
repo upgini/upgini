@@ -2498,11 +2498,11 @@ def test_diff_target_dups(requests_mock: Mocker):
         assert len(self.data) == 2
         print(self.data)
         assert self.data.loc[0, "date_0e8763"] == 1672531200000
-        assert self.data.loc[0, "feature_2ad562"] == 12
-        assert self.data.loc[0, "target"] == 0
+        assert self.data.loc[0, "feature_2ad562"] == 13
+        assert self.data.loc[0, "target"] == 1
         assert self.data.loc[1, "date_0e8763"] == 1672531200000
-        assert self.data.loc[1, "feature_2ad562"] == 13
-        assert self.data.loc[1, "target"] == 1
+        assert self.data.loc[1, "feature_2ad562"] == 12
+        assert self.data.loc[1, "target"] == 0
         return SearchTask("123", self, rest_client=enricher.rest_client)
 
     Dataset.search = mock_search

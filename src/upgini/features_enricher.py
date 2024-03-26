@@ -94,7 +94,7 @@ try:
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
 
-from upgini.utils.target_utils import define_task
+from upgini.utils.target_utils import calculate_psi, define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
@@ -2226,13 +2226,10 @@ class FeaturesEnricher(TransformerMixin):
             validated_X, self.fit_search_keys, self.logger, self.bundle, self.warning_counter
         )
 
-        has_date = self._get_date_column(self.fit_search_keys) is not None
+        maybe_date_column = self._get_date_column(self.fit_search_keys)
+        has_date = maybe_date_column is not None
         model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
         self._validate_binary_observations(validated_y, model_task_type)
-
-        df = self.__handle_index_search_keys(df, self.fit_search_keys)
-
-        df = self.__correct_target(df)
 
         self.runtime_parameters = get_runtime_params_custom_loss(
             self.loss, model_task_type, self.runtime_parameters, self.logger
@@ -2244,6 +2241,13 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df = pd.concat([eval_X, eval_y], axis=1)
                 eval_df[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df])
+
+        df = self.__correct_target(df)
+
+        df = self.__handle_index_search_keys(df, self.fit_search_keys)
+
+        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
+            self._validate_PSI(df.sort_values(by=maybe_date_column))
 
         if DEFAULT_INDEX in df.columns:
             msg = self.bundle.get("unsupported_index_column")
@@ -3566,6 +3570,34 @@ class FeaturesEnricher(TransformerMixin):
             msg = self.bundle.get("binary_small_dataset")
             self.logger.warning(msg)
             print(msg)
+
+    def _validate_PSI(self, df: pd.DataFrame):
+        if EVAL_SET_INDEX in df.columns:
+            train = df.query(f"{EVAL_SET_INDEX} == 0")
+            eval1 = df.query(f"{EVAL_SET_INDEX} == 1")
+        else:
+            train = df
+            eval1 = None
+
+        # 1. Check train PSI
+        half_train = round(len(train) / 2)
+        part1 = train[:half_train]
+        part2 = train[half_train:]
+        train_psi = calculate_psi(part1[self.TARGET_NAME], part2[self.TARGET_NAME])
+        if train_psi > 0.2:
+            self.warning_counter.increment()
+            msg = self.bundle.get("train_unstable_target").format(train_psi)
+            print(msg)
+            self.logger.warning(msg)
+
+        # 2. Check train-test PSI
+        if eval1 is not None:
+            train_test_psi = calculate_psi(train[self.TARGET_NAME], eval1[self.TARGET_NAME])
+            if train_test_psi > 0.2:
+                self.warning_counter.increment()
+                msg = self.bundle.get("eval_unstable_target").format(train_test_psi)
+                print(msg)
+                self.logger.warning(msg)
 
     def _dump_python_libs(self):
         try:
