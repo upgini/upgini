@@ -1,5 +1,5 @@
 import pandas as pd
-from upgini.autofe.date import DateDiff, DateDiffMin, DateDiffType2
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff
 
 from datetime import datetime
 from pandas.testing import assert_series_equal
@@ -33,17 +33,26 @@ def test_date_diff_type2():
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
 
-def test_date_diff_min():
+def test_date_diff_list():
     df = pd.DataFrame(
         [
             ["2022-10-10", ["1993-12-10", "1993-12-11"]],
-            ["2022-10-10", ["1993-12-10"]],
+            ["2022-10-10", ["1993-12-10", "1993-12-10"]],
             ["2022-10-10", ["2023-10-10"]],
             ["2022-10-10", []],
         ],
         columns=["date1", "date2"],
     )
 
-    operand = DateDiffMin()
-    expected_result = pd.Series([10530, 10531, None, None])
-    assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
+    assert_series_equal(
+        DateListDiff(aggregation="min").calculate_binary(df.date1, df.date2), pd.Series([10530, 10531, None, None])
+    )
+    assert_series_equal(
+        DateListDiff(aggregation="max").calculate_binary(df.date1, df.date2), pd.Series([10531, 10531, None, None])
+    )
+    assert_series_equal(
+        DateListDiff(aggregation="mean").calculate_binary(df.date1, df.date2), pd.Series([10530.5, 10531, None, None])
+    )
+    assert_series_equal(
+        DateListDiff(aggregation="nunique").calculate_binary(df.date1, df.date2), pd.Series([2, 1, 0, 0])
+    )
