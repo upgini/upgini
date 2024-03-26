@@ -132,9 +132,7 @@ def balance_undersample(
                 class_value = classes[class_idx]
                 class_count = vc[class_value]
                 sample_strategy[class_value] = min(class_count, quantile25_class_cnt * multiclass_bootstrap_loops)
-            sampler = RandomUnderSampler(
-                sampling_strategy=sample_strategy, random_state=random_state
-            )
+            sampler = RandomUnderSampler(sampling_strategy=sample_strategy, random_state=random_state)
             X = df[SYSTEM_RECORD_ID]
             X = X.to_frame(SYSTEM_RECORD_ID)
             new_x, _ = sampler.fit_resample(X, target)  # type: ignore
@@ -153,9 +151,7 @@ def balance_undersample(
         minority_class = df[df[target_column] == min_class_value]
         majority_class = df[df[target_column] != min_class_value]
         sample_size = min(len(majority_class), min_sample_threshold - min_class_count)
-        sampled_majority_class = majority_class.sample(
-            n=sample_size, random_state=random_state
-        )
+        sampled_majority_class = majority_class.sample(n=sample_size, random_state=random_state)
         resampled_data = df[
             (df[SYSTEM_RECORD_ID].isin(minority_class[SYSTEM_RECORD_ID]))
             | (df[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))

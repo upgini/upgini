@@ -1,7 +1,7 @@
 import datetime
 import logging
 import re
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,9 @@ from dateutil.relativedelta import relativedelta
 from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
 
 from upgini.errors import ValidationError
+from upgini.metadata import SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
+from upgini.utils.warning_counter import WarningCounter
 
 DATE_FORMATS = [
     "%Y-%m-%d",
@@ -225,3 +227,49 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
 
     is_diff_less_than_two_columns = grouped.apply(check_differences)
     return is_diff_less_than_two_columns.all()
+
+
+def validate_dates_distribution(
+    X: pd.DataFrame,
+    search_keys: Dict[str, SearchKey],
+    logger: Optional[logging.Logger] = None,
+    bundle: Optional[ResourceBundle] = None,
+    warning_counter: Optional[WarningCounter] = None,
+):
+    maybe_date_col = None
+    for key, key_type in search_keys.items():
+        if key_type in [SearchKey.DATE, SearchKey.DATETIME]:
+            maybe_date_col = key
+
+    if maybe_date_col is None:
+        for col in X.columns:
+            if col in search_keys:
+                continue
+            try:
+                pd.to_datetime(X[col])
+                maybe_date_col = col
+                break
+            except Exception:
+                pass
+
+    if maybe_date_col is None:
+        return
+
+    dates = pd.to_datetime(X[maybe_date_col]).dt.date
+
+    date_counts = dates.value_counts().sort_index()
+
+    date_counts_1 = date_counts[: round(len(date_counts) / 2)]
+    date_counts_2 = date_counts[round(len(date_counts) / 2) :]
+    ratio = date_counts_2.mean() / date_counts_1.mean()
+
+    if ratio > 1.2 or ratio < 0.8:
+        if warning_counter is not None:
+            warning_counter.increment()
+        if logger is None:
+            logger = logging.getLogger("muted_logger")
+            logger.setLevel("FATAL")
+        bundle = bundle or get_custom_bundle()
+        msg = bundle.get("x_unstable_by_date")
+        print(msg)
+        logger.warning(msg)
