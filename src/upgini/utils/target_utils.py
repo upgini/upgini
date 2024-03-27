@@ -185,7 +185,7 @@ def calculate_psi(expected: pd.Series, actual: pd.Series) -> float:
     # Define the bins for the target variable
     df_min = df.min()
     df_max = df.max()
-    bins = [df_min, df_max/2, df_max]
+    bins = [df_min, (df_min + df_max) / 2, df_max]
 
     # Calculate the base distribution
     train_distribution = expected.value_counts(bins=bins, normalize=True).sort_index().values

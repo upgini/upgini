@@ -428,13 +428,13 @@ def test_saved_features_enricher(requests_mock: Mocker):
     df.drop(columns="SystemRecordId_473310000", inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
+    train_target = train_df["target"].copy()
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval1_target = eval1_df["target"].reset_index(drop=True).copy()
     eval2_df = df[11000:12000]
     eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
+    eval2_target = eval2_df["target"].copy()
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -481,6 +481,31 @@ def test_saved_features_enricher(requests_mock: Mocker):
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
+
+    # Check imbalanced target metrics
+    random = np.random.RandomState(42)
+    train_random_indices = random.choice(train_target.index, size=9000, replace=False)
+    train_target.loc[train_random_indices] = 0
+
+    metrics = enricher.calculate_metrics(
+        train_features,
+        train_target
+    )
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: [train_segment],
+            rows_header: [10000],
+            target_mean_header: [0.049],
+            enriched_gini: [0.000985],
+        }
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
 def test_features_enricher_with_demo_key(requests_mock: Mocker):

@@ -135,7 +135,7 @@ def test_balance_undersaampling_multiclass():
     assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
 
 
-def test_psi_calculation():
+def test_binary_psi_calculation():
     df = pd.DataFrame({
         "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 1, 0, 1, 0, 1]
     })
@@ -169,3 +169,26 @@ def test_psi_calculation():
     enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
     enricher._validate_PSI(df)
     assert enricher.warning_counter._count == 2
+
+
+def test_regression_psi_calculation():
+    random = np.random.RandomState(42)
+    df = pd.DataFrame({
+        "target": random.rand(20)
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert enricher.warning_counter._count == 1
+
+    values1 = random.rand(10)
+    values2 = values1.copy()
+    values2[0] = 0.0
+    values2[9] = 1.0
+    df = pd.DataFrame({
+        "target": list(values1) + list(values2)
+    })
+    df["date"] = pd.date_range("2020-01-01", "2020-01-20")
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher._validate_PSI(df)
+    assert not enricher.warning_counter.has_warnings()
