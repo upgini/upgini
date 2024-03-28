@@ -3,15 +3,16 @@ import re
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import catboost
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-import catboost
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
 
+from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
 
 try:
@@ -352,6 +353,7 @@ class EstimatorWrapper:
             "target_type": target_type,
             "groups": groups,
             "text_features": text_features,
+            "logger": logger,
         }
         if estimator is None:
             params = dict()
@@ -414,12 +416,22 @@ class CatBoostWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
         groups: Optional[List[str]] = None,
         text_features: Optional[List[str]] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         super(CatBoostWrapper, self).__init__(
-            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups, text_features=text_features
+            estimator,
+            scorer,
+            metric_name,
+            multiplier,
+            cv,
+            target_type,
+            groups=groups,
+            text_features=text_features,
+            logger=logger,
         )
         self.cat_features = None
         self.emb_features = None
+        self.exclude_features = []
 
     def _prepare_to_fit(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
         X, y, groups, params = super()._prepare_to_fit(X, y)
@@ -437,9 +449,7 @@ class CatBoostWrapper(EstimatorWrapper):
                 X, embedding_features = self.group_embeddings(X)
                 params["embedding_features"] = embedding_features
             else:
-                self.logger.info(
-                    f"Embedding features count less than 3, so use them separately: {self.emb_features}"
-                )
+                self.logger.info(f"Embedding features count less than 3, so use them separately: {self.emb_features}")
                 self.emb_features = []
         else:
             self.logger.warning(f"Embedding features are not supported by Catboost version {catboost.__version__}")
@@ -498,6 +508,8 @@ class CatBoostWrapper(EstimatorWrapper):
         return df, [emb_name]
 
     def _prepare_to_calculate(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        if self.exclude_features:
+            X = X.drop(columns=self.exclude_features)
         X, y, params = super()._prepare_to_calculate(X, y)
         if self.text_features:
             params["text_features"] = self.text_features
@@ -509,6 +521,26 @@ class CatBoostWrapper(EstimatorWrapper):
             params["cat_features"] = self.cat_features
 
         return X, y, params
+
+    def cross_val_predict(
+        self, X: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
+    ) -> Optional[float]:
+        try:
+            return super().cross_val_predict(X, y, baseline_score_column)
+        except Exception as e:
+            if "Dictionary size is 0" in e.args[0] and self.text_features:
+                high_cardinality_features = FeaturesValidator.find_high_cardinality(X[self.text_features])
+                self.logger.warning(
+                    "Failed to calculate metrics. Try to remove high cardinality"
+                    f" text features {high_cardinality_features} and retry"
+                )
+                for f in high_cardinality_features:
+                    self.text_features.remove(f)
+                    self.exclude_features.append(f)
+                    X = X.drop(columns=f)
+                return super().cross_val_predict(X, y, baseline_score_column)
+            else:
+                raise e
 
 
 class LightGBMWrapper(EstimatorWrapper):
@@ -522,9 +554,18 @@ class LightGBMWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
         groups: Optional[List[str]] = None,
         text_features: Optional[List[str]] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         super(LightGBMWrapper, self).__init__(
-            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups, text_features=text_features
+            estimator,
+            scorer,
+            metric_name,
+            multiplier,
+            cv,
+            target_type,
+            groups=groups,
+            text_features=text_features,
+            logger=logger,
         )
         self.cat_features = None
 
@@ -561,9 +602,18 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         target_type: ModelTaskType,
         groups: Optional[List[str]] = None,
         text_features: Optional[List[str]] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         super(OtherEstimatorWrapper, self).__init__(
-            estimator, scorer, metric_name, multiplier, cv, target_type, groups=groups, text_features=text_features
+            estimator,
+            scorer,
+            metric_name,
+            multiplier,
+            cv,
+            target_type,
+            groups=groups,
+            text_features=text_features,
+            logger=logger,
         )
         self.cat_features = None
 

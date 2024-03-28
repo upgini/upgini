@@ -3665,7 +3665,7 @@ class FeaturesEnricher(TransformerMixin):
                     if y is not None:
                         with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
                             pickle.dump(sample(y, xy_sample_index), y_file)
-                        if eval_set is not None:
+                        if eval_set:
                             eval_xy_sample_index = rnd.randint(0, _num_samples(eval_set[0][0]), size=1000)
                             with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
                                 pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)

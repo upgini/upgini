@@ -140,7 +140,7 @@ def test_binary_psi_calculation():
         "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 1, 0, 1, 0, 1]
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert not enricher.warning_counter.has_warnings()
 
@@ -148,7 +148,7 @@ def test_binary_psi_calculation():
         "target": [0, 0, 0, 0, 0, 1, 1, 1, 1, 1,   0, 0, 0, 0, 0, 0, 0, 1, 0, 1]
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert enricher.warning_counter._count == 1
 
@@ -157,7 +157,7 @@ def test_binary_psi_calculation():
         "eval_set_index": [0] * 10 + [1] * 10,
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert enricher.warning_counter._count == 1
 
@@ -166,7 +166,7 @@ def test_binary_psi_calculation():
         "eval_set_index": [0] * 10 + [1] * 10,
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert enricher.warning_counter._count == 2
 
@@ -177,7 +177,7 @@ def test_regression_psi_calculation():
         "target": random.rand(20)
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert enricher.warning_counter._count == 1
 
@@ -189,6 +189,6 @@ def test_regression_psi_calculation():
         "target": list(values1) + list(values2)
     })
     df["date"] = pd.date_range("2020-01-01", "2020-01-20")
-    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE})
+    enricher = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, logs_enabled=False)
     enricher._validate_PSI(df)
     assert not enricher.warning_counter.has_warnings()

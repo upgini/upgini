@@ -1,5 +1,4 @@
 import functools
-import logging
 import numbers
 import time
 import warnings
@@ -313,7 +312,7 @@ def cross_validate(
 
         return ret
     except Exception:
-        logging.exception("Failed to execute overriden cross_validate. Fallback to original")
+        # logging.exception("Failed to execute overriden cross_validate. Fallback to original")
         raise
         # fit_params["use_best_model"] = False
         # return original_cross_validate(
