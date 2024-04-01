@@ -67,12 +67,6 @@ class DateListDiff(PandasOperand, DateDiffMixin):
             data["name"] = f"date_diff_{data.get('aggregation')}"
         super().__init__(**data)
 
-    def map_diff(self, left: np.datetime64, right: list) -> list:
-        return (left - self._convert_to_date(pd.Series(right), self.right_unit)) / np.timedelta64(1, self.diff_unit)
-
-    def reduce(self, diff_list: pd.Series) -> float:
-        return diff_list[diff_list > 0].aggregate(self.aggregation)
-
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
         right = right.apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
