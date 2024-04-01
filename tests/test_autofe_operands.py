@@ -1,4 +1,5 @@
 import pandas as pd
+from pydantic import NoneBytes
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
 
 from datetime import datetime
@@ -47,7 +48,7 @@ def test_date_diff_list():
     def check(aggregation, expected_name, expected_values):
         operand = DateListDiff(aggregation=aggregation)
         assert operand.name == expected_name
-        assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_values)
+        assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, None, None]))
     check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, None, None]))
@@ -83,7 +84,7 @@ def test_date_diff_list_bounded():
             diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound
         )
         assert operand.name == expected_name
-        assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_values)
+        assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2, 1, 0, 0, 0]))
     check_num_by_years(18, 23, "date_diff_Y_18_23_count", pd.Series([1, 2, 2, 0, 0]))

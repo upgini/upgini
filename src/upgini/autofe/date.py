@@ -54,6 +54,9 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
         return diff
 
 
+_ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len, 0)}
+
+
 class DateListDiff(PandasOperand, DateDiffMixin):
     is_binary = True
     has_symmetry_importance = True
@@ -72,18 +75,31 @@ class DateListDiff(PandasOperand, DateDiffMixin):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
+        right = right.apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
 
-        return pd.Series(left.index.map(lambda i: self.reduce(self.map_diff(left.loc[i], right.loc[i]))))
+        return pd.Series(left - right.values).apply(lambda x: self._agg(self._diff(x)))
+
+    def _diff(self, x):
+        x = x / np.timedelta64(1, self.diff_unit)
+        return x[x > 0]
+
+    def _agg(self, x):
+        method = getattr(np, self.aggregation, None)
+        default = np.nan
+        if method is None and self.aggregation in _ext_aggregations:
+            method, default = _ext_aggregations[self.aggregation]
+        elif not callable(method):
+            raise ValueError(f"Unsupported aggregation: {self.aggregation}")
+
+        return method(x) if len(x) > 0 else default
 
 
 class DateListDiffBounded(DateListDiff):
     lower_bound: Optional[int]
     upper_bound: Optional[int]
-    inclusive: Optional[str]
 
     def __init__(self, **data: Any) -> None:
         if "name" not in data:
-            inclusive = data.get("inclusive")
             lower_bound = data.get("lower_bound")
             upper_bound = data.get("upper_bound")
             components = [
@@ -92,18 +108,10 @@ class DateListDiffBounded(DateListDiff):
                 str(lower_bound if lower_bound is not None else "minusinf"),
                 str(upper_bound if upper_bound is not None else "plusinf"),
             ]
-            if inclusive:
-                components.append(inclusive)
             components.append(data.get("aggregation"))
             data["name"] = "_".join(components)
         super().__init__(**data)
 
-    def reduce(self, diff_list: pd.Series) -> float:
-        return diff_list[
-            (diff_list > 0)
-            & (
-                diff_list.between(
-                    self.lower_bound or -np.inf, self.upper_bound or np.inf, inclusive=self.inclusive or "left"
-                )
-            )
-        ].aggregate(self.aggregation)
+    def _agg(self, x):
+        x = x[(x >= (self.lower_bound or -np.inf)) & (x < (self.upper_bound or np.inf))]
+        return super()._agg(x)
