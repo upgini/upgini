@@ -3209,22 +3209,21 @@ class FeaturesEnricher(TransformerMixin):
                 return None
             features_meta = self._search_task.get_all_features_metadata_v2()
 
-            def get_feature_by_display_index(idx, op):
+            def get_feature_by_name(name: str):
                 for m in features_meta:
-                    if m.name.endswith(f"_{op}_{idx}"):
+                    if m.name == name:
                         return m
 
             descriptions = []
             for m in autofe_meta:
                 autofe_feature = Feature.from_formula(m.formula)
+                autofe_feature.set_display_index(m.display_index)
                 if autofe_feature.op.is_vector:
                     continue
 
                 description = dict()
 
-                feature_meta = get_feature_by_display_index(
-                    m.display_index, autofe_feature.op.alias or autofe_feature.op.name
-                )
+                feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True))
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
