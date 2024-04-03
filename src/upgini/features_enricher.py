@@ -424,7 +424,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.X = X
                 self.y = y
                 self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
-                self.dump_input(trace_id, X, y, eval_set)
+                self.dump_input(trace_id, X, y, self.eval_set)
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -563,7 +563,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.X = X
                 self.y = y
                 self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
-                self.dump_input(trace_id, X, y, eval_set)
+                self.dump_input(trace_id, X, y, self.eval_set)
 
                 if _num_samples(drop_duplicates(X)) > Dataset.MAX_ROWS:
                     raise ValidationError(self.bundle.get("dataset_too_many_rows_registered").format(Dataset.MAX_ROWS))
@@ -823,12 +823,16 @@ class FeaturesEnricher(TransformerMixin):
                 print(msg)
 
             self.__validate_search_keys(self.search_keys, self.search_id)
+            effective_X = X if X is not None else self.X
+            effective_y = y if y is not None else self.y
+            effective_eval_set = eval_set if eval_set is not None else self.eval_set
+            effective_eval_set = self._check_eval_set(effective_eval_set, effective_X, self.bundle)
 
             try:
                 self.__log_debug_information(
-                    X if X is not None else self.X,
-                    y if y is not None else self.y,
-                    eval_set if eval_set is not None else self.eval_set,
+                    effective_X,
+                    effective_y,
+                    effective_eval_set,
                     exclude_features_sources=exclude_features_sources,
                     cv=cv if cv is not None else self.cv,
                     importance_threshold=importance_threshold,
@@ -842,16 +846,13 @@ class FeaturesEnricher(TransformerMixin):
                     self._search_task is None
                     or self._search_task.provider_metadata_v2 is None
                     or len(self._search_task.provider_metadata_v2) == 0
-                    or (self.X is None and X is None)
-                    or (self.y is None and y is None)
+                    or effective_X is None
+                    or effective_y is None
                 ):
                     raise ValidationError(self.bundle.get("metrics_unfitted_enricher"))
 
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
-
-                effective_X = X if X is not None else self.X
-                effective_eval_set = eval_set if eval_set is not None else self.eval_set
 
                 validate_scoring_argument(scoring)
 
@@ -872,8 +873,7 @@ class FeaturesEnricher(TransformerMixin):
                 ):
                     cat_features = estimator.get_param("cat_features")
                     if len(cat_features) > 0 and isinstance(cat_features[0], int):
-                        effectiveX = X or self.X
-                        cat_features = [effectiveX.columns[i] for i in cat_features]
+                        cat_features = [effective_X.columns[i] for i in cat_features]
                         for cat_feature in cat_features:
                             if cat_feature in self.search_keys:
                                 if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
@@ -883,9 +883,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
-                    X=X,
-                    y=y,
-                    eval_set=eval_set,
+                    X=effective_X,
+                    y=effective_y,
+                    eval_set=effective_eval_set,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
@@ -995,8 +995,6 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_metric = None
                         uplift = None
 
-                    effective_X = X if X is not None else self.X
-                    effective_y = y if y is not None else self.y
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
                             "quality_metrics_train_segment"
@@ -2823,6 +2821,7 @@ class FeaturesEnricher(TransformerMixin):
 
             maybe_date_col = self._get_date_column(self.search_keys)
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
+                # TODO cast date column to single dtype
                 min_date = X[maybe_date_col].min()
                 max_date = X[maybe_date_col].max()
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
