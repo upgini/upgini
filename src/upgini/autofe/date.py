@@ -1,11 +1,12 @@
-from typing import Optional, Union
+from typing import Any, Optional, Union
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from upgini.autofe.operand import PandasOperand
 
 
-class DateDiffMixin:
+class DateDiffMixin(BaseModel):
     diff_unit: str = "D"
     left_unit: Optional[str] = None
     right_unit: Optional[str] = None
@@ -38,7 +39,6 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
     name = "date_diff_type2"
     is_binary = True
     has_symmetry_importance = True
-    is_vectorizable = False
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
@@ -51,3 +51,60 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
         diff = (future - left) / np.timedelta64(1, self.diff_unit)
 
         return diff
+
+
+_ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len, 0)}
+
+
+class DateListDiff(PandasOperand, DateDiffMixin):
+    is_binary = True
+    has_symmetry_importance = True
+    aggregation: str
+
+    def __init__(self, **data: Any) -> None:
+        if "name" not in data:
+            data["name"] = f"date_diff_{data.get('aggregation')}"
+        super().__init__(**data)
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        left = self._convert_to_date(left, self.left_unit)
+        right = right.apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
+
+        return pd.Series(left - right.values).apply(lambda x: self._agg(self._diff(x)))
+
+    def _diff(self, x):
+        x = x / np.timedelta64(1, self.diff_unit)
+        return x[x > 0]
+
+    def _agg(self, x):
+        method = getattr(np, self.aggregation, None)
+        default = np.nan
+        if method is None and self.aggregation in _ext_aggregations:
+            method, default = _ext_aggregations[self.aggregation]
+        elif not callable(method):
+            raise ValueError(f"Unsupported aggregation: {self.aggregation}")
+
+        return method(x) if len(x) > 0 else default
+
+
+class DateListDiffBounded(DateListDiff):
+    lower_bound: Optional[int]
+    upper_bound: Optional[int]
+
+    def __init__(self, **data: Any) -> None:
+        if "name" not in data:
+            lower_bound = data.get("lower_bound")
+            upper_bound = data.get("upper_bound")
+            components = [
+                "date_diff",
+                data.get("diff_unit"),
+                str(lower_bound if lower_bound is not None else "minusinf"),
+                str(upper_bound if upper_bound is not None else "plusinf"),
+            ]
+            components.append(data.get("aggregation"))
+            data["name"] = "_".join(components)
+        super().__init__(**data)
+
+    def _agg(self, x):
+        x = x[(x >= (self.lower_bound or -np.inf)) & (x < (self.upper_bound or np.inf))]
+        return super()._agg(x)
