@@ -241,6 +241,7 @@ def test_demo_metrics(requests_mock: Mocker):
 
     enricher.X = x_sampled.drop(columns="system_record_id")
     enricher.y = y_sampled
+    enricher.eval_set = []
 
     enricher._FeaturesEnricher__cached_sampled_datasets = (
         x_sampled,
