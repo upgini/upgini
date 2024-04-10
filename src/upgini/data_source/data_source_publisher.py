@@ -85,6 +85,15 @@ class DataSourcePublisher:
                     or set(search_keys.values()) == {SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO}
                 ) and sort_column is None:
                     raise ValidationError("Sort column is required for passed search keys")
+                if (
+                    set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
+                    and snapshot_frequency_days is None
+                    and join_date_abs_limit_days is None
+                ):
+                    raise ValidationError(
+                        "With MSISDN and DATE keys one of the snapshot_frequency_days or"
+                        " join_date_abs_limit_days parameters is required"
+                    )
 
                 request = {
                     "dataTableUri": data_table_uri,
