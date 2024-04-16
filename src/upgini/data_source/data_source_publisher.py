@@ -72,8 +72,8 @@ class DataSourcePublisher:
                     )
                 if search_keys is None or len(search_keys) == 0:
                     raise ValidationError("Empty search keys")
-                if SearchKey.DATE in search_keys.values() and date_format is None:
-                    raise ValidationError("date_format is required for DATE search key")
+                # if SearchKey.DATE in search_keys.values() and date_format is None:
+                #     raise ValidationError("date_format is required for DATE search key")
                 if update_frequency not in self.ACCEPTABLE_UPDATE_FREQUENCIES:
                     raise ValidationError(
                         f"Invalid update frequency: {update_frequency}. "
@@ -98,7 +98,6 @@ class DataSourcePublisher:
                 request = {
                     "dataTableUri": data_table_uri,
                     "searchKeys": {k: v.value.value for k, v in search_keys.items()},
-                    "dateFormat": date_format,
                     "excludeColumns": exclude_columns,
                     "hashFeatureNames": str(hash_feature_names).lower(),
                     "snapshotFrequencyDays": snapshot_frequency_days,
@@ -107,6 +106,8 @@ class DataSourcePublisher:
                     "featuresForEmbeddings": features_for_embeddings,
                     "forceGeneration": str(_force_generation).lower(),
                 }
+                if date_format is not None:
+                    request["dateFormat"] = date_format
                 if secondary_search_keys is not None:
                     request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
                 if sort_column is not None:
