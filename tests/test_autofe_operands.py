@@ -30,7 +30,8 @@ def test_date_diff_type2():
 
     operand = DateDiffType2(left_unit="s")
     expected_result = pd.Series([61.0, 182.0])
-    assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
+    actual = operand.calculate_binary(df.date1, df.date2)
+    assert_series_equal(actual, expected_result)
 
 
 def test_date_diff_list():

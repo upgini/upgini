@@ -1,7 +1,7 @@
 from typing import Optional
 
 import pandas as pd
-from pandas.api.types import is_float_dtype, is_int64_dtype, is_string_dtype
+from pandas.api.types import is_float_dtype, is_int64_dtype, is_string_dtype, is_object_dtype
 
 from upgini.errors import ValidationError
 
@@ -44,7 +44,7 @@ class PhoneNormalizer:
         Method will remove all non numeric chars from string and convert it to int.
         None will be set for phone numbers that couldn"t be converted to int
         """
-        if is_string_dtype(self.df[self.phone_column_name]):
+        if is_string_dtype(self.df[self.phone_column_name]) or is_object_dtype(self.df[self.phone_column_name]):
             convert_func = self.phone_str_to_int_safe
         elif is_float_dtype(self.df[self.phone_column_name]):
             convert_func = self.phone_float_to_int_safe

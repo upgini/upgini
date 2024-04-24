@@ -46,6 +46,7 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
         future = right + (left.dt.year - right.dt.year).apply(
             lambda y: np.datetime64("NaT") if np.isnan(y) else pd.tseries.offsets.DateOffset(years=y)
         )
+        future = pd.to_datetime(future)
         before = future[future < left]
         future[future < left] = before + pd.tseries.offsets.DateOffset(years=1)
         diff = (future - left) / np.timedelta64(1, self.diff_unit)

@@ -100,6 +100,9 @@ class DateTimeSearchKeyConverter:
                 msg = self.bundle.get("unsupported_date_type").format(self.date_column)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
+        else:
+            df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
+            df[self.date_column] = self.parse_date(df)
 
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features
