@@ -2,6 +2,7 @@ from typing import Any, Optional, Union
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
+from pandas.core.arrays.timedeltas import TimedeltaArray
 
 from upgini.autofe.operand import PandasOperand
 
@@ -73,8 +74,13 @@ class DateListDiff(PandasOperand, DateDiffMixin):
 
         return pd.Series(left - right.values).apply(lambda x: self._agg(self._diff(x)))
 
-    def _diff(self, x):
-        x = x / np.timedelta64(1, self.diff_unit)
+    def _diff(self, x: TimedeltaArray):
+        if self.diff_unit == "Y":
+            x = (x / 365 / 24 / 60 / 60 / 10**9).astype(int)
+        elif self.diff_unit == "M":
+            raise Exception("Unsupported difference unit: Month")
+        else:
+            x = x / np.timedelta64(1, self.diff_unit)
         return x[x > 0]
 
     def _agg(self, x):

@@ -375,7 +375,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features_v2.parquet"
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features_v3.parquet"
     )
 
     mock_default_requests(requests_mock, url)
