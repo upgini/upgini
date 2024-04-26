@@ -820,6 +820,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            self.logger.info("Start calculate metrics")
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for calculate_metrics: {args}"
                 self.logger.warning(msg)
