@@ -3,7 +3,15 @@ from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
-from upgini.metadata import EVAL_SET_INDEX, SORT_ID, SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
+from upgini.metadata import (
+    ENTITY_SYSTEM_RECORD_ID,
+    EVAL_SET_INDEX,
+    SORT_ID,
+    SYSTEM_RECORD_ID,
+    TARGET,
+    ModelTaskType,
+    SearchKey,
+)
 from upgini.resource_bundle import ResourceBundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.target_utils import define_task
@@ -143,6 +151,8 @@ def clean_full_duplicates(
     unique_columns = df.columns.tolist()
     if SYSTEM_RECORD_ID in unique_columns:
         unique_columns.remove(SYSTEM_RECORD_ID)
+    if ENTITY_SYSTEM_RECORD_ID in unique_columns:
+        unique_columns.remove(ENTITY_SYSTEM_RECORD_ID)
     if SORT_ID in unique_columns:
         unique_columns.remove(SORT_ID)
     if EVAL_SET_INDEX in unique_columns:

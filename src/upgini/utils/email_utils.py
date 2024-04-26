@@ -38,11 +38,13 @@ class EmailSearchKeyConverter:
         email_column: str,
         hem_column: Optional[str],
         search_keys: Dict[str, SearchKey],
+        unnest_search_keys: Optional[List[str]] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.email_column = email_column
         self.hem_column = hem_column
         self.search_keys = search_keys
+        self.unnest_search_keys = unnest_search_keys
         if logger is not None:
             self.logger = logger
         else:
@@ -80,9 +82,12 @@ class EmailSearchKeyConverter:
                 del self.search_keys[self.email_column]
                 return df
             self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
+            self.unnest_search_keys.append(self.HEM_COLUMN_NAME)
             self.email_converted_to_hem = True
 
         del self.search_keys[self.email_column]
+        if self.email_column in self.unnest_search_keys:
+            self.unnest_search_keys.remove(self.email_column)
 
         df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_one_domain)
 
