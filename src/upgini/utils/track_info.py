@@ -55,7 +55,7 @@ def _get_execution_ide() -> str:
 def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
-    ident_res = "https://api.ipify.org"
+    ident_res = "https://api64.ipify.org"
 
     try:
         track["hostname"] = socket.gethostname()
@@ -74,17 +74,20 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
             display(
                 Javascript(
                     """
-                        import('https://upgini.github.io/upgini/js/a.js')
+                    async function getVisitorId() {
+                        return import('https://upgini.github.io/upgini/js/a.js')
                             .then(FingerprintJS => FingerprintJS.load())
                             .then(fp => fp.get())
-                            .then(result => window.visitorId = result.visitorId);
+                            .then(result => result.visitorId);
+                    }
                     """
                 )
             )
-            track["visitorId"] = output.eval_js("window.visitorId", timeout_sec=10)
+            track["visitorId"] = output.eval_js("getVisitorId()", timeout_sec=30)
         except Exception as e:
             track["err"] = str(e)
-            track["visitorId"] = "None"
+            if "visitorId" not in track:
+                track["visitorId"] = "None"
         if client_ip:
             track["ip"] = client_ip
         else:
@@ -95,16 +98,19 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
                 display(
                     Javascript(
                         f"""
-                            fetch("{ident_res}")
+                        async function getIP() {{
+                            return fetch("{ident_res}")
                                 .then(response => response.text())
-                                .then(data => window.clientIP = data);
+                                .then(data => data);
+                        }}
                         """
                     )
                 )
-                track["ip"] = output.eval_js("window.clientIP", timeout_sec=10)
+                track["ip"] = output.eval_js("getIP()", timeout_sec=10)
             except Exception as e:
                 track["err"] = str(e)
-                track["ip"] = "0.0.0.0"
+                if "ip" not in track:
+                    track["ip"] = "0.0.0.0"
 
     elif track["ide"] == "binder":
         try:
@@ -116,8 +122,10 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
                 track["visitorId"] = sha256(os.environ["CLIENT_IP"].encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
-            track["ip"] = "0.0.0.0"
-            track["visitorId"] = "None"
+            if "ip" not in track:
+                track["ip"] = "0.0.0.0"
+            if "visitorId" not in track:
+                track["visitorId"] = "None"
 
     elif track["ide"] == "kaggle":
         try:
@@ -136,8 +144,8 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
                     raise Exception(err)
         except Exception as e:
             track["err"] = str(e)
-            track["ip"] = "0.0.0.0"
-            track["visitorId"] = "None"
+            if "visitorId" not in track:
+                track["visitorId"] = "None"
     else:
         try:
             if client_ip:
@@ -150,5 +158,9 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
                 track["visitorId"] = sha256(str(getnode()).encode()).hexdigest()
         except Exception as e:
             track["err"] = str(e)
+            if "visitorId" not in track:
+                track["visitorId"] = "None"
+            if "ip" not in track:
+                track["ip"] = "0.0.0.0"
 
     return track

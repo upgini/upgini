@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import gc
 import hashlib
 import itertools
@@ -149,6 +150,7 @@ class FeaturesEnricher(TransformerMixin):
     """
 
     TARGET_NAME = "target"
+    CURRENT_DATE = "current_date"
     RANDOM_STATE = 42
     CALCULATE_METRICS_THRESHOLD = 50_000_000
     CALCULATE_METRICS_MIN_THRESHOLD = 500
@@ -210,6 +212,7 @@ class FeaturesEnricher(TransformerMixin):
         client_ip: Optional[str] = None,
         client_visitorid: Optional[str] = None,
         custom_bundle_config: Optional[str] = None,
+        add_date_if_missing: bool = True,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -320,6 +323,7 @@ class FeaturesEnricher(TransformerMixin):
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
         self.baseline_score_column = baseline_score_column
+        self.add_date_if_missing = add_date_if_missing
 
     def _get_api_key(self):
         return self._api_key
@@ -422,6 +426,9 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Start fit")
 
             self.__validate_search_keys(self.search_keys, self.search_id)
+
+            # Validate client estimator params
+            self._get_client_cat_features(estimator, X, self.search_keys)
 
             try:
                 self.X = X
@@ -816,6 +823,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
+            self.logger.info("Start calculate metrics")
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for calculate_metrics: {args}"
                 self.logger.warning(msg)
@@ -867,22 +875,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_support_link(msg)
                     return None
 
-                cat_features = None
-                search_keys_for_metrics = []
-                if (
-                    estimator is not None
-                    and hasattr(estimator, "get_param")
-                    and estimator.get_param("cat_features") is not None
-                ):
-                    cat_features = estimator.get_param("cat_features")
-                    if len(cat_features) > 0 and isinstance(cat_features[0], int):
-                        cat_features = [effective_X.columns[i] for i in cat_features]
-                        for cat_feature in cat_features:
-                            if cat_feature in self.search_keys:
-                                if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
-                                    search_keys_for_metrics.append(cat_feature)
-                                else:
-                                    raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
+                cat_features, search_keys_for_metrics = self._get_client_cat_features(
+                    estimator, effective_X, self.search_keys
+                )
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
@@ -897,6 +892,7 @@ class FeaturesEnricher(TransformerMixin):
                     search_keys_for_metrics=search_keys_for_metrics,
                     progress_bar=progress_bar,
                     progress_callback=progress_callback,
+                    cat_features=cat_features,
                 )
                 if prepared_data is None:
                     return None
@@ -1274,6 +1270,29 @@ class FeaturesEnricher(TransformerMixin):
 
         return _cv, groups
 
+    def _get_client_cat_features(
+        self, estimator: Optional[Any], X: pd.DataFrame, search_keys: Dict[str, SearchKey]
+    ) -> Optional[List[str]]:
+        cat_features = None
+        search_keys_for_metrics = []
+        if (
+            estimator is not None
+            and hasattr(estimator, "get_param")
+            and estimator.get_param("cat_features") is not None
+        ):
+            cat_features = estimator.get_param("cat_features")
+            if len(cat_features) > 0:
+                if all([isinstance(f, int) for f in cat_features]):
+                    cat_features = [X.columns[i] for i in cat_features]
+                self.logger.info(f"Collected categorical features {cat_features} from user estimator")
+                for cat_feature in cat_features:
+                    if cat_feature in search_keys:
+                        if search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                            search_keys_for_metrics.append(cat_feature)
+                        else:
+                            raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
+        return cat_features, search_keys_for_metrics
+
     def _prepare_data_for_metrics(
         self,
         trace_id: str,
@@ -1288,6 +1307,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys_for_metrics: Optional[List[str]] = None,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        cat_features: Optional[List[str]] = None,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -1345,9 +1365,8 @@ class FeaturesEnricher(TransformerMixin):
 
         # Detect and drop high cardinality columns in train
         columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
-        columns_with_high_cardinality = [
-            c for c in columns_with_high_cardinality if c not in (self.generate_features or [])
-        ]
+        non_excluding_columns = (self.generate_features or []) + (cat_features or [])
+        columns_with_high_cardinality = [c for c in columns_with_high_cardinality if c not in non_excluding_columns]
         if len(columns_with_high_cardinality) > 0:
             self.logger.warning(
                 f"High cardinality columns {columns_with_high_cardinality} will be dropped for metrics calculation"
@@ -1809,10 +1828,11 @@ class FeaturesEnricher(TransformerMixin):
         else:
             features_section = ""
 
-        api_example = f"""curl 'https://inference-upgini.azurewebsites.net/api/http_inference_trigger' \\
+        search_id = self._search_task.search_task_id
+        api_example = f"""curl 'https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}' \\
     -H 'Authorization: {self.api_key}' \\
     -H 'Content-Type: application/json' \\
-    -d '{{"search_id": "{self._search_task.search_task_id}", "search_keys": {keys}{features_section}}}'"""
+    -d '{{"search_keys": {keys}{features_section}}}'"""
         return api_example
 
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
@@ -1907,6 +1927,8 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             else:
                 self.logger.info("Input dataset hasn't date column")
+                if self.add_date_if_missing:
+                    df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
 
             # Don't pass all features in backend on transform
             original_features_for_transform = []
@@ -2305,7 +2327,8 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
-
+            if self.add_date_if_missing:
+                df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
         if (
             self.detect_missing_search_keys
             and list(self.fit_search_keys.values()) == [SearchKey.DATE]
@@ -2912,6 +2935,25 @@ class FeaturesEnricher(TransformerMixin):
                 return col
 
     @staticmethod
+    def _add_current_date_as_key(
+        df: pd.DataFrame, search_keys: Dict[str, SearchKey], logger: logging.Logger, bundle: ResourceBundle
+    ) -> pd.DataFrame:
+        if (
+            set(search_keys.values()) == {SearchKey.PHONE}
+            or set(search_keys.values()) == {SearchKey.EMAIL}
+            or set(search_keys.values()) == {SearchKey.HEM}
+            or set(search_keys.values()) == {SearchKey.COUNTRY, SearchKey.POSTAL_CODE}
+        ):
+            msg = bundle.get("current_date_added")
+            print(msg)
+            logger.warning(msg)
+            df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
+            search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
+            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, None, logger, bundle)
+            df = converter.convert(df)
+        return df
+
+    @staticmethod
     def _get_group_columns(df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> List[str]:
         return [
             col
@@ -3033,8 +3075,8 @@ class FeaturesEnricher(TransformerMixin):
         df = df.sort_values(by=original_order_name).drop(columns=original_order_name)
 
         meaning_types[id_name] = (
-            FileColumnMeaningType.SYSTEM_RECORD_ID 
-            if id_name == SYSTEM_RECORD_ID 
+            FileColumnMeaningType.SYSTEM_RECORD_ID
+            if id_name == SYSTEM_RECORD_ID
             else FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
         )
         return df
@@ -3092,7 +3134,8 @@ class FeaturesEnricher(TransformerMixin):
 
         comparing_columns = X.columns if is_transform else df_with_original_index.columns
         dup_features = [
-            c for c in comparing_columns 
+            c
+            for c in comparing_columns
             if c in result_features.columns and c not in [SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
         ]
         if len(dup_features) > 0:

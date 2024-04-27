@@ -246,7 +246,7 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
     eval1_df = df[10000:11000].reset_index(drop=True)
     eval1_features = eval1_df.drop(columns="target")
     # shuffle columns
-    eval1_features = eval1_features[set(eval1_features.columns)]
+    eval1_features = eval1_features[list(eval1_features.columns)]
     eval1_target = eval1_df["target"].reset_index(drop=True)
 
     eval2_df = df[11000:12000]
@@ -375,7 +375,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features_v3.parquet"
     )
 
     mock_default_requests(requests_mock, url)
@@ -462,7 +462,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [-0.000136, 0.000000, -0.003728],
+            enriched_gini: [0.021830, -0.006607, -0.018483],
         }
     )
     print("Expected metrics: ")
@@ -487,16 +487,13 @@ def test_saved_features_enricher(requests_mock: Mocker):
     train_random_indices = random.choice(train_target.index, size=9000, replace=False)
     train_target.loc[train_random_indices] = 0
 
-    metrics = enricher.calculate_metrics(
-        train_features,
-        train_target
-    )
+    metrics = enricher.calculate_metrics(train_features, train_target)
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            enriched_gini: [0.000985],
+            enriched_gini: [0.054454],
         }
     )
     print("Expected metrics: ")
@@ -2231,8 +2228,9 @@ def test_email_search_key(requests_mock: Mocker):
             "hashed_email_64ff8c",
             "email_one_domain_3b0a68",
             "email_domain_10c73f",
+            "current_date_b993c4",
         }
-        assert {"hashed_email_64ff8c", "email_one_domain_3b0a68"} == {
+        assert {"hashed_email_64ff8c", "email_one_domain_3b0a68", "current_date_b993c4"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         raise TestException()
@@ -2278,11 +2276,18 @@ def test_composit_index_search_key(requests_mock: Mocker):
     ):
         self.validate()
         assert set(self.columns.to_list()) == {
-            "system_record_id", "entity_system_record_id", "country_aff64e", "postal_code_13534a", "target"
+            "system_record_id",
+            "entity_system_record_id"
+            "country_aff64e",
+            "postal_code_13534a",
+            "current_date_b993c4",
+            "target",
         }
         assert "country_aff64e" in self.columns
         assert "postal_code_13534a"
-        assert {"country_aff64e", "postal_code_13534a"} == {sk for sublist in self.search_keys for sk in sublist}
+        assert {"country_aff64e", "postal_code_13534a", "current_date_b993c4"} == {
+            sk for sublist in self.search_keys for sk in sublist
+        }
         # assert "country_fake_a" in self.columns
         # assert "postal_code_fake_a" in self.columns
         # assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
@@ -2662,5 +2667,4 @@ class DataFrameWrapper:
 
 
 class TestException(Exception):
-    def __init__(self):
-        super().__init__()
+    pass

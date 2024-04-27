@@ -1,6 +1,7 @@
 python-dateutil>=2.8.0
 requests>=2.8.0
-pandas>=1.1.0,<2.0.0
+# pandas>=1.1.0,<2.0.0
+pandas>=2.0.0,<3.0.0
 numpy>=1.19.0
 scikit-learn>=1.3.0
 pydantic>=1.8.2,<2.0.0
@@ -10,6 +11,7 @@ catboost>=1.0.3
 lightgbm>=3.3.2
 pyjwt>=2.8.0
 xhtml2pdf==0.2.11
+ipywidgets>=8.1.0
 
 black
 flake8
@@ -23,3 +25,5 @@ requests-mock
 unittest-xml-reporting
 pytest-parallel
 py
+build
+twine

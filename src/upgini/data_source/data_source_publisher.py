@@ -48,6 +48,7 @@ class DataSourcePublisher:
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
         update_frequency: str,
+        exclude_from_autofe_generation: Optional[List[str]],
         secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
         sort_column: Optional[str] = None,
         date_format: Optional[str] = None,
@@ -57,7 +58,6 @@ class DataSourcePublisher:
         join_date_abs_limit_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
-        exclude_from_autofe_generation: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
