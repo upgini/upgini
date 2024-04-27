@@ -1,3 +1,4 @@
+import inspect
 import logging
 import re
 from copy import deepcopy
@@ -381,6 +382,11 @@ class EstimatorWrapper:
             kwargs["estimator"] = estimator_copy
             if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
                 if cat_features is not None:
+                    for cat_feature in cat_features:
+                        if cat_feature not in X.columns:
+                            logger.error(
+                                f"Client cat_feature `{cat_feature}` not found in X columns: {X.columns.to_list()}"
+                            )
                     estimator_copy.set_params(
                         cat_features=[X.columns.get_loc(cat_feature) for cat_feature in cat_features]
                     )
@@ -647,6 +653,12 @@ class OtherEstimatorWrapper(EstimatorWrapper):
 def validate_scoring_argument(scoring: Union[Callable, str, None]):
     if isinstance(scoring, str) and scoring is not None:
         _get_scorer_by_name(scoring)
+    elif isinstance(scoring, Callable):
+        spec = inspect.getfullargspec(scoring)
+        if len(spec.args) < 3:
+            raise ValidationError(
+                f"Invalid scoring function passed {scoring}. It should accept 3 input arguments: estimator, X, y"
+            )
 
 
 def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
