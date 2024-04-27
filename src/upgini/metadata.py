@@ -186,7 +186,10 @@ class FileColumnMetadata(BaseModel):
     meaningType: FileColumnMeaningType
     minMaxValues: Optional[NumericInterval] = None
     originalName: Optional[str]
-    isUnnest: bool = False
+    # is this column contains keys from multiple key columns like msisdn1, msisdn2
+    isUnnest: bool = False,
+    # list of original etalon key column names like msisdn1, msisdn2
+    unnestKeyNames: Optional[list[str]]
 
 
 class FileMetadata(BaseModel):
