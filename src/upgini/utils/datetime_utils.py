@@ -6,7 +6,10 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype, is_object_dtype
+from pandas.api.types import (
+    is_numeric_dtype,
+    is_period_dtype,
+)
 
 from upgini.errors import ValidationError
 from upgini.metadata import SearchKey
