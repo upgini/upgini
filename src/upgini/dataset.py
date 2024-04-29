@@ -81,7 +81,7 @@ class Dataset:  # (pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
-        unnest_search_keys: Optional[List[str]] = None,
+        unnest_search_keys: Optional[Dict[str, str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
@@ -811,6 +811,7 @@ class Dataset:  # (pd.DataFrame):
                 )
                 if self.unnest_search_keys and column_meta.originalName in self.unnest_search_keys:
                     column_meta.isUnnest = True
+                    column_meta.unnestKeyNames = self.unnest_search_keys[column_meta.originalName]
 
                 columns.append(column_meta)
 

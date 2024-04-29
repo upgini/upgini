@@ -126,9 +126,9 @@ class DateTimeSearchKeyConverter:
         df.drop(columns=seconds, inplace=True)
 
         if keep_time:
-            df[self.DATETIME_COL] = df[self.date_column].view(np.int64) // 1_000_000
+            df[self.DATETIME_COL] = df[self.date_column].astype(np.int64) // 1_000_000
             df[self.DATETIME_COL] = df[self.DATETIME_COL].apply(self._int_to_opt).astype("Int64")
-        df[self.date_column] = df[self.date_column].dt.floor("D").view(np.int64) // 1_000_000
+        df[self.date_column] = df[self.date_column].dt.floor("D").astype(np.int64) // 1_000_000
         df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
 
         self.logger.info(f"Date after convertion to timestamp: {df[self.date_column]}")

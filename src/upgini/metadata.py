@@ -187,7 +187,7 @@ class FileColumnMetadata(BaseModel):
     minMaxValues: Optional[NumericInterval] = None
     originalName: Optional[str]
     # is this column contains keys from multiple key columns like msisdn1, msisdn2
-    isUnnest: bool = False,
+    isUnnest: bool = False
     # list of original etalon key column names like msisdn1, msisdn2
     unnestKeyNames: Optional[list[str]]
 
@@ -284,7 +284,7 @@ class FeaturesFilter(BaseModel):
 
 
 class RuntimeParameters(BaseModel):
-    properties: Dict[str, str] = dict()
+    properties: Dict[str, str] = {}
 
 
 class SearchCustomization(BaseModel):

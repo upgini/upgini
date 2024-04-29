@@ -251,7 +251,7 @@ class FeaturesEnricher(TransformerMixin):
         self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict]] = None
 
         validate_version(self.logger)
-        self.search_keys = search_keys or dict()
+        self.search_keys = search_keys or {}
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
         self.model_task_type = model_task_type
@@ -1181,8 +1181,6 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
 
-        unnest_search_keys = []
-
         extended_X = x.copy()
         generated_features = []
         date_column = self._get_date_column(search_keys)
@@ -1193,7 +1191,7 @@ class FeaturesEnricher(TransformerMixin):
         email_column = self._get_email_column(search_keys)
         hem_column = self._get_hem_column(search_keys)
         if email_column:
-            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, unnest_search_keys, self.logger)
+            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, [], self.logger)
             extended_X = converter.convert(extended_X)
             generated_features.extend(converter.generated_features)
         if (
@@ -1409,7 +1407,7 @@ class FeaturesEnricher(TransformerMixin):
                     fitting_enriched_X[col].astype("string").str.replace(",", ".").astype(np.float64)
                 )
 
-        fitting_eval_set_dict = dict()
+        fitting_eval_set_dict = {}
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
             eval_X_sorted, eval_y_sorted = self._sort_by_system_record_id(eval_X_sampled, eval_y_sampled, self.cv)
@@ -1521,7 +1519,7 @@ class FeaturesEnricher(TransformerMixin):
     def __sample_only_input(
         self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]], is_demo_dataset: bool
     ) -> _SampledDataForMetrics:
-        eval_set_sampled_dict = dict()
+        eval_set_sampled_dict = {}
 
         df = validated_X.copy()
         df[TARGET] = validated_y
@@ -1547,7 +1545,7 @@ class FeaturesEnricher(TransformerMixin):
             df = df.sample(n=sample_rows, random_state=self.random_state)
 
         df_extended, search_keys = self._extend_x(df, is_demo_dataset)
-        df_extended = self.__add_fit_system_record_id(df_extended, dict(), search_keys)
+        df_extended = self.__add_fit_system_record_id(df_extended, {}, search_keys)
 
         train_df = df_extended.query(f"{EVAL_SET_INDEX} == 0") if eval_set is not None else df_extended
         X_sampled = train_df.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
@@ -1571,7 +1569,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: str,
         remove_outliers_calc_metrics: Optional[bool],
     ) -> _SampledDataForMetrics:
-        eval_set_sampled_dict = dict()
+        eval_set_sampled_dict = {}
         search_keys = self.fit_search_keys
 
         rows_to_drop = None
@@ -1645,7 +1643,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
     ) -> _SampledDataForMetrics:
-        eval_set_sampled_dict = dict()
+        eval_set_sampled_dict = {}
         if eval_set is not None:
             self.logger.info("Transform with eval_set")
             # concatenate X and eval_set with eval_set_index
@@ -1667,7 +1665,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
                 df = df.sample(n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state)
 
-            eval_set_sampled_dict = dict()
+            eval_set_sampled_dict = {}
 
             tmp_target_name = "__target"
             df = df.rename(columns={TARGET: tmp_target_name})
@@ -1960,7 +1958,7 @@ class FeaturesEnricher(TransformerMixin):
             email_converted_to_hem = False
             if email_column:
                 converter = EmailSearchKeyConverter(
-                    email_column, hem_column, search_keys, unnest_search_keys, self.logger
+                    email_column, hem_column, search_keys, list(unnest_search_keys.keys()), self.logger
                 )
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
@@ -1987,7 +1985,7 @@ class FeaturesEnricher(TransformerMixin):
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform))
 
             if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(df, dict(), search_keys)
+                df = self.__add_fit_system_record_id(df, {}, search_keys)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
 
@@ -2021,12 +2019,13 @@ class FeaturesEnricher(TransformerMixin):
             dataset = Dataset(
                 "sample_" + str(uuid.uuid4()),
                 df=df_without_features,
+                meaning_types=meaning_types,
+                search_keys=combined_search_keys,
+                unnest_search_keys=unnest_search_keys,
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
             )
-            dataset.meaning_types = meaning_types
-            dataset.search_keys = combined_search_keys
             if email_converted_to_hem:
                 dataset.ignore_columns = [email_column]
 
@@ -2360,7 +2359,7 @@ class FeaturesEnricher(TransformerMixin):
         email_converted_to_hem = False
         if email_column:
             converter = EmailSearchKeyConverter(
-                email_column, hem_column, self.fit_search_keys, unnest_search_keys, self.logger
+                email_column, hem_column, self.fit_search_keys, list(unnest_search_keys.keys()), self.logger
             )
             df = converter.convert(df)
             self.fit_generated_features.extend(converter.generated_features)
@@ -2984,21 +2983,23 @@ class FeaturesEnricher(TransformerMixin):
             if t == SearchKey.PHONE:
                 return col
 
-    def _explode_multiple_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
+    def _explode_multiple_search_keys(
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]
+    ) -> Tuple[pd.DataFrame, Dict[str, List[str]]]:
         # find groups of multiple search keys
-        search_key_names_by_type: Dict[SearchKey, str] = dict()
+        search_key_names_by_type: Dict[SearchKey, str] = {}
         for key_name, key_type in search_keys.items():
             search_key_names_by_type[key_type] = search_key_names_by_type.get(key_type, []) + [key_name]
         search_key_names_by_type = {
             key_type: key_names for key_type, key_names in search_key_names_by_type.items() if len(key_names) > 1
         }
         if len(search_key_names_by_type) == 0:
-            return df, []
+            return df, {}
 
         multiple_keys_columns = [col for cols in search_key_names_by_type.values() for col in cols]
         other_columns = [col for col in df.columns if col not in multiple_keys_columns]
         exploded_dfs = []
-        unnest_search_keys = []
+        unnest_search_keys = {}
 
         for key_type, key_names in search_key_names_by_type.items():
             new_search_key = f"upgini_{key_type.name.lower()}_unnest"
@@ -3009,7 +3010,7 @@ class FeaturesEnricher(TransformerMixin):
             for old_key in key_names:
                 del search_keys[old_key]
             search_keys[new_search_key] = key_type
-            unnest_search_keys.append(new_search_key)
+            unnest_search_keys[new_search_key] = key_names
 
         df = pd.concat(exploded_dfs, ignore_index=True)
         return df, unnest_search_keys
@@ -3160,7 +3161,7 @@ class FeaturesEnricher(TransformerMixin):
             result_features = result_features[~result_features[SYSTEM_RECORD_ID].isin(rows_to_drop[SYSTEM_RECORD_ID])]
             self.logger.info(f"After dropping target outliers size: {len(result_features)}")
 
-        result_eval_sets = dict()
+        result_eval_sets = {}
         if not is_transform and EVAL_SET_INDEX in result_features.columns:
             result_train_features = result_features.loc[result_features[EVAL_SET_INDEX] == 0].copy()
             eval_set_indices = list(result_features[EVAL_SET_INDEX].unique())
@@ -3366,7 +3367,7 @@ class FeaturesEnricher(TransformerMixin):
                 if autofe_feature.op.is_vector:
                     continue
 
-                description = dict()
+                description = {}
 
                 feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True))
                 if feature_meta is None:
