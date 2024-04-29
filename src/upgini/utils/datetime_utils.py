@@ -249,7 +249,8 @@ def validate_dates_distribution(
             if col in search_keys:
                 continue
             try:
-                pd.to_datetime(X[col])
+                # Format mixed to avoid massive warnings
+                pd.to_datetime(X[col], format="mixed")
                 maybe_date_col = col
                 break
             except Exception:
