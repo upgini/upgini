@@ -81,7 +81,8 @@ class FeaturesValidator:
         return [
             i
             for i in df
-            if (is_string_dtype(df[i]) or is_integer_dtype(df[i])) and (df[i].nunique(dropna=False) / row_count >= 0.95)
+            if (is_object_dtype(df[i]) or is_string_dtype(df[i]) or is_integer_dtype(df[i]))
+            and (df[i].nunique(dropna=False) / row_count >= 0.85)
         ]
 
     @staticmethod

@@ -17,6 +17,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_period_dtype,
     is_string_dtype,
+    is_object_dtype,
 )
 
 from upgini.errors import ValidationError
@@ -223,7 +224,7 @@ class Dataset:  # (pd.DataFrame):
         """Check that string values less than maximum characters for LLM"""
         # self.logger.info("Validate too long string values")
         for col in self.data.columns:
-            if is_string_dtype(self.data[col]):
+            if is_string_dtype(self.data[col]) or is_object_dtype(self.data[col]):
                 max_length: int = self.data[col].astype("str").str.len().max()
                 if max_length > self.MAX_STRING_FEATURE_LENGTH:
                     self.data[col] = self.data[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
@@ -354,7 +355,7 @@ class Dataset:  # (pd.DataFrame):
         if postal_code is not None and postal_code in self.data.columns:
             # self.logger.info("Normalize postal code")
 
-            if is_string_dtype(self.data[postal_code]):
+            if is_string_dtype(self.data[postal_code]) or is_object_dtype(self.data[postal_code]):
                 try:
                     self.data[postal_code] = (
                         self.data[postal_code].astype("string").astype("Float64").astype("Int64").astype("string")
@@ -829,7 +830,7 @@ class Dataset:  # (pd.DataFrame):
             return DataType.INT
         elif is_float_dtype(pandas_data_type):
             return DataType.DECIMAL
-        elif is_string_dtype(pandas_data_type):
+        elif is_string_dtype(pandas_data_type) or is_object_dtype(pandas_data_type):
             return DataType.STRING
         else:
             msg = self.bundle.get("dataset_invalid_column_type").format(column_name, pandas_data_type)

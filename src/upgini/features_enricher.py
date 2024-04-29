@@ -22,6 +22,7 @@ from pandas.api.types import (
     is_bool,
     is_datetime64_any_dtype,
     is_numeric_dtype,
+    is_object_dtype,
     is_period_dtype,
     is_string_dtype,
 )
@@ -3083,7 +3084,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
         target = df[self.TARGET_NAME]
-        if is_string_dtype(target):
+        if is_string_dtype(target) or is_object_dtype(target):
             maybe_numeric_target = pd.to_numeric(target, errors="coerce")
             # If less than 5% is non numeric then leave this rows with NaN target and later it will be dropped
             if maybe_numeric_target.isna().sum() <= _num_samples(df) * 0.05:
@@ -3486,7 +3487,8 @@ class FeaturesEnricher(TransformerMixin):
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
                 if x[column_name].isnull().all() or (
-                    is_string_dtype(x[column_name]) and (x[column_name].astype("string").str.strip() == "").all()
+                    (is_string_dtype(x[column_name]) or is_object_dtype(x[column_name]))
+                    and (x[column_name].astype("string").str.strip() == "").all()
                 ):
                     raise ValidationError(self.bundle.get("empty_search_key").format(column_name))
 

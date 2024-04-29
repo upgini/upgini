@@ -4,7 +4,7 @@ from hashlib import sha256
 from typing import Dict, List, Optional
 
 import pandas as pd
-from pandas.api.types import is_string_dtype
+from pandas.api.types import is_string_dtype, is_object_dtype
 from upgini.resource_bundle import bundle
 
 from upgini.metadata import SearchKey
@@ -18,7 +18,7 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
         return str(column_name).lower() in ["email", "e_mail", "e-mail"]
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
-        if not is_string_dtype(column):
+        if not is_string_dtype(column) and not is_object_dtype:
             return False
         if not column.astype("string").str.contains("@").any():
             return False

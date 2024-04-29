@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_string_dtype
+from pandas.api.types import is_object_dtype, is_string_dtype
 
 from upgini import SearchKey
 from upgini.http import get_rest_client
@@ -34,7 +34,11 @@ def upload_user_ads(name: str, df: pd.DataFrame, search_keys: Dict[str, SearchKe
             if df[column_name].notnull().sum() < min_valid_rows_count:
                 raise ValueError(bundle.get("ads_upload_to_many_empty_rows"))
             meaning_type = search_keys[column_name].value
-            if meaning_type == FileColumnMeaningType.MSISDN and not is_string_dtype(df[column_name]):
+            if (
+                meaning_type == FileColumnMeaningType.MSISDN
+                and not is_string_dtype(df[column_name])
+                and not is_object_dtype(df[column_name])
+            ):
                 df[column_name] = df[column_name].values.astype(np.int64).astype("string")  # type: ignore
         else:
             meaning_type = FileColumnMeaningType.FEATURE
