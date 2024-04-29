@@ -1,5 +1,5 @@
 import pandas as pd
-from pandas.api.types import is_string_dtype
+from pandas.api.types import is_string_dtype, is_object_dtype
 
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
@@ -9,7 +9,7 @@ class CountrySearchKeyDetector(BaseSearchKeyDetector):
         return "country" in str(column_name).lower()
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
-        if not is_string_dtype(column):
+        if not is_string_dtype(column) and not is_object_dtype(column):
             return False
 
         all_count = len(column)
