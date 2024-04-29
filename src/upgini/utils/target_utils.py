@@ -107,7 +107,7 @@ def balance_undersample(
     min_class_count = vc[min_class_value]
 
     min_class_percent = imbalance_threshold / target_classes_count
-    min_class_threshold = min_class_percent * count
+    min_class_threshold = int(min_class_percent * count)
 
     resampled_data = df
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)

@@ -2,7 +2,7 @@ import itertools
 from typing import List, Tuple
 
 import pandas as pd
-from pandas.api.types import is_string_dtype
+from pandas.api.types import is_string_dtype, is_object_dtype
 
 
 def combine_search_keys(search_keys: List[str]) -> List[Tuple[str]]:
@@ -20,5 +20,6 @@ def find_numbers_with_decimal_comma(df: pd.DataFrame) -> pd.DataFrame:
     return [
         col
         for col in tmp.columns
-        if is_string_dtype(tmp[col]) and tmp[col].astype("string").str.match("^[0-9]+,[0-9]*$").any()
+        if (is_string_dtype(tmp[col]) or is_object_dtype(tmp[col]))
+        and tmp[col].astype("string").str.match("^[0-9]+,[0-9]*$").any()
     ]

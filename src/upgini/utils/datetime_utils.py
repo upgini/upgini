@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype
+from pandas.api.types import is_numeric_dtype, is_period_dtype, is_string_dtype, is_object_dtype
 
 from upgini.errors import ValidationError
 from upgini.metadata import SearchKey
@@ -78,7 +78,7 @@ class DateTimeSearchKeyConverter:
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
         elif isinstance(df[self.date_column].values[0], datetime.date):
             df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
-        elif is_string_dtype(df[self.date_column]):
+        elif is_string_dtype(df[self.date_column]) or is_object_dtype:
             df[self.date_column] = df[self.date_column].apply(self.clean_date)
             df[self.date_column] = self.parse_date(df)
         elif is_period_dtype(df[self.date_column]):
