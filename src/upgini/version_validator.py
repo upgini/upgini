@@ -1,7 +1,7 @@
 import json
+import threading
 
 import requests
-import threading
 
 try:
     from packaging.version import parse
@@ -10,7 +10,7 @@ except ImportError:
 
 import logging
 
-from upgini.http import __version__
+from upgini.__about__ import __version__
 from upgini.resource_bundle import bundle
 
 URL_PATTERN = "https://pypi.python.org/pypi/{package}/json"

@@ -1,8 +1,10 @@
-import numpy as np
 import numbers
+
+import numpy as np
+from sklearn.model_selection import BaseCrossValidator
 from sklearn.utils import indexable
 from sklearn.utils.validation import _num_samples
-from sklearn.model_selection import BaseCrossValidator
+
 from upgini.resource_bundle import bundle
 
 

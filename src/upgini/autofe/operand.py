@@ -1,8 +1,9 @@
-from pydantic import BaseModel
-from typing import Dict, List, Optional, Tuple, Union
 import abc
-import pandas as pd
+from typing import Dict, List, Optional, Tuple, Union
+
 import numpy as np
+import pandas as pd
+from pydantic import BaseModel
 
 
 class Operand(BaseModel):

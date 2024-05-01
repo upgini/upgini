@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 .. module: mdc
 .. moduleauthor:: Aljosha Friemann a.friemann@automate.wtf
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
 
-from upgini.mdc.context import new_log_context, get_mdc_fields
 from pythonjsonlogger import jsonlogger
 
+from upgini.mdc.context import get_mdc_fields, new_log_context
 
 MDContext = new_log_context
 MDC = new_log_context

@@ -1,8 +1,9 @@
-import pandas as pd
-from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
-
 from datetime import datetime
+
+import pandas as pd
 from pandas.testing import assert_series_equal
+
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
 
 
 def test_date_diff():

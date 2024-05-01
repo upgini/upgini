@@ -1,5 +1,7 @@
 from typing import List
+
 import pandas as pd
+
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 

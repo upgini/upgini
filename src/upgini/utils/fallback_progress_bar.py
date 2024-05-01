@@ -22,7 +22,7 @@ class CustomFallbackProgressBar:
         fraction = self.progress / self.total
         filled = "=" * int(fraction * self.text_width)
         rest = " " * (self.text_width - len(filled))
-        return "[{}{}] {}% {} {}".format(filled, rest, self.progress, self._stage, self._eta)
+        return f"[{filled}{rest}] {self.progress}% {self._stage} {self._eta}"
 
     def display(self):
         print(self)

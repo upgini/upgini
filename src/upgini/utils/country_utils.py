@@ -1,5 +1,5 @@
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_object_dtype
+from pandas.api.types import is_object_dtype, is_string_dtype
 
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 

@@ -5,13 +5,10 @@
 # License: MIT
 
 import numpy as np
-
-from sklearn.utils import check_random_state
-from sklearn.utils import _safe_indexing
+from sklearn.utils import _safe_indexing, check_random_state
 
 from .base import BaseUnderSampler
-from .utils import check_target_type
-from .utils import _deprecate_positional_args
+from .utils import _deprecate_positional_args, check_target_type
 
 
 class RandomUnderSampler(BaseUnderSampler):

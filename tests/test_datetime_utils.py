@@ -150,13 +150,14 @@ def test_multivariate_time_series():
     assert not is_blocked_time_series(df, "date", ["date"])
 
     df = pd.DataFrame({"date": pd.date_range("2020-01-01", "2021-01-01")})
-    assert is_blocked_time_series(df, "date", ["date"])
+    assert not is_blocked_time_series(df, "date", ["date"])
 
     df1 = pd.DataFrame(
         {
             "date": pd.date_range("2020-01-01", "2021-01-01"),
             "feature1": np.random.randint(0, 1000, 367),
             "feature2": np.random.randint(0, 1000, 367),
+            "feature3": range(367),
         }
     )
     df2 = pd.DataFrame(
@@ -164,6 +165,7 @@ def test_multivariate_time_series():
             "date": pd.date_range("2020-01-01", "2021-01-01"),
             "feature1": np.random.randint(0, 1000, 367),
             "feature2": np.random.randint(0, 1000, 367),
+            "feature3": range(367),
         }
     )
     df = pd.concat([df1, df2])

@@ -9,13 +9,11 @@ from abc import ABCMeta, abstractmethod
 from typing import List, Optional
 
 import numpy as np
-
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import label_binarize
 from sklearn.utils.multiclass import check_classification_targets
 
-from .utils import check_sampling_strategy, check_target_type
-from .utils import ArraysTransformer
+from .utils import ArraysTransformer, check_sampling_strategy, check_target_type
 
 
 class SamplerMixin(BaseEstimator, metaclass=ABCMeta):
@@ -107,7 +105,6 @@ class SamplerMixin(BaseEstimator, metaclass=ABCMeta):
             The corresponding label of `X_resampled`.
 
         """
-        pass
 
     @abstractmethod
     def _check_X_y(self, X, y, accept_sparse: Optional[List[str]] = None):

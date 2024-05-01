@@ -1,8 +1,8 @@
-from functools import lru_cache
 import os
 import re
 import socket
 import sys
+from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
 from typing import Optional
@@ -51,7 +51,7 @@ def _get_execution_ide() -> str:
         return "other"
 
 
-@lru_cache()
+@lru_cache
 def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}

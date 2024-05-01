@@ -1,9 +1,9 @@
 from functools import reduce
 from typing import Any, Dict, List, Optional, Tuple, Union
-import numpy as np
 
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import BaseCrossValidator, KFold, TimeSeriesSplit, GroupKFold, GroupShuffleSplit
+from sklearn.model_selection import BaseCrossValidator, GroupKFold, GroupShuffleSplit, KFold, TimeSeriesSplit
 
 from upgini.metadata import CVType
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit

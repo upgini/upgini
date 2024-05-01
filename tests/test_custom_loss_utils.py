@@ -1,6 +1,7 @@
 import pytest
+
 from upgini.metadata import ModelTaskType, RuntimeParameters
-from upgini.utils.custom_loss_utils import get_runtime_params_custom_loss, get_additional_params_custom_loss
+from upgini.utils.custom_loss_utils import get_additional_params_custom_loss, get_runtime_params_custom_loss
 
 
 @pytest.mark.parametrize(

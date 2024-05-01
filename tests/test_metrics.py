@@ -218,7 +218,7 @@ def test_demo_metrics(requests_mock: Mocker):
         url,
         search_task_id,
     )
-    with open(os.path.join(BASE_DIR, "file_meta.json"), "r") as f:
+    with open(os.path.join(BASE_DIR, "file_meta.json")) as f:
         file_meta = json.load(f)
     requests_mock.get(url + f"/public/api/v2/search/{search_task_id}/metadata", json=file_meta)
     provider_meta = ProviderTaskMetadataV2.parse_file(os.path.join(BASE_DIR, "provider_meta.json"))
@@ -1004,7 +1004,7 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     assert metrics_df.loc[2, uplift] == approx(-0.050026)
 
 
-@pytest.mark.skip()
+@pytest.mark.skip
 def test_lightgbm_metric_binary(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)

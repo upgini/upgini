@@ -15,9 +15,9 @@ from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
     is_numeric_dtype,
+    is_object_dtype,
     is_period_dtype,
     is_string_dtype,
-    is_object_dtype,
 )
 
 from upgini.errors import ValidationError
@@ -95,7 +95,7 @@ class Dataset:  # (pd.DataFrame):
                 data = pd.read_csv(path, **kwargs)
             else:
                 # try different separators: , ; \t ...
-                with open(path, mode="r") as csvfile:
+                with open(path) as csvfile:
                     sep = csv.Sniffer().sniff(csvfile.read(2048)).delimiter
                 kwargs["sep"] = sep
                 data = pd.read_csv(path, **kwargs)
@@ -251,7 +251,7 @@ class Dataset:  # (pd.DataFrame):
     @staticmethod
     def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
         try:
-            if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
+            if isinstance(ip, (IPv4Address, IPv6Address)):
                 return int(ip)
         except Exception:
             pass
@@ -259,7 +259,7 @@ class Dataset:  # (pd.DataFrame):
     @staticmethod
     def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
         try:
-            if isinstance(ip, IPv4Address) or isinstance(ip, IPv6Address):
+            if isinstance(ip, (IPv4Address, IPv6Address)):
                 return str(int(ip))
         except Exception:
             pass

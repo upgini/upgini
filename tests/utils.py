@@ -18,11 +18,11 @@ class RequestsCounter:
 
 
 def mock_default_requests(requests_mock: Mocker, url: str):
-    requests_mock.get("https://ident.me", content="1.1.1.1".encode())
-    requests_mock.post(url + "/private/api/v2/events/send", content="Success".encode())
+    requests_mock.get("https://ident.me", content=b"1.1.1.1")
+    requests_mock.post(url + "/private/api/v2/events/send", content=b"Success")
     requests_mock.post(url + "/private/api/v2/security/refresh_access_token", json={"access_token": "123"})
     requests_mock.get("https://pypi.python.org/pypi/upgini/json", json={"releases": {"1.0.0": [{}]}})
-    requests_mock.post(url + "/public/api/v2/search/dump-input", content="123".encode())
+    requests_mock.post(url + "/public/api/v2/search/dump-input", content=b"123")
     requests_mock.get(
         url + "/public/api/v2/user/transform-usage",
         json={"transformedRows": 0, "restRows": 12000, "limit": 12000, "hasLimit": True},

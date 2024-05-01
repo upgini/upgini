@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
 from requests.exceptions import RequestException
 
+from upgini.__about__ import __version__
 from upgini.errors import (
     HttpError,
     UnauthorizedError,
@@ -38,17 +39,17 @@ from upgini.metadata import (
 from upgini.resource_bundle import bundle
 from upgini.utils.track_info import get_track_metrics
 
-try:
-    from importlib_metadata import version  # type: ignore
+# try:
+#     from importlib.metadata import version  # type: ignore
 
-    __version__ = version("upgini")
-except ImportError:
-    try:
-        from importlib.metadata import version  # type: ignore
+#     __version__ = version("upgini")
+# except ImportError:
+#     try:
+#         from importlib_metadata import version  # type: ignore
 
-        __version__ = version("upgini")
-    except ImportError:
-        __version__ = "Upgini wasn't installed"
+#         __version__ = version("upgini")
+#     except ImportError:
+#         __version__ = "Upgini wasn't installed"
 
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
@@ -925,7 +926,7 @@ def is_demo_api_key(api_token: Optional[str]) -> bool:
     return api_token is None or api_token == "" or api_token == DEMO_API_KEY
 
 
-@lru_cache()
+@lru_cache
 def _get_rest_client(
     backend_url: str, api_token: str, client_ip: Optional[str] = None, client_visitorid: Optional[str] = None
 ) -> _RestClient:
