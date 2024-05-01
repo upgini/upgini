@@ -151,3 +151,6 @@ catboost_info/
 build/
 playgroung.ipynb
 fingerprint.js
+envVars.txt
+.ruff_cache
+.jupyter

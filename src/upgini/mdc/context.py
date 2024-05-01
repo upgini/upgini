@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 .. module: TODO
     :platform: TODO
@@ -7,12 +6,11 @@
 .. moduleauthor:: Aljosha Friemann a.friemann@automate.wtf
 """
 
-import time
-import uuid
+import collections
 import logging
 import threading
-import collections
-
+import time
+import uuid
 from contextlib import contextmanager
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +30,7 @@ def get_mdc_fields():
 
 @contextmanager
 def new_log_context(**kwargs):
-    context_id = "mdc-{thread}-{context}".format(thread=threading.current_thread().ident, context=uuid.uuid4())
+    context_id = f"mdc-{threading.current_thread().ident}-{uuid.uuid4()}"
 
     LOGGER.debug("creating context %s", context_id)
 

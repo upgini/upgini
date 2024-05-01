@@ -1,8 +1,9 @@
 from typing import Any, Optional, Union
+
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
 from pandas.core.arrays.timedeltas import TimedeltaArray
+from pydantic import BaseModel
 
 from upgini.autofe.operand import PandasOperand
 

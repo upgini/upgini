@@ -20,6 +20,7 @@ from sklearn.metrics._scorer import _MultimetricScorer
 from sklearn.model_selection import check_cv
 from sklearn.utils.fixes import np_version, parse_version
 from sklearn.utils.validation import indexable
+
 # from sklearn.model_selection import cross_validate as original_cross_validate
 
 _DEFAULT_TAGS = {
@@ -46,7 +47,7 @@ _DEFAULT_TAGS = {
 
 def cross_validate(
     estimator,
-    X,
+    x,
     y=None,
     *,
     groups=None,
@@ -69,7 +70,7 @@ def cross_validate(
     estimator : estimator object implementing 'fit'
         The object to use to fit the data.
 
-    X : array-like of shape (n_samples, n_features)
+    x : array-like of shape (n_samples, n_features)
         The data to fit. Can be for example a list, or an array.
 
     y : array-like of shape (n_samples,) or (n_samples, n_outputs), \
@@ -250,7 +251,7 @@ def cross_validate(
 
     """
     try:
-        X, y, groups = indexable(X, y, groups)
+        x, y, groups = indexable(x, y, groups)
 
         cv = check_cv(cv, y, classifier=is_classifier(estimator))
 
@@ -267,7 +268,7 @@ def cross_validate(
         results = parallel(
             delayed(_fit_and_score)(
                 clone(estimator),
-                X,
+                x,
                 y,
                 scorers,
                 train,
@@ -280,7 +281,7 @@ def cross_validate(
                 return_estimator=return_estimator,
                 error_score=error_score,
             )
-            for train, test in cv.split(X, y, groups)
+            for train, test in cv.split(x, y, groups)
         )
 
         _warn_about_fit_failures(results, error_score)
@@ -487,7 +488,7 @@ def _fit_and_score(
         if y_train is None:
             estimator.fit(X_train, **fit_params)
         else:
-            if isinstance(estimator, CatBoostClassifier) or isinstance(estimator, CatBoostRegressor):
+            if isinstance(estimator, (CatBoostClassifier, CatBoostRegressor)):
                 fit_params = fit_params.copy()
                 fit_params["eval_set"] = [(X_test, y_test)]
             estimator.fit(X_train, y_train, **fit_params)
@@ -582,9 +583,11 @@ def _aggregate_score_dicts(scores):
     """
 
     return {
-        key: np.asarray([score[key] for score in scores])
-        if isinstance(scores[0][key], numbers.Number)
-        else [score[key] for score in scores]
+        key: (
+            np.asarray([score[key] for score in scores])
+            if isinstance(scores[0][key], numbers.Number)
+            else [score[key] for score in scores]
+        )
         for key in scores[0]
     }
 
@@ -969,9 +972,7 @@ def _safe_indexing(X, indices, *, axis=0):
         return X
 
     if axis not in (0, 1):
-        raise ValueError(
-            "'axis' should be either 0 (to index rows) or 1 (to index " " column). Got {} instead.".format(axis)
-        )
+        raise ValueError("'axis' should be either 0 (to index rows) or 1 (to index " f" column). Got {axis} instead.")
 
     indices_dtype = _determine_key_type(indices)
 
@@ -982,7 +983,7 @@ def _safe_indexing(X, indices, *, axis=0):
         raise ValueError(
             "'X' should be a 2D NumPy array, 2D sparse matrix or pandas "
             "dataframe when indexing the columns (i.e. 'axis=1'). "
-            "Got {} instead with {} dimension(s).".format(type(X), X.ndim)
+            f"Got {type(X)} instead with {X.ndim} dimension(s)."
         )
 
     if axis == 1 and indices_dtype == "str" and not hasattr(X, "loc"):

@@ -2,7 +2,7 @@ import itertools
 from typing import List, Tuple
 
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_object_dtype
+from pandas.api.types import is_object_dtype, is_string_dtype
 
 
 def combine_search_keys(search_keys: List[str]) -> List[Tuple[str]]:

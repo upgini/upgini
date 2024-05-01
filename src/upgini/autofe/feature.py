@@ -215,7 +215,7 @@ class Feature:
             return Column(string)
 
         def is_trivial_char(c: str) -> bool:
-            return not (c in "()+-*/,")
+            return c not in "()+-*/,"
 
         def find_prev(string: str) -> int:
             if string[-1] != ")":

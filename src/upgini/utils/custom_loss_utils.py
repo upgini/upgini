@@ -1,6 +1,7 @@
-from upgini.metadata import ModelTaskType, RuntimeParameters
-from typing import Optional, Dict, Any
 import logging
+from typing import Any, Dict, Optional
+
+from upgini.metadata import ModelTaskType, RuntimeParameters
 from upgini.resource_bundle import bundle
 
 

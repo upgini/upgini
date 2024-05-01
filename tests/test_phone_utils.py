@@ -1,6 +1,6 @@
-from upgini.utils.phone_utils import PhoneSearchKeyDetector
 import pandas as pd
 
+from upgini.utils.phone_utils import PhoneSearchKeyDetector
 
 detector = PhoneSearchKeyDetector()
 

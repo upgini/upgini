@@ -2548,7 +2548,7 @@ class FeaturesEnricher(TransformerMixin):
             validated_X = X.copy()
         elif isinstance(X, pd.Series):
             validated_X = X.to_frame()
-        elif isinstance(X, np.ndarray) or isinstance(X, list):
+        elif isinstance(X, (list, np.ndarray)):
             validated_X = pd.DataFrame(X)
             renaming = {c: str(c) for c in validated_X.columns}
             validated_X = validated_X.rename(columns=renaming)
@@ -2637,7 +2637,7 @@ class FeaturesEnricher(TransformerMixin):
             validated_eval_X = eval_X.copy()
         elif isinstance(eval_X, pd.Series):
             validated_eval_X = eval_X.to_frame()
-        elif isinstance(eval_X, np.ndarray) or isinstance(eval_X, list):
+        elif isinstance(eval_X, (list, np.ndarray)):
             validated_eval_X = pd.DataFrame(eval_X)
             renaming = {c: str(c) for c in validated_eval_X.columns}
             validated_eval_X = validated_eval_X.rename(columns=renaming)
@@ -2819,7 +2819,7 @@ class FeaturesEnricher(TransformerMixin):
             )
 
             def sample(df):
-                if isinstance(df, pd.Series) or isinstance(df, pd.DataFrame):
+                if isinstance(df, (pd.DataFrame, pd.Series)):
                     return df.head(10)
                 else:
                     return df[:10]
@@ -3693,7 +3693,7 @@ class FeaturesEnricher(TransformerMixin):
                 def sample(inp, sample_index):
                     if _num_samples(inp) <= 1000:
                         return inp
-                    if isinstance(inp, pd.DataFrame) or isinstance(inp, pd.Series):
+                    if isinstance(inp, (pd.DataFrame, pd.Series)):
                         return inp.sample(n=1000, random_state=random_state)
                     if isinstance(inp, np.ndarray):
                         return inp[sample_index]

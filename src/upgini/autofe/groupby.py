@@ -1,6 +1,8 @@
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
 from typing import Optional
+
 import pandas as pd
+
+from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 
 class GroupByThenAgg(PandasOperand, VectorizableMixin):

@@ -43,7 +43,7 @@ def test_define_multiclass_task_type():
     assert define_task(y, False) == ModelTaskType.MULTICLASS
     assert define_task(y, True) == ModelTaskType.MULTICLASS
 
-    y = pd.Series(range(0, 50))
+    y = pd.Series(range(50))
     assert define_task(y, False) == ModelTaskType.MULTICLASS
     assert define_task(y, True) == ModelTaskType.MULTICLASS
 
