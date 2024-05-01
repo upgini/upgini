@@ -1,9 +1,11 @@
 import time
-from typing import Dict, Optional
 import uuid
+from typing import Dict, Optional
+
+import pandas as pd
+
 from upgini.http import get_rest_client
 from upgini.spinner import Spinner
-import pandas as pd
 
 
 class AdsManager:

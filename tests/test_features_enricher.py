@@ -374,8 +374,17 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
 def test_saved_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1.parquet"
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/validation_features_v3.parquet"
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
     )
 
     mock_default_requests(requests_mock, url)
@@ -1999,7 +2008,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
 
     def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
         result_wrapper.df = pd.read_parquet(file_path)
-        raise TestException()
+        raise TestException
 
     original_initial_search = _RestClient.initial_search_v2
     _RestClient.initial_search_v2 = mocked_initial_search
@@ -2145,7 +2154,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
 
     def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
         result_wrapper.df = pd.read_parquet(file_path)
-        raise TestException()
+        raise TestException
 
     original_initial_search = _RestClient.initial_search_v2
     _RestClient.initial_search_v2 = mocked_initial_search
@@ -2233,7 +2242,7 @@ def test_email_search_key(requests_mock: Mocker):
         assert {"hashed_email_64ff8c", "email_one_domain_3b0a68", "current_date_b993c4"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
-        raise TestException()
+        raise TestException
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
@@ -2291,7 +2300,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         # assert "country_fake_a" in self.columns
         # assert "postal_code_fake_a" in self.columns
         # assert {"country_fake_a", "postal_code_fake_a"} == {sk for sublist in self.search_keys for sk in sublist}
-        raise TestException()
+        raise TestException
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1
@@ -2446,7 +2455,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "email_one_domain_3b0a68",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
-        raise TestException()
+        raise TestException
 
     Dataset.validation = mock_validation
 
@@ -2488,7 +2497,7 @@ def test_numbers_with_comma(requests_mock: Mocker):
     ):
         self.validate()
         assert self.data["feature_2ad562"].dtype == "float64"
-        raise TestException()
+        raise TestException
 
     Dataset.search = mock_search
     Dataset.MIN_ROWS_COUNT = 1

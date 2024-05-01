@@ -17,7 +17,7 @@ __author__ = "Felix Zenk"
 __email__ = "felix.zenk@web.de"
 
 
-class _Parser(object):
+class _Parser:
     """
     A parser for the .properties file format.
     """
@@ -49,7 +49,7 @@ class _Parser(object):
             return re.sub(pattern, lambda match: codecs.decode(match.group(0), "unicode-escape"), arg)
 
         # I/O read
-        with open(file_path, mode="r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         # parse
@@ -83,7 +83,7 @@ class _Parser(object):
         return mapping
 
 
-class ResourceBundle(object):
+class ResourceBundle:
     """
     A ResourceBundle manages internationalization of string resources
     """
@@ -199,7 +199,7 @@ class ResourceBundle(object):
         raise NotInResourceBundleError(self.name, item)
 
 
-def get_bundle(bundle_name: str, locale: str | Sequence[str | str] = None, path: Path | str = None) -> ResourceBundle:
+def get_bundle(bundle_name: str, locale: str | Sequence[str] = None, path: Path | str = None) -> ResourceBundle:
     """
     Return a new :class:`ResourceBundle` after parsing the locale
 
@@ -224,7 +224,7 @@ bundle = ResourceBundle("strings", None, path=os.path.dirname(os.path.realpath(_
 custom_bundles = dict()
 
 
-def get_custom_bundle(custom_cfg: Optional[str] = None) -> "ResourceBundle":
+def get_custom_bundle(custom_cfg: Optional[str] = None) -> ResourceBundle:
     global custom_bundles
     if custom_cfg is not None:
         custom_bundle = custom_bundles.get(custom_cfg)

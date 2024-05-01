@@ -8,10 +8,10 @@ import pandas as pd
 
 from upgini import dataset
 from upgini.http import (
-    _RestClient,
     ProviderTaskSummary,
     SearchProgress,
     SearchTaskSummary,
+    _RestClient,
     get_rest_client,
     is_demo_api_key,
 )
@@ -295,7 +295,7 @@ class SearchTask:
         return self.rest_client.get_search_file_metadata(self.search_task_id, trace_id)
 
 
-@lru_cache()
+@lru_cache
 def _get_all_initial_raw_features_cached(
     endpoint: Optional[str],
     api_key: Optional[str],
@@ -328,7 +328,7 @@ def _get_all_initial_raw_features_cached(
     return result_df
 
 
-@lru_cache()
+@lru_cache
 def _get_all_validation_raw_features_cached(
     endpoint: Optional[str],
     api_key: Optional[str],
@@ -357,7 +357,7 @@ def _get_all_validation_raw_features_cached(
     return result_df
 
 
-@lru_cache()
+@lru_cache
 def _get_target_outliers_cached(
     endpoint: Optional[str],
     api_key: Optional[str],

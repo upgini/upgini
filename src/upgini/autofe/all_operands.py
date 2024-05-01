@@ -1,9 +1,10 @@
 from typing import Dict
+
+from upgini.autofe.binary import Add, Divide, Max, Min, Multiply, Sim, Subtract
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
 from upgini.autofe.operand import Operand
-from upgini.autofe.unary import Abs, Log, Residual, Sqrt, Square, Sigmoid, Floor, Freq
-from upgini.autofe.binary import Min, Max, Add, Subtract, Multiply, Divide, Sim
+from upgini.autofe.unary import Abs, Floor, Freq, Log, Residual, Sigmoid, Sqrt, Square
 from upgini.autofe.vector import Mean, Sum
 
 ALL_OPERANDS: Dict[str, Operand] = {

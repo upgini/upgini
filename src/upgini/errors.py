@@ -16,7 +16,7 @@ class UnauthorizedError(HttpError):
     """Unauthorized error from REST API."""
 
     def __init__(self, message, status_code):
-        message = "Unauthorized, please check your authorization token ({})".format(message)
+        message = f"Unauthorized, please check your authorization token ({message})"
         super(UnauthorizedError, self).__init__(message, status_code)
 
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
@@ -209,6 +211,7 @@ class FileMetadata(BaseModel):
         for c in self.columns:
             if c.name == name:
                 return c
+        return None
 
     def search_types(self) -> Set[SearchKey]:
         search_keys = set()

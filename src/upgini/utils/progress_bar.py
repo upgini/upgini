@@ -28,7 +28,7 @@ class CustomProgressBar(DisplayObject):
         fraction = self.progress / self.total
         filled = "=" * int(fraction * self.text_width)
         rest = " " * (self.text_width - len(filled))
-        return "[{}{}] {}% {}".format(filled, rest, self.progress, self._stage)
+        return f"[{filled}{rest}] {self.progress}% {self._stage}"
 
     def _repr_html_(self):
         return "<progress style='width:{}' max='{}' value='{}'></progress>  {}% {}</br>{}".format(

@@ -5,10 +5,10 @@ import pandas as pd
 
 class BaseSearchKeyDetector:
     def _is_search_key_by_name(self, column_name: str) -> bool:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _get_search_keys_by_name(self, column_names: List[str]) -> List[str]:
         return [

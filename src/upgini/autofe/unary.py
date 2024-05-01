@@ -1,6 +1,7 @@
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
 import numpy as np
 import pandas as pd
+
+from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 
 class Abs(PandasOperand, VectorizableMixin):

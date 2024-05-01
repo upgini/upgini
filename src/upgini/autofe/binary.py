@@ -1,8 +1,9 @@
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
 import numpy as np
 import pandas as pd
 from numpy import dot
 from numpy.linalg import norm
+
+from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 
 class Min(PandasOperand):

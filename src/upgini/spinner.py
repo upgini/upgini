@@ -1,6 +1,6 @@
 import threading
-from typing import Optional, List
 import time
+from typing import List, Optional
 
 
 class Spinner:

@@ -1,6 +1,6 @@
-from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 import pandas as pd
 
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 
 detector = PostalCodeSearchKeyDetector()
 

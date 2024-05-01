@@ -4,10 +4,10 @@ from hashlib import sha256
 from typing import Dict, List, Optional
 
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_object_dtype
-from upgini.resource_bundle import bundle
+from pandas.api.types import is_object_dtype, is_string_dtype
 
 from upgini.metadata import SearchKey
+from upgini.resource_bundle import bundle
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
