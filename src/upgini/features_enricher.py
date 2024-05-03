@@ -1333,6 +1333,9 @@ class FeaturesEnricher(TransformerMixin):
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
+        meta = self._search_task.get_all_features_metadata_v2()
+        zero_importance_client_features = [m.name for m in meta if m.source == "etalon" and m.shap_value == 0.0]
+
         client_features = [
             c
             for c in X_sampled.columns.to_list()
@@ -1341,6 +1344,7 @@ class FeaturesEnricher(TransformerMixin):
                 excluding_search_keys
                 + list(self.fit_dropped_features)
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID]
+                + zero_importance_client_features
             )
         ]
 
@@ -1399,9 +1403,9 @@ class FeaturesEnricher(TransformerMixin):
         if len(decimal_columns_to_fix) > 0:
             self.logger.warning(f"Convert strings with decimal comma to float: {decimal_columns_to_fix}")
             for col in decimal_columns_to_fix:
-                fitting_X[col] = fitting_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                fitting_X[col] = fitting_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                 fitting_enriched_X[col] = (
-                    fitting_enriched_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    fitting_enriched_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                 )
 
         fitting_eval_set_dict = dict()
@@ -1437,9 +1441,17 @@ class FeaturesEnricher(TransformerMixin):
             # Correct string features with decimal commas
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
-                    fitting_eval_X[col] = fitting_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    fitting_eval_X[col] = (
+                        fitting_eval_X[col]
+                        .astype("string").str
+                        .replace(",", ".", regex=False)
+                        .astype(np.float64)
+                    )
                     fitting_enriched_eval_X[col] = (
-                        fitting_enriched_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                        fitting_enriched_eval_X[col]
+                        .astype("string").str
+                        .replace(",", ".", regex=False)
+                        .astype(np.float64)
                     )
 
             fitting_eval_set_dict[idx] = (
@@ -2845,8 +2857,10 @@ class FeaturesEnricher(TransformerMixin):
             maybe_date_col = self._get_date_column(self.search_keys)
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                min_date = X[maybe_date_col].min()
-                max_date = X[maybe_date_col].max()
+                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format)
+                converted_X = date_converter.convert(X)
+                min_date = converted_X[maybe_date_col].min()
+                max_date = converted_X[maybe_date_col].max()
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
 
         except Exception:
