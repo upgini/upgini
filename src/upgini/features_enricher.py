@@ -930,6 +930,7 @@ class FeaturesEnricher(TransformerMixin):
                         scoring,
                         groups=groups,
                         text_features=self.generate_features,
+                        has_date=has_date,
                     )
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
@@ -956,6 +957,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=self.generate_features,
+                            has_date=has_date,
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
@@ -981,6 +983,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=self.generate_features,
+                            has_date=has_date,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
@@ -1333,6 +1336,7 @@ class FeaturesEnricher(TransformerMixin):
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
+
         client_features = [
             c
             for c in X_sampled.columns.to_list()
@@ -1399,9 +1403,9 @@ class FeaturesEnricher(TransformerMixin):
         if len(decimal_columns_to_fix) > 0:
             self.logger.warning(f"Convert strings with decimal comma to float: {decimal_columns_to_fix}")
             for col in decimal_columns_to_fix:
-                fitting_X[col] = fitting_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                fitting_X[col] = fitting_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                 fitting_enriched_X[col] = (
-                    fitting_enriched_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    fitting_enriched_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                 )
 
         fitting_eval_set_dict = dict()
@@ -1437,9 +1441,17 @@ class FeaturesEnricher(TransformerMixin):
             # Correct string features with decimal commas
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
-                    fitting_eval_X[col] = fitting_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                    fitting_eval_X[col] = (
+                        fitting_eval_X[col]
+                        .astype("string").str
+                        .replace(",", ".", regex=False)
+                        .astype(np.float64)
+                    )
                     fitting_enriched_eval_X[col] = (
-                        fitting_enriched_eval_X[col].astype("string").str.replace(",", ".").astype(np.float64)
+                        fitting_enriched_eval_X[col]
+                        .astype("string").str
+                        .replace(",", ".", regex=False)
+                        .astype(np.float64)
                     )
 
             fitting_eval_set_dict[idx] = (
@@ -2845,8 +2857,10 @@ class FeaturesEnricher(TransformerMixin):
             maybe_date_col = self._get_date_column(self.search_keys)
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                min_date = X[maybe_date_col].min()
-                max_date = X[maybe_date_col].max()
+                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format)
+                converted_X = date_converter.convert(X)
+                min_date = converted_X[maybe_date_col].min()
+                max_date = converted_X[maybe_date_col].max()
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
 
         except Exception:
@@ -3706,7 +3720,7 @@ class FeaturesEnricher(TransformerMixin):
                     if y is not None:
                         with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
                             pickle.dump(sample(y, xy_sample_index), y_file)
-                        if eval_set:
+                        if eval_set and _num_samples(eval_set[0][0]) > 0:
                             eval_xy_sample_index = rnd.randint(0, _num_samples(eval_set[0][0]), size=1000)
                             with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
                                 pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
