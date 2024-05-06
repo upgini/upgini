@@ -16,6 +16,9 @@ class Column:
         self.data = data
         self.calculate_all = calculate_all
 
+    def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
+        return self.name
+
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
         self.name = self._unhash(mapping.get(self.name) or self.name)
         return self
@@ -74,9 +77,9 @@ class Feature:
         return self
 
     def get_hash(self) -> str:
-        return hashlib.sha256("_".join([self.op.name] + [ch.name for ch in self.children]).encode("utf-8")).hexdigest()[
-            :8
-        ]
+        return hashlib.sha256(
+            "_".join([self.op.name] + [ch.get_display_name() for ch in self.children]).encode("utf-8")
+        ).hexdigest()[:8]
 
     def set_alias(self, alias: str) -> "Feature":
         self.alias = alias
