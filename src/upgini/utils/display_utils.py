@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 import pandas as pd
 from xhtml2pdf import pisa
+from upgini.__about__ import __version__
 
 
 def ipython_available() -> bool:
@@ -166,12 +167,12 @@ def make_html_report(
                         /*-pdf-frame-border: 1;*/
                     }}
                     @frame content_frame {{
-                        left: 10pt; width: 574pt; top: 50pt; height: 752pt;
+                        left: 10pt; width: 574pt; top: 50pt; height: 742pt;
                         /*-pdf-frame-border: 1;*/
                     }}
                     @frame footer_frame {{
                         -pdf-frame-content: footer_content;
-                        left: 10pt; width: 574pt; top: 802pt; height: 30pt;
+                        left: 10pt; width: 574pt; top: 802pt; height: 40pt;
                         /*-pdf-frame-border: 1;*/
                     }}
                 }}
@@ -234,7 +235,8 @@ def make_html_report(
             <div id="header_content">UPGINI</div>
             <div id="footer_content">
                 © Upgini</br>
-                sales@upgini.com
+                sales@upgini.com</br>
+                Launched by version {__version__}
             </div>
 
             <h1>Data search report</h1>
@@ -257,7 +259,7 @@ def make_html_report(
             }
             <h3>Relevant data sources</h3>
             {make_table(relevant_datasources_df)}
-            <h3>All relevant features. Listing</h3>
+            <h3>All relevant features. Listing ({len(relevant_features_df)} items)</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
             {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df, wrap_long_string=25)
              if autofe_descriptions_df is not None

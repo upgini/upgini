@@ -250,7 +250,7 @@ class Dataset:  # (pd.DataFrame):
         if len(columns_to_fix) > 0:
             self.logger.warning(f"Convert strings with decimal comma to float: {columns_to_fix}")
             for col in columns_to_fix:
-                self.data[col] = self.data[col].astype("string").str.replace(",", ".").astype(np.float64)
+                self.data[col] = self.data[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
 
     @staticmethod
     def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
