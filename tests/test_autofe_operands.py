@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 from pandas.testing import assert_series_equal
 
-from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 
 
 def test_date_diff():
@@ -93,3 +93,23 @@ def test_date_diff_list_bounded():
     check_num_by_years(30, 45, "date_diff_Y_30_45_count", pd.Series([0, 1, 0, 0, 0]))
     check_num_by_years(45, 60, "date_diff_Y_45_60_count", pd.Series([0, 1, 0, 0, 0]))
     check_num_by_years(60, None, "date_diff_Y_60_plusinf_count", pd.Series([0, 1, 0, 0, 0]))
+
+
+def test_date_percentile():
+    data = pd.DataFrame(
+        [
+            ["2024-03-03", 2],
+            ["2024-02-03", 2],
+            ["2024-02-04", 34],
+            ["2024-02-05", 32],
+            ["2023-03-03", 60],
+            ["2023-03-02", None],
+        ],
+        columns=["date", "feature"],
+    )
+    operand = DatePercentile(
+        zero_month=2, zero_year=2024, zero_bounds=[2.0, 8.0, 14.0, 20.0, 26.0, 32.0, 32.4, 32.8, 33.2, 33.6, 34.0]
+    )
+
+    expected_values = pd.Series([None, 0, 100, 50, 100, None])
+    assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)

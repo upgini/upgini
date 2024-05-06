@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -116,3 +116,34 @@ class DateListDiffBounded(DateListDiff):
     def _agg(self, x):
         x = x[(x >= (self.lower_bound or -np.inf)) & (x < (self.upper_bound or np.inf))]
         return super()._agg(x)
+
+
+class DatePercentile(PandasOperand):
+    name = "date_per"
+    is_binary = True
+    output_type = "float"
+
+    zero_month: Optional[int]
+    zero_year: Optional[int]
+    zero_bounds: Optional[List[float]]
+    step: int = 30
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        # Assuming that left is a date column, right is a feature column
+        left = pd.to_datetime(left)
+        months = left.dt.month
+        years = left.dt.year
+
+        month_diffs = 12 * (years - (self.zero_year or 0)) + (months - (self.zero_month or 0))
+        bounds = month_diffs.apply(
+            lambda d: np.array(self.zero_bounds if self.zero_bounds is not None else []) + d * 30
+        )
+
+        return right.index.to_series().apply(lambda i: self.__perc(right[i], bounds[i]))
+
+    def __perc(self, f, bounds):
+        hit = np.where(f >= bounds)[0]
+        if hit.size > 0:
+            return np.max(hit) * 10
+        else:
+            return None
