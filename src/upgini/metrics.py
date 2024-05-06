@@ -314,8 +314,16 @@ class EstimatorWrapper:
             metrics_by_fold = cv_results["test_score"]
             self.cv_estimators = cv_results["estimator"]
 
+            self.check_fold_metrics(metrics_by_fold)
+
             metric = np.mean(metrics_by_fold) * self.multiplier
         return self.post_process_metric(metric)
+
+    def check_fold_metrics(self, metrics_by_fold: List[float]):
+        first_metric_sign = 1 if metrics_by_fold[0] >= 0 else -1
+        for metric in metrics_by_fold[1:]:
+            if first_metric_sign * metric < 0:
+                self.logger.warning(f"Sign of metrics differs between folds: {metrics_by_fold}")
 
     def post_process_metric(self, metric: float) -> float:
         if self.metric_name == "GINI":
@@ -346,6 +354,7 @@ class EstimatorWrapper:
         text_features: Optional[List[str]] = None,
         add_params: Optional[Dict[str, Any]] = None,
         groups: Optional[List[str]] = None,
+        has_date: Optional[bool] = None,
     ) -> EstimatorWrapper:
         scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
         kwargs = {
@@ -360,6 +369,7 @@ class EstimatorWrapper:
         }
         if estimator is None:
             params = dict()
+            params["has_time"] = has_date
             # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
             #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
@@ -475,7 +485,7 @@ class CatBoostWrapper(EstimatorWrapper):
 
         # Find rest categorical features
         self.cat_features = _get_cat_features(x, self.text_features, embedding_features)
-        x = fill_na_cat_features(x, self.cat_features)
+        # x = fill_na_cat_features(x, self.cat_features)
         unique_cat_features = []
         for name in self.cat_features:
             # Remove constant categorical features
@@ -525,7 +535,7 @@ class CatBoostWrapper(EstimatorWrapper):
             x, emb_columns = self.group_embeddings(x)
             params["embedding_features"] = emb_columns
         if self.cat_features:
-            x = fill_na_cat_features(x, self.cat_features)
+            # x = fill_na_cat_features(x, self.cat_features)
             params["cat_features"] = self.cat_features
 
         return x, y, params

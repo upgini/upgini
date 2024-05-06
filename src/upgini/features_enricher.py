@@ -930,6 +930,7 @@ class FeaturesEnricher(TransformerMixin):
                         scoring,
                         groups=groups,
                         text_features=self.generate_features,
+                        has_date=has_date,
                     )
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
@@ -956,6 +957,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=self.generate_features,
+                            has_date=has_date,
                         )
                         etalon_metric = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
@@ -981,6 +983,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=self.generate_features,
+                            has_date=has_date,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
@@ -1333,8 +1336,6 @@ class FeaturesEnricher(TransformerMixin):
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in search_keys_for_metrics]
-        meta = self._search_task.get_all_features_metadata_v2()
-        zero_importance_client_features = [m.name for m in meta if m.source == "etalon" and m.shap_value == 0.0]
 
         client_features = [
             c
@@ -1344,7 +1345,6 @@ class FeaturesEnricher(TransformerMixin):
                 excluding_search_keys
                 + list(self.fit_dropped_features)
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID]
-                + zero_importance_client_features
             )
         ]
 
@@ -3720,7 +3720,7 @@ class FeaturesEnricher(TransformerMixin):
                     if y is not None:
                         with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
                             pickle.dump(sample(y, xy_sample_index), y_file)
-                        if eval_set:
+                        if eval_set and _num_samples(eval_set[0][0]) > 0:
                             eval_xy_sample_index = rnd.randint(0, _num_samples(eval_set[0][0]), size=1000)
                             with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
                                 pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
