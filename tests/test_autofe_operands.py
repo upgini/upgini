@@ -108,7 +108,7 @@ def test_date_percentile():
         columns=["date", "feature"],
     )
     operand = DatePercentile(
-        zero_month=2, zero_year=2024, zero_bounds=[2.0, 8.0, 14.0, 20.0, 26.0, 32.0, 32.4, 32.8, 33.2, 33.6, 34.0]
+        zero_month=2, zero_year=2024, zero_bounds="[2.0, 8.0, 14.0, 20.0, 26.0, 32.0, 32.4, 32.8, 33.2, 33.6, 34.0]"
     )
 
     expected_values = pd.Series([None, 0, 100, 50, 100, None])

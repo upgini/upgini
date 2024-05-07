@@ -1,9 +1,10 @@
+from datetime import date
 from typing import Any, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from upgini.autofe.operand import PandasOperand
 
@@ -123,14 +124,22 @@ class DatePercentile(PandasOperand):
     is_binary = True
     output_type = "float"
 
+    date_unit: Optional[str] = None
     zero_month: Optional[int]
     zero_year: Optional[int]
     zero_bounds: Optional[List[float]]
     step: int = 30
 
+    @validator("zero_bounds", pre=True)
+    def validate_bounds(cls, value):
+        if value is None or isinstance(value, list):
+            return value
+        elif isinstance(value, str):
+            return value[1:-1].split(", ")
+
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         # Assuming that left is a date column, right is a feature column
-        left = pd.to_datetime(left)
+        left = pd.to_datetime(left, unit=self.date_unit)
         months = left.dt.month
         years = left.dt.year
 
