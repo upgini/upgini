@@ -1442,15 +1442,12 @@ class FeaturesEnricher(TransformerMixin):
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
                     fitting_eval_X[col] = (
-                        fitting_eval_X[col]
-                        .astype("string").str
-                        .replace(",", ".", regex=False)
-                        .astype(np.float64)
+                        fitting_eval_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                     )
                     fitting_enriched_eval_X[col] = (
                         fitting_enriched_eval_X[col]
-                        .astype("string").str
-                        .replace(",", ".", regex=False)
+                        .astype("string")
+                        .str.replace(",", ".", regex=False)
                         .astype(np.float64)
                     )
 
@@ -3293,7 +3290,7 @@ class FeaturesEnricher(TransformerMixin):
                     description[f"Feature {feature_idx}"] = bc.hashed_name
                     feature_idx += 1
 
-                description["Function"] = autofe_feature.op.name
+                description["Function"] = ",".join(sorted(autofe_feature.get_all_operand_names()))
 
                 descriptions.append(description)
 

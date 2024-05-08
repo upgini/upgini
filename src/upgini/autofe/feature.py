@@ -1,6 +1,6 @@
 import hashlib
 import itertools
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -93,6 +93,11 @@ class Feature:
     def set_alias(self, alias: str) -> "Feature":
         self.alias = alias
         return self
+
+    def get_all_operand_names(self) -> Set[str]:
+        return {self.op.name}.union(
+            {n for f in self.children if isinstance(f, Feature) for n in f.get_all_operand_names()}
+        )
 
     def rename_columns(self, mapping: Dict[str, str]) -> "Feature":
         for child in self.children:
