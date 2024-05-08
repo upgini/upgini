@@ -25,8 +25,10 @@ class Operand(BaseModel):
         self.params = params
         return self
 
-    def get_params(self) -> Dict[str, str]:
-        return self.params
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = {"alias": self.alias}
+        res.update(self.params or {})
+        return res
 
 
 MAIN_COLUMN = "main_column"

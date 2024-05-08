@@ -19,6 +19,9 @@ class Column:
     def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
         return self.name
 
+    def set_op_params(self, params: Dict[str, str]) -> "Column":
+        return self
+
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
         self.name = self._unhash(mapping.get(self.name) or self.name)
         return self
@@ -72,8 +75,14 @@ class Feature:
         self.cached_display_name = cached_display_name
         self.alias = alias
 
-    def set_op_params(self, params: Dict[str, str]) -> "Feature":
+    def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
+        obj_dict = self.op.dict().copy()
+        obj_dict.update(params or {})
+        self.op = self.op.__class__.parse_obj(obj_dict)
         self.op.set_params(params)
+
+        for child in self.children:
+            child.set_op_params(params)
         return self
 
     def get_hash(self) -> str:

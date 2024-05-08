@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,17 @@ class DateDiff(PandasOperand, DateDiffMixin):
     is_binary = True
     has_symmetry_importance = True
 
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "diff_unit": self.diff_unit,
+                "left_unit": self.left_unit,
+                "right_unit": self.right_unit,
+            }
+        )
+        return res
+
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
@@ -42,6 +53,17 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
     name = "date_diff_type2"
     is_binary = True
     has_symmetry_importance = True
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "diff_unit": self.diff_unit,
+                "left_unit": self.left_unit,
+                "right_unit": self.right_unit,
+            }
+        )
+        return res
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
@@ -64,6 +86,15 @@ class DateListDiff(PandasOperand, DateDiffMixin):
     is_binary = True
     has_symmetry_importance = True
     aggregation: str
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "aggregation": self.aggregation,
+            }
+        )
+        return res
 
     def __init__(self, **data: Any) -> None:
         if "name" not in data:
@@ -130,6 +161,19 @@ class DatePercentile(PandasOperand):
     zero_bounds: Optional[List[float]]
     step: int = 30
 
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "date_unit": self.date_unit,
+                "zero_month": self.zero_month,
+                "zero_year": self.zero_year,
+                "zero_bounds": self.zero_bounds,
+                "step": self.step,
+            }
+        )
+        return res
+
     @validator("zero_bounds", pre=True)
     def validate_bounds(cls, value):
         if value is None or isinstance(value, list):
@@ -155,4 +199,4 @@ class DatePercentile(PandasOperand):
         if hit.size > 0:
             return np.max(hit) * 10
         else:
-            return None
+            return np.nan
