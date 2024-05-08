@@ -3266,10 +3266,16 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions = []
             for m in autofe_meta:
-                autofe_feature = Feature.from_formula(m.formula)
                 orig_to_hashed = {base_column.original_name: base_column.hashed_name for base_column in m.base_columns}
-                autofe_feature.rename_columns(orig_to_hashed)
-                autofe_feature.set_display_index(m.display_index)
+
+                autofe_feature = (
+                    Feature.from_formula(m.formula)
+                    .set_display_index(m.display_index)
+                    .set_alias(m.alias)
+                    .set_op_params(m.operator_params or {})
+                    .rename_columns(orig_to_hashed)
+                )
+
                 if autofe_feature.op.is_vector:
                     continue
 
