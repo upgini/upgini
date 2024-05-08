@@ -17,7 +17,7 @@ from sklearn.base import clone, is_classifier
 from sklearn.exceptions import FitFailedWarning, NotFittedError
 from sklearn.metrics import check_scoring
 from sklearn.metrics._scorer import _MultimetricScorer
-from sklearn.model_selection import check_cv
+from sklearn.model_selection import StratifiedKFold, check_cv
 from sklearn.utils.fixes import np_version, parse_version
 from sklearn.utils.validation import indexable
 
@@ -312,25 +312,34 @@ def cross_validate(
                 ret[key] = train_scores_dict[name]
 
         return ret
-    except Exception:
+    except ValueError as e:
         # logging.exception("Failed to execute overriden cross_validate. Fallback to original")
-        raise
-        # fit_params["use_best_model"] = False
-        # return original_cross_validate(
-        #     estimator,
-        #     X,
-        #     y,
-        #     groups=groups,
-        #     scoring=scoring,
-        #     cv=cv,
-        #     n_jobs=n_jobs,
-        #     verbose=verbose,
-        #     fit_params=fit_params,
-        #     pre_dispatch=pre_dispatch,
-        #     return_train_score=return_train_score,
-        #     return_estimator=return_estimator,
-        #     error_score=error_score,
-        # )
+        if hasattr(e, "args") and len(e.args) > 0 and "Only one class present in y_true" in e.args[0]:
+            # Try change CV to StratifiedKFold and retry
+            if hasattr(cv, "shuffle"):
+                shuffle = cv.shuffle
+            else:
+                shuffle = False
+            if hasattr(cv, "random_state"):
+                random_state = cv.random_state
+            else:
+                random_state = None
+            return cross_validate(
+                estimator,
+                x,
+                y,
+                groups=groups,
+                scoring=scoring,
+                cv=StratifiedKFold(n_splits=cv.get_n_splits(), shuffle=shuffle, random_state=random_state),
+                n_jobs=n_jobs,
+                verbose=verbose,
+                fit_params=fit_params,
+                pre_dispatch=pre_dispatch,
+                return_train_score=return_train_score,
+                return_estimator=return_estimator,
+                error_score=error_score,
+            )
+        raise e
 
 
 def _fit_and_score(
