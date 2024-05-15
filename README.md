@@ -799,4 +799,4 @@ Some convenient ways to start contributing are:
 - [More perks for registered users](https://profile.upgini.com)
 
 <sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
-Please report it here.</a></sup>
+Please report it here</a></sup>

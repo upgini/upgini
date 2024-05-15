@@ -2648,7 +2648,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
         enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
         with pytest.raises(
-            ValueError, match="Only one class present in y_true. ROC AUC score is not defined in that case."
+            ValueError, match="n_splits=5 cannot be greater than the number of members in each class."
         ):
             enricher.calculate_metrics(
                 df.drop(columns="target"),

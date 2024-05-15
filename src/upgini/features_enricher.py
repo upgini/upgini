@@ -935,7 +935,7 @@ class FeaturesEnricher(TransformerMixin):
                     metric = wrapper.metric_name
                     multiplier = wrapper.multiplier
 
-                    # 1 If client features are presented - fit and predict with KFold CatBoost model
+                    # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
                     etalon_metric = None
                     baseline_estimator = None
@@ -962,9 +962,15 @@ class FeaturesEnricher(TransformerMixin):
                         etalon_metric = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
                         )
-                        self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
+                        if etalon_metric is None:
+                            self.logger.info(
+                                f"Baseline {metric} on train client features is None (maybe all features was removed)"
+                            )
+                            baseline_estimator = None
+                        else:
+                            self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
 
-                    # 2 Fit and predict with KFold Catboost model on enriched tds
+                    # 2 Fit and predict with KFold estimator on enriched tds
                     # and calculate final metric (and uplift)
                     enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
@@ -986,11 +992,15 @@ class FeaturesEnricher(TransformerMixin):
                             has_date=has_date,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
-                        self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
-                        if etalon_metric is not None:
-                            uplift = (enriched_metric - etalon_metric) * multiplier
-                        else:
+                        if etalon_metric is None:
+                            self.logger.warning(
+                                f"Enriched {metric} on train combined features is None (maybe all features was removed)"
+                            )
+                            enriched_estimator = None
                             uplift = None
+                        else:
+                            self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
+                            uplift = (enriched_metric - etalon_metric) * multiplier
                     else:
                         enriched_metric = None
                         uplift = None

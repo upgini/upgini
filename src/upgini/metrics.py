@@ -298,6 +298,7 @@ class EstimatorWrapper:
         scorer = check_scoring(self.estimator, scoring=self.scorer)
 
         if baseline_score_column is not None and self.metric_name == "GINI":
+            self.logger.info("Calculate baseline GINI on passed baseline_score_column and target")
             metric = roc_auc_score(y, x[baseline_score_column])
         else:
             cv_results = cross_validate(
@@ -548,14 +549,21 @@ class CatBoostWrapper(EstimatorWrapper):
         except Exception as e:
             if "Dictionary size is 0" in e.args[0] and self.text_features:
                 high_cardinality_features = FeaturesValidator.find_high_cardinality(x[self.text_features])
-                self.logger.warning(
-                    "Calculate metrics has problem with CatBoost text features. Try to remove high cardinality"
-                    f" text features {high_cardinality_features} and retry"
-                )
+                if len(high_cardinality_features) == 0:
+                    high_cardinality_features = self.text_features
+                    self.logger.warning(
+                        "Calculate metrics has problem with CatBoost text features. High cardinality features not found"
+                        f". Try to remove all text features {high_cardinality_features} and retry"
+                    )
+                else:
+                    self.logger.warning(
+                        "Calculate metrics has problem with CatBoost text features. Try to remove high cardinality"
+                        f" text features {high_cardinality_features} and retry"
+                    )
                 for f in high_cardinality_features:
                     self.text_features.remove(f)
                     self.exclude_features.append(f)
-                    x = x.drop(columns=f)
+                    x = x.drop(columns=f, errors="ignore")
                 return super().cross_val_predict(x, y, baseline_score_column)
             else:
                 raise e
