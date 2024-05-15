@@ -11,46 +11,49 @@ def get_runtime_params_custom_loss(
     runtime_parameters: RuntimeParameters,
     logger: Optional[logging.Logger] = None,
 ) -> RuntimeParameters:
+    if not loss:
+        return runtime_parameters
+
     if logger is None:
         logger = logging.getLogger()
-    if loss is not None:
-        selection_loss_reg = [
-            "regression",
-            "regression_l1",
-            "huber",
-            "poisson",
-            "quantile",
-            "mape",
-            "mean_absolute_percentage_error",
-            "gamma",
-            "tweedie",
-        ]
-        selection_loss_binary = ["binary"]
-        selection_loss_multi_clf = ["multiclass", "multiclassova", "multiclass_ova", "ova", "ovr"]
-        use_custom_loss = (
-            True
-            if (
-                (model_task_type == ModelTaskType.REGRESSION)
-                and (loss in selection_loss_reg)
-                or (model_task_type == ModelTaskType.BINARY)
-                and (loss in selection_loss_binary)
-                or (model_task_type == ModelTaskType.MULTICLASS)
-                and (loss in selection_loss_multi_clf)
-            )
-            else False
-        )
 
-        if use_custom_loss:
-            runtime_parameters.properties["lightgbm_params_preselection.objective"] = loss
-            runtime_parameters.properties["lightgbm_params_base.objective"] = loss
-            runtime_parameters.properties["lightgbm_params_segment.objective"] = loss
-            msg = bundle.get("loss_selection_info").format(loss)
-            logger.info(msg)
-            print(msg)
-        else:
-            msg = bundle.get("loss_selection_warn").format(loss, model_task_type)
-            logger.warning(msg)
-            print(msg)
+    selection_loss_reg = [
+        "regression",
+        "regression_l1",
+        "huber",
+        "poisson",
+        "quantile",
+        "mape",
+        "mean_absolute_percentage_error",
+        "gamma",
+        "tweedie",
+    ]
+    selection_loss_binary = ["binary"]
+    selection_loss_multi_clf = ["multiclass", "multiclassova", "multiclass_ova", "ova", "ovr"]
+    use_custom_loss = (
+        True
+        if (
+            (model_task_type == ModelTaskType.REGRESSION)
+            and (loss in selection_loss_reg)
+            or (model_task_type == ModelTaskType.BINARY)
+            and (loss in selection_loss_binary)
+            or (model_task_type == ModelTaskType.MULTICLASS)
+            and (loss in selection_loss_multi_clf)
+        )
+        else False
+    )
+
+    if use_custom_loss:
+        runtime_parameters.properties["lightgbm_params_preselection.objective"] = loss
+        runtime_parameters.properties["lightgbm_params_base.objective"] = loss
+        runtime_parameters.properties["lightgbm_params_segment.objective"] = loss
+        msg = bundle.get("loss_selection_info").format(loss)
+        logger.info(msg)
+        print(msg)
+    else:
+        msg = bundle.get("loss_selection_warn").format(loss, model_task_type)
+        logger.warning(msg)
+        print(msg)
 
     return runtime_parameters
 
