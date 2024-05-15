@@ -35,7 +35,7 @@ def validate_version(logger: logging.Logger):
         try:
             current_version = parse(__version__)
             latest_version = get_version("upgini")
-            if current_version < latest_version:  # type: ignore
+            if current_version < latest_version:
                 msg = bundle.get("version_warning").format(current_version, latest_version)
                 logger.warning(msg)
                 print(msg)

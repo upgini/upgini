@@ -426,7 +426,7 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit")
 
-            self.__validate_search_keys(self.search_keys, self.search_id)
+            self.__validate_search_keys(self.search_keys)
 
             # Validate client estimator params
             self._get_client_cat_features(estimator, X, self.search_keys)
@@ -560,7 +560,7 @@ class FeaturesEnricher(TransformerMixin):
 
             self.logger.info("Start fit_transform")
 
-            self.__validate_search_keys(self.search_keys, self.search_id)
+            self.__validate_search_keys(self.search_keys)
 
             search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
             if progress_callback is not None:
@@ -975,6 +975,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 2 Fit and predict with KFold estimator on enriched tds
                     # and calculate final metric (and uplift)
+                    enriched_metric = None
+                    uplift = None
                     enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
                         self.logger.info(
@@ -995,18 +997,15 @@ class FeaturesEnricher(TransformerMixin):
                             has_date=has_date,
                         )
                         enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
-                        if etalon_metric is None:
+                        if enriched_metric is None:
                             self.logger.warning(
                                 f"Enriched {metric} on train combined features is None (maybe all features was removed)"
                             )
                             enriched_estimator = None
-                            uplift = None
                         else:
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
+                        if etalon_metric is not None and enriched_metric is not None:
                             uplift = (enriched_metric - etalon_metric) * multiplier
-                    else:
-                        enriched_metric = None
-                        uplift = None
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -2175,7 +2174,7 @@ class FeaturesEnricher(TransformerMixin):
             ]
             return excluded_features[feature_name_header].values.tolist()
 
-    def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str]):
+    def __validate_search_keys(self, search_keys: Dict[str, SearchKey], search_id: Optional[str] = None):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.debug(f"search_id {search_id} provided without search_keys")
