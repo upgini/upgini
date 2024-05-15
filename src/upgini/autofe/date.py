@@ -196,6 +196,6 @@ class DatePercentile(PandasOperand):
     def __perc(self, f, bounds):
         hit = np.where(f >= bounds)[0]
         if hit.size > 0:
-            return np.max(hit) * 10
+            return np.max(hit) + 1
         else:
             return np.nan
