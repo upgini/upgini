@@ -188,7 +188,7 @@ class DatePercentile(PandasOperand):
 
         month_diffs = 12 * (years - (self.zero_year or 0)) + (months - (self.zero_month or 0))
         bounds = month_diffs.apply(
-            lambda d: np.array(self.zero_bounds if self.zero_bounds is not None else []) + d * 30
+            lambda d: np.array(self.zero_bounds if self.zero_bounds is not None else []) + d * self.step
         )
 
         return right.index.to_series().apply(lambda i: self.__perc(right[i], bounds[i]))
