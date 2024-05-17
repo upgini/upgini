@@ -1,6 +1,6 @@
 import hashlib
 import itertools
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,12 @@ class Column:
         self.name = name
         self.data = data
         self.calculate_all = calculate_all
+
+    def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
+        return self.name
+
+    def set_op_params(self, params: Dict[str, str]) -> "Column":
+        return self
 
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
         self.name = self._unhash(mapping.get(self.name) or self.name)
@@ -69,18 +75,29 @@ class Feature:
         self.cached_display_name = cached_display_name
         self.alias = alias
 
-    def set_op_params(self, params: Dict[str, str]) -> "Feature":
+    def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
+        obj_dict = self.op.dict().copy()
+        obj_dict.update(params or {})
+        self.op = self.op.__class__.parse_obj(obj_dict)
         self.op.set_params(params)
+
+        for child in self.children:
+            child.set_op_params(params)
         return self
 
     def get_hash(self) -> str:
-        return hashlib.sha256("_".join([self.op.name] + [ch.name for ch in self.children]).encode("utf-8")).hexdigest()[
-            :8
-        ]
+        return hashlib.sha256(
+            "_".join([self.op.name] + [ch.get_display_name() for ch in self.children]).encode("utf-8")
+        ).hexdigest()[:8]
 
     def set_alias(self, alias: str) -> "Feature":
         self.alias = alias
         return self
+
+    def get_all_operand_names(self) -> Set[str]:
+        return {self.op.name}.union(
+            {n for f in self.children if isinstance(f, Feature) for n in f.get_all_operand_names()}
+        )
 
     def rename_columns(self, mapping: Dict[str, str]) -> "Feature":
         for child in self.children:

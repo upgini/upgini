@@ -1454,15 +1454,12 @@ class FeaturesEnricher(TransformerMixin):
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
                     fitting_eval_X[col] = (
-                        fitting_eval_X[col]
-                        .astype("string").str
-                        .replace(",", ".", regex=False)
-                        .astype(np.float64)
+                        fitting_eval_X[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
                     )
                     fitting_enriched_eval_X[col] = (
                         fitting_enriched_eval_X[col]
-                        .astype("string").str
-                        .replace(",", ".", regex=False)
+                        .astype("string")
+                        .str.replace(",", ".", regex=False)
                         .astype(np.float64)
                     )
 
@@ -3384,10 +3381,16 @@ class FeaturesEnricher(TransformerMixin):
 
             descriptions = []
             for m in autofe_meta:
-                autofe_feature = Feature.from_formula(m.formula)
                 orig_to_hashed = {base_column.original_name: base_column.hashed_name for base_column in m.base_columns}
-                autofe_feature.rename_columns(orig_to_hashed)
-                autofe_feature.set_display_index(m.display_index)
+
+                autofe_feature = (
+                    Feature.from_formula(m.formula)
+                    .set_display_index(m.display_index)
+                    .set_alias(m.alias)
+                    .set_op_params(m.operator_params or {})
+                    .rename_columns(orig_to_hashed)
+                )
+
                 if autofe_feature.op.is_vector:
                     continue
 
@@ -3408,7 +3411,7 @@ class FeaturesEnricher(TransformerMixin):
                     description[f"Feature {feature_idx}"] = bc.hashed_name
                     feature_idx += 1
 
-                description["Function"] = autofe_feature.op.name
+                description["Function"] = ",".join(sorted(autofe_feature.get_all_operand_names()))
 
                 descriptions.append(description)
 

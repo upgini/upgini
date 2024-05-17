@@ -264,9 +264,11 @@ class BaseColumnMetadata(BaseModel):
 
 
 class GeneratedFeatureMetadata(BaseModel):
-    formula: str  # on hashed names
+    alias: Optional[str]
+    formula: str
     display_index: str
     base_columns: List[BaseColumnMetadata]
+    operator_params: Optional[Dict[str, str]]
 
 
 class ProviderTaskMetadataV2(BaseModel):

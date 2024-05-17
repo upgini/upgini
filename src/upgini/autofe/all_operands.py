@@ -1,7 +1,7 @@
 from typing import Dict
 
 from upgini.autofe.binary import Add, Divide, Max, Min, Multiply, Sim, Subtract
-from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
 from upgini.autofe.operand import Operand
 from upgini.autofe.unary import Abs, Floor, Freq, Log, Residual, Sigmoid, Sqrt, Square
@@ -49,6 +49,7 @@ ALL_OPERANDS: Dict[str, Operand] = {
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=30, upper_bound=45),
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=45, upper_bound=60),
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=60),
+        DatePercentile(),
     ]
 }
 
