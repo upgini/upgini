@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
+import datetime
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, validator
 
@@ -20,6 +21,20 @@ class DateDiffMixin(BaseModel):
             return x.apply(lambda y: self._convert_to_date(y, unit), axis=1)
 
         return pd.to_datetime(x, unit=unit)
+
+    def _convert_diff_to_unit(self, diff: Union[pd.Series, TimedeltaArray]) -> Union[pd.Series, TimedeltaArray]:
+        if self.diff_unit == "D":
+            if isinstance(diff, pd.Series) and diff.dtype == "object":
+                return diff.apply(lambda x: None if isinstance(x, float) and np.isnan(x) else x.days)
+            else:
+                return diff / np.timedelta64(1, self.diff_unit)
+        elif self.diff_unit == "Y":
+            if isinstance(diff, TimedeltaArray):
+                return (diff / 365 / 24 / 60 / 60 / 10**9).astype(int)
+            else:
+                return (diff / 365 / 24 / 60 / 60 / 10**9).dt.nanoseconds
+        else:
+            raise Exception(f"Unsupported difference unit: {self.diff_unit}")
 
 
 class DateDiff(PandasOperand, DateDiffMixin):
@@ -41,7 +56,8 @@ class DateDiff(PandasOperand, DateDiffMixin):
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
-        return self.__replace_negative((left - right) / np.timedelta64(1, self.diff_unit))
+        diff = self._convert_diff_to_unit(left.dt.date - right.dt.date)
+        return self.__replace_negative(diff)
 
     def __replace_negative(self, x: Union[pd.DataFrame, pd.Series]):
         x[x < 0] = None
@@ -107,12 +123,7 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         return pd.Series(left - right.values).apply(lambda x: self._agg(self._diff(x)))
 
     def _diff(self, x: TimedeltaArray):
-        if self.diff_unit == "Y":
-            x = (x / 365 / 24 / 60 / 60 / 10**9).astype(int)
-        elif self.diff_unit == "M":
-            raise Exception("Unsupported difference unit: Month")
-        else:
-            x = x / np.timedelta64(1, self.diff_unit)
+        x = self._convert_diff_to_unit(x)
         return x[x > 0]
 
     def _agg(self, x):

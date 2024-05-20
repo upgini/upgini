@@ -11,12 +11,13 @@ def test_date_diff():
         [
             ["2022-10-10", pd.to_datetime("1993-12-10").timestamp()],
             ["2022-10-10", pd.to_datetime("2023-10-10").timestamp()],
+            ["2022-10-10", pd.to_datetime("1966-10-10").timestamp()],
         ],
         columns=["date1", "date2"],
     )
 
     operand = DateDiff(right_unit="s")
-    expected_result = pd.Series([10531, None])
+    expected_result = pd.Series([10531, None, 20454])
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
 
