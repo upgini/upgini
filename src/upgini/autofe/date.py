@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-import datetime
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, validator
 
