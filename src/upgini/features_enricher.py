@@ -2654,9 +2654,6 @@ class FeaturesEnricher(TransformerMixin):
         return validated_X
 
     def _validate_y(self, X: pd.DataFrame, y) -> pd.Series:
-        if _num_samples(y) == 0:
-            raise ValidationError(self.bundle.get("y_is_empty"))
-
         if (
             not isinstance(y, pd.Series)
             and not isinstance(y, pd.DataFrame)
@@ -2664,6 +2661,9 @@ class FeaturesEnricher(TransformerMixin):
             and not isinstance(y, list)
         ):
             raise ValidationError(self.bundle.get("unsupported_y_type").format(type(y)))
+
+        if _num_samples(y) == 0:
+            raise ValidationError(self.bundle.get("y_is_empty"))
 
         if _num_samples(X) != _num_samples(y):
             raise ValidationError(self.bundle.get("x_and_y_diff_size").format(_num_samples(X), _num_samples(y)))

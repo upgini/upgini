@@ -58,6 +58,7 @@ class DataSourcePublisher:
         join_date_abs_limit_days: Optional[int] = None,
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
+        keep_features: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
@@ -116,6 +117,8 @@ class DataSourcePublisher:
                     request["adsDefinitionIdToReplace"] = data_table_id_to_replace
                 if exclude_from_autofe_generation is not None:
                     request["excludeFromGeneration"] = exclude_from_autofe_generation
+                if keep_features is not None:
+                    request["keepFeatures"] = keep_features
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
