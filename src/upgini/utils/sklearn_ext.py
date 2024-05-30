@@ -320,7 +320,7 @@ def cross_validate(
                 shuffle = cv.shuffle
             else:
                 shuffle = False
-            if hasattr(cv, "random_state"):
+            if hasattr(cv, "random_state") and shuffle:
                 random_state = cv.random_state
             else:
                 random_state = None
