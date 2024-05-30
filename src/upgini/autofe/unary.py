@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import robust_scale
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
@@ -111,3 +112,15 @@ class Freq(PandasOperand):
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         value_counts = data.value_counts(normalize=True)
         return self._loc(data, value_counts)
+
+
+class Scale(PandasOperand, VectorizableMixin):
+    name = "scale"
+    is_unary = True
+    output_type = "float"
+
+    def calculate_unary(self, data: pd.Series) -> pd.Series:
+        return pd.Series(robust_scale(data), index=data.index, name=data.name)
+
+    def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        return pd.DataFrame(robust_scale(data), index=data.index, columns=data.columns)

@@ -1,9 +1,10 @@
 from datetime import datetime
 
 import pandas as pd
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_series_equal, assert_frame_equal
 
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
+from upgini.autofe.unary import Scale
 
 
 def test_date_diff():
@@ -123,3 +124,31 @@ def test_date_percentile():
 
     expected_values = pd.Series([None, 1, 100, 51, 100, None])
     assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)
+
+
+def test_scale():
+    data = pd.DataFrame(
+        [[1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2]],
+        columns=["a", "b"],
+        index=[8, 7, 6, 5, 1, 2, 3, 4],
+    )
+    operand = Scale()
+
+    expected_result = pd.DataFrame(
+        [
+            [-0.25, 97.55555556],
+            [165.75, 0.66666667],
+            [-0.25, -0.22222222],
+            [0.75, 0.66666667],
+            [-0.75, -0.66666667],
+            [-0.25, -1.11111111],
+            [0.25, 0.22222222],
+            [0.75, -0.22222222],
+        ],
+        columns=["a", "b"],
+        index=[8, 7, 6, 5, 1, 2, 3, 4],
+    )
+
+    assert_frame_equal(operand.calculate_group(data), expected_result)
+    assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
+    assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
