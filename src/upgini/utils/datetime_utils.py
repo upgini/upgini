@@ -82,19 +82,19 @@ class DateTimeSearchKeyConverter:
         elif isinstance(df[self.date_column].values[0], datetime.date):
             df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
         elif is_period_dtype(df[self.date_column]):
-            df[self.date_column] = pd.to_datetime(df[self.date_column].astype("string"))
+            df[self.date_column] = df[self.date_column].dt.to_timestamp()
         elif is_numeric_dtype(df[self.date_column]):
             # 315532801 - 2524608001    - seconds
             # 315532801000 - 2524608001000 - milliseconds
             # 315532801000000 - 2524608001000000 - microseconds
             # 315532801000000000 - 2524608001000000000 - nanoseconds
-            if df[self.date_column].apply(lambda x: 10**16 < x).all():
+            if df[self.date_column].apply(lambda x: 10 ** 16 < x).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ns")
-            elif df[self.date_column].apply(lambda x: 10**14 < x < 10**16).all():
+            elif df[self.date_column].apply(lambda x: 10 ** 14 < x < 10 ** 16).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="us")
-            elif df[self.date_column].apply(lambda x: 10**11 < x < 10**14).all():
+            elif df[self.date_column].apply(lambda x: 10 ** 11 < x < 10 ** 14).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ms")
-            elif df[self.date_column].apply(lambda x: 0 < x < 10 * 11).all():
+            elif df[self.date_column].apply(lambda x: 0 < x < 10 ** 11).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
             else:
                 msg = self.bundle.get("unsupported_date_type").format(self.date_column)
@@ -185,7 +185,10 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
 def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[str]) -> bool:
     df = df.copy()
     seconds = "datetime_seconds"
-    df[date_col] = pd.to_datetime(df[date_col])
+    if is_period_dtype(df[date_col]):
+        df[date_col] = df[date_col].dt.to_timestamp()
+    else:
+        df[date_col] = pd.to_datetime(df[date_col])
     df[date_col] = df[date_col].dt.tz_localize(None)
     df[seconds] = (df[date_col] - df[date_col].dt.floor("D")).dt.seconds
 
@@ -248,7 +251,9 @@ def validate_dates_distribution(
             if col in search_keys:
                 continue
             try:
-                if pd.__version__ >= "2.0.0":
+                if is_period_dtype(X[col]):
+                    pass
+                elif pd.__version__ >= "2.0.0":
                     # Format mixed to avoid massive warnings
                     pd.to_datetime(X[col], format="mixed")
                 else:
@@ -261,7 +266,9 @@ def validate_dates_distribution(
     if maybe_date_col is None:
         return
 
-    if pd.__version__ >= "2.0.0":
+    if is_period_dtype(X[maybe_date_col]):
+        dates = X[maybe_date_col].dt.to_timestamp().dt.date
+    elif pd.__version__ >= "2.0.0":
         dates = pd.to_datetime(X[maybe_date_col], format="mixed").dt.date
     else:
         dates = pd.to_datetime(X[maybe_date_col]).dt.date
