@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import robust_scale
+from sklearn.preprocessing import Normalizer
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
@@ -120,7 +120,9 @@ class Scale(PandasOperand, VectorizableMixin):
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return pd.Series(robust_scale(data), index=data.index, name=data.name)
+        normalized_data = Normalizer().transform(data.to_frame().T).T
+        return pd.Series(normalized_data[:, 0], index=data.index, name=data.name)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        return pd.DataFrame(robust_scale(data), index=data.index, columns=data.columns)
+        normalized_data = Normalizer().transform(data.T).T
+        return pd.DataFrame(normalized_data, index=data.index, columns=data.columns)
