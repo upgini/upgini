@@ -114,8 +114,8 @@ class Freq(PandasOperand):
         return self._loc(data, value_counts)
 
 
-class Scale(PandasOperand, VectorizableMixin):
-    name = "scale"
+class Norm(PandasOperand, VectorizableMixin):
+    name = "norm"
     is_unary = True
     output_type = "float"
 

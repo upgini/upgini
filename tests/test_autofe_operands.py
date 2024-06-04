@@ -4,7 +4,7 @@ import pandas as pd
 from pandas.testing import assert_series_equal, assert_frame_equal
 
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
-from upgini.autofe.unary import Scale
+from upgini.autofe.unary import Norm
 
 
 def test_date_diff():
@@ -126,13 +126,13 @@ def test_date_percentile():
     assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)
 
 
-def test_scale():
+def test_norm():
     data = pd.DataFrame(
         [[1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2]],
         columns=["a", "b"],
         index=[8, 7, 6, 5, 1, 2, 3, 4],
     )
-    operand = Scale()
+    operand = Norm()
 
     expected_result = pd.DataFrame(
         [
