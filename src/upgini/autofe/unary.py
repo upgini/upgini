@@ -114,15 +114,14 @@ class Freq(PandasOperand):
         return self._loc(data, value_counts)
 
 
-class Norm(PandasOperand, VectorizableMixin):
+class Norm(PandasOperand):
     name = "norm"
     is_unary = True
     output_type = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        normalized_data = Normalizer().transform(data.to_frame().T).T
-        return pd.Series(normalized_data[:, 0], index=data.index, name=data.name)
-
-    def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        normalized_data = Normalizer().transform(data.T).T
-        return pd.DataFrame(normalized_data, index=data.index, columns=data.columns)
+        data_dropna = data.dropna()
+        normalized_data = Normalizer().transform(data_dropna.to_frame().T).T
+        normalized_data = pd.Series(normalized_data[:, 0], index=data_dropna.index, name=data.name)
+        normalized_data = normalized_data.reindex(data.index)
+        return normalized_data

@@ -128,27 +128,28 @@ def test_date_percentile():
 
 def test_norm():
     data = pd.DataFrame(
-        [[1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2]],
+        [[None, 1], [1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2], [1, None]],
         columns=["a", "b"],
-        index=[8, 7, 6, 5, 1, 2, 3, 4],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
     operand = Norm()
 
     expected_result = pd.DataFrame(
         [
-            [0.00300266, 0.99949312],
-            [0.99988729, 0.01800889],
-            [0.00300266, 0.00900444],
-            [0.00900799, 0.01800889],
-            [0.0, 0.00450222],
+            [None, 0.00450218],
+            [0.00300266, 0.99948299],
+            [0.99988729, 0.0180087],
+            [0.00300266, 0.00900435],
+            [0.00900799, 0.0180087],
+            [0.0, 0.00450218],
             [0.00300266, 0.0],
-            [0.00600533, 0.01350666],
-            [0.00900799, 0.00900444],
+            [0.00600533, 0.01350653],
+            [0.00900799, 0.00900435],
+            [0.00300266, None],
         ],
         columns=["a", "b"],
-        index=[8, 7, 6, 5, 1, 2, 3, 4],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
 
-    assert_frame_equal(operand.calculate_group(data), expected_result)
     assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
