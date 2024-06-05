@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import pandas as pd
-from pandas.testing import assert_series_equal, assert_frame_equal
+from pandas.testing import assert_series_equal
 
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.unary import Norm
