@@ -9,6 +9,7 @@ from upgini.autofe.operand import PandasOperand, VectorizableMixin
 class Min(PandasOperand):
     name = "min"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
@@ -18,6 +19,7 @@ class Min(PandasOperand):
 class Max(PandasOperand):
     name = "max"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
@@ -28,6 +30,7 @@ class Add(PandasOperand, VectorizableMixin):
     name = "+"
     alias = "add"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
     is_vectorizable = True
 
@@ -46,6 +49,7 @@ class Subtract(PandasOperand, VectorizableMixin):
     name = "-"
     alias = "sub"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
     is_vectorizable = True
 
@@ -64,6 +68,7 @@ class Multiply(PandasOperand, VectorizableMixin):
     name = "*"
     alias = "mul"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
     is_vectorizable = True
 
@@ -112,6 +117,7 @@ class Combine(PandasOperand):
 class CombineThenFreq(PandasOperand):
     name = "CombineThenFreq"
     is_binary = True
+    is_symmetrical = True
     has_symmetry_importance = True
     output_type = "float"
     is_distribution_dependent = True
@@ -128,6 +134,7 @@ class Sim(PandasOperand):
     name = "sim"
     is_binary = True
     output_type = "float"
+    is_symmetrical = True
     has_symmetry_importance = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
