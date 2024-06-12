@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import Normalizer
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
@@ -111,3 +112,16 @@ class Freq(PandasOperand):
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         value_counts = data.value_counts(normalize=True)
         return self._loc(data, value_counts)
+
+
+class Norm(PandasOperand):
+    name = "norm"
+    is_unary = True
+    output_type = "float"
+
+    def calculate_unary(self, data: pd.Series) -> pd.Series:
+        data_dropna = data.dropna()
+        normalized_data = Normalizer().transform(data_dropna.to_frame().T).T
+        normalized_data = pd.Series(normalized_data[:, 0], index=data_dropna.index, name=data.name)
+        normalized_data = normalized_data.reindex(data.index)
+        return normalized_data

@@ -4,6 +4,7 @@ import pandas as pd
 from pandas.testing import assert_series_equal
 
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
+from upgini.autofe.unary import Norm
 
 
 def test_date_diff():
@@ -123,3 +124,32 @@ def test_date_percentile():
 
     expected_values = pd.Series([None, 1, 100, 51, 100, None])
     assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)
+
+
+def test_norm():
+    data = pd.DataFrame(
+        [[None, 1], [1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2], [1, None]],
+        columns=["a", "b"],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
+    )
+    operand = Norm()
+
+    expected_result = pd.DataFrame(
+        [
+            [None, 0.00450218],
+            [0.00300266, 0.99948299],
+            [0.99988729, 0.0180087],
+            [0.00300266, 0.00900435],
+            [0.00900799, 0.0180087],
+            [0.0, 0.00450218],
+            [0.00300266, 0.0],
+            [0.00600533, 0.01350653],
+            [0.00900799, 0.00900435],
+            [0.00300266, None],
+        ],
+        columns=["a", "b"],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
+    )
+
+    assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
+    assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])

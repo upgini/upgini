@@ -10,6 +10,7 @@ class Operand(BaseModel):
     name: str
     alias: Optional[str]
     is_unary: bool = False
+    is_symmetrical: bool = False
     has_symmetry_importance: bool = False
     input_type: Optional[str]
     output_type: Optional[str]
