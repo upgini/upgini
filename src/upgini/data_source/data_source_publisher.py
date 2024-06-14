@@ -347,3 +347,29 @@ class DataSourcePublisher:
             self.upload_online(search_keys=keys)
 
         print("All ADS-es successfully uploaded")
+
+    def union_search_tasks(
+        self,
+        search_ids: List[str],
+        target_user_email: str,
+        selected_features: Optional[List[str]] = None,
+        exclude_features: Optional[List[str]] = None,
+    ) -> str:
+        if not search_ids:
+            raise Exception("Empty search ids list")
+
+        if not target_user_email:
+            raise Exception("Empty target user email")
+
+        request = {
+            "search_task_ids": search_ids,
+            "target_user_email": target_user_email,
+        }
+        if selected_features:
+            request["selected_features"] = selected_features
+        if exclude_features:
+            request["exclude_features"] = exclude_features
+
+        response = self._rest_client.union_search_tasks(request, "trace_id")
+        print(response)
+        return response
