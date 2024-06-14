@@ -291,6 +291,7 @@ class _RestClient:
     GET_ACTIVE_ADS_DEFINITIONS_URI = "private/api/v2/ads/definitions"
     UPLOAD_ONLINE_URI = "private/api/v2/ads/upload-online"
     STOP_ADS_MANAGEMENT_TASK_URI_FMT = "private/api/v2/ads/management-task/{0}/stop"
+    UNION_SEARCH_TASKS_URI_FMT = SERVICE_ROOT_V2 + "search/merge"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -759,6 +760,10 @@ class _RestClient:
     def stop_ads_management_task(self, ads_management_task_id: str, trace_id: str):
         api_path = self.STOP_ADS_MANAGEMENT_TASK_URI_FMT.format(ads_management_task_id)
         self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id))
+
+    def union_search_tasks(self, request: dict, trace_id: str):
+        api_path = self.UNION_SEARCH_TASKS_URI_FMT
+        return self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
 
     # ---
 
