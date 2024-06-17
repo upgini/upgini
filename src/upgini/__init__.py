@@ -1,21 +1,7 @@
-from typing import List
+from .lazy_import import LazyImport
 
-from .dataset import Dataset
-from .features_enricher import FeaturesEnricher  # noqa: F401
-from .metadata import (  # noqa: F401
-    FileColumnMeaningType,
-    FileMetrics,
-    ModelTaskType,
-    SearchKey,
-)
-from .search_task import SearchTask
-
-
-def search_history() -> List[SearchTask]:
-    # TODO
-    return []
-
-
-def datasets_history() -> List[Dataset]:
-    # TODO
-    return []
+FeaturesEnricher = LazyImport('upgini.features_enricher', 'FeaturesEnricher')
+SearchKey = LazyImport('upgini.metadata', 'SearchKey')
+RuntimeParameters = LazyImport('upgini.metadata', 'RuntimeParameters')
+CVType = LazyImport('upgini.metadata', 'CVType')
+ModelTaskType = LazyImport('upgini.metadata', 'ModelTaskType')
