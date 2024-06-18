@@ -1343,7 +1343,7 @@ class FeaturesEnricher(TransformerMixin):
             not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
-                + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID]
+                + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
 
@@ -2784,9 +2784,10 @@ class FeaturesEnricher(TransformerMixin):
         X: pd.DataFrame, y: pd.Series, cv: Optional[CVType]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
+            record_id_column = ENTITY_SYSTEM_RECORD_ID if ENTITY_SYSTEM_RECORD_ID in X else SYSTEM_RECORD_ID
             Xy = X.copy()
             Xy[TARGET] = y
-            Xy = Xy.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
+            Xy = Xy.sort_values(by=record_id_column).reset_index(drop=True)
             X = Xy.drop(columns=TARGET)
             y = Xy[TARGET].copy()
 
