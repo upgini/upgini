@@ -2557,9 +2557,6 @@ class FeaturesEnricher(TransformerMixin):
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
     def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
-        if _num_samples(X) == 0:
-            raise ValidationError(self.bundle.get("x_is_empty"))
-
         if isinstance(X, pd.DataFrame):
             if isinstance(X.columns, pd.MultiIndex) or isinstance(X.index, pd.MultiIndex):
                 raise ValidationError(self.bundle.get("x_multiindex_unsupported"))
@@ -2572,6 +2569,9 @@ class FeaturesEnricher(TransformerMixin):
             validated_X = validated_X.rename(columns=renaming)
         else:
             raise ValidationError(self.bundle.get("unsupported_x_type").format(type(X)))
+
+        if _num_samples(X) == 0:
+            raise ValidationError(self.bundle.get("x_is_empty"))
 
         if len(set(validated_X.columns)) != len(validated_X.columns):
             raise ValidationError(self.bundle.get("x_contains_dup_columns"))

@@ -95,6 +95,11 @@ class DataSourcePublisher:
                         "With MSISDN and DATE keys one of the snapshot_frequency_days or"
                         " join_date_abs_limit_days parameters is required"
                     )
+                if (
+                    set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
+                    or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}
+                ) and not date_format:
+                    raise ValidationError("date_format argument is required for PHONE+DATE and HEM+DATE search keys")
 
                 request = {
                     "dataTableUri": data_table_uri,
