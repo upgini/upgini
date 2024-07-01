@@ -90,7 +90,7 @@
 |Consumer Confidence index| 44 |22|-|Monthly|date, country|No
 |World economic indicators|191 |41|-|Monthly|date, country|No
 |Markets data|-|17|-|Monthly|date, datetime|No
-|World mobile & fixed broadband network coverage and perfomance |167|-|3|Monthly|country, postal/ZIP code|No
+|World mobile & fixed broadband network coverage and performance |167|-|3|Monthly|country, postal/ZIP code|No
 |World demographic data |90|-|2|Annual|country, postal/ZIP code|No
 |World house prices |44|-|3|Annual|country, postal/ZIP code|No
 |Public social media profile data |104|-|-|Monthly|date, email/HEM, phone |Yes
