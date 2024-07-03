@@ -679,6 +679,11 @@ def validate_scoring_argument(scoring: Union[Callable, str, None]):
             raise ValidationError(
                 f"Invalid scoring function passed {scoring}. It should accept 3 input arguments: estimator, x, y"
             )
+    elif scoring is not None:
+        raise ValidationError(
+            f"Invalid scoring argument passed {scoring}. It should be string with scoring name or function"
+            " that accepts 3 input arguments: estimator, x, y"
+        )
 
 
 def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
