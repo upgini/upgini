@@ -1,5 +1,6 @@
 import abc
 from typing import Optional
+import Levenshtein
 import numpy as np
 import pandas as pd
 from numpy import dot
@@ -144,14 +145,14 @@ class Sim(PandasOperand):
         return dot(left, right) / (norm(left) * norm(right))
 
 
-class JaroWinkler(PandasOperand, abc.ABC):
+class StringSim(PandasOperand, abc.ABC):
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         sims = []
         for i in left.index:
             left_i = self._prepare_value(left.get(i))
             right_i = self._prepare_value(right.get(i))
             if left_i is not None and right_i is not None:
-                sims.append(jarowinkler_similarity(left_i, right_i))
+                sims.append(self._similarity(left_i, right_i))
             else:
                 sims.append(None)
 
@@ -161,8 +162,12 @@ class JaroWinkler(PandasOperand, abc.ABC):
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         pass
 
+    @abc.abstractmethod
+    def _similarity(self, left: str, right: str) -> float:
+        pass
 
-class JaroWinkler1(JaroWinkler):
+
+class JaroWinklerSim1(StringSim):
     name = "sim_jw1"
     is_binary = True
     input_type = "string"
@@ -173,8 +178,11 @@ class JaroWinkler1(JaroWinkler):
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         return value
 
+    def _similarity(self, left: str, right: str) -> float:
+        return jarowinkler_similarity(left, right)
 
-class JaroWinkler2(JaroWinkler):
+
+class JaroWinklerSim2(StringSim):
     name = "sim_jw2"
     is_binary = True
     input_type = "string"
@@ -184,3 +192,21 @@ class JaroWinkler2(JaroWinkler):
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         return value[::-1] if value is not None else None
+
+    def _similarity(self, left: str, right: str) -> float:
+        return jarowinkler_similarity(left, right)
+
+
+class LevenshteinSim(StringSim):
+    name = "sim_lv"
+    is_binary = True
+    input_type = "string"
+    output_type = "float"
+    is_symmetrical = True
+    has_symmetry_importance = True
+
+    def _prepare_value(self, value: Optional[str]) -> Optional[str]:
+        return value
+
+    def _similarity(self, left: str, right: str) -> float:
+        return 1 - Levenshtein.distance(left, right) / max(len(left), len(right))

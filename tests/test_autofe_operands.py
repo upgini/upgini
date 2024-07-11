@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 from pandas.testing import assert_series_equal
 
-from upgini.autofe.binary import JaroWinkler1, JaroWinkler2
+from upgini.autofe.binary import JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.unary import Norm
 
@@ -156,7 +156,7 @@ def test_norm():
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
 
 
-def test_jaro_winkler():
+def test_string_sim():
     data = pd.DataFrame(
         [
             ["book", "look"],
@@ -172,6 +172,8 @@ def test_jaro_winkler():
 
     expected_jw1 = pd.Series([0.833, None, None, 0.902, None, 1.0, 0.0])
     expected_jw2 = pd.Series([0.883, None, None, 0.739, None, 1.0, 0.0])
+    expected_lv = pd.Series([0.75, None, None, 0.5, None, 1.0, 0.0])
 
-    assert_series_equal(JaroWinkler1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
-    assert_series_equal(JaroWinkler2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
+    assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
+    assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
+    assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
