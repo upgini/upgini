@@ -18,7 +18,7 @@ from upgini.autofe.binary import (
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq, GroupByThenNUnique, GroupByThenRank
 from upgini.autofe.operand import Operand
-from upgini.autofe.unary import Abs, Floor, Freq, Log, Residual, Norm, Sigmoid, Sqrt, Square
+from upgini.autofe.unary import Abs, Embeddings, Floor, Freq, Log, Residual, Norm, Sigmoid, Sqrt, Square
 from upgini.autofe.vector import Mean, Sum
 
 ALL_OPERANDS: Dict[str, Operand] = {
@@ -69,6 +69,7 @@ ALL_OPERANDS: Dict[str, Operand] = {
         JaroWinklerSim2(),
         LevenshteinSim(),
         Distance(),
+        Embeddings(),
     ]
 }
 

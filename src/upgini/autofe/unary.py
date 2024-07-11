@@ -125,3 +125,10 @@ class Norm(PandasOperand):
         normalized_data = pd.Series(normalized_data[:, 0], index=data_dropna.index, name=data.name)
         normalized_data = normalized_data.reindex(data.index)
         return normalized_data
+
+
+class Embeddings(PandasOperand):
+    name = "emb"
+    is_unary = True
+    input_type = "string"
+    output_type = "vector"
