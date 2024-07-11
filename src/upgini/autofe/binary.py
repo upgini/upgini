@@ -1,7 +1,10 @@
+import abc
+from typing import Optional
 import numpy as np
 import pandas as pd
 from numpy import dot
 from numpy.linalg import norm
+from jarowinkler import jarowinkler_similarity
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
@@ -139,3 +142,45 @@ class Sim(PandasOperand):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return dot(left, right) / (norm(left) * norm(right))
+
+
+class JaroWinkler(PandasOperand, abc.ABC):
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        sims = []
+        for i in left.index:
+            left_i = self._prepare_value(left.get(i))
+            right_i = self._prepare_value(right.get(i))
+            if left_i is not None and right_i is not None:
+                sims.append(jarowinkler_similarity(left_i, right_i))
+            else:
+                sims.append(None)
+
+        return pd.Series(sims, index=left.index)
+
+    @abc.abstractmethod
+    def _prepare_value(self, value: Optional[str]) -> Optional[str]:
+        pass
+
+
+class JaroWinkler1(JaroWinkler):
+    name = "sim_jw1"
+    is_binary = True
+    input_type = "string"
+    output_type = "float"
+    is_symmetrical = True
+    has_symmetry_importance = True
+
+    def _prepare_value(self, value: Optional[str]) -> Optional[str]:
+        return value
+
+
+class JaroWinkler2(JaroWinkler):
+    name = "sim_jw2"
+    is_binary = True
+    input_type = "string"
+    output_type = "float"
+    is_symmetrical = True
+    has_symmetry_importance = True
+
+    def _prepare_value(self, value: Optional[str]) -> Optional[str]:
+        return value[::-1] if value is not None else None

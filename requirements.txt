@@ -12,6 +12,8 @@ lightgbm>=3.3.2
 pyjwt>=2.8.0
 xhtml2pdf==0.2.11
 ipywidgets>=8.1.0
+# autofe
+jarowinkler>=2.0.0
 
 black
 flake8
