@@ -134,8 +134,8 @@ class CombineThenFreq(PandasOperand):
         self._loc(temp, value_counts)
 
 
-class Sim(PandasOperand):
-    name = "sim"
+class Distance(PandasOperand):
+    name = "dist"
     is_binary = True
     output_type = "float"
     is_symmetrical = True
@@ -143,6 +143,14 @@ class Sim(PandasOperand):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return dot(left, right) / (norm(left) * norm(right))
+
+
+class Sim(Distance):
+    name = "sim"
+    is_binary = True
+    output_type = "float"
+    is_symmetrical = True
+    has_symmetry_importance = True
 
 
 class StringSim(PandasOperand, abc.ABC):
