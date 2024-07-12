@@ -1,9 +1,10 @@
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
 
-from upgini.autofe.binary import JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
+from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.unary import Norm
 
@@ -177,3 +178,21 @@ def test_string_sim():
     assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
     assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
     assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
+
+
+def test_distance():
+    data = pd.DataFrame(
+        [
+            [np.array([0, 1, 0]), np.array([0, 1, 0])],
+            [np.array([0, 1, 0]), np.array([1, 1, 0])],
+            [np.array([0, 1, 0]), np.array([1, 0, 0])],
+        ],
+        columns=["v1", "v2"],
+    )
+
+    op = Distance()
+
+    expected_values = pd.Series([1.0, 0.5, 0.0])
+    actual_values = op.calculate_binary(data.v1, data.v2)
+
+    assert_series_equal(actual_values, expected_values)

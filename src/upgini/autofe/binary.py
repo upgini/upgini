@@ -142,15 +142,25 @@ class Distance(PandasOperand):
     has_symmetry_importance = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        return dot(left, right) / (norm(left) * norm(right))
+        return pd.Series(
+            1 - self.__dot(left, right) / (self.__dot(left, left) * self.__dot(right, right)), index=left.index
+        )
+
+    # row-wise dot product
+    def __dot(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        return (left * right).apply(np.sum)
 
 
+# Left for backward compatibility
 class Sim(Distance):
     name = "sim"
     is_binary = True
     output_type = "float"
     is_symmetrical = True
     has_symmetry_importance = True
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        return 1 - super().calculate_binary(left, right)
 
 
 class StringSim(PandasOperand, abc.ABC):
