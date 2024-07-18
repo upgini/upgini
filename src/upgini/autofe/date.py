@@ -1,3 +1,4 @@
+import abc
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -159,12 +160,35 @@ class DateListDiffBounded(DateListDiff):
         return super()._agg(x)
 
 
-class DatePercentile(PandasOperand):
-    name = "date_per"
+class DatePercentileBase(PandasOperand, abc.ABC):
     is_binary = True
     output_type = "float"
 
     date_unit: Optional[str] = None
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        # Assuming that left is a date column, right is a feature column
+        left = pd.to_datetime(left, unit=self.date_unit)
+
+        bounds = self._get_bounds(left)
+
+        return right.index.to_series().apply(lambda i: self._perc(right[i], bounds[i]))
+
+    @abc.abstractmethod
+    def _get_bounds(self, date_col: pd.Series) -> pd.Series:
+        pass
+
+    def _perc(self, f, bounds):
+        hit = np.where(f >= bounds)[0]
+        if hit.size > 0:
+            return np.max(hit) + 1
+        else:
+            return np.nan
+
+
+class DatePercentile(DatePercentileBase):
+    name = "date_per"
+
     zero_month: Optional[int]
     zero_year: Optional[int]
     zero_bounds: Optional[List[float]]
@@ -190,22 +214,18 @@ class DatePercentile(PandasOperand):
         elif isinstance(value, str):
             return value[1:-1].split(", ")
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        # Assuming that left is a date column, right is a feature column
-        left = pd.to_datetime(left, unit=self.date_unit)
-        months = left.dt.month
-        years = left.dt.year
+    def _get_bounds(self, date_col: pd.Series) -> pd.Series:
+        months = date_col.dt.month
+        years = date_col.dt.year
 
         month_diffs = 12 * (years - (self.zero_year or 0)) + (months - (self.zero_month or 0))
-        bounds = month_diffs.apply(
+        return month_diffs.apply(
             lambda d: np.array(self.zero_bounds if self.zero_bounds is not None else []) + d * self.step
         )
 
-        return right.index.to_series().apply(lambda i: self.__perc(right[i], bounds[i]))
 
-    def __perc(self, f, bounds):
-        hit = np.where(f >= bounds)[0]
-        if hit.size > 0:
-            return np.max(hit) + 1
-        else:
-            return np.nan
+class DatePercentileType2(DatePercentileBase):
+    name = "date_per_type2"
+
+    def _get_bounds(self, date_col: pd.Series) -> pd.Series:
+        pass
