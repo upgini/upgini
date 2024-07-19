@@ -1,9 +1,10 @@
 from datetime import datetime
 
 import pandas as pd
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_series_equal, assert_frame_equal
 
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
+from upgini.autofe.feature import Feature, FeatureGroup
 from upgini.autofe.unary import Norm
 
 
@@ -153,3 +154,74 @@ def test_norm():
 
     assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
+
+
+def test_feature_display_name():
+    feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
+    assert feature1.get_display_name() == "f_f1_autofe_abs_123"
+
+    feature2 = Feature.from_formula("(f1/f2)").set_display_index("123")
+    assert feature2.get_display_name(cache=False) == "f_f1_f_f2_autofe_div_123"
+    assert feature2.get_display_name(shorten=True) == "f_autofe_div_123"
+    assert feature2.get_display_name() == "f_autofe_div_123"  # cached
+
+    feature3 = Feature.from_formula("GroupByThenMin(abs(f1),f2)").set_display_index("123")
+    assert feature3.get_display_name(cache=False) == "f_f1_abs_f_f2_autofe_groupbythenmin_123"
+    assert feature3.get_display_name(shorten=True) == "f_autofe_groupbythenmin_123"
+
+    feature4 = Feature.from_formula("mean(f1,f2,f3)").set_display_index("123")
+    assert feature4.get_display_name(cache=False) == "f_f1_f_f2_f_f3_autofe_mean_123"
+    assert feature4.get_display_name(shorten=True) == "f_autofe_mean_123"
+
+
+def test_feature_group():
+    data = pd.DataFrame(
+        [
+            ["a", 1, -1],
+            ["a", 2, -3],
+            ["b", 3, -1],
+            ["b", 0, 0],
+            ["c", -4, -2],
+        ],
+        columns=["f1", "f2", "f3"],
+    )
+
+    group1 = FeatureGroup.make_groups(
+        [
+            Feature.from_formula("GroupByThenMin(f2,f1)"),
+            Feature.from_formula("GroupByThenMin(f3,f1)"),
+        ]
+    )
+    assert len(group1) == 1
+    expected_group1_res = pd.DataFrame(
+        [
+            [1, -3],
+            [1, -3],
+            [0, -1],
+            [0, -1],
+            [-4, -2],
+        ],
+        columns=["f_f2_f_f1_autofe_groupbythenmin", "f_f3_f_f1_autofe_groupbythenmin"],
+    )
+    group1_res = group1[0].calculate(data)
+    assert_frame_equal(group1_res, expected_group1_res)
+
+    group2 = FeatureGroup.make_groups(
+        [
+            Feature.from_formula("GroupByThenMin(abs(f2),f1)"),
+            Feature.from_formula("GroupByThenMin(abs(f3),f1)"),
+        ]
+    )
+    assert len(group2) == 1
+    expected_group2_res = pd.DataFrame(
+        [
+            [1, 1],
+            [1, 1],
+            [0, 0],
+            [0, 0],
+            [4, 2],
+        ],
+        columns=["f_f2_abs_f_f1_autofe_groupbythenmin", "f_f3_abs_f_f1_autofe_groupbythenmin"],
+    )
+    group2_res = group2[0].calculate(data)
+    assert_frame_equal(group2_res, expected_group2_res)
