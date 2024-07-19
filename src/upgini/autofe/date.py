@@ -185,6 +185,15 @@ class DatePercentileBase(PandasOperand, abc.ABC):
         else:
             return np.nan
 
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "date_unit": self.date_unit,
+            }
+        )
+        return res
+
 
 class DatePercentile(DatePercentileBase):
     name = "date_per"
@@ -198,7 +207,6 @@ class DatePercentile(DatePercentileBase):
         res = super().get_params()
         res.update(
             {
-                "date_unit": self.date_unit,
                 "zero_month": self.zero_month,
                 "zero_year": self.zero_year,
                 "zero_bounds": self.zero_bounds,
