@@ -325,17 +325,18 @@ class FeatureGroup:
             lower_order_children = [
                 ch for f in self.children for ch in f.children if ch.get_display_name() != main_column
             ]
+            lower_order_names = [ch.get_display_name() for ch in lower_order_children]
             if any(isinstance(f, Feature) for f in lower_order_children):
                 child_data = pd.concat(
-                    [data[main_column]] + [ch.calculate(data) for ch in lower_order_children], axis=1
+                    [data[main_column]] + [ch.calculate(data) for ch in lower_order_children],
+                    axis=1,
                 )
+                child_data.columns = [main_column] + lower_order_names
             else:
                 child_data = data[columns]
 
             new_data = self.op.calculate_group(child_data, main_column=main_column)
-            new_data.rename(
-                columns=dict(zip((c for c in columns if c != main_column), self.get_display_names())), inplace=True
-            )
+            new_data.rename(columns=dict(zip(lower_order_names, self.get_display_names())), inplace=True)
         else:
             raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
 
