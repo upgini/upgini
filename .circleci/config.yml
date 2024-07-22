@@ -35,6 +35,7 @@ jobs:
       #       sudo apt upgrade && sudo apt update
       #       sudo apt install tox
       - run: pip install tox
+      - run: pip uninstall -y numpy pandas scipy
       - run:
           no_output_timeout: 60m
           name: Run tox
