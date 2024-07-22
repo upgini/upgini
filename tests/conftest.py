@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from upgini import Dataset, FileColumnMeaningType, FileMetrics
+from upgini.metadata import FileColumnMeaningType, FileMetrics
+from upgini.dataset import Dataset
 
 
 @pytest.fixture
