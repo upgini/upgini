@@ -6,6 +6,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
+from upgini.autofe.feature import Feature
 from upgini.autofe.unary import Norm
 
 
@@ -196,3 +197,14 @@ def test_distance():
     actual_values = op.calculate_binary(data.v1, data.v2)
 
     assert_series_equal(actual_values, expected_values)
+
+
+def test_get_display_name():
+    feature = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
+    feature2 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
+
+    assert feature.get_display_name(cache=False) == "f_b_f_c_autofe_abs_123"
+    assert feature.get_display_name(shorten=True) == "f_autofe_date_diff_abs_123"
+
+    assert feature2.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_123"
+    assert feature2.get_display_name(shorten=True) == "f_autofe_date_diff_123"
