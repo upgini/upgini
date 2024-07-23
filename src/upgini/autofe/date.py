@@ -39,6 +39,7 @@ class DateDiffMixin(BaseModel):
 
 class DateDiff(PandasOperand, DateDiffMixin):
     name = "date_diff"
+    alias = "date_diff_type1"
     is_binary = True
     has_symmetry_importance = True
 

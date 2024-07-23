@@ -174,8 +174,10 @@ def test_get_display_name():
     assert feature4.get_display_name(shorten=True) == "f_autofe_mean_123"
 
     feature5 = Feature.from_formula("date_per(f1,date_diff(f1,f2))").set_display_index("123")
-    assert feature5.get_display_name(cache=False) == "f_f1_f_f1_f2_date_diff_autofe_date_per_method1_123"
-    assert feature5.get_display_name(shorten=True) == "f_autofe_date_per_method1_123"
+    assert feature5.get_display_name(cache=False) == "f_f1_f_f1_f2_date_diff_type1_autofe_date_per_method1_123"
+    assert feature5.get_display_name(shorten=True, cache=False) == "f_autofe_date_per_method1_123"
+    feature5.op.alias = "date_diff_type1_per_method1"
+    assert feature5.get_display_name(shorten=True) == "f_autofe_date_diff_type1_per_method1_123"
 
 
 def test_feature_group():
