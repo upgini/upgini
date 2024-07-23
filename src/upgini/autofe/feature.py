@@ -16,9 +16,6 @@ class Column:
         self.data = data
         self.calculate_all = calculate_all
 
-    def get_name_component(self, **kwargs) -> str:
-        return self.name
-
     def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
         return self.name
 
