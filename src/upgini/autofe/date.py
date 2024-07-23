@@ -197,6 +197,7 @@ class DatePercentileBase(PandasOperand, abc.ABC):
 
 class DatePercentile(DatePercentileBase):
     name = "date_per"
+    alias = "date_per_method1"
 
     zero_month: Optional[int]
     zero_year: Optional[int]
@@ -232,8 +233,8 @@ class DatePercentile(DatePercentileBase):
         )
 
 
-class DatePercentileType2(DatePercentileBase):
-    name = "date_per_type2"
+class DatePercentileMethod2(DatePercentileBase):
+    name = "date_per_method2"
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         pass

@@ -7,7 +7,7 @@ from upgini.autofe.date import (
     DateListDiff,
     DateListDiffBounded,
     DatePercentile,
-    DatePercentileType2,
+    DatePercentileMethod2,
 )
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
 from upgini.autofe.operand import Operand
@@ -57,7 +57,7 @@ ALL_OPERANDS: Dict[str, Operand] = {
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=45, upper_bound=60),
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=60),
         DatePercentile(),
-        DatePercentileType2(),
+        DatePercentileMethod2(),
         Norm(),
     ]
 }

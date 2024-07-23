@@ -156,7 +156,7 @@ def test_norm():
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
 
 
-def test_feature_display_name():
+def test_get_display_name():
     feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
     assert feature1.get_display_name() == "f_f1_autofe_abs_123"
 
@@ -172,6 +172,10 @@ def test_feature_display_name():
     feature4 = Feature.from_formula("mean(f1,f2,f3)").set_display_index("123")
     assert feature4.get_display_name(cache=False) == "f_f1_f_f2_f_f3_autofe_mean_123"
     assert feature4.get_display_name(shorten=True) == "f_autofe_mean_123"
+
+    feature5 = Feature.from_formula("date_per(f1,date_diff(f1,f2))").set_display_index("123")
+    assert feature5.get_display_name(cache=False) == "f_f1_f_f1_f2_date_diff_autofe_date_per_method1_123"
+    assert feature5.get_display_name(shorten=True) == "f_autofe_date_per_method1_123"
 
 
 def test_feature_group():
