@@ -134,9 +134,6 @@ class Feature:
         for child in self.children:
             child.delete_data()
 
-    def get_name_component(self, **kwargs) -> str:
-        return "_".join(ch.get_name_component(**kwargs) for ch in self.children) + "_" + self.get_op_display_name()
-
     def get_op_display_name(self) -> str:
         return self.op.alias or self.op.name.lower()
 
@@ -149,8 +146,7 @@ class Feature:
         elif shorten and not self.op.is_unary:
             components = ["f_autofe", self.get_op_display_name()]
         else:
-            child_components = [ch.get_name_component(**kwargs) for ch in self.children]
-            components = ["f_" + "_f_".join(child_components)] + [
+            components = ["f_" + "_f_".join(self.get_columns())] + [
                 "autofe",
                 self.get_op_display_name(),
             ]

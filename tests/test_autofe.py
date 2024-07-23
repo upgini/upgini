@@ -166,7 +166,7 @@ def test_get_display_name():
     assert feature2.get_display_name() == "f_autofe_div_123"  # cached
 
     feature3 = Feature.from_formula("GroupByThenMin(abs(f1),f2)").set_display_index("123")
-    assert feature3.get_display_name(cache=False) == "f_f1_abs_f_f2_autofe_groupbythenmin_123"
+    assert feature3.get_display_name(cache=False) == "f_f1_f_f2_autofe_groupbythenmin_123"
     assert feature3.get_display_name(shorten=True) == "f_autofe_groupbythenmin_123"
 
     feature4 = Feature.from_formula("mean(f1,f2,f3)").set_display_index("123")
@@ -174,10 +174,17 @@ def test_get_display_name():
     assert feature4.get_display_name(shorten=True) == "f_autofe_mean_123"
 
     feature5 = Feature.from_formula("date_per(f1,date_diff(f1,f2))").set_display_index("123")
-    assert feature5.get_display_name(cache=False) == "f_f1_f_f1_f2_date_diff_type1_autofe_date_per_method1_123"
+    assert feature5.get_display_name(cache=False) == "f_f1_f_f2_autofe_date_per_method1_123"
     assert feature5.get_display_name(shorten=True, cache=False) == "f_autofe_date_per_method1_123"
     feature5.op.alias = "date_diff_type1_per_method1"
     assert feature5.get_display_name(shorten=True) == "f_autofe_date_diff_type1_per_method1_123"
+
+
+def test_get_hash():
+    feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
+    feature2 = Feature.from_formula("GroupByThenMin(abs(f1),f2)")
+
+    assert feature1.get_hash() != feature2.get_hash()
 
 
 def test_feature_group():
@@ -229,9 +236,9 @@ def test_feature_group():
             [4, 2, -4],
         ],
         columns=[
-            "f_f2_abs_f_f1_autofe_groupbythenmin",
-            "f_f3_abs_f_f1_autofe_groupbythenmin",
-            "f_f2_f3_min_f_f1_autofe_groupbythenmin",
+            "f_f2_f_f1_autofe_groupbythenmin",
+            "f_f3_f_f1_autofe_groupbythenmin",
+            "f_f2_f_f3_f_f1_autofe_groupbythenmin",
         ],
     )
     group2_res = group2[0].calculate(data)
