@@ -146,7 +146,7 @@ class Feature:
         elif shorten and not self.op.is_unary:
             components = ["f_autofe", self.get_op_display_name()]
         else:
-            components = ["f_" + "_f_".join(self.get_columns())] + [
+            components = ["f_" + "_f_".join(self.get_columns(**kwargs))] + [
                 "autofe",
                 self.get_op_display_name(),
             ]
