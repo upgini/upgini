@@ -15,7 +15,14 @@ from upgini.autofe.binary import (
     Sim,
     Subtract,
 )
-from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
+from upgini.autofe.date import (
+    DateDiff,
+    DateDiffType2,
+    DateListDiff,
+    DateListDiffBounded,
+    DatePercentile,
+    DatePercentileMethod2,
+)
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq, GroupByThenNUnique, GroupByThenRank
 from upgini.autofe.operand import Operand
 from upgini.autofe.unary import Abs, Embeddings, Floor, Freq, Log, Residual, Norm, Sigmoid, Sqrt, Square
@@ -64,6 +71,7 @@ ALL_OPERANDS: Dict[str, Operand] = {
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=45, upper_bound=60),
         DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=60),
         DatePercentile(),
+        DatePercentileMethod2(),
         Norm(),
         JaroWinklerSim1(),
         JaroWinklerSim2(),

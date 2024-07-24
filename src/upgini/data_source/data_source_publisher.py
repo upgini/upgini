@@ -59,9 +59,35 @@ class DataSourcePublisher:
         features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
         keep_features: Optional[List[str]] = None,
+        date_features: Optional[List[str]] = None,
+        date_vector_features: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
+        """Register new ADS
+
+        Parameters
+        ----------
+        data_table_uri - str - table name in format {project_id}.{datasource_name}.{table_name}
+
+        search_keys - dict with column names as keys and SearchKey as value
+
+        update_frequency - str - (Monthly, Weekly, Daily, Annually, Quarterly)
+
+        exclude_from_autofe_generation - optional list of features that should be excluded from AutoFE
+
+        secondary_search_keys - optional dict of secondary search keys
+
+        sort_column - optional str - name of unique column that could be used for sort
+
+        date_format - optional str - format of date if it is present in search keys
+
+        ...
+
+        data_table_id_to_replace - optional str - id of registered ADS that should be replaced by new table
+
+        keep_features - optional list - features that should not be removed from ADS (even if they are personal)
+        """
         trace_id = str(uuid.uuid4())
 
         with MDC(trace_id=trace_id):
@@ -124,6 +150,14 @@ class DataSourcePublisher:
                     request["excludeFromGeneration"] = exclude_from_autofe_generation
                 if keep_features is not None:
                     request["keepFeatures"] = keep_features
+                if date_features is not None:
+                    if date_format is None:
+                        raise ValidationError("date_format should be presented if you use date features")
+                    request["dateFeatures"] = date_features
+                if date_vector_features is not None:
+                    if date_format is None:
+                        raise ValidationError("date_format should be presented if you use date vector features")
+                    request["dateVectorFeatures"] = date_vector_features
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -181,6 +215,9 @@ class DataSourcePublisher:
                 msg = f"Data table successfully registered with id: {data_table_id}"
                 self.logger.info(msg)
                 print(msg)
+                if "warnings" in status_response and status_response["warnings"]:
+                    self.logger.warning(status_response["warnings"])
+                    print(status_response["warnings"])
                 return data_table_id
             except KeyboardInterrupt:
                 if task_id is not None:

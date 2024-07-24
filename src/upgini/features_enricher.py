@@ -2870,7 +2870,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
 
         except Exception:
-            self.logger.exception("Failed to log debug information")
+            self.logger.warning("Failed to log debug information", exc_info=True)
 
     def __handle_index_search_keys(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> pd.DataFrame:
         index_names = df.index.names if df.index.names != [None] else [DEFAULT_INDEX]

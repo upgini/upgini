@@ -41,7 +41,7 @@ class Column:
     def get_column_nodes(self) -> List["Column"]:
         return [self]
 
-    def get_columns(self) -> List[str]:
+    def get_columns(self, **kwargs) -> List[str]:
         return [self.name]
 
     def infer_type(self, data: pd.DataFrame) -> DtypeObj:
@@ -56,6 +56,12 @@ class Column:
 
     def to_pretty_formula(self) -> str:
         return self.to_formula()
+
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Column):
+            return False
+        else:
+            return self.name == value.name and self.calculate_all == value.calculate_all
 
 
 class Feature:
@@ -310,8 +316,21 @@ class FeatureGroup:
         main_column = None if self.main_column_node is None else self.main_column_node.get_columns()[0]
         if isinstance(self.op, PandasOperand):
             columns = self.get_columns()
-            new_data = self.op.calculate_group(data[columns], main_column=main_column)
-            new_data.rename(columns=dict(zip(columns, self.get_display_names())), inplace=True)
+            lower_order_children = [
+                ch for f in self.children for ch in f.children if ch.get_display_name() != main_column
+            ]
+            lower_order_names = [ch.get_display_name() for ch in lower_order_children]
+            if any(isinstance(f, Feature) for f in lower_order_children):
+                child_data = pd.concat(
+                    [data[main_column]] + [ch.calculate(data) for ch in lower_order_children],
+                    axis=1,
+                )
+                child_data.columns = [main_column] + lower_order_names
+            else:
+                child_data = data[columns]
+
+            new_data = self.op.calculate_group(child_data, main_column=main_column)
+            new_data.rename(columns=dict(zip(lower_order_names, self.get_display_names())), inplace=True)
         else:
             raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
 

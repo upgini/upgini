@@ -1,12 +1,10 @@
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_series_equal, assert_frame_equal
 
-from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
-from upgini.autofe.feature import Feature
+from upgini.autofe.feature import Feature, FeatureGroup
 from upgini.autofe.unary import Norm
 
 
@@ -158,45 +156,101 @@ def test_norm():
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
 
 
-def test_string_sim():
+def test_get_display_name():
+    feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
+    assert feature1.get_display_name() == "f_f1_autofe_abs_123"
+
+    feature2 = Feature.from_formula("(f1/f2)").set_display_index("123")
+    assert feature2.get_display_name(cache=False) == "f_f1_f_f2_autofe_div_123"
+    assert feature2.get_display_name(shorten=True) == "f_autofe_div_123"
+    assert feature2.get_display_name() == "f_autofe_div_123"  # cached
+
+    feature3 = Feature.from_formula("GroupByThenMin(abs(f1),f2)").set_display_index("123")
+    assert feature3.get_display_name(cache=False) == "f_f1_f_f2_autofe_groupbythenmin_123"
+    assert feature3.get_display_name(shorten=True) == "f_autofe_groupbythenmin_123"
+
+    feature4 = Feature.from_formula("mean(f1,f2,f3)").set_display_index("123")
+    assert feature4.get_display_name(cache=False) == "f_f1_f_f2_f_f3_autofe_mean_123"
+    assert feature4.get_display_name(shorten=True) == "f_autofe_mean_123"
+
+    feature5 = Feature.from_formula("date_per(f1,date_diff(f1,f2))").set_display_index("123")
+    assert feature5.get_display_name(cache=False) == "f_f1_f_f2_autofe_date_per_method1_123"
+    assert feature5.get_display_name(shorten=True, cache=False) == "f_autofe_date_per_method1_123"
+    feature5.op.alias = "date_diff_type1_per_method1"
+    assert feature5.get_display_name(shorten=True) == "f_autofe_date_diff_type1_per_method1_123"
+
+    feature6 = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
+    assert feature6.get_display_name(cache=False) == "f_b_f_c_autofe_abs_123"
+    assert feature6.get_display_name(shorten=True) == "f_autofe_date_diff_abs_123"
+
+    feature7 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
+    assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_123"
+    assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_123"
+
+
+def test_get_hash():
+    feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
+    feature2 = Feature.from_formula("GroupByThenMin(abs(f1),f2)")
+
+    assert feature1.get_hash() != feature2.get_hash()
+
+
+def test_feature_group():
     data = pd.DataFrame(
         [
-            ["book", "look"],
-            ["blow", None],
-            [None, "Jeremy"],
-            ["below", "bewoll"],
-            [None, None],
-            ["abc", "abc"],
-            ["four", "seven"],
+            ["a", 1, -1],
+            ["a", 2, -3],
+            ["b", 3, -1],
+            ["b", 0, 0],
+            ["c", -4, -2],
         ],
-        columns=["a", "b"],
+        columns=["f1", "f2", "f3"],
     )
 
-    expected_jw1 = pd.Series([0.833, None, None, 0.902, None, 1.0, 0.0])
-    expected_jw2 = pd.Series([0.883, None, None, 0.739, None, 1.0, 0.0])
-    expected_lv = pd.Series([0.75, None, None, 0.5, None, 1.0, 0.0])
-
-    assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
-    assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
-    assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
-
-
-def test_distance():
-    data = pd.DataFrame(
+    group1 = FeatureGroup.make_groups(
         [
-            [np.array([0, 1, 0]), np.array([0, 1, 0])],
-            [np.array([0, 1, 0]), np.array([1, 1, 0])],
-            [np.array([0, 1, 0]), np.array([1, 0, 0])],
-        ],
-        columns=["v1", "v2"],
+            Feature.from_formula("GroupByThenMin(f2,f1)"),
+            Feature.from_formula("GroupByThenMin(f3,f1)"),
+        ]
     )
+    assert len(group1) == 1
+    expected_group1_res = pd.DataFrame(
+        [
+            [1, -3],
+            [1, -3],
+            [0, -1],
+            [0, -1],
+            [-4, -2],
+        ],
+        columns=["f_f2_f_f1_autofe_groupbythenmin", "f_f3_f_f1_autofe_groupbythenmin"],
+    )
+    group1_res = group1[0].calculate(data)
+    assert_frame_equal(group1_res, expected_group1_res)
 
-    op = Distance()
-
-    expected_values = pd.Series([1.0, 0.5, 0.0])
-    actual_values = op.calculate_binary(data.v1, data.v2)
-
-    assert_series_equal(actual_values, expected_values)
+    group2 = FeatureGroup.make_groups(
+        [
+            Feature.from_formula("GroupByThenMin(abs(f2),f1)"),
+            Feature.from_formula("GroupByThenMin(abs(f3),f1)"),
+            Feature.from_formula("GroupByThenMin(min(f2,f3),f1)"),
+        ]
+    )
+    assert len(group2) == 1
+    expected_group2_res = pd.DataFrame(
+        [
+            [1, 1, -3],
+            [1, 1, -3],
+            [0, 0, -1],
+            [0, 0, -1],
+            [4, 2, -4],
+        ],
+        columns=[
+            "f_f2_f_f1_autofe_groupbythenmin",
+            "f_f3_f_f1_autofe_groupbythenmin",
+            "f_f2_f_f3_f_f1_autofe_groupbythenmin",
+        ],
+    )
+    group2_res = group2[0].calculate(data)
+    assert_frame_equal(group2_res, expected_group2_res)
 
 
 def test_get_display_name():
