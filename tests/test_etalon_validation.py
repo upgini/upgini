@@ -6,7 +6,8 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from upgini import Dataset, FileColumnMeaningType
+from upgini.dataset import Dataset
+from upgini.ads import FileColumnMeaningType
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
