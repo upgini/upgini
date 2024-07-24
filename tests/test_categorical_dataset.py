@@ -3,7 +3,8 @@ import os
 import pandas as pd
 import pytest
 
-from upgini import Dataset, FileColumnMeaningType
+from upgini.dataset import Dataset
+from upgini.ads import FileColumnMeaningType
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 FIXTURE_DIR = os.path.join(
