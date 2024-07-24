@@ -49,7 +49,6 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "python-bidi==0.4.2",
     "xhtml2pdf==0.2.11",
-    "python-bidi==0.4.2",
 ]
 
 [project.urls]
