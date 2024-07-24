@@ -19,6 +19,10 @@ def test_date_diff():
     )
 
     operand = DateDiff(right_unit="s")
+    expected_result = pd.Series([10531, -365.0, 20454])
+    assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
+
+    operand = DateDiff(right_unit="s", replace_negative=True)
     expected_result = pd.Series([10531, None, 20454])
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
@@ -54,10 +58,15 @@ def test_date_diff_list():
         assert operand.name == expected_name
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
-    check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, None, None]))
-    check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, None, None]))
-    check(aggregation="mean", expected_name="date_diff_mean", expected_values=pd.Series([10530.5, 10531, None, None]))
-    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 0, 0]))
+    check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, -365.0, None]))
+    check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, -365.0, None]))
+    check(aggregation="mean", expected_name="date_diff_mean", expected_values=pd.Series([10530.5, 10531, -365.0, None]))
+    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 1, 0]))
+
+    operand = DateListDiff(aggregation="min", replace_negative=True)
+    assert_series_equal(
+        operand.calculate_binary(df.date1, df.date2).rename(None), pd.Series([10530, 10531, None, None])
+    )
 
 
 def test_date_diff_list_bounded():
@@ -181,11 +190,11 @@ def test_get_display_name():
 
     feature6 = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
     assert feature6.get_display_name(cache=False) == "f_b_f_c_autofe_abs_123"
-    assert feature6.get_display_name(shorten=True) == "f_autofe_date_diff_abs_123"
+    assert feature6.get_display_name(shorten=True) == "f_autofe_date_diff_type1_abs_123"
 
     feature7 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
-    assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_123"
-    assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_123"
+    assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_123"
+    assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_type1_123"
 
 
 def test_get_hash():
@@ -251,14 +260,3 @@ def test_feature_group():
     )
     group2_res = group2[0].calculate(data)
     assert_frame_equal(group2_res, expected_group2_res)
-
-
-def test_get_display_name():
-    feature = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
-    feature2 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
-
-    assert feature.get_display_name(cache=False) == "f_b_f_c_autofe_abs_123"
-    assert feature.get_display_name(shorten=True) == "f_autofe_date_diff_abs_123"
-
-    assert feature2.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_123"
-    assert feature2.get_display_name(shorten=True) == "f_autofe_date_diff_123"

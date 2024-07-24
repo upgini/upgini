@@ -167,7 +167,10 @@ class DateListDiffBounded(DateListDiff):
         super().__init__(**data)
 
     def _agg(self, x):
-        x = x[(x >= (self.lower_bound or -np.inf)) & (x < (self.upper_bound or np.inf))]
+        x = x[
+            (x >= (self.lower_bound if self.lower_bound is not None else -np.inf))
+            & (x < (self.upper_bound if self.upper_bound is not None else np.inf))
+        ]
         return super()._agg(x)
 
 
