@@ -189,7 +189,7 @@ def test_get_display_name():
     assert feature5.get_display_name(shorten=True) == "f_autofe_date_diff_type1_per_method1_123"
 
     feature6 = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
-    assert feature6.get_display_name(cache=False) == "f_b_f_c_autofe_abs_123"
+    assert feature6.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_abs_123"
     assert feature6.get_display_name(shorten=True) == "f_autofe_date_diff_type1_abs_123"
 
     feature7 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
