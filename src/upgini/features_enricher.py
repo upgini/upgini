@@ -2347,6 +2347,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Input dataset hasn't date column")
             if self.add_date_if_missing:
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
+
         if (
             self.detect_missing_search_keys
             and list(self.fit_search_keys.values()) == [SearchKey.DATE]
