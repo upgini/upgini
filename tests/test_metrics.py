@@ -324,7 +324,7 @@ def test_default_metric_binary(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -336,7 +336,9 @@ def test_default_metric_binary(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
@@ -448,7 +450,7 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -460,7 +462,9 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
@@ -572,7 +576,7 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -584,7 +588,9 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
@@ -695,7 +701,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -707,7 +713,9 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     # TODO replace with input dataset with date search key and regression target
@@ -813,7 +821,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -825,7 +833,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
@@ -937,7 +947,7 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -949,7 +959,9 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input_with_cat.parquet"))
@@ -1058,7 +1070,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1181,7 +1193,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1193,7 +1205,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
@@ -1301,7 +1315,7 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
             ],
         ),
     )
-    path_to_mock_features = os.path.join(FIXTURE_DIR, "features.parquet")
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1313,7 +1327,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
         ads_search_task_id,
         validation_search_task_id,
     )
-    path_to_mock_validation_features = os.path.join(FIXTURE_DIR, "validation_features.parquet")
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
     df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input_with_string_feature.parquet"))

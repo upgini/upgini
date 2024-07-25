@@ -1563,7 +1563,7 @@ class FeaturesEnricher(TransformerMixin):
             df = df.sample(n=sample_rows, random_state=self.random_state)
 
         df_extended, search_keys = self._extend_x(df, is_demo_dataset)
-        df_extended = self.__add_fit_system_record_id(df_extended, {}, search_keys)
+        df_extended = self.__add_fit_system_record_id(df_extended, {}, search_keys, SYSTEM_RECORD_ID)
 
         train_df = df_extended.query(f"{EVAL_SET_INDEX} == 0") if eval_set is not None else df_extended
         X_sampled = train_df.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
@@ -2003,7 +2003,7 @@ class FeaturesEnricher(TransformerMixin):
             columns_for_system_record_id = sorted(list(search_keys.keys()) + (original_features_for_transform))
 
             if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(df, {}, search_keys)
+                df = self.__add_fit_system_record_id(df, {}, search_keys, SYSTEM_RECORD_ID)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
 
@@ -3053,7 +3053,14 @@ class FeaturesEnricher(TransformerMixin):
 
         # order by date and idempotent order by other keys
         if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
-            sort_exclude_columns = [original_order_name, ORIGINAL_INDEX, EVAL_SET_INDEX, TARGET, "__target"]
+            sort_exclude_columns = [
+                original_order_name,
+                ORIGINAL_INDEX,
+                EVAL_SET_INDEX,
+                TARGET,
+                "__target",
+                ENTITY_SYSTEM_RECORD_ID,
+            ]
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 date_column = DateTimeSearchKeyConverter.DATETIME_COL
                 sort_exclude_columns.append(self._get_date_column(search_keys))

@@ -83,7 +83,8 @@ def test_features_enricher(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -200,7 +201,8 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -286,7 +288,8 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -376,13 +379,13 @@ def test_saved_features_enricher(requests_mock: Mocker):
 
     if pd.__version__ >= "2.2.0":
         print("Use features for pandas 2.2")
-        features_file = "validation_features_v3.parquet"
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
     elif pd.__version__ >= "2.0.0":
         print("Use features for pandas 2.0")
-        features_file = "validation_features_v2.parquet"
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
     else:
         print("Use features for pandas 1.*")
-        features_file = "validation_features_v1.parquet"
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
     )
@@ -518,7 +521,8 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -663,7 +667,8 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -779,7 +784,8 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -895,7 +901,8 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1074,7 +1081,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         ),
     )
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/complex_feature_name_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/complex_feature_name_features_with_entity_system_record_id.parquet",
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features, metrics_calculation=True)
 
@@ -1189,7 +1197,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
 def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocker):
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1317,7 +1326,8 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
     url = "http://fake_url2"
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1443,7 +1453,8 @@ def test_filter_by_importance(requests_mock: Mocker):
     url = "https://some.fake.url"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1546,7 +1557,8 @@ def test_filter_by_max_features(requests_mock: Mocker):
     url = "https://some.fake.url"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1726,7 +1738,8 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -1803,6 +1816,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     mock_features["system_record_id"] = pd.util.hash_pandas_object(
         df_with_eval_set_index_with_date[sorted(search_keys.keys())].reset_index(drop=True), index=False
     ).astype("Float64")
+    mock_features["entity_system_record_id"] = mock_features["system_record_id"]
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
     enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)
@@ -1829,7 +1843,8 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
     mock_default_requests(requests_mock, url)
@@ -2014,7 +2029,8 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
     _RestClient.initial_search_v2 = mocked_initial_search
 
     expected_result_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/expected_prepared_with_entity_system_record_id.parquet",
     )
 
     expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
@@ -2043,6 +2059,8 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
             pass
 
         actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+        # actual_result_df.to_parquet(expected_result_path)
+        # expected_result_df = actual_result_df
         assert_frame_equal(actual_result_df, expected_result_df)
 
     try:
@@ -2084,7 +2102,9 @@ def test_imbalanced_dataset(requests_mock: Mocker):
             eval_set_metrics=[],
         ),
     )
-    path_to_mock_features = os.path.join(base_dir, "test_data/binary/features_imbalanced.parquet")
+    path_to_mock_features = os.path.join(
+        base_dir, "test_data/binary/features_imbalanced_with_entity_system_record_id.parquet"
+    )
 
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
@@ -2197,6 +2217,9 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
             # actual_result_df.to_parquet(expected_result_path)
             actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
             actual_result_df["rep_date_f5d6bb"] = actual_result_df["rep_date_f5d6bb"].astype("Int64")
+
+            # actual_result_df.to_parquet(expected_result_path)
+            # expected_result_df = actual_result_df
             assert_frame_equal(actual_result_df, expected_result_df)
 
         for i in range(5):
@@ -2286,7 +2309,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         self.validate()
         assert set(self.columns.to_list()) == {
             "system_record_id",
-            "entity_system_record_id"
+            "entity_system_record_id",
             "country_aff64e",
             "postal_code_13534a",
             "current_date_b993c4",
@@ -2361,7 +2384,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         ),
     )
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -2573,7 +2597,8 @@ def test_unsupported_arguments(requests_mock: Mocker):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "test_data/binary/mock_features.parquet"
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
@@ -2656,9 +2681,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
         enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
-        with pytest.raises(
-            ValueError, match="n_splits=5 cannot be greater than the number of members in each class."
-        ):
+        with pytest.raises(ValueError, match="n_splits=5 cannot be greater than the number of members in each class."):
             enricher.calculate_metrics(
                 df.drop(columns="target"),
                 df["target"],
@@ -2672,7 +2695,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
 class DataFrameWrapper:
     def __init__(self):
-        self.df = None
+        self.df: Optional[pd.DataFrame] = None
 
 
 class TestException(Exception):
