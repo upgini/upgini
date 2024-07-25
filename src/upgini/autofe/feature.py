@@ -323,10 +323,10 @@ class FeatureGroup:
             lower_order_names = [ch.get_display_name() for ch in lower_order_children]
             if any(isinstance(f, Feature) for f in lower_order_children):
                 child_data = pd.concat(
-                    [data[main_column]] + [ch.calculate(data) for ch in lower_order_children],
+                    [data[main_column or []]] + [ch.calculate(data) for ch in lower_order_children],
                     axis=1,
                 )
-                child_data.columns = [main_column] + lower_order_names
+                child_data.columns = ([main_column] if main_column is not None else []) + lower_order_names
             else:
                 child_data = data[columns]
 
