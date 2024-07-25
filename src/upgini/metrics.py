@@ -369,7 +369,7 @@ class EstimatorWrapper:
             "logger": logger,
         }
         if estimator is None:
-            params = dict()
+            params = {}
             params["has_time"] = has_date
             # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
             #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]

@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal
 from upgini.dataset import Dataset
 from upgini.ads import FileColumnMeaningType
 from upgini.errors import ValidationError
-from upgini.metadata import ModelTaskType, SearchKey
+from upgini.metadata import SEARCH_KEY_UNNEST, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
@@ -41,13 +41,32 @@ def test_email_to_hem_convertion():
     search_keys = {
         "email": SearchKey.EMAIL,
     }
-    converter = EmailSearchKeyConverter("email", None, search_keys)
+    converter = EmailSearchKeyConverter("email", None, search_keys, [])
     df = converter.convert(df)
     assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
     assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
     assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
     assert "email" in df.columns
     assert converter.email_converted_to_hem
+
+
+def test_unnest_email_to_hem_conversion():
+    df = pd.DataFrame({
+        "upgini_email_unnest": ["test@google.com", None, "fake"],
+        SEARCH_KEY_UNNEST: ["email", "email", "email"]
+    })
+    search_keys = {
+        "upgini_email_unnest": SearchKey.EMAIL,
+    }
+    unnest_search_keys = ["upgini_email_unnest"]
+    converter = EmailSearchKeyConverter("upgini_email_unnest", None, search_keys, unnest_search_keys)
+    df = converter.convert(df)
+    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
+    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
+    assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
+    assert "upgini_email_unnest" in df.columns
+    assert converter.email_converted_to_hem
+    assert unnest_search_keys == [EmailSearchKeyConverter.HEM_COLUMN_NAME]
 
 
 def test_string_ip_to_int_conversion():
