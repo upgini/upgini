@@ -2214,7 +2214,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
                 pass
 
             actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-            # actual_result_df.to_parquet(expected_result_path)
             actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
             actual_result_df["rep_date_f5d6bb"] = actual_result_df["rep_date_f5d6bb"].astype("Int64")
 
