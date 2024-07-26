@@ -1601,8 +1601,7 @@ class FeaturesEnricher(TransformerMixin):
                 outliers = pd.merge(
                     self.df_with_original_index,
                     target_outliers_df,
-                    left_on=SYSTEM_RECORD_ID,
-                    right_on=SYSTEM_RECORD_ID,
+                    on=ENTITY_SYSTEM_RECORD_ID,
                     how="inner",
                 )
                 top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
