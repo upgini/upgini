@@ -1,8 +1,10 @@
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal, assert_frame_equal
 
+from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.feature import Feature, FeatureGroup
 from upgini.autofe.unary import Norm
@@ -163,6 +165,49 @@ def test_norm():
 
     assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
     assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
+
+
+def test_string_sim():
+    data = pd.DataFrame(
+        [
+            ["book", "look"],
+            ["blow", None],
+            [None, "Jeremy"],
+            ["below", "bewoll"],
+            [None, None],
+            ["abc", "abc"],
+            ["four", "seven"],
+        ],
+        columns=["a", "b"],
+    )
+
+    expected_jw1 = pd.Series([0.833, None, None, 0.902, None, 1.0, 0.0])
+    expected_jw2 = pd.Series([0.883, None, None, 0.739, None, 1.0, 0.0])
+    expected_lv = pd.Series([0.75, None, None, 0.5, None, 1.0, 0.0])
+
+    assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
+    assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
+    assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
+
+
+def test_distance():
+    data = pd.DataFrame(
+        [
+            [np.array([0, 1, 0]), np.array([0, 1, 0])],
+            [np.array([0, 1, 0]), np.array([1, 1, 0])],
+            [np.array([0, 1, 0]), np.array([1, 0, 0])],
+            [np.array([0, 1, 0]), None],
+            [None, np.array([1, 0, 0])],
+        ],
+        columns=["v1", "v2"],
+    )
+
+    op = Distance()
+
+    expected_values = pd.Series([0.0, 0.5, 1.0, np.nan, np.nan])
+    actual_values = op.calculate_binary(data.v1, data.v2)
+
+    assert_series_equal(actual_values, expected_values)
 
 
 def test_get_display_name():
