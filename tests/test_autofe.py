@@ -3,10 +3,11 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal, assert_frame_equal
+import pytest
 
 from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
-from upgini.autofe.feature import Feature, FeatureGroup
+from upgini.autofe.feature import Column, Feature, FeatureGroup
 from upgini.autofe.unary import Norm
 
 
@@ -323,3 +324,25 @@ def test_feature_group():
     )
     group2_res = group2[0].calculate(data)
     assert_frame_equal(group2_res, expected_group2_res)
+
+
+def test_from_formula():
+
+    def check_formula(formula):
+        assert Feature.from_formula(formula).to_formula() == formula
+
+    check_formula("a")
+    check_formula("(a/b)")
+    check_formula("log(a)")
+    check_formula("date_diff(a,b)")
+    check_formula("date_per(a,date_diff(b,c))")
+    check_formula("mean(a,b,c,d,e)")
+
+    with pytest.raises(ValueError):
+        check_formula("unsupported(a,b)")
+
+    with pytest.raises(ValueError):
+        check_formula("(a,b)")
+
+    with pytest.raises(ValueError):
+        check_formula("a/b")

@@ -239,11 +239,17 @@ class Feature:
 
     @staticmethod
     def from_formula(string: str) -> Union[Column, "Feature"]:
-        if string[-1] != ")":
-            return Column(string)
 
         def is_trivial_char(c: str) -> bool:
             return c not in "()+-*/,"
+
+        if string[-1] != ")":
+            if all(is_trivial_char(c) for c in string):
+                return Column(string)
+            else:
+                raise ValueError(
+                    f"Unsupported column name: {string}. Column names should not have characters: ['(', ')', '+', '-', '*', '/', ',']"
+                )
 
         def find_prev(string: str) -> int:
             if string[-1] != ")":
@@ -266,8 +272,11 @@ class Feature:
             return Feature(find_op(string[: p2 - 1]), [Feature.from_formula(string[p2:-1])])
         p1 = find_prev(string[: p2 - 1])
         if string[0] == "(":
+            op = find_op(string[p2 - 1])
+            if op is None:
+                raise ValueError(f"Unsupported operand: {string[p2 - 1]}")
             return Feature(
-                find_op(string[p2 - 1]),
+                op,
                 [Feature.from_formula(string[p1 : p2 - 1]), Feature.from_formula(string[p2:-1])],
             )
         else:
@@ -278,6 +287,8 @@ class Feature:
                     [Feature.from_formula(string[p1 : p2 - 1]), Feature.from_formula(string[p2:-1])],
                 )
             else:
+                if string[p1 - 1] == "(":
+                    raise ValueError(f"Unsupported operand: {string[: p1 - 1]}")
                 base_features = [
                     Feature.from_formula(string[p2:-1]),
                     Feature.from_formula(string[p1 : p2 - 1]),
