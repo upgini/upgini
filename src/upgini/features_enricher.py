@@ -866,6 +866,13 @@ class FeaturesEnricher(TransformerMixin):
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
 
+                if self.X is None:
+                    self.X = X
+                if self.y is None:
+                    self.y = y
+                if self.eval_set is None:
+                    self.eval_set = effective_eval_set
+
                 validate_scoring_argument(scoring)
 
                 self._validate_baseline_score(effective_X, effective_eval_set)
