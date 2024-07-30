@@ -23,7 +23,9 @@ from pandas.api.types import (
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
+    ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
+    SEARCH_KEY_UNNEST,
     SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
     TARGET,
@@ -79,6 +81,7 @@ class Dataset:  # (pd.DataFrame):
         path: Optional[str] = None,
         meaning_types: Optional[Dict[str, FileColumnMeaningType]] = None,
         search_keys: Optional[List[Tuple[str, ...]]] = None,
+        unnest_search_keys: Optional[Dict[str, str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
@@ -113,6 +116,7 @@ class Dataset:  # (pd.DataFrame):
         self.description = description
         self.meaning_types = meaning_types
         self.search_keys = search_keys
+        self.unnest_search_keys = unnest_search_keys
         self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
@@ -172,7 +176,7 @@ class Dataset:  # (pd.DataFrame):
         new_columns = []
         dup_counter = 0
         for column in self.data.columns:
-            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID]:
+            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]:
                 self.columns_renaming[column] = column
                 new_columns.append(column)
                 continue
@@ -353,7 +357,9 @@ class Dataset:  # (pd.DataFrame):
 
             if is_string_dtype(self.data[postal_code]) or is_object_dtype(self.data[postal_code]):
                 try:
-                    self.data[postal_code] = self.data[postal_code].astype("float64").astype("Int64").astype("string")
+                    self.data[postal_code] = (
+                        self.data[postal_code].astype("string").astype("Float64").astype("Int64").astype("string")
+                    )
                 except Exception:
                     pass
             elif is_float_dtype(self.data[postal_code]):
@@ -803,6 +809,9 @@ class Dataset:  # (pd.DataFrame):
                     meaningType=meaning_type,
                     minMaxValues=min_max_values,
                 )
+                if self.unnest_search_keys and column_meta.originalName in self.unnest_search_keys:
+                    column_meta.isUnnest = True
+                    column_meta.unnestKeyNames = self.unnest_search_keys[column_meta.originalName]
 
                 columns.append(column_meta)
 

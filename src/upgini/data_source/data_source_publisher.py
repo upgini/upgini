@@ -82,6 +82,9 @@ class DataSourcePublisher:
 
         date_format - optional str - format of date if it is present in search keys
 
+        features_for_embeddings - optional list of str - list of features that should be used for GPT features
+            generation
+
         ...
 
         data_table_id_to_replace - optional str - id of registered ADS that should be replaced by new table

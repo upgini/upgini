@@ -31,7 +31,7 @@ DATE_FORMATS = [
     "%Y-%m-%dT%H:%M:%S.%f",
 ]
 
-DATETIME_PATTERN = r"^[\d\s\.\-:T]+$"
+DATETIME_PATTERN = r"^[\d\s\.\-:T/]+$"
 
 
 class DateTimeSearchKeyConverter:
@@ -147,7 +147,10 @@ class DateTimeSearchKeyConverter:
                     return pd.to_datetime(df[self.date_column], format=date_format)
                 except ValueError:
                     pass
-            raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
+            try:
+                return pd.to_datetime(df[self.date_column])
+            except ValueError:
+                raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
