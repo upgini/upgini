@@ -3186,7 +3186,9 @@ class FeaturesEnricher(TransformerMixin):
 
         if rows_to_drop is not None:
             self.logger.info(f"Before dropping target outliers size: {len(result_features)}")
-            result_features = result_features[~result_features[SYSTEM_RECORD_ID].isin(rows_to_drop[SYSTEM_RECORD_ID])]
+            result_features = result_features[
+                ~result_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
+            ]
             self.logger.info(f"After dropping target outliers size: {len(result_features)}")
 
         result_eval_sets = {}
@@ -3219,11 +3221,11 @@ class FeaturesEnricher(TransformerMixin):
             result_train = result_train_features
 
         if drop_system_record_id:
-            if SYSTEM_RECORD_ID in result_train.columns:
-                result_train = result_train.drop(columns=SYSTEM_RECORD_ID)
+            result_train = result_train.drop(columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore")
             for eval_set_index in result_eval_sets.keys():
-                if SYSTEM_RECORD_ID in result_eval_sets[eval_set_index].columns:
-                    result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(columns=SYSTEM_RECORD_ID)
+                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(
+                    columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore"
+                )
 
         return result_train, result_eval_sets
 
@@ -3481,6 +3483,9 @@ class FeaturesEnricher(TransformerMixin):
         is_transform=False,
         silent_mode=False,
     ):
+        for _, key_type in search_keys.items():
+            if not isinstance(key_type, SearchKey):
+                raise ValidationError(self.bundle.get("unsupported_type_of_search_key").format(key_type))
         valid_search_keys = {}
         unsupported_search_keys = {
             SearchKey.IP_RANGE_FROM,
