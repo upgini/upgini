@@ -20,7 +20,7 @@ class DateDiffMixin(BaseModel):
         if isinstance(x, pd.DataFrame):
             return x.apply(lambda y: self._convert_to_date(y, unit), axis=1)
 
-        return pd.to_datetime(x, unit=unit)
+        return pd.to_datetime(x, unit=unit, errors='coerce')
 
     def _convert_diff_to_unit(self, diff: Union[pd.Series, TimedeltaArray]) -> Union[pd.Series, TimedeltaArray]:
         if self.diff_unit == "D":
