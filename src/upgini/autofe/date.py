@@ -20,7 +20,7 @@ class DateDiffMixin(BaseModel):
         if isinstance(x, pd.DataFrame):
             return x.apply(lambda y: self._convert_to_date(y, unit), axis=1)
 
-        return pd.to_datetime(x, unit=unit)
+        return pd.to_datetime(x, unit=unit, errors='coerce')
 
     def _convert_diff_to_unit(self, diff: Union[pd.Series, TimedeltaArray]) -> Union[pd.Series, TimedeltaArray]:
         if self.diff_unit == "D":
@@ -85,7 +85,7 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
         future = right + (left.dt.year - right.dt.year).apply(
-            lambda y: np.datetime64("NaT") if np.isnan(y) else pd.tseries.offsets.DateOffset(years=y)
+            lambda y: pd.tseries.offsets.DateOffset(years=0 if np.isnan(y) else y)
         )
         future = pd.to_datetime(future)
         before = future[future < left]
