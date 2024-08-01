@@ -418,3 +418,19 @@ class DataSourcePublisher:
         response = self._rest_client.union_search_tasks(request, "trace_id")
         print(response)
         return response
+
+    def reannounce_all_ads(self):
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            try:
+                task_id = self._rest_client.reannounce_all_ads(trace_id)
+                with Spinner():
+                    status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
+                    while status_response["status"] not in self.FINAL_STATUSES:
+                        time.sleep(5)
+                        status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
+
+                if status_response["status"] != "COMPLETED":
+                    raise Exception("Failed to reannounce all ADS: " + status_response["errorMessage"])
+            except Exception:
+                self.logger.exception("Failed to reannounce all ADS-es")
