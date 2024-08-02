@@ -2300,8 +2300,6 @@ class FeaturesEnricher(TransformerMixin):
         self.fit_search_keys = self.search_keys.copy()
         self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys, is_demo_dataset)
 
-        validate_dates_distribution(validated_X, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
-
         maybe_date_column = self._get_date_column(self.fit_search_keys)
         has_date = maybe_date_column is not None
         model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
@@ -2322,9 +2320,6 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
 
-        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
-            self._validate_PSI(df.sort_values(by=maybe_date_column))
-
         if DEFAULT_INDEX in df.columns:
             msg = self.bundle.get("unsupported_index_column")
             self.logger.info(msg)
@@ -2334,25 +2329,32 @@ class FeaturesEnricher(TransformerMixin):
 
         df = self.__add_country_code(df, self.fit_search_keys)
 
-        df = remove_fintech_duplicates(
-            df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
-        )
-        df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
-
-        date_column = self._get_date_column(self.fit_search_keys)
-        self.__adjust_cv(df, date_column, model_task_type)
-
         self.fit_generated_features = []
 
-        if date_column is not None:
-            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
+        if has_date:
+            converter = DateTimeSearchKeyConverter(maybe_date_column, self.date_format, self.logger, bundle=self.bundle)
             df = converter.convert(df, keep_time=True)
-            self.logger.info(f"Date column after convertion: {df[date_column]}")
+            self.logger.info(f"Date column after convertion: {df[maybe_date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
             if self.add_date_if_missing:
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
+
+        # Checks that need validated date
+        validate_dates_distribution(validated_X, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
+
+        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
+            self._validate_PSI(df.sort_values(by=maybe_date_column))
+
+        self.__adjust_cv(df, maybe_date_column, model_task_type)
+
+        # TODO normalize and convert all columns
+
+        df = remove_fintech_duplicates(
+            df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
+        )
+        df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
 
         if (
             self.detect_missing_search_keys
