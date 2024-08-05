@@ -90,7 +90,6 @@ from upgini.utils.display_utils import (
 from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
-from upgini.utils.ip_utils import IpToCountrySearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 
@@ -1213,13 +1212,6 @@ class FeaturesEnricher(TransformerMixin):
             converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, [], self.logger)
             extended_X = converter.convert(extended_X)
             generated_features.extend(converter.generated_features)
-        if (
-            self.detect_missing_search_keys
-            and list(search_keys.values()) == [SearchKey.DATE]
-            and self.country_code is None
-        ):
-            converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
-            extended_X = converter.convert(extended_X)
         generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
         return extended_X, search_keys
@@ -1987,13 +1979,6 @@ class FeaturesEnricher(TransformerMixin):
                 df = converter.convert(df)
                 generated_features.extend(converter.generated_features)
                 email_converted_to_hem = converter.email_converted_to_hem
-            if (
-                self.detect_missing_search_keys
-                and list(search_keys.values()) == [SearchKey.DATE]
-                and self.country_code is None
-            ):
-                converter = IpToCountrySearchKeyConverter(search_keys, self.logger)
-                df = converter.convert(df)
             generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
@@ -2342,7 +2327,7 @@ class FeaturesEnricher(TransformerMixin):
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
         # Checks that need validated date
-        validate_dates_distribution(validated_X, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
+        validate_dates_distribution(df, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
 
         if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
             self._validate_PSI(df.sort_values(by=maybe_date_column))
@@ -2355,14 +2340,6 @@ class FeaturesEnricher(TransformerMixin):
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
         )
         df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
-
-        if (
-            self.detect_missing_search_keys
-            and list(self.fit_search_keys.values()) == [SearchKey.DATE]
-            and self.country_code is None
-        ):
-            converter = IpToCountrySearchKeyConverter(self.fit_search_keys, self.logger)
-            df = converter.convert(df)
 
         # Explode multiple search keys
         non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX] + list(self.fit_search_keys.keys())
