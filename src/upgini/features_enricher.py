@@ -865,13 +865,6 @@ class FeaturesEnricher(TransformerMixin):
                 if X is not None and y is None:
                     raise ValidationError("X passed without y")
 
-                if self.X is None:
-                    self.X = X
-                if self.y is None:
-                    self.y = y
-                if self.eval_set is None:
-                    self.eval_set = effective_eval_set
-
                 validate_scoring_argument(scoring)
 
                 self._validate_baseline_score(effective_X, effective_eval_set)
@@ -888,9 +881,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
-                    X=effective_X,
-                    y=effective_y,
-                    eval_set=effective_eval_set,
+                    X=X,
+                    y=y,
+                    eval_set=eval_set,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
@@ -1134,6 +1127,13 @@ class FeaturesEnricher(TransformerMixin):
                         self.__display_support_link(msg)
                     elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
                         self.logger.warning("Uplift is negative")
+
+                    if self.X is None:
+                        self.X = X
+                    if self.y is None:
+                        self.y = y
+                    if self.eval_set is None:
+                        self.eval_set = effective_eval_set
 
                     return metrics_df
             except Exception as e:
