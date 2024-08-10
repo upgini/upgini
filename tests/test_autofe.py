@@ -14,12 +14,16 @@ def test_date_diff():
             ["2022-10-10", pd.to_datetime("1993-12-10").timestamp()],
             ["2022-10-10", pd.to_datetime("2023-10-10").timestamp()],
             ["2022-10-10", pd.to_datetime("1966-10-10").timestamp()],
+            ["1022-10-10", pd.to_datetime("1966-10-10").timestamp()],
+            [None, pd.to_datetime("1966-10-10").timestamp()],
+            ["2022-10-10", None],
+            [None, None],
         ],
         columns=["date1", "date2"],
     )
 
     operand = DateDiff(right_unit="s")
-    expected_result = pd.Series([10531, None, 20454])
+    expected_result = pd.Series([10531, None, 20454, None, None, None, None])
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
 
@@ -28,12 +32,16 @@ def test_date_diff_type2():
         [
             [pd.to_datetime("2022-10-10").timestamp(), datetime(1993, 12, 10)],
             [pd.to_datetime("2022-10-10").timestamp(), datetime(1993, 4, 10)],
+            [pd.to_datetime("2022-10-10").timestamp(), datetime(993, 4, 10)],
+            [None, datetime(1993, 4, 10)],
+            [pd.to_datetime("2022-10-10").timestamp(), None],
+            [None, None],
         ],
         columns=["date1", "date2"],
     )
 
     operand = DateDiffType2(left_unit="s")
-    expected_result = pd.Series([61.0, 182.0])
+    expected_result = pd.Series([61.0, 182.0, None, None, None, None])
     actual = operand.calculate_binary(df.date1, df.date2)
     assert_series_equal(actual, expected_result)
 
@@ -44,6 +52,7 @@ def test_date_diff_list():
             ["2022-10-10", ["1993-12-10", "1993-12-11"]],
             ["2022-10-10", ["1993-12-10", "1993-12-10"]],
             ["2022-10-10", ["2023-10-10"]],
+            ["2022-10-10", ["1023-10-10"]],
             ["2022-10-10", []],
         ],
         columns=["date1", "date2"],
@@ -54,10 +63,14 @@ def test_date_diff_list():
         assert operand.name == expected_name
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
-    check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, None, None]))
-    check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, None, None]))
-    check(aggregation="mean", expected_name="date_diff_mean", expected_values=pd.Series([10530.5, 10531, None, None]))
-    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 0, 0]))
+    check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, None, None, None]))
+    check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, None, None, None]))
+    check(
+        aggregation="mean",
+        expected_name="date_diff_mean",
+        expected_values=pd.Series([10530.5, 10531, None, None, None]),
+    )
+    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 0, 0, 0]))
 
 
 def test_date_diff_list_bounded():
@@ -78,6 +91,7 @@ def test_date_diff_list_bounded():
             ],
             ["2022-10-10", ["2003-12-10", "2003-12-10"]],
             ["2022-10-10", ["2023-10-10", "1993-12-10"]],
+            ["1022-10-10", ["2023-10-10", "1993-12-10"]],
             ["2022-10-10", []],
         ],
         columns=["date1", "date2"],
@@ -90,12 +104,12 @@ def test_date_diff_list_bounded():
         assert operand.name == expected_name
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
-    check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2, 1, 0, 0, 0]))
-    check_num_by_years(18, 23, "date_diff_Y_18_23_count", pd.Series([1, 2, 2, 0, 0]))
-    check_num_by_years(23, 30, "date_diff_Y_23_30_count", pd.Series([0, 1, 0, 1, 0]))
-    check_num_by_years(30, 45, "date_diff_Y_30_45_count", pd.Series([0, 1, 0, 0, 0]))
-    check_num_by_years(45, 60, "date_diff_Y_45_60_count", pd.Series([0, 1, 0, 0, 0]))
-    check_num_by_years(60, None, "date_diff_Y_60_plusinf_count", pd.Series([0, 1, 0, 0, 0]))
+    check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2, 1, 0, 0, 0, 0]))
+    check_num_by_years(18, 23, "date_diff_Y_18_23_count", pd.Series([1, 2, 2, 0, 0, 0]))
+    check_num_by_years(23, 30, "date_diff_Y_23_30_count", pd.Series([0, 1, 0, 1, 0, 0]))
+    check_num_by_years(30, 45, "date_diff_Y_30_45_count", pd.Series([0, 1, 0, 0, 0, 0]))
+    check_num_by_years(45, 60, "date_diff_Y_45_60_count", pd.Series([0, 1, 0, 0, 0, 0]))
+    check_num_by_years(60, None, "date_diff_Y_60_plusinf_count", pd.Series([0, 1, 0, 0, 0, 0]))
 
 
 def test_date_percentile():
