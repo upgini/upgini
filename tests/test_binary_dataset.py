@@ -43,6 +43,7 @@ def test_binary_dataset_pandas(datafiles, etalon_definition, etalon_search_keys)
         search_keys=etalon_search_keys,  # type: ignore
         model_task_type=ModelTaskType.BINARY,  # type: ignore
     )
+    ds.columns_renaming = {c: c for c in df.columns}
     ds.validate()
     expected_valid_rows = 15555
     assert len(ds) == expected_valid_rows

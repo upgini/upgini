@@ -40,6 +40,7 @@ def test_categorical_dataset(datafiles, etalon_definition, etalon_search_keys):
         meaning_types=etalon_definition,  # type: ignore
         search_keys=etalon_search_keys,  # type: ignore
     )
+    ds.columns_renaming = {c: c for c in df.columns}
     ds.validate()
     expected_valid_rows = 16913
     assert len(ds) == expected_valid_rows

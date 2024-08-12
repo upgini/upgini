@@ -6,13 +6,10 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from pandas.api.types import (
-    is_numeric_dtype,
-    is_period_dtype,
-)
+from pandas.api.types import is_numeric_dtype, is_period_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import SearchKey
+from upgini.metadata import EVAL_SET_INDEX, SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.warning_counter import WarningCounter
 
@@ -36,13 +33,16 @@ DATETIME_PATTERN = r"^[\d\s\.\-:T/]+$"
 
 class DateTimeSearchKeyConverter:
     DATETIME_COL = "_date_time"
+    MIN_SUPPORTED_DATE_TS = datetime.datetime(1999, 12, 31)  # 946684800000  # 2000-01-01
 
     def __init__(
         self,
         date_column: str,
         date_format: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
-        bundle: ResourceBundle = None,
+        bundle: Optional[ResourceBundle] = None,
+        warnings_counter: Optional[WarningCounter] = None,
+        silent_mode=False,
     ):
         self.date_column = date_column
         self.date_format = date_format
@@ -53,6 +53,8 @@ class DateTimeSearchKeyConverter:
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
         self.bundle = bundle or get_custom_bundle()
+        self.warnings_counter = warnings_counter or WarningCounter()
+        self.silent_mode = silent_mode
 
     @staticmethod
     def _int_to_opt(i: int) -> Optional[int]:
@@ -88,13 +90,13 @@ class DateTimeSearchKeyConverter:
             # 315532801000 - 2524608001000 - milliseconds
             # 315532801000000 - 2524608001000000 - microseconds
             # 315532801000000000 - 2524608001000000000 - nanoseconds
-            if df[self.date_column].apply(lambda x: 10 ** 16 < x).all():
+            if df[self.date_column].apply(lambda x: 10**16 < x).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ns")
-            elif df[self.date_column].apply(lambda x: 10 ** 14 < x < 10 ** 16).all():
+            elif df[self.date_column].apply(lambda x: 10**14 < x < 10**16).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="us")
-            elif df[self.date_column].apply(lambda x: 10 ** 11 < x < 10 ** 14).all():
+            elif df[self.date_column].apply(lambda x: 10**11 < x < 10**14).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="ms")
-            elif df[self.date_column].apply(lambda x: 0 < x < 10 ** 11).all():
+            elif df[self.date_column].apply(lambda x: 0 < x < 10**11).all():
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
             else:
                 msg = self.bundle.get("unsupported_date_type").format(self.date_column)
@@ -103,6 +105,8 @@ class DateTimeSearchKeyConverter:
         else:
             df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
             df[self.date_column] = self.parse_date(df)
+
+        df = self.clean_old_dates(df)
 
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features
@@ -151,6 +155,19 @@ class DateTimeSearchKeyConverter:
                 return pd.to_datetime(df[self.date_column])
             except ValueError:
                 raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
+
+    def clean_old_dates(self, df: pd.DataFrame) -> pd.DataFrame:
+        condition = df[self.date_column] <= self.MIN_SUPPORTED_DATE_TS
+        old_subset = df[condition]
+        if len(old_subset) > 0:
+            df.loc[condition, self.date_column] = None
+            self.logger.info(f"Set to None: {len(old_subset)} of {len(df)} rows because they are before 2000-01-01")
+            msg = self.bundle.get("dataset_drop_old_dates")
+            self.logger.warning(msg)
+            if not self.silent_mode:
+                print(msg)
+            self.warnings_counter.increment()
+        return df
 
 
 def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
@@ -238,16 +255,18 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
 
 
 def validate_dates_distribution(
-    X: pd.DataFrame,
+    df: pd.DataFrame,
     search_keys: Dict[str, SearchKey],
     logger: Optional[logging.Logger] = None,
     bundle: Optional[ResourceBundle] = None,
     warning_counter: Optional[WarningCounter] = None,
 ):
-    maybe_date_col = None
-    for key, key_type in search_keys.items():
-        if key_type in [SearchKey.DATE, SearchKey.DATETIME]:
-            maybe_date_col = key
+    maybe_date_col = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+
+    if EVAL_SET_INDEX in df.columns:
+        X = df.query(f"{EVAL_SET_INDEX} == 0")
+    else:
+        X = df
 
     if maybe_date_col is None:
         for col in X.columns:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 
 from pydantic import BaseModel
 
@@ -112,6 +112,21 @@ class SearchKey(Enum):
             return SearchKey.MSISDN_RANGE_FROM
         if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
             return SearchKey.MSISDN_RANGE_TO
+
+    @staticmethod
+    def find_key(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> Optional[SearchKey]:
+        if isinstance(keys, SearchKey):
+            keys = [keys]
+        for col, key_type in search_keys.items():
+            if key_type in keys:
+                return col
+        return None
+
+    @staticmethod
+    def find_all_keys(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> List[SearchKey]:
+        if isinstance(keys, SearchKey):
+            keys = [keys]
+        return [col for col, key_type in search_keys.items() if key_type in keys]
 
 
 class DataType(Enum):

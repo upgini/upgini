@@ -1,13 +1,112 @@
 import logging
-from typing import Dict, List, Optional
+from ipaddress import IPv4Address, IPv6Address, _BaseAddress, ip_address
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 from requests import get
 
+from upgini.errors import ValidationError
 from upgini.metadata import SearchKey
+from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 
 # from upgini.resource_bundle import bundle
 # from upgini.utils.track_info import get_track_metrics
+
+
+class IpSearchKeyConverter:
+    def __init__(
+        self,
+        ip_column: str,
+        search_keys: Dict[str, SearchKey],
+        columns_renaming: Dict[str, str],
+        unnest_search_keys: Optional[List[str]] = None,
+        bundle: Optional[ResourceBundle] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
+        self.ip_column = ip_column
+        self.search_keys = search_keys
+        self.columns_renaming = columns_renaming
+        self.unnest_search_keys = unnest_search_keys
+        self.bundle = bundle or get_custom_bundle()
+        if logger is not None:
+            self.logger = logger
+        else:
+            self.logger = logging.getLogger()
+            self.logger.setLevel("FATAL")
+
+    @staticmethod
+    def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
+        try:
+            if isinstance(ip, (IPv4Address, IPv6Address)):
+                return int(ip)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
+        try:
+            if isinstance(ip, (IPv4Address, IPv6Address)):
+                return str(int(ip))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address]) -> Optional[_BaseAddress]:
+        try:
+            return ip_address(ip)
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _is_ipv4(ip: Optional[_BaseAddress]):
+        return ip is not None and (
+            isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
+        )
+
+    @staticmethod
+    def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
+        if isinstance(ip, IPv4Address):
+            return ip
+        return None
+
+    @staticmethod
+    def _to_ipv6(ip: Optional[_BaseAddress]) -> Optional[IPv6Address]:
+        if isinstance(ip, IPv6Address):
+            return ip
+        if isinstance(ip, IPv4Address):
+            return IPv6Address("::ffff:" + str(ip))
+        return None
+
+    def convert(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert ip address to int"""
+        self.logger.info("Convert ip address to int")
+        original_ip = self.columns_renaming[self.ip_column]
+
+        df[self.ip_column] = df[self.ip_column].apply(self._safe_ip_parse)
+        if df[self.ip_column].isnull().all():
+            raise ValidationError(self.bundle.get("invalid_ip").format(self.ip_column))
+
+        # legacy support
+        ipv4 = self.ip_column + "_v4"
+        df[ipv4] = df[self.ip_column].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
+        self.search_keys[ipv4] = SearchKey.IP
+        self.columns_renaming[ipv4] = original_ip
+
+        ipv6 = self.ip_column + "_v6"
+        df[ipv6] = (
+            df[self.ip_column]
+            .apply(self._to_ipv6)
+            .apply(self._ip_to_int_str)
+            .astype("string")
+            # .str.replace(".0", "", regex=False)
+        )
+        df = df.drop(columns=self.ip_column)
+        del self.search_keys[self.ip_column]
+        del self.columns_renaming[self.ip_column]
+        self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
+        self.columns_renaming[ipv6] = original_ip  # could be __unnest_ip...
+
+        return df
 
 
 class IpToCountrySearchKeyConverter:

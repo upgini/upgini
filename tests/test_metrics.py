@@ -10,9 +10,10 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
 from upgini.errors import ValidationError
 from upgini.metadata import (
+    SearchKey,
     CVType,
     FeaturesMetadataV2,
     HitRateMetrics,
@@ -179,12 +180,16 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     enriched_eval_X = test.drop(columns="target1")
     sampled_eval_X = enriched_eval_X
     sampled_eval_y = test["target1"]
+
+    columns_renaming = {c: c for c in enriched_X.columns}
+
     enricher._FeaturesEnricher__cached_sampled_datasets = (
         sampled_X,
         sampled_y,
         enriched_X,
         {0: (sampled_eval_X, enriched_eval_X, sampled_eval_y)},
         search_keys,
+        columns_renaming,
     )
 
     metrics = enricher.calculate_metrics()
@@ -243,12 +248,15 @@ def test_demo_metrics(requests_mock: Mocker):
     enricher.y = y_sampled
     enricher.eval_set = []
 
+    columns_renaming = {c: c for c in x_sampled.columns}
+
     enricher._FeaturesEnricher__cached_sampled_datasets = (
         x_sampled,
         y_sampled,
         enriched_X,
         dict(),
         search_keys,
+        columns_renaming,
     )
 
     metrics = enricher.calculate_metrics(scoring="mean_absolute_error")

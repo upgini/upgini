@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_object_dtype, is_string_dtype
 
 from upgini.metadata import SearchKey
-from upgini.resource_bundle import bundle
+from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
@@ -38,13 +38,17 @@ class EmailSearchKeyConverter:
         email_column: str,
         hem_column: Optional[str],
         search_keys: Dict[str, SearchKey],
+        columns_renaming: Dict[str, str],
         unnest_search_keys: Optional[List[str]] = None,
+        bundle: Optional[ResourceBundle] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.email_column = email_column
         self.hem_column = hem_column
         self.search_keys = search_keys
+        self.columns_renaming = columns_renaming
         self.unnest_search_keys = unnest_search_keys
+        self.bundle = bundle or get_custom_bundle()
         if logger is not None:
             self.logger = logger
         else:
@@ -61,7 +65,7 @@ class EmailSearchKeyConverter:
         if not EMAIL_REGEX.fullmatch(email):
             return None
 
-        return sha256(email.lower().encode("utf-8")).hexdigest()
+        return sha256(email.lower().encode("utf-8")).hexdigest().lower()
 
     @staticmethod
     def _email_to_one_domain(email: str) -> Optional[str]:
@@ -72,28 +76,38 @@ class EmailSearchKeyConverter:
 
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
+        original_email_column = self.columns_renaming[self.email_column]
         if self.hem_column is None:
             df[self.HEM_COLUMN_NAME] = df[self.email_column].apply(self._email_to_hem)
             if df[self.HEM_COLUMN_NAME].isna().all():
-                msg = bundle.get("all_emails_invalid").format(self.email_column)
+                msg = self.bundle.get("all_emails_invalid").format(self.email_column)
                 print(msg)
                 self.logger.warning(msg)
                 df = df.drop(columns=self.HEM_COLUMN_NAME)
                 del self.search_keys[self.email_column]
                 return df
             self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
-            self.unnest_search_keys.append(self.HEM_COLUMN_NAME)
+            if self.email_column in self.unnest_search_keys:
+                self.unnest_search_keys.append(self.HEM_COLUMN_NAME)
+            self.columns_renaming[self.HEM_COLUMN_NAME] = original_email_column  # it could be upgini_email_unnest...
             self.email_converted_to_hem = True
+        else:
+            df[self.hem_column] = df[self.hem_column].astype("string").str.lower()
 
         del self.search_keys[self.email_column]
         if self.email_column in self.unnest_search_keys:
             self.unnest_search_keys.remove(self.email_column)
 
         df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_one_domain)
-
+        self.columns_renaming[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = original_email_column
         self.search_keys[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = SearchKey.EMAIL_ONE_DOMAIN
+
+        if self.email_converted_to_hem:
+            df = df.drop(columns=self.email_column)
+            del self.columns_renaming[self.email_column]
 
         df[self.DOMAIN_COLUMN_NAME] = df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME].str[1:]
         self.generated_features.append(self.DOMAIN_COLUMN_NAME)
+        self.columns_renaming[self.DOMAIN_COLUMN_NAME] = original_email_column
 
         return df

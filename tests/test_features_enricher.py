@@ -8,11 +8,12 @@ import pytest
 from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
 from upgini.http import _RestClient
 from upgini.metadata import (
+    SearchKey,
     CVType,
     FeaturesMetadataV2,
     HitRateMetrics,
@@ -1042,7 +1043,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
                 },
                 {
                     "index": 1,
-                    "name": "cos_3_freq_w_sun_",
+                    "name": "cos_3_freq_w_sun__0a6bf9",
                     "originalName": "cos(3,freq=W-SUN)",
                     "dataType": "INT",
                     "meaningType": "FEATURE",
@@ -1071,13 +1072,13 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(name="f_feature123", type="numerical", source="ads", hit_rate=99.0, shap_value=0.9),
                 FeaturesMetadataV2(
-                    name="cos_3_freq_w_sun_", type="numerical", source="etalon", hit_rate=100.0, shap_value=0.1
+                    name="cos_3_freq_w_sun__0a6bf9", type="numerical", source="etalon", hit_rate=100.0, shap_value=0.1
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=5319, max_hit_count=5266, hit_rate=0.99, hit_rate_percent=99.0
             ),
-            features_used_for_embeddings=["cos_3_freq_w_sun_"],
+            features_used_for_embeddings=["cos_3_freq_w_sun__0a6bf9"],
         ),
     )
     path_to_mock_features = os.path.join(
@@ -1168,8 +1169,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         progress_bar=None,
         progress_callback=None,
     ):
-        assert "cos(3,freq=W-SUN)" in self.data.columns
-        assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun_"
+        assert "cos_3_freq_w_sun__0a6bf9" in self.data.columns
+        assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun__0a6bf9"
         return original_validation(
             self,
             trace_id,
@@ -2256,12 +2257,12 @@ def test_email_search_key(requests_mock: Mocker):
             "system_record_id",
             "entity_system_record_id",
             "target",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
-            "email_domain_10c73f",
+            "hashed_email",
+            "email_one_domain",
+            "email_domain",
             "current_date_b993c4",
         }
-        assert {"hashed_email_64ff8c", "email_one_domain_3b0a68", "current_date_b993c4"} == {
+        assert {"hashed_email", "email_one_domain", "current_date_b993c4"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         raise TestException
@@ -2422,15 +2423,15 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "phone_45569d",
             "date_0e8763",
             "target",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
-            "email_domain_10c73f",
+            "hashed_email",
+            "email_one_domain",
+            "email_domain",
         }
         assert {
             "postal_code_13534a",
             "phone_45569d",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
+            "hashed_email",
+            "email_one_domain",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         search_task = SearchTask(search_task_id, self, rest_client=enricher.rest_client)
@@ -2474,8 +2475,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             # "country_aff64e",
             "postal_code_13534a",
             "phone_45569d",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
+            "hashed_email",
+            "email_one_domain",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         raise TestException
@@ -2690,6 +2691,12 @@ def test_unsupported_arguments(requests_mock: Mocker):
             )
     finally:
         Dataset.MIN_ROWS_COUNT = original_min_rows
+
+
+def test_multikey_metrics_without_external_features():
+    # TODO test case when there is no external features found and we have datetime + email
+    # that produce "client" features and multiple email produce multiple email_domain features
+    pass
 
 
 class DataFrameWrapper:
