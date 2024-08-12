@@ -148,6 +148,8 @@ class Distance(PandasOperand):
 
     # row-wise dot product
     def __dot(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        left = left.apply(lambda x: np.array(x))
+        right = right.apply(lambda x: np.array(x))
         res = (left.dropna() * right.dropna()).apply(np.sum)
         res = res.reindex(left.index.union(right.index))
         return res
