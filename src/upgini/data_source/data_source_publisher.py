@@ -235,7 +235,7 @@ class DataSourcePublisher:
                 self.logger.exception("Failed to register data table")
                 raise
 
-    def remove(self, data_table_ids: List[str] | str):
+    def remove(self, data_table_ids: Union[List[str], str]):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
