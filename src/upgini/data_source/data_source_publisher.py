@@ -47,9 +47,9 @@ class DataSourcePublisher:
         self,
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
-        update_frequency: (
-            Literal["Daily"] | Literal["Weekly"] | Literal["Monthly"] | Literal["Quarterly"] | Literal["Annually"]
-        ),
+        update_frequency: Union[
+            Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
+        ],
         exclude_from_autofe_generation: Optional[List[str]],
         secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
         sort_column: Optional[str] = None,
