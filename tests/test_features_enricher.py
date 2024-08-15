@@ -8,12 +8,11 @@ import pytest
 from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
-from upgini.features_enricher import FeaturesEnricher
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
+from upgini.features_enricher import FeaturesEnricher
 from upgini.http import _RestClient
 from upgini.metadata import (
-    SearchKey,
     CVType,
     FeaturesMetadataV2,
     HitRateMetrics,
@@ -21,7 +20,9 @@ from upgini.metadata import (
     ModelTaskType,
     ProviderTaskMetadataV2,
     RuntimeParameters,
+    SearchKey,
 )
+from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
@@ -177,7 +178,7 @@ def test_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -475,7 +476,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.021830, -0.006607, -0.018483],
+            enriched_gini: [0.016531, 0.003019, -0.021013],
         }
     )
     print("Expected metrics: ")
@@ -506,7 +507,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            enriched_gini: [0.054454],
+            enriched_gini: [0.053696],
         }
     )
     print("Expected metrics: ")
@@ -758,7 +759,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -877,7 +878,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -994,7 +995,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -1814,10 +1815,14 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     mock_features = pd.read_parquet(path_to_mock_features)
     converter = DateTimeSearchKeyConverter("rep_date")
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
+    search_keys_copy = search_keys.copy()
+    normalizer = Normalizer(search_keys_copy, converter.generated_features)
+    df_with_eval_set_index_with_date = normalizer.normalize(df_with_eval_set_index_with_date)
     mock_features["system_record_id"] = pd.util.hash_pandas_object(
-        df_with_eval_set_index_with_date[sorted(search_keys.keys())].reset_index(drop=True), index=False
+        df_with_eval_set_index_with_date[sorted(search_keys_copy.keys())].reset_index(drop=True), index=False
     ).astype("Float64")
     mock_features["entity_system_record_id"] = mock_features["system_record_id"]
+    mock_features = mock_features.drop_duplicates(subset=["entity_system_record_id"], keep="first")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
     enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)

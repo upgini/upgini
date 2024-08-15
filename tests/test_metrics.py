@@ -1131,23 +1131,23 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     assert metrics_df.loc[0, segment_header] == train_segment
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
-    assert metrics_df.loc[0, baseline_gini] == approx(0.027066)
-    assert metrics_df.loc[0, enriched_gini] == approx(0.101601)
-    assert metrics_df.loc[0, uplift] == approx(0.074535)
+    assert metrics_df.loc[0, baseline_gini] == approx(0.062606)
+    assert metrics_df.loc[0, enriched_gini] == approx(0.069399)
+    assert metrics_df.loc[0, uplift] == approx(0.006793)
 
     assert metrics_df.loc[1, segment_header] == eval_1_segment
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
-    assert metrics_df.loc[1, baseline_gini] == approx(-0.078548)
-    assert metrics_df.loc[1, enriched_gini] == approx(-0.019663)
-    assert metrics_df.loc[1, uplift] == approx(0.058885)
+    assert metrics_df.loc[1, baseline_gini] == approx(-0.028926)
+    assert metrics_df.loc[1, enriched_gini] == approx(-0.008178)
+    assert metrics_df.loc[1, uplift] == approx(0.020748)
 
     assert metrics_df.loc[2, segment_header] == eval_2_segment
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
-    assert metrics_df.loc[2, baseline_gini] == approx(-0.066572)
-    assert metrics_df.loc[2, enriched_gini] == approx(-0.116598)
-    assert metrics_df.loc[2, uplift] == approx(-0.050026)
+    assert metrics_df.loc[2, baseline_gini] == approx(-0.025322)
+    assert metrics_df.loc[2, enriched_gini] == approx(-0.047903)
+    assert metrics_df.loc[2, uplift] == approx(-0.022581)
 
 
 @pytest.mark.skip
