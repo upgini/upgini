@@ -3,8 +3,6 @@ from typing import Optional
 import Levenshtein
 import numpy as np
 import pandas as pd
-from numpy import dot
-from numpy.linalg import norm
 from jarowinkler import jarowinkler_similarity
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin

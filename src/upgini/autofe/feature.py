@@ -248,7 +248,8 @@ class Feature:
                 return Column(string)
             else:
                 raise ValueError(
-                    f"Unsupported column name: {string}. Column names should not have characters: ['(', ')', '+', '-', '*', '/', ',']"
+                    f"Unsupported column name: {string}. Column names should not have characters: "
+                    "['(', ')', '+', '-', '*', '/', ',']"
                 )
 
         def find_prev(string: str) -> int:
