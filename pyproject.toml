@@ -51,7 +51,6 @@ dependencies = [
     "xhtml2pdf==0.2.11",
     "jarowinkler>=2.0.0",
     "levenshtein>=0.25.1",
-    "python-bidi==0.4.2",
 ]
 
 [project.urls]
