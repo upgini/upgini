@@ -3,7 +3,7 @@ import time
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from upgini.errors import HttpError, ValidationError
 from upgini.http import LoggerFactory, get_rest_client
@@ -47,7 +47,9 @@ class DataSourcePublisher:
         self,
         data_table_uri: str,
         search_keys: Dict[str, SearchKey],
-        update_frequency: str,
+        update_frequency: Union[
+            Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
+        ],
         exclude_from_autofe_generation: Optional[List[str]],
         secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
         sort_column: Optional[str] = None,
@@ -233,11 +235,17 @@ class DataSourcePublisher:
                 self.logger.exception("Failed to register data table")
                 raise
 
-    def remove(self, data_table_ids: List[str]):
+    def remove(self, data_table_ids: Union[List[str], str]):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
-                if data_table_ids is None or len(data_table_ids) == 0:
+                if not data_table_ids:
+                    raise ValidationError("Empty data table ids")
+                if isinstance(data_table_ids, str):
+                    data_table_ids = [data_table_ids]
+                if not isinstance(data_table_ids, list):
+                    raise ValidationError("Invalid format of data_table_ids argument")
+                if len(data_table_ids) == 0:
                     raise ValidationError("Empty data table ids")
 
                 for data_table_id in data_table_ids:
@@ -266,16 +274,20 @@ class DataSourcePublisher:
         source_link: Optional[str] = None,
         update_frequency: Optional[str] = None,
         client_emails: Optional[List[str]] = None,
+        date_features: Optional[List[str]] = None,
+        date_vector_features: Optional[List[str]] = None,
     ):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
-                if data_table_ids is None or len(data_table_ids) == 0:
+                if data_table_ids is None:
                     raise ValidationError("Empty data table ids")
                 if isinstance(data_table_ids, str):
                     data_table_ids = [data_table_ids]
                 if not isinstance(data_table_ids, list):
                     raise ValidationError("data_table_ids should be string or list of strings")
+                if len(data_table_ids) == 0:
+                    raise ValidationError("Empty data table ids")
                 if update_frequency is not None and update_frequency not in self.ACCEPTABLE_UPDATE_FREQUENCIES:
                     raise ValidationError(
                         f"Invalid update frequency: {update_frequency}. "
@@ -311,6 +323,10 @@ class DataSourcePublisher:
                     request["updateFrequency"] = update_frequency
                 if client_emails is not None:
                     request["clientEmails"] = client_emails
+                if date_features is not None:
+                    request["dateFeatures"] = date_features
+                if date_vector_features is not None:
+                    request["dateVectorFeatures"] = date_vector_features
                 self.logger.info(f"Activating data tables with request {request}")
 
                 self._rest_client.activate_datatables(request, trace_id)
