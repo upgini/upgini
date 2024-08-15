@@ -1,6 +1,20 @@
 from typing import Dict
 
-from upgini.autofe.binary import Add, Divide, Max, Min, Multiply, Sim, Subtract
+from upgini.autofe.binary import (
+    Add,
+    Combine,
+    CombineThenFreq,
+    Distance,
+    Divide,
+    JaroWinklerSim1,
+    JaroWinklerSim2,
+    LevenshteinSim,
+    Max,
+    Min,
+    Multiply,
+    Sim,
+    Subtract,
+)
 from upgini.autofe.date import (
     DateDiff,
     DateDiffType2,
@@ -9,9 +23,9 @@ from upgini.autofe.date import (
     DatePercentile,
     DatePercentileMethod2,
 )
-from upgini.autofe.groupby import GroupByThenAgg, GroupByThenRank
+from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq, GroupByThenNUnique, GroupByThenRank
 from upgini.autofe.operand import Operand
-from upgini.autofe.unary import Abs, Floor, Freq, Log, Residual, Norm, Sigmoid, Sqrt, Square
+from upgini.autofe.unary import Abs, Embeddings, Floor, Freq, Log, Residual, Norm, Sigmoid, Sqrt, Square
 from upgini.autofe.vector import Mean, Sum
 
 ALL_OPERANDS: Dict[str, Operand] = {
@@ -39,10 +53,10 @@ ALL_OPERANDS: Dict[str, Operand] = {
         GroupByThenAgg(name="GroupByThenMedian", agg="median"),
         GroupByThenAgg(name="GroupByThenStd", output_type="float", agg="std"),
         GroupByThenRank(),
-        Operand(name="Combine", has_symmetry_importance=True, output_type="object", is_categorical=True),
-        Operand(name="CombineThenFreq", has_symmetry_importance=True, output_type="float"),
-        Operand(name="GroupByThenNUnique", output_type="int", is_vectorizable=True, is_grouping=True),
-        Operand(name="GroupByThenFreq", output_type="float", is_grouping=True),
+        Combine(),
+        CombineThenFreq(),
+        GroupByThenNUnique(),
+        GroupByThenFreq(),
         Sim(),
         DateDiff(),
         DateDiffType2(),
@@ -59,6 +73,11 @@ ALL_OPERANDS: Dict[str, Operand] = {
         DatePercentile(),
         DatePercentileMethod2(),
         Norm(),
+        JaroWinklerSim1(),
+        JaroWinklerSim2(),
+        LevenshteinSim(),
+        Distance(),
+        Embeddings(),
     ]
 }
 

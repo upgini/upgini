@@ -13,6 +13,9 @@ pyjwt>=2.8.0
 xhtml2pdf==0.2.11
 python-bidi==0.4.2
 ipywidgets>=8.1.0
+# autofe
+jarowinkler>=2.0.0
+levenshtein>=0.25.1
 
 black
 flake8
