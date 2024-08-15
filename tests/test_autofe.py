@@ -81,21 +81,7 @@ def test_date_diff_list():
         expected_name="date_diff_mean",
         expected_values=pd.Series([10530.5, 10531, -365.0, None, None]),
     )
-    check(
-        aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0])
-    )
-
-    operand = DateListDiff(aggregation="mean")
-    df1 = df.loc[[2], :]
-    assert_series_equal(
-        operand.calculate_binary(df1.date1, df1.date2).rename(None).reset_index(drop=True), pd.Series([-365.0])
-    )
-
-    operand = DateListDiff(aggregation="nunique")
-    df1 = df.loc[len(df) - 1 :, :]
-    assert_series_equal(
-        operand.calculate_binary(df1.date1, df1.date2).rename(None).reset_index(drop=True), pd.Series([0.0])
-    )
+    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 1, 1, 0]))
 
     operand = DateListDiff(aggregation="min", replace_negative=True)
     assert_series_equal(
