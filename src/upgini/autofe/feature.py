@@ -138,15 +138,17 @@ class Feature:
         if self.cached_display_name is not None and cache:
             return self.cached_display_name
 
+        should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary else False
+        prev_name = [self.children[0].get_op_display_name()] if should_stack_op else []
+
         if self.alias:
             components = ["f_autofe", self.alias]
-        elif shorten and not self.op.is_unary:
-            components = ["f_autofe", self.get_op_display_name()]
+        elif shorten and (not self.op.is_unary or should_stack_op):
+            components = ["f_autofe"] + prev_name + [self.get_op_display_name()]
         else:
-            components = ["f_" + "_f_".join(self.get_columns(**kwargs))] + [
-                "autofe",
-                self.get_op_display_name(),
-            ]
+            components = (
+                ["f_" + "_f_".join(self.get_columns(**kwargs))] + ["autofe"] + prev_name + [self.get_op_display_name()]
+            )
         components.extend([str(self.display_index)] if self.display_index is not None else [])
         display_name = "_".join(components)
 
@@ -237,11 +239,18 @@ class Feature:
 
     @staticmethod
     def from_formula(string: str) -> Union[Column, "Feature"]:
-        if string[-1] != ")":
-            return Column(string)
 
         def is_trivial_char(c: str) -> bool:
             return c not in "()+-*/,"
+
+        if string[-1] != ")":
+            if all(is_trivial_char(c) for c in string):
+                return Column(string)
+            else:
+                raise ValueError(
+                    f"Unsupported column name: {string}. Column names should not have characters: "
+                    "['(', ')', '+', '-', '*', '/', ',']"
+                )
 
         def find_prev(string: str) -> int:
             if string[-1] != ")":
@@ -264,8 +273,11 @@ class Feature:
             return Feature(find_op(string[: p2 - 1]), [Feature.from_formula(string[p2:-1])])
         p1 = find_prev(string[: p2 - 1])
         if string[0] == "(":
+            op = find_op(string[p2 - 1])
+            if op is None:
+                raise ValueError(f"Unsupported operand: {string[p2 - 1]}")
             return Feature(
-                find_op(string[p2 - 1]),
+                op,
                 [Feature.from_formula(string[p1 : p2 - 1]), Feature.from_formula(string[p2:-1])],
             )
         else:
@@ -276,6 +288,8 @@ class Feature:
                     [Feature.from_formula(string[p1 : p2 - 1]), Feature.from_formula(string[p2:-1])],
                 )
             else:
+                if string[p1 - 1] == "(":
+                    raise ValueError(f"Unsupported operand: {string[: p1 - 1]}")
                 base_features = [
                     Feature.from_formula(string[p2:-1]),
                     Feature.from_formula(string[p1 : p2 - 1]),
@@ -321,10 +335,10 @@ class FeatureGroup:
             lower_order_names = [ch.get_display_name() for ch in lower_order_children]
             if any(isinstance(f, Feature) for f in lower_order_children):
                 child_data = pd.concat(
-                    [data[main_column]] + [ch.calculate(data) for ch in lower_order_children],
+                    [data[main_column or []]] + [ch.calculate(data) for ch in lower_order_children],
                     axis=1,
                 )
-                child_data.columns = [main_column] + lower_order_names
+                child_data.columns = ([main_column] if main_column is not None else []) + lower_order_names
             else:
                 child_data = data[columns]
 

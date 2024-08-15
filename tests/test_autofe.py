@@ -1,11 +1,14 @@
+import pytest
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 from pandas.testing import assert_series_equal, assert_frame_equal
 
-from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.feature import Feature, FeatureGroup
+from upgini.autofe.date import DateDiff, DateDiffType2, DateListDiff, DateListDiffBounded, DatePercentile
 from upgini.autofe.unary import Norm
+from upgini.autofe.binary import Distance, JaroWinklerSim1, JaroWinklerSim2, LevenshteinSim
 
 
 def test_date_diff():
@@ -23,6 +26,10 @@ def test_date_diff():
     )
 
     operand = DateDiff(right_unit="s")
+    expected_result = pd.Series([10531, -365.0, 20454, None, None, None, None])
+    assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
+
+    operand = DateDiff(right_unit="s", replace_negative=True)
     expected_result = pd.Series([10531, None, 20454, None, None, None, None])
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
@@ -63,14 +70,23 @@ def test_date_diff_list():
         assert operand.name == expected_name
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
-    check(aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, None, None, None]))
-    check(aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, None, None, None]))
+    check(
+        aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, -365.0, None, None])
+    )
+    check(
+        aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, -365.0, None, None])
+    )
     check(
         aggregation="mean",
         expected_name="date_diff_mean",
-        expected_values=pd.Series([10530.5, 10531, None, None, None]),
+        expected_values=pd.Series([10530.5, 10531, -365.0, None, None]),
     )
-    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 0, 0, 0]))
+    check(aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2, 1, 1, 1, 0]))
+
+    operand = DateListDiff(aggregation="min", replace_negative=True)
+    assert_series_equal(
+        operand.calculate_binary(df.date1, df.date2).rename(None), pd.Series([10530, 10531, None, None, None])
+    )
 
 
 def test_date_diff_list_bounded():
@@ -193,6 +209,14 @@ def test_get_display_name():
     feature5.op.alias = "date_diff_type1_per_method1"
     assert feature5.get_display_name(shorten=True) == "f_autofe_date_diff_type1_per_method1_123"
 
+    feature6 = Feature.from_formula("abs(date_diff(b,c))").set_display_index("123")
+    assert feature6.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_abs_123"
+    assert feature6.get_display_name(shorten=True) == "f_autofe_date_diff_type1_abs_123"
+
+    feature7 = Feature.from_formula("date_diff(b,c)").set_display_index("123")
+    assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_123"
+    assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_type1_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
@@ -257,3 +281,69 @@ def test_feature_group():
     )
     group2_res = group2[0].calculate(data)
     assert_frame_equal(group2_res, expected_group2_res)
+
+
+def test_string_sim():
+    data = pd.DataFrame(
+        [
+            ["book", "look"],
+            ["blow", None],
+            [None, "Jeremy"],
+            ["below", "bewoll"],
+            [None, None],
+            ["abc", "abc"],
+            ["four", "seven"],
+        ],
+        columns=["a", "b"],
+    )
+
+    expected_jw1 = pd.Series([0.833, None, None, 0.902, None, 1.0, 0.0])
+    expected_jw2 = pd.Series([0.883, None, None, 0.739, None, 1.0, 0.0])
+    expected_lv = pd.Series([0.75, None, None, 0.5, None, 1.0, 0.0])
+
+    assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
+    assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
+    assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
+
+
+def test_distance():
+    data = pd.DataFrame(
+        [
+            [np.array([0, 1, 0]), np.array([0, 1, 0])],
+            [[0, 1, 0], [0, 1, 0]],
+            [np.array([0, 1, 0]), np.array([1, 1, 0])],
+            [np.array([0, 1, 0]), np.array([1, 0, 0])],
+            [np.array([0, 1, 0]), None],
+            [None, np.array([1, 0, 0])],
+        ],
+        columns=["v1", "v2"],
+    )
+
+    op = Distance()
+
+    expected_values = pd.Series([0.0, 0.0, 0.5, 1.0, np.nan, np.nan])
+    actual_values = op.calculate_binary(data.v1, data.v2)
+
+    assert_series_equal(actual_values, expected_values)
+
+
+def test_from_formula():
+
+    def check_formula(formula):
+        assert Feature.from_formula(formula).to_formula() == formula
+
+    check_formula("a")
+    check_formula("(a/b)")
+    check_formula("log(a)")
+    check_formula("date_diff(a,b)")
+    check_formula("date_per(a,date_diff(b,c))")
+    check_formula("mean(a,b,c,d,e)")
+
+    with pytest.raises(ValueError):
+        check_formula("unsupported(a,b)")
+
+    with pytest.raises(ValueError):
+        check_formula("(a,b)")
+
+    with pytest.raises(ValueError):
+        check_formula("a/b")

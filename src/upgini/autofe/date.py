@@ -43,6 +43,8 @@ class DateDiff(PandasOperand, DateDiffMixin):
     is_binary = True
     has_symmetry_importance = True
 
+    replace_negative: bool = False
+
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
         res.update(
@@ -50,6 +52,7 @@ class DateDiff(PandasOperand, DateDiffMixin):
                 "diff_unit": self.diff_unit,
                 "left_unit": self.left_unit,
                 "right_unit": self.right_unit,
+                "replace_negative": self.replace_negative,
             }
         )
         return res
@@ -61,7 +64,8 @@ class DateDiff(PandasOperand, DateDiffMixin):
         return self.__replace_negative(diff)
 
     def __replace_negative(self, x: Union[pd.DataFrame, pd.Series]):
-        x[x < 0] = None
+        if self.replace_negative:
+            x[x < 0] = None
         return x
 
 
@@ -101,13 +105,19 @@ _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len,
 class DateListDiff(PandasOperand, DateDiffMixin):
     is_binary = True
     has_symmetry_importance = True
+
     aggregation: str
+    replace_negative: bool = False
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
         res.update(
             {
                 "aggregation": self.aggregation,
+                "diff_unit": self.diff_unit,
+                "left_unit": self.left_unit,
+                "right_unit": self.right_unit,
+                "replace_negative": self.replace_negative,
             }
         )
         return res
@@ -125,7 +135,7 @@ class DateListDiff(PandasOperand, DateDiffMixin):
 
     def _diff(self, x: TimedeltaArray):
         x = self._convert_diff_to_unit(x)
-        return x[x > 0]
+        return x[x > 0] if self.replace_negative else x
 
     def _agg(self, x):
         method = getattr(np, self.aggregation, None)
@@ -157,7 +167,10 @@ class DateListDiffBounded(DateListDiff):
         super().__init__(**data)
 
     def _agg(self, x):
-        x = x[(x >= (self.lower_bound or -np.inf)) & (x < (self.upper_bound or np.inf))]
+        x = x[
+            (x >= (self.lower_bound if self.lower_bound is not None else -np.inf))
+            & (x < (self.upper_bound if self.upper_bound is not None else np.inf))
+        ]
         return super()._agg(x)
 
 
