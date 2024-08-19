@@ -20,7 +20,7 @@ class DateDiffMixin(BaseModel):
         if isinstance(x, pd.DataFrame):
             return x.apply(lambda y: self._convert_to_date(y, unit), axis=1)
 
-        return pd.to_datetime(x, unit=unit, errors='coerce')
+        return pd.to_datetime(x, unit=unit, errors="coerce")
 
     def _convert_diff_to_unit(self, diff: Union[pd.Series, TimedeltaArray]) -> Union[pd.Series, TimedeltaArray]:
         if self.diff_unit == "D":
@@ -100,6 +100,7 @@ class DateDiffType2(PandasOperand, DateDiffMixin):
 
 
 _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len, 0)}
+_count_aggregations = ["nunique", "count"]
 
 
 class DateListDiff(PandasOperand, DateDiffMixin):
@@ -129,9 +130,15 @@ class DateListDiff(PandasOperand, DateDiffMixin):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
-        right = right.apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
+        right_mask = right.apply(lambda x: len(x) > 0)
+        mask = left.notna() & right.notna() & right_mask
+        right_masked = right[mask].apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
+        res_masked = pd.Series(left[mask] - right_masked.values).apply(lambda x: self._agg(self._diff(x)))
+        res = res_masked.reindex(left.index.union(right.index))
+        if self.aggregation in _count_aggregations:
+            res[~right_mask] = 0.0
 
-        return pd.Series(left - right.values).apply(lambda x: self._agg(self._diff(x)))
+        return res
 
     def _diff(self, x: TimedeltaArray):
         x = self._convert_diff_to_unit(x)
