@@ -91,7 +91,11 @@ from upgini.utils.display_utils import (
     prepare_and_show_report,
     show_request_quote_button,
 )
-from upgini.utils.email_utils import EmailSearchKeyConverter, EmailSearchKeyDetector
+from upgini.utils.email_utils import (
+    EmailDomainGenerator,
+    EmailSearchKeyConverter,
+    EmailSearchKeyDetector,
+)
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpSearchKeyConverter
@@ -1030,7 +1034,7 @@ class FeaturesEnricher(TransformerMixin):
                         self.bundle.get("quality_metrics_rows_header"): _num_samples(effective_X),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                        y_sorted
+                        effective_y
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                             np.mean(effective_y), 4
@@ -1103,7 +1107,7 @@ class FeaturesEnricher(TransformerMixin):
                                 # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                                eval_y_sorted
+                                effective_eval_set[idx][1]
                             ):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                                     np.mean(effective_eval_set[idx][1]), 4
@@ -1211,29 +1215,6 @@ class FeaturesEnricher(TransformerMixin):
 
     def _has_paid_features(self, exclude_features_sources: Optional[List[str]]) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
-
-    def _extend_x(self, x: pd.DataFrame, is_demo_dataset: bool) -> Tuple[pd.DataFrame, Dict[str, SearchKey]]:
-        search_keys = self.search_keys.copy()
-        search_keys = self.__prepare_search_keys(x, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
-
-        extended_X = x.copy()
-        generated_features = []
-        date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
-        if date_column is not None:
-            converter = DateTimeSearchKeyConverter(
-                date_column, self.date_format, self.logger, self.bundle, silent_mode=True
-            )
-            extended_X = converter.convert(extended_X, keep_time=True)
-            generated_features.extend(converter.generated_features)
-        email_column = self._get_email_column(search_keys)
-        hem_column = self._get_hem_column(search_keys)
-        if email_column:
-            converter = EmailSearchKeyConverter(email_column, hem_column, search_keys, [], self.logger)
-            extended_X = converter.convert(extended_X)
-            generated_features.extend(converter.generated_features)
-        generated_features = [f for f in generated_features if f in self.fit_generated_features]
-
-        return extended_X, search_keys
 
     def _is_input_same_as_fit(
         self,
@@ -1386,6 +1367,7 @@ class FeaturesEnricher(TransformerMixin):
             importance_threshold,
             max_features,
         )
+        filtered_enriched_features = [c for c in filtered_enriched_features if c not in client_features]
 
         X_sorted, y_sorted = self._sort_by_system_record_id(X_sampled, y_sampled, self.cv)
         enriched_X_sorted, enriched_y_sorted = self._sort_by_system_record_id(enriched_X, y_sampled, self.cv)
@@ -1591,6 +1573,12 @@ class FeaturesEnricher(TransformerMixin):
             df = converter.convert(df, keep_time=True)
             generated_features = converter.generated_features
 
+        email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
+        if email_columns:
+            generator = EmailDomainGenerator(email_columns)
+            df = generator.generate(df)
+            generated_features.extend(generator.generated_features)
+
         normalizer = Normalizer(self.search_keys, generated_features, self.bundle, self.logger, self.warning_counter)
         df = normalizer.normalize(df)
         columns_renaming = normalizer.columns_renaming
@@ -1607,13 +1595,6 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info(f"Downsampling from {num_samples} to {sample_rows}")
             df = df.sample(n=sample_rows, random_state=self.random_state)
 
-        email_column = self._get_email_column(search_keys)
-        hem_column = self._get_hem_column(search_keys)
-        if email_column:
-            converter = EmailSearchKeyConverter(
-                email_column, hem_column, search_keys, columns_renaming, [], self.bundle, self.logger
-            )
-            df = converter.convert(df)
         df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID)
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -2030,6 +2011,12 @@ class FeaturesEnricher(TransformerMixin):
                 if self.add_date_if_missing:
                     df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
 
+            email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
+            if email_columns:
+                generator = EmailDomainGenerator(email_columns)
+                df = generator.generate(df)
+                generated_features.extend(generator.generated_features)
+
             normalizer = Normalizer(
                 search_keys, generated_features, self.bundle, self.logger, self.warning_counter, silent_mode
             )
@@ -2053,7 +2040,6 @@ class FeaturesEnricher(TransformerMixin):
 
             email_column = self._get_email_column(search_keys)
             hem_column = self._get_hem_column(search_keys)
-            # email_converted_to_hem = False
             if email_column:
                 converter = EmailSearchKeyConverter(
                     email_column,
@@ -2064,7 +2050,6 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger,
                 )
                 df = converter.convert(df)
-                generated_features.extend(converter.generated_features)
 
             ip_column = self._get_ip_column(search_keys)
             if ip_column:
@@ -2099,7 +2084,9 @@ class FeaturesEnricher(TransformerMixin):
             for col in features_for_transform:
                 meaning_types[col] = FileColumnMeaningType.FEATURE
             features_not_to_pass = [
-                c for c in df.columns if c not in search_keys.keys() and c not in features_for_transform
+                c
+                for c in df.columns
+                if c not in search_keys.keys() and c not in features_for_transform and c != ENTITY_SYSTEM_RECORD_ID
             ]
 
             if add_fit_system_record_id:
@@ -2235,7 +2222,9 @@ class FeaturesEnricher(TransformerMixin):
                 result = enrich()
 
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
-            existing_filtered_columns = [c for c in filtered_columns if c in result.columns]
+            existing_filtered_columns = [
+                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
+            ]
             selecting_columns = validated_X.columns.tolist() + generated_features + existing_filtered_columns
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
@@ -2446,6 +2435,12 @@ class FeaturesEnricher(TransformerMixin):
             if self.add_date_if_missing:
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
+        email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
+        if email_columns:
+            generator = EmailDomainGenerator(email_columns)
+            df = generator.generate(df)
+            self.fit_generated_features.extend(generator.generated_features)
+
         # Checks that need validated date
         validate_dates_distribution(df, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
 
@@ -2488,7 +2483,6 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger,
             )
             df = converter.convert(df)
-            self.fit_generated_features.extend(converter.generated_features)
 
         ip_column = self._get_ip_column(self.fit_search_keys)
         if ip_column:

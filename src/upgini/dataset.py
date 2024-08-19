@@ -302,7 +302,7 @@ class Dataset:  # (pd.DataFrame):
             key
             for search_group in self.search_keys_checked
             for key in search_group
-            if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
+            if not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
         }
         ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
@@ -440,9 +440,11 @@ class Dataset:  # (pd.DataFrame):
                 FileColumnMeaningType.DATETIME,
                 # FileColumnMeaningType.IP_ADDRESS,
             }:
+                min_value = self.data[column_name].astype("Int64").min()
+                max_value = self.data[column_name].astype("Int64").max()
                 min_max_values = NumericInterval(
-                    minValue=self.data[column_name].astype("Int64").min(),
-                    maxValue=self.data[column_name].astype("Int64").max(),
+                    minValue=min_value,
+                    maxValue=max_value,
                 )
             else:
                 min_max_values = None

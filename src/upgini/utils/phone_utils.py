@@ -29,21 +29,21 @@ class PhoneSearchKeyConverter:
     def convert(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self.phone_to_int(df)
         if self.country_column is not None:
-            df = df.apply(self.add_prefix, axis=1)
+            df[self.phone_column] = df.apply(self.add_prefix, axis=1)
         df[self.phone_column] = df[self.phone_column].astype("Int64")
         return df
 
     def add_prefix(self, row):
         phone = row[self.phone_column]
         if pd.isna(phone):
-            return row
+            return phone
         country = row[self.country_column]
         country_prefix_tuple = self.COUNTRIES_PREFIXES.get(country)
         if country_prefix_tuple is not None:
             country_prefix, number_of_digits = country_prefix_tuple
             if len(str(phone)) == number_of_digits:
-                row[self.phone_column] = int(country_prefix + str(phone))
-        return row
+                return int(country_prefix + str(phone))
+        return phone
 
     def phone_to_int(self, df: pd.DataFrame) -> pd.DataFrame:
         """

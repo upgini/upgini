@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+import pytz
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -28,12 +29,13 @@ DATE_FORMATS = [
     "%Y-%m-%dT%H:%M:%S.%f",
 ]
 
-DATETIME_PATTERN = r"^[\d\s\.\-:T/]+$"
+DATETIME_PATTERN = r"^[\d\s\.\-:T/+]+$"
 
 
 class DateTimeSearchKeyConverter:
     DATETIME_COL = "_date_time"
-    MIN_SUPPORTED_DATE_TS = datetime.datetime(1999, 12, 31)  # 946684800000  # 2000-01-01
+    # MIN_SUPPORTED_DATE_TS = datetime.datetime(1999, 12, 31)  # 946684800000  # 2000-01-01
+    MIN_SUPPORTED_DATE_TS = pd.to_datetime(datetime.datetime(1999, 12, 31)).tz_localize(None)
 
     def __init__(
         self,
@@ -106,12 +108,13 @@ class DateTimeSearchKeyConverter:
             df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
             df[self.date_column] = self.parse_date(df)
 
-        df = self.clean_old_dates(df)
-
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features
         seconds = "datetime_seconds"
         df[self.date_column] = df[self.date_column].dt.tz_localize(None)
+
+        df = self.clean_old_dates(df)
+
         df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
 
         seconds_without_na = df[seconds].dropna()

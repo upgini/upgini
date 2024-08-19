@@ -28,10 +28,31 @@ class EmailSearchKeyDetector(BaseSearchKeyDetector):
         return is_email_count / all_count > 0.1
 
 
+class EmailDomainGenerator:
+    DOMAIN_SUFFIX = "_domain"
+
+    def __init__(self, email_columns: List[str]):
+        self.email_columns = email_columns
+        self.generated_features = []
+
+    def generate(self, df: pd.DataFrame) -> pd.DataFrame:
+        for email_col in self.email_columns:
+            domain_feature = email_col + self.DOMAIN_SUFFIX
+            df[domain_feature] = df[email_col].apply(self._email_to_domain)
+            self.generated_features.append(domain_feature)
+        return df
+
+    @staticmethod
+    def _email_to_domain(email: str) -> Optional[str]:
+        if email is not None and isinstance(email, str) and "@" in email:
+            name_and_domain = email.split("@")
+            if len(name_and_domain) == 2 and len(name_and_domain[1]) > 0:
+                return name_and_domain[1]
+
+
 class EmailSearchKeyConverter:
-    HEM_COLUMN_NAME = "hashed_email"
-    DOMAIN_COLUMN_NAME = "email_domain"
-    EMAIL_ONE_DOMAIN_COLUMN_NAME = "email_one_domain"
+    HEM_SUFFIX = "_hem"
+    ONE_DOMAIN_SUFFIX = "_one_domain"
 
     def __init__(
         self,
@@ -54,7 +75,6 @@ class EmailSearchKeyConverter:
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
-        self.generated_features: List[str] = []
         self.email_converted_to_hem = False
 
     @staticmethod
@@ -78,18 +98,19 @@ class EmailSearchKeyConverter:
         df = df.copy()
         original_email_column = self.columns_renaming[self.email_column]
         if self.hem_column is None:
-            df[self.HEM_COLUMN_NAME] = df[self.email_column].apply(self._email_to_hem)
-            if df[self.HEM_COLUMN_NAME].isna().all():
+            hem_name = self.email_column + self.HEM_SUFFIX
+            df[hem_name] = df[self.email_column].apply(self._email_to_hem)
+            if df[hem_name].isna().all():
                 msg = self.bundle.get("all_emails_invalid").format(self.email_column)
                 print(msg)
                 self.logger.warning(msg)
-                df = df.drop(columns=self.HEM_COLUMN_NAME)
+                df = df.drop(columns=hem_name)
                 del self.search_keys[self.email_column]
                 return df
-            self.search_keys[self.HEM_COLUMN_NAME] = SearchKey.HEM
+            self.search_keys[hem_name] = SearchKey.HEM
             if self.email_column in self.unnest_search_keys:
-                self.unnest_search_keys.append(self.HEM_COLUMN_NAME)
-            self.columns_renaming[self.HEM_COLUMN_NAME] = original_email_column  # it could be upgini_email_unnest...
+                self.unnest_search_keys.append(hem_name)
+            self.columns_renaming[hem_name] = original_email_column  # it could be upgini_email_unnest...
             self.email_converted_to_hem = True
         else:
             df[self.hem_column] = df[self.hem_column].astype("string").str.lower()
@@ -98,16 +119,13 @@ class EmailSearchKeyConverter:
         if self.email_column in self.unnest_search_keys:
             self.unnest_search_keys.remove(self.email_column)
 
-        df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = df[self.email_column].apply(self._email_to_one_domain)
-        self.columns_renaming[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = original_email_column
-        self.search_keys[self.EMAIL_ONE_DOMAIN_COLUMN_NAME] = SearchKey.EMAIL_ONE_DOMAIN
+        one_domain_name = self.email_column + self.ONE_DOMAIN_SUFFIX
+        df[one_domain_name] = df[self.email_column].apply(self._email_to_one_domain)
+        self.columns_renaming[one_domain_name] = original_email_column
+        self.search_keys[one_domain_name] = SearchKey.EMAIL_ONE_DOMAIN
 
         if self.email_converted_to_hem:
             df = df.drop(columns=self.email_column)
             del self.columns_renaming[self.email_column]
-
-        df[self.DOMAIN_COLUMN_NAME] = df[self.EMAIL_ONE_DOMAIN_COLUMN_NAME].str[1:]
-        self.generated_features.append(self.DOMAIN_COLUMN_NAME)
-        self.columns_renaming[self.DOMAIN_COLUMN_NAME] = original_email_column
 
         return df

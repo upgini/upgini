@@ -49,15 +49,15 @@ def test_email_to_hem_convertion():
     columns_renaming = {"email": "original_email"}
     converter = EmailSearchKeyConverter("email", None, search_keys, columns_renaming, [])
     df = converter.convert(df)
-    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
+    assert "email" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
+    # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
+    assert "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
     assert "email" not in df.columns
     assert converter.email_converted_to_hem
     assert columns_renaming == {
-        EmailSearchKeyConverter.HEM_COLUMN_NAME: "original_email",
-        EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: "original_email",
-        EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME: "original_email",
+        "email" + EmailSearchKeyConverter.HEM_SUFFIX: "original_email",
+        # EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: "original_email",
+        "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: "original_email",
     }
 
 
@@ -72,12 +72,12 @@ def test_unnest_email_to_hem_conversion():
     unnest_search_keys = ["upgini_email_unnest"]
     converter = EmailSearchKeyConverter("upgini_email_unnest", None, search_keys, columns_renaming, unnest_search_keys)
     df = converter.convert(df)
-    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
+    assert "upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
+    # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
+    assert "upgini_email_unnest" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
     assert "upgini_email_unnest" not in df.columns
     assert converter.email_converted_to_hem
-    assert unnest_search_keys == [EmailSearchKeyConverter.HEM_COLUMN_NAME]
+    assert unnest_search_keys == ["upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX]
 
 
 def test_string_ip_to_int_conversion():
