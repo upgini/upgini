@@ -137,6 +137,7 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         res = res_masked.reindex(left.index.union(right.index))
         if self.aggregation in _count_aggregations:
             res[~right_mask] = 0.0
+        res = res.astype(np.float64)
 
         return res
 
@@ -200,7 +201,7 @@ class DatePercentileBase(PandasOperand, abc.ABC):
         pass
 
     def _perc(self, f, bounds):
-        hit = np.where(f >= bounds)[0]
+        hit = np.where(f >= np.array(bounds))[0]
         if hit.size > 0:
             return np.max(hit) + 1
         else:
