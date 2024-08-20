@@ -133,10 +133,19 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         right_mask = right.apply(lambda x: len(x) > 0)
         mask = left.notna() & right.notna() & right_mask
         right_masked = right[mask].apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
-        res_masked = pd.Series(left[mask] - right_masked.values).apply(lambda x: self._agg(self._diff(x)))
+
+        if len(right_masked) == 0:
+            diff = []
+        elif len(right_masked) < 2:
+            diff = [left[mask].iloc[0] - right_masked.iloc[0]]
+        else:
+            diff = left[mask] - right_masked.values
+
+        res_masked = pd.Series(diff, index=left[mask].index).apply(lambda x: self._agg(self._diff(x)))
         res = res_masked.reindex(left.index.union(right.index))
         if self.aggregation in _count_aggregations:
             res[~right_mask] = 0.0
+        res = res.astype(np.float64)
 
         return res
 
