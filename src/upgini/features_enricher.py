@@ -3158,6 +3158,7 @@ class FeaturesEnricher(TransformerMixin):
         if len(search_key_names_by_type) == 0:
             return df, {}
 
+        self.logger.info(f"Start exploding dataset by {search_key_names_by_type}. Size before: {len(df)}")
         multiple_keys_columns = [col for cols in search_key_names_by_type.values() for col in cols]
         other_columns = [col for col in df.columns if col not in multiple_keys_columns]
         exploded_dfs = []
@@ -3176,6 +3177,7 @@ class FeaturesEnricher(TransformerMixin):
             columns_renaming[new_search_key] = new_search_key
 
         df = pd.concat(exploded_dfs, ignore_index=True)
+        self.logger.info(f"Finished explosion. Size after: {len(df)}")
         return df, unnest_search_keys
 
     def __add_fit_system_record_id(
