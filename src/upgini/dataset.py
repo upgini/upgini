@@ -692,7 +692,7 @@ class Dataset:  # (pd.DataFrame):
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
         self.data.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
         uploading_file_size = Path(parquet_file_path).stat().st_size
-        self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
+        self.logger.info(f"Size of prepared uploading file: {uploading_file_size}. {len(self.data)} rows")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
             raise ValidationError(self.bundle.get("dataset_too_big_file"))
         return parquet_file_path
