@@ -173,31 +173,42 @@ def test_date_percentile():
 
 def test_norm():
     data = pd.DataFrame(
-        [[None, 1], [1, 222], [333, 4], [1, 2], [3, 4], [0, 1], [1, 0], [2, 3], [3, 2], [1, None]],
-        columns=["a", "b"],
+        [
+            [None, 1, None],
+            [1, 222, None],
+            [333, 4, None],
+            [1, 2, None],
+            [3, 4, None],
+            [0, 1, None],
+            [1, 0, None],
+            [2, 3, None],
+            [3, 2, None],
+            [1, None, None],
+        ],
+        columns=["a", "b", "c"],
         index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
     operand = Norm()
 
     expected_result = pd.DataFrame(
         [
-            [None, 0.00450218],
-            [0.00300266, 0.99948299],
-            [0.99988729, 0.0180087],
-            [0.00300266, 0.00900435],
-            [0.00900799, 0.0180087],
-            [0.0, 0.00450218],
-            [0.00300266, 0.0],
-            [0.00600533, 0.01350653],
-            [0.00900799, 0.00900435],
-            [0.00300266, None],
+            [None, 0.00450218, None],
+            [0.00300266, 0.99948299, None],
+            [0.99988729, 0.0180087, None],
+            [0.00300266, 0.00900435, None],
+            [0.00900799, 0.0180087, None],
+            [0.0, 0.00450218, None],
+            [0.00300266, 0.0, None],
+            [0.00600533, 0.01350653, None],
+            [0.00900799, 0.00900435, None],
+            [0.00300266, None, None],
         ],
-        columns=["a", "b"],
+        columns=["a", "b", "c"],
         index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
 
-    assert_series_equal(operand.calculate_unary(data["a"]), expected_result["a"])
-    assert_series_equal(operand.calculate_unary(data["b"]), expected_result["b"])
+    for c in data.columns:
+        assert_series_equal(operand.calculate_unary(data[c]), expected_result[c])
 
 
 def test_get_display_name():

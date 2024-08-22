@@ -121,6 +121,9 @@ class Norm(PandasOperand):
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         data_dropna = data.dropna()
+        if data_dropna.empty:
+            return data
+
         normalized_data = Normalizer().transform(data_dropna.to_frame().T).T
         normalized_data = pd.Series(normalized_data[:, 0], index=data_dropna.index, name=data.name)
         normalized_data = normalized_data.reindex(data.index)
