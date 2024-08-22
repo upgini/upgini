@@ -63,6 +63,7 @@ class DataSourcePublisher:
         keep_features: Optional[List[str]] = None,
         date_features: Optional[List[str]] = None,
         date_vector_features: Optional[List[str]] = None,
+        generate_runtime_embeddings: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
@@ -163,6 +164,8 @@ class DataSourcePublisher:
                     if date_format is None:
                         raise ValidationError("date_format should be presented if you use date vector features")
                     request["dateVectorFeatures"] = date_vector_features
+                if generate_runtime_embeddings is not None:
+                    request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -276,6 +279,8 @@ class DataSourcePublisher:
         client_emails: Optional[List[str]] = None,
         date_features: Optional[List[str]] = None,
         date_vector_features: Optional[List[str]] = None,
+        exclude_from_autofe_generation: Optional[List[str]] = None,
+        generate_runtime_embeddings: Optional[List[str]] = None,
     ):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
@@ -327,6 +332,10 @@ class DataSourcePublisher:
                     request["dateFeatures"] = date_features
                 if date_vector_features is not None:
                     request["dateVectorFeatures"] = date_vector_features
+                if exclude_from_autofe_generation is not None:
+                    request["excludeFromGenerationFeatures"] = exclude_from_autofe_generation
+                if generate_runtime_embeddings is not None:
+                    request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
                 self.logger.info(f"Activating data tables with request {request}")
 
                 self._rest_client.activate_datatables(request, trace_id)

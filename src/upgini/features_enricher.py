@@ -846,17 +846,37 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.warning(msg)
                 print(msg)
 
+            if X is not None and y is None:
+                raise ValidationError("X passed without y")
+
             self.__validate_search_keys(self.search_keys, self.search_id)
             effective_X = X if X is not None else self.X
             effective_y = y if y is not None else self.y
             effective_eval_set = eval_set if eval_set is not None else self.eval_set
             effective_eval_set = self._check_eval_set(effective_eval_set, effective_X, self.bundle)
 
+            if (
+                self._search_task is None
+                or self._search_task.provider_metadata_v2 is None
+                or len(self._search_task.provider_metadata_v2) == 0
+                or effective_X is None
+                or effective_y is None
+            ):
+                raise ValidationError(self.bundle.get("metrics_unfitted_enricher"))
+
+            validated_X = self._validate_X(effective_X)
+            validated_y = self._validate_y(validated_X, effective_y)
+            validated_eval_set = (
+                [self._validate_eval_set_pair(validated_X, eval_pair) for eval_pair in effective_eval_set]
+                if effective_eval_set is not None
+                else None
+            )
+
             try:
                 self.__log_debug_information(
-                    effective_X,
-                    effective_y,
-                    effective_eval_set,
+                    validated_X,
+                    validated_y,
+                    validated_eval_set,
                     exclude_features_sources=exclude_features_sources,
                     cv=cv if cv is not None else self.cv,
                     importance_threshold=importance_threshold,
@@ -866,21 +886,9 @@ class FeaturesEnricher(TransformerMixin):
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                 )
 
-                if (
-                    self._search_task is None
-                    or self._search_task.provider_metadata_v2 is None
-                    or len(self._search_task.provider_metadata_v2) == 0
-                    or effective_X is None
-                    or effective_y is None
-                ):
-                    raise ValidationError(self.bundle.get("metrics_unfitted_enricher"))
-
-                if X is not None and y is None:
-                    raise ValidationError("X passed without y")
-
                 validate_scoring_argument(scoring)
 
-                self._validate_baseline_score(effective_X, effective_eval_set)
+                self._validate_baseline_score(validated_X, validated_eval_set)
 
                 if self._has_paid_features(exclude_features_sources):
                     msg = self.bundle.get("metrics_with_paid_features")
@@ -889,7 +897,7 @@ class FeaturesEnricher(TransformerMixin):
                     return None
 
                 cat_features, search_keys_for_metrics = self._get_client_cat_features(
-                    estimator, effective_X, self.search_keys
+                    estimator, validated_X, self.search_keys
                 )
 
                 prepared_data = self._prepare_data_for_metrics(
@@ -1034,10 +1042,10 @@ class FeaturesEnricher(TransformerMixin):
                         self.bundle.get("quality_metrics_rows_header"): _num_samples(effective_X),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                        effective_y
+                        validated_y
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                            np.mean(effective_y), 4
+                            np.mean(validated_y), 4
                         )
                     if etalon_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -1107,10 +1115,10 @@ class FeaturesEnricher(TransformerMixin):
                                 # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                                effective_eval_set[idx][1]
+                                validated_eval_set[idx][1]
                             ):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                                    np.mean(effective_eval_set[idx][1]), 4
+                                    np.mean(validated_eval_set[idx][1]), 4
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
@@ -3211,18 +3219,26 @@ class FeaturesEnricher(TransformerMixin):
                 date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             sort_columns = [date_column] if date_column is not None else []
 
+            sorted_other_keys = sorted(search_keys, key=lambda x: str(search_keys.get(x)))
+            sorted_other_keys = [k for k in sorted_other_keys if k not in sort_exclude_columns]
+
             other_columns = sorted(
                 [
                     c
                     for c in df.columns
-                    if c not in sort_columns and c not in sort_exclude_columns and df[c].nunique() > 1
+                    if c not in sort_columns
+                    and c not in sorted_other_keys
+                    and c not in sort_exclude_columns
+                    and df[c].nunique() > 1
                 ]
             )
 
+            all_other_columns = sorted_other_keys + other_columns
+
             search_keys_hash = "search_keys_hash"
-            if len(other_columns) > 0:
+            if len(all_other_columns) > 0:
                 sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[other_columns], index=False)
+                df[search_keys_hash] = pd.util.hash_pandas_object(df[all_other_columns], index=False)
 
             df = df.sort_values(by=sort_columns)
 

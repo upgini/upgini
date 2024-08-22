@@ -1,7 +1,6 @@
 import datetime
 import logging
 import re
-import pytz
 from typing import Dict, List, Optional
 
 import numpy as np
