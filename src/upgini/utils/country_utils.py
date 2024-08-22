@@ -4,6 +4,22 @@ from pandas.api.types import is_object_dtype, is_string_dtype
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 
+class CountrySearchKeyConverter:
+
+    def __init__(self, country_col: str):
+        self.country_col = country_col
+
+    def convert(self, df: pd.DataFrame) -> pd.DataFrame:
+        df[self.country_col] = (
+            df[self.country_col]
+            .astype("string")
+            .str.upper()
+            .str.replace(r"[^A-Z]", "", regex=True)
+            .str.replace("UK", "GB", regex=False)
+        )
+        return df
+
+
 class CountrySearchKeyDetector(BaseSearchKeyDetector):
     def _is_search_key_by_name(self, column_name: str) -> bool:
         return "country" in str(column_name).lower()

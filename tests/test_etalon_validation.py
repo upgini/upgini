@@ -6,14 +6,18 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from upgini.dataset import Dataset
 from upgini.ads import FileColumnMeaningType
+from upgini.dataset import Dataset
 from upgini.errors import ValidationError
 from upgini.metadata import SEARCH_KEY_UNNEST, ModelTaskType, SearchKey
+from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
+from upgini.utils.country_utils import CountrySearchKeyConverter
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
+from upgini.utils.ip_utils import IpSearchKeyConverter
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
 from upgini.utils.warning_counter import WarningCounter
 
 
@@ -21,6 +25,7 @@ def test_etalon_validation(etalon: Dataset):
     print("Initial dataset:\n", etalon)
     Dataset.MIN_ROWS_COUNT = 1  # type: ignore
     count = len(etalon)
+    etalon.columns_renaming = {c: c for c in etalon.data.columns}
     etalon.validate()
     valid_count = len(etalon)
     valid_rate = 100 * valid_count / count
@@ -41,32 +46,38 @@ def test_email_to_hem_convertion():
     search_keys = {
         "email": SearchKey.EMAIL,
     }
-    converter = EmailSearchKeyConverter("email", None, search_keys, [])
+    columns_renaming = {"email": "original_email"}
+    converter = EmailSearchKeyConverter("email", None, search_keys, columns_renaming, [])
     df = converter.convert(df)
-    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
-    assert "email" in df.columns
+    assert "email" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
+    # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
+    assert "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
+    assert "email" not in df.columns
     assert converter.email_converted_to_hem
+    assert columns_renaming == {
+        "email" + EmailSearchKeyConverter.HEM_SUFFIX: "original_email",
+        # EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: "original_email",
+        "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: "original_email",
+    }
 
 
 def test_unnest_email_to_hem_conversion():
-    df = pd.DataFrame({
-        "upgini_email_unnest": ["test@google.com", None, "fake"],
-        SEARCH_KEY_UNNEST: ["email", "email", "email"]
-    })
+    df = pd.DataFrame(
+        {"upgini_email_unnest": ["test@google.com", None, "fake"], SEARCH_KEY_UNNEST: ["email", "email", "email"]}
+    )
     search_keys = {
         "upgini_email_unnest": SearchKey.EMAIL,
     }
+    columns_renaming = {"upgini_email_unnest": "upgini_email_unnest"}
     unnest_search_keys = ["upgini_email_unnest"]
-    converter = EmailSearchKeyConverter("upgini_email_unnest", None, search_keys, unnest_search_keys)
+    converter = EmailSearchKeyConverter("upgini_email_unnest", None, search_keys, columns_renaming, unnest_search_keys)
     df = converter.convert(df)
-    assert EmailSearchKeyConverter.HEM_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
-    assert EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME in df.columns
-    assert "upgini_email_unnest" in df.columns
+    assert "upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
+    # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
+    assert "upgini_email_unnest" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
+    assert "upgini_email_unnest" not in df.columns
     assert converter.email_converted_to_hem
-    assert unnest_search_keys == [EmailSearchKeyConverter.HEM_COLUMN_NAME]
+    assert unnest_search_keys == ["upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX]
 
 
 def test_string_ip_to_int_conversion():
@@ -77,22 +88,15 @@ def test_string_ip_to_int_conversion():
             {"ip": None},
         ]
     )
-    dataset = Dataset(
-        "test",
-        df=df,
-        search_keys=[("ip",)],
-        meaning_types={
-            "ip": FileColumnMeaningType.IP_ADDRESS,
-        },
-    )
-    dataset._Dataset__rename_columns()
-    dataset._Dataset__convert_ip()
-    assert dataset.data["ip_bb9af5_v4"].dtype == "Int64"
-    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
-    assert dataset.data["ip_bb9af5_v4"].isnull().sum() == 2
-    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
-    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
-    assert dataset.data["ip_bb9af5_v6"].isnull().sum() == 2
+    columns_renaming = {"ip": "original_ip"}
+    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
+    converter.convert(df)
+    assert df["ip_v4"].dtype == "Int64"
+    assert df["ip_v4"].iloc[0] == 3232235777
+    assert df["ip_v4"].isnull().sum() == 2
+    assert df["ip_v6"].dtype.name == "string"
+    assert df["ip_v6"].iloc[0] == "281473913979137"
+    assert df["ip_v6"].isnull().sum() == 2
 
 
 def test_python_ip_to_int_conversion():
@@ -101,16 +105,13 @@ def test_python_ip_to_int_conversion():
             {"ip": ipaddress.ip_address("192.168.1.1")},
         ]
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip",)])
-    dataset.meaning_types = {
-        "ip": FileColumnMeaningType.IP_ADDRESS,
-    }
-    dataset._Dataset__rename_columns()
-    dataset._Dataset__convert_ip()
-    assert dataset.data["ip_bb9af5_v4"].dtype == "Int64"
-    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
-    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
-    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
+    columns_renaming = {"ip": "original_ip"}
+    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
+    converter.convert(df)
+    assert df["ip_v4"].dtype == "Int64"
+    assert df["ip_v4"].iloc[0] == 3232235777
+    assert df["ip_v6"].dtype.name == "string"
+    assert df["ip_v6"].iloc[0] == "281473913979137"
 
 
 def test_ip_v6_conversion():
@@ -125,37 +126,30 @@ def test_ip_v6_conversion():
             ]
         }
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip",)])
-    dataset.meaning_types = {
-        "ip": FileColumnMeaningType.IP_ADDRESS,
-    }
-
-    dataset._Dataset__rename_columns()
-    dataset._Dataset__convert_ip()
-    assert dataset.data["ip_bb9af5_v4"].dtype.name == "Int64"
-    assert dataset.data["ip_bb9af5_v4"].isna().all()
-    assert dataset.data["ip_bb9af5_v6"].dtype.name == "string"
-    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "892262568539"
-    assert dataset.data["ip_bb9af5_v6"].iloc[1] == "53200333237544187032231876373729151639"
-    assert dataset.data["ip_bb9af5_v6"].iloc[2] == "47858880780748872078732893423110750580"
-    assert dataset.data["ip_bb9af5_v6"].iloc[3] == "47900246818989331262222645018619415311"
-    assert dataset.data["ip_bb9af5_v6"].iloc[4] == "47865208883029157842893923520652305233"
+    columns_renaming = {"ip": "original_ip"}
+    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
+    converter.convert(df)
+    assert df["ip_v4"].dtype.name == "Int64"
+    assert df["ip_v4"].isna().all()
+    assert df["ip_v6"].dtype.name == "string"
+    assert df["ip_v6"].iloc[0] == "892262568539"
+    assert df["ip_v6"].iloc[1] == "53200333237544187032231876373729151639"
+    assert df["ip_v6"].iloc[2] == "47858880780748872078732893423110750580"
+    assert df["ip_v6"].iloc[3] == "47900246818989331262222645018619415311"
+    assert df["ip_v6"].iloc[4] == "47865208883029157842893923520652305233"
 
 
 def test_int_ip_to_int_conversion():
     df = pd.DataFrame(
         {"ip": [3232235777, 892262568539]},
     )
-    dataset = Dataset("test", df=df, search_keys=[("ip",)])  # type: ignore
-    dataset.meaning_types = {
-        "ip": FileColumnMeaningType.IP_ADDRESS,
-    }
-    dataset._Dataset__rename_columns()
-    dataset._Dataset__convert_ip()
-    assert dataset.data["ip_bb9af5_v4"].iloc[0] == 3232235777
-    assert dataset.data["ip_bb9af5_v6"].iloc[0] == "281473913979137"
-    assert dataset.data["ip_bb9af5_v4"].isnull().sum() == 1
-    assert dataset.data["ip_bb9af5_v6"].iloc[1] == "892262568539"
+    columns_renaming = {"ip": "original_ip"}
+    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
+    converter.convert(df)
+    assert df["ip_v4"].iloc[0] == 3232235777
+    assert df["ip_v6"].iloc[0] == "281473913979137"
+    assert df["ip_v4"].isnull().sum() == 1
+    assert df["ip_v6"].iloc[1] == "892262568539"
 
 
 def test_string_date_to_timestamp_convertion():
@@ -333,116 +327,108 @@ def test_fail_on_too_many_classes():
 
 def test_iso_code_normalization():
     df = pd.DataFrame({"iso_code": ["  rU 1", " Uk", "G B "]})
-    dataset = Dataset("test321", df=df)  # type: ignore
-    dataset.meaning_types = {"iso_code": FileColumnMeaningType.COUNTRY}
-    dataset._Dataset__normalize_iso_code()
-    assert dataset.data.loc[0, "iso_code"] == "RU"
-    assert dataset.data.loc[1, "iso_code"] == "GB"
-    assert dataset.data.loc[2, "iso_code"] == "GB"
+    converter = CountrySearchKeyConverter("iso_code")
+    df = converter.convert(df)
+    assert df.loc[0, "iso_code"] == "RU"
+    assert df.loc[1, "iso_code"] == "GB"
+    assert df.loc[2, "iso_code"] == "GB"
 
 
 def test_postal_code_normalization():
     df = pd.DataFrame({"postal_code": ["  0ab-0123 ", "0123  3948  "]})
-    dataset = Dataset("test321", df=df)  # type: ignore
-    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
-    dataset._Dataset__normalize_postal_code()
-    assert dataset.data.loc[0, "postal_code"] == "AB0123"
-    assert dataset.data.loc[1, "postal_code"] == "1233948"
+    converter = PostalCodeSearchKeyConverter("postal_code")
+    df = converter.convert(df)
+    assert df.loc[0, "postal_code"] == "AB0123"
+    assert df.loc[1, "postal_code"] == "1233948"
 
 
 def test_number_postal_code_normalization():
     df = pd.DataFrame({"postal_code": [103305, 111222]})
-    dataset = Dataset("test321", df=df)  # type: ignore
-    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
-    dataset._Dataset__normalize_postal_code()
-    assert dataset.data.loc[0, "postal_code"] == "103305"
-    assert dataset.data.loc[1, "postal_code"] == "111222"
+    converter = PostalCodeSearchKeyConverter("postal_code")
+    df = converter.convert(df)
+    assert df.loc[0, "postal_code"] == "103305"
+    assert df.loc[1, "postal_code"] == "111222"
 
 
 def test_float_postal_code_normalization():
     df = pd.DataFrame({"postal_code": [103305.0, 111222.0]})
-    dataset = Dataset("test321", df=df)  # type: ignore
-    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
-    dataset._Dataset__normalize_postal_code()
-    assert dataset.data.loc[0, "postal_code"] == "103305"
-    assert dataset.data.loc[1, "postal_code"] == "111222"
+    converter = PostalCodeSearchKeyConverter("postal_code")
+    df = converter.convert(df)
+    assert df.loc[0, "postal_code"] == "103305"
+    assert df.loc[1, "postal_code"] == "111222"
 
 
 def test_float_string_postal_code_normalization():
     df = pd.DataFrame({"postal_code": ["103305.0", "111222.0"]})
-    dataset = Dataset("test321", df=df)  # type: ignore
-    dataset.meaning_types = {"postal_code": FileColumnMeaningType.POSTAL_CODE}
-    dataset._Dataset__normalize_postal_code()
-    assert dataset.data.loc[0, "postal_code"] == "103305"
-    assert dataset.data.loc[1, "postal_code"] == "111222"
+    converter = PostalCodeSearchKeyConverter("postal_code")
+    df = converter.convert(df)
+    assert df.loc[0, "postal_code"] == "103305"
+    assert df.loc[1, "postal_code"] == "111222"
 
 
 def test_old_dates_drop():
     df = pd.DataFrame({"date": ["2020-01-01", "2005-05-02", "1999-12-31", None]})
     converter = DateTimeSearchKeyConverter("date")
     df = converter.convert(df)
-    dataset = Dataset("test", df=df)  # type: ignore
-    dataset.meaning_types = {"date": FileColumnMeaningType.DATE}
-    dataset._Dataset__remove_old_dates()
-    assert len(dataset) == 3
+    assert len(df[df.date.isna()]) == 2
 
 
 def test_time_cutoff_from_str():
-    df = pd.DataFrame({"date": ["2020-01-01 00:01:00", "2000-01-01 00:00:00", "1999-12-31 02:00:00", None]})
+    df = pd.DataFrame({"date": ["2020-01-01 00:01:00", "2000-01-01 00:00:00", "1999-12-31 00:00:00", None]})
     converter = DateTimeSearchKeyConverter("date", "%Y-%m-%d %H:%M:%S")
     dataset = converter.convert(df)
 
     assert dataset.loc[0, "date"] == 1577836800000
     assert dataset.loc[1, "date"] == 946684800000
-    assert dataset.loc[2, "date"] == 946598400000
+    assert pd.isnull(dataset.loc[2, "date"])
     assert pd.isnull(dataset.loc[3, "date"])
 
     assert "datetime_time_sin_1" in dataset.columns
     assert dataset.loc[0, "datetime_time_sin_1"] == pytest.approx(np.sin(2 * np.pi / 24 / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_sin_1"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_1"] == pytest.approx(np.sin(2 * np.pi / 12), abs=0.000001)
+    assert pd.isnull(dataset.loc[2, "datetime_time_sin_1"])
     assert pd.isnull(dataset.loc[3, "datetime_time_sin_1"])
 
     assert "datetime_time_cos_1" in dataset.columns
     assert dataset.loc[0, "datetime_time_cos_1"] == pytest.approx(np.cos(2 * np.pi / 24 / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_cos_1"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_1"] == pytest.approx(np.cos(2 * np.pi / 12), abs=0.000001)
+    assert pd.isnull(dataset.loc[2, "datetime_time_cos_1"])
     assert pd.isnull(dataset.loc[3, "datetime_time_cos_1"])
 
     assert "datetime_time_sin_2" in dataset.columns
     assert dataset.loc[0, "datetime_time_sin_2"] == pytest.approx(np.sin(2 * np.pi / 12 / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_sin_2"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_2"] == pytest.approx(np.sin(2 * np.pi / 6), abs=0.000001)
+    assert pd.isnull(dataset.loc[2, "datetime_time_sin_2"])
     assert pd.isnull(dataset.loc[3, "datetime_time_sin_2"])
 
     assert "datetime_time_cos_2" in dataset.columns
     assert dataset.loc[0, "datetime_time_cos_2"] == pytest.approx(np.cos(2 * np.pi / 12 / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_cos_2"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_2"] == pytest.approx(np.cos(2 * np.pi / 6), abs=0.000001)
+    assert pd.isnull(dataset.loc[2, "datetime_time_cos_2"])
     assert pd.isnull(dataset.loc[3, "datetime_time_cos_2"])
 
     assert "datetime_time_sin_24" in dataset.columns
     assert dataset.loc[0, "datetime_time_sin_24"] == pytest.approx(np.sin(2 * np.pi / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_sin_24"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_24"] == 0.0
+    assert pd.isnull(dataset.loc[2, "datetime_time_sin_24"])
     assert pd.isnull(dataset.loc[3, "datetime_time_sin_24"])
 
     assert "datetime_time_cos_24" in dataset.columns
     assert dataset.loc[0, "datetime_time_cos_24"] == pytest.approx(np.cos(2 * np.pi / 60), abs=0.000001)
     assert dataset.loc[1, "datetime_time_cos_24"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_24"] == 1.0
+    assert pd.isnull(dataset.loc[2, "datetime_time_cos_24"])
     assert pd.isnull(dataset.loc[3, "datetime_time_cos_24"])
 
     assert "datetime_time_sin_48" in dataset.columns
     assert dataset.loc[0, "datetime_time_sin_48"] == pytest.approx(np.sin(2 * np.pi / 30), abs=0.000001)
     assert dataset.loc[1, "datetime_time_sin_48"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_48"] == 0.0
+    assert pd.isnull(dataset.loc[2, "datetime_time_sin_48"])
     assert pd.isnull(dataset.loc[3, "datetime_time_sin_48"])
 
     assert "datetime_time_cos_48" in dataset.columns
     assert dataset.loc[0, "datetime_time_cos_48"] == pytest.approx(np.cos(2 * np.pi / 30), abs=0.000001)
     assert dataset.loc[1, "datetime_time_cos_48"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_48"] == 1.0
+    assert pd.isnull(dataset.loc[2, "datetime_time_cos_48"])
     assert pd.isnull(dataset.loc[3, "datetime_time_cos_48"])
 
 
@@ -672,11 +658,10 @@ def test_columns_renaming():
     )
 
     df = pd.concat([df1, df2], axis=1)
-
-    dataset = Dataset("tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)])
-    dataset._Dataset__rename_columns()
-    print(dataset)
-    assert set(dataset.data.columns.to_list()) == {"feature1_422b73", "date_0e8763", "feature1_422b73_0"}
+    search_keys = {"date": SearchKey.DATE}
+    normalizer = Normalizer(search_keys, [])
+    df = normalizer.normalize(df)
+    assert set(df.columns.to_list()) == {"feature1_422b73", "date_0e8763", "feature1_422b73_0"}
 
 
 def test_too_long_columns():
@@ -688,10 +673,10 @@ def test_too_long_columns():
         }
     )
 
-    dataset = Dataset("tds", df=df, meaning_types={"date": FileColumnMeaningType.DATE}, search_keys=[("date",)])
-    dataset._Dataset__rename_columns()
-    print(dataset)
-    assert set(dataset.data.columns.to_list()) == {
+    search_keys = {"date": SearchKey.DATE}
+    normalizer = Normalizer(search_keys, [])
+    df = normalizer.normalize(df)
+    assert set(df.columns.to_list()) == {
         "date_0e8763",
         (
             "columnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnnamecolumnname"

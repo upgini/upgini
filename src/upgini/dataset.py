@@ -1,32 +1,24 @@
 import csv
-import hashlib
 import logging
 import tempfile
 import time
-from ipaddress import IPv4Address, IPv6Address, _BaseAddress, ip_address
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool_dtype as is_bool
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
     is_numeric_dtype,
     is_object_dtype,
-    is_period_dtype,
     is_string_dtype,
 )
 
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
-    ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
-    SEARCH_KEY_UNNEST,
-    SYSTEM_COLUMNS,
     SYSTEM_RECORD_ID,
     TARGET,
     DataType,
@@ -40,10 +32,8 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchCustomization,
 )
-from upgini.normalizer.phone_normalizer import PhoneNormalizer
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
-from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.target_utils import balance_undersample
 
@@ -117,7 +107,6 @@ class Dataset:  # (pd.DataFrame):
         self.meaning_types = meaning_types
         self.search_keys = search_keys
         self.unnest_search_keys = unnest_search_keys
-        self.ignore_columns = []
         self.hierarchical_group_keys = []
         self.hierarchical_subgroup_keys = []
         self.file_upload_id: Optional[str] = None
@@ -170,241 +159,6 @@ class Dataset:  # (pd.DataFrame):
     def __validate_max_row_count(self):
         if len(self.data) > self.MAX_ROWS:
             raise ValidationError(self.bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
-
-    def __rename_columns(self):
-        # self.logger.info("Replace restricted symbols in column names")
-        new_columns = []
-        dup_counter = 0
-        for column in self.data.columns:
-            if column in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]:
-                self.columns_renaming[column] = column
-                new_columns.append(column)
-                continue
-
-            new_column = str(column)
-            suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
-            if len(new_column) == 0:
-                raise ValidationError(self.bundle.get("dataset_empty_column_names"))
-            # db limit for column length
-            if len(new_column) > 250:
-                new_column = new_column[:250]
-
-            # make column name unique relative to server features
-            new_column = f"{new_column}_{suffix}"
-
-            new_column = new_column.lower()
-
-            # if column starts with non alphabetic symbol then add "a" to the beginning of string
-            if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
-                new_column = "a" + new_column
-
-            # replace unsupported characters to "_"
-            for idx, c in enumerate(new_column):
-                if ord(c) not in range(ord("a"), ord("z") + 1) and ord(c) not in range(ord("0"), ord("9") + 1):
-                    new_column = new_column[:idx] + "_" + new_column[idx + 1 :]
-
-            if new_column in new_columns:
-                new_column = f"{new_column}_{dup_counter}"
-                dup_counter += 1
-            new_columns.append(new_column)
-
-            # self.data.columns.values[col_idx] = new_column
-            # self.rename(columns={column: new_column}, inplace=True)
-            self.meaning_types = {
-                (new_column if key == str(column) else key): value for key, value in self.meaning_types_checked.items()
-            }
-            self.search_keys = [
-                tuple(new_column if key == str(column) else key for key in keys) for keys in self.search_keys_checked
-            ]
-            self.columns_renaming[new_column] = str(column)
-        self.data.columns = new_columns
-        self.etalon_def = None
-
-    def __validate_too_long_string_values(self):
-        """Check that string values less than maximum characters for LLM"""
-        # self.logger.info("Validate too long string values")
-        for col in self.data.columns:
-            if is_string_dtype(self.data[col]) or is_object_dtype(self.data[col]):
-                max_length: int = self.data[col].astype("str").str.len().max()
-                if max_length > self.MAX_STRING_FEATURE_LENGTH:
-                    self.data[col] = self.data[col].astype("str").str.slice(stop=self.MAX_STRING_FEATURE_LENGTH)
-
-    def __convert_bools(self):
-        """Convert bool columns to string"""
-        # self.logger.info("Converting bool to int")
-        for col in self.data.columns:
-            if is_bool(self.data[col]):
-                self.data[col] = self.data[col].astype("str")
-
-    def __convert_float16(self):
-        """Convert float16 to float"""
-        # self.logger.info("Converting float16 to float")
-        for col in self.data.columns:
-            if is_float_dtype(self.data[col]):
-                self.data[col] = self.data[col].astype("float64")
-
-    def __correct_decimal_comma(self):
-        """Check DataSet for decimal commas and fix them"""
-        # self.logger.info("Correct decimal commas")
-        columns_to_fix = find_numbers_with_decimal_comma(self.data)
-        if len(columns_to_fix) > 0:
-            self.logger.warning(f"Convert strings with decimal comma to float: {columns_to_fix}")
-            for col in columns_to_fix:
-                self.data[col] = self.data[col].astype("string").str.replace(",", ".", regex=False).astype(np.float64)
-
-    @staticmethod
-    def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
-        try:
-            if isinstance(ip, (IPv4Address, IPv6Address)):
-                return int(ip)
-        except Exception:
-            pass
-
-    @staticmethod
-    def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
-        try:
-            if isinstance(ip, (IPv4Address, IPv6Address)):
-                return str(int(ip))
-        except Exception:
-            pass
-
-    @staticmethod
-    def _safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address]) -> Optional[_BaseAddress]:
-        try:
-            return ip_address(ip)
-        except ValueError:
-            pass
-
-    @staticmethod
-    def _is_ipv4(ip: Optional[_BaseAddress]):
-        return ip is not None and (
-            isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
-        )
-
-    @staticmethod
-    def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
-        if isinstance(ip, IPv4Address):
-            return ip
-        return None
-
-    @staticmethod
-    def _to_ipv6(ip: Optional[_BaseAddress]) -> Optional[IPv6Address]:
-        if isinstance(ip, IPv6Address):
-            return ip
-        if isinstance(ip, IPv4Address):
-            return IPv6Address("::ffff:" + str(ip))
-        return None
-
-    def __convert_ip(self):
-        """Convert ip address to int"""
-        ip = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
-        if ip is not None and ip in self.data.columns:
-            self.logger.info("Convert ip address to int")
-            del self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value]
-            del self.meaning_types[ip]
-            original_ip = self.columns_renaming[ip]
-            del self.columns_renaming[ip]
-
-            search_keys = set()
-            for tup in self.search_keys_checked:
-                search_keys.update(tup)
-            search_keys.remove(ip)
-
-            self.data[ip] = self.data[ip].apply(self._safe_ip_parse)
-            if self.data[ip].isnull().all():
-                raise ValidationError(self.bundle.get("invalid_ip").format(ip))
-
-            ipv4 = ip + "_v4"
-            self.data[ipv4] = self.data[ip].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
-            self.meaning_types[ipv4] = FileColumnMeaningType.IP_ADDRESS
-            self.etalon_def[FileColumnMeaningType.IP_ADDRESS.value] = ipv4
-            search_keys.add(ipv4)
-            self.columns_renaming[ipv4] = original_ip
-
-            ipv6 = ip + "_v6"
-            self.data[ipv6] = (
-                self.data[ip]
-                .apply(self._to_ipv6)
-                .apply(self._ip_to_int_str)
-                .astype("string")
-                # .str.replace(".0", "", regex=False)
-            )
-            self.data = self.data.drop(columns=ip)
-            self.meaning_types[ipv6] = FileColumnMeaningType.IPV6_ADDRESS
-            self.etalon_def[FileColumnMeaningType.IPV6_ADDRESS.value] = ipv6
-            search_keys.add(ipv6)
-            self.columns_renaming[ipv6] = original_ip
-            self.search_keys = combine_search_keys(search_keys)
-
-    def __normalize_iso_code(self):
-        iso_code = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
-        if iso_code is not None and iso_code in self.data.columns:
-            # self.logger.info("Normalize iso code column")
-            self.data[iso_code] = (
-                self.data[iso_code]
-                .astype("string")
-                .str.upper()
-                .str.replace(r"[^A-Z]", "", regex=True)
-                .str.replace("UK", "GB", regex=False)
-            )
-            if (self.data[iso_code] == "").all():
-                raise ValidationError(self.bundle.get("invalid_country").format(iso_code))
-
-    def __normalize_postal_code(self):
-        postal_code = self.etalon_def_checked.get(FileColumnMeaningType.POSTAL_CODE.value)
-        if postal_code is not None and postal_code in self.data.columns:
-            # self.logger.info("Normalize postal code")
-
-            if is_string_dtype(self.data[postal_code]) or is_object_dtype(self.data[postal_code]):
-                try:
-                    self.data[postal_code] = (
-                        self.data[postal_code].astype("string").astype("Float64").astype("Int64").astype("string")
-                    )
-                except Exception:
-                    pass
-            elif is_float_dtype(self.data[postal_code]):
-                self.data[postal_code] = self.data[postal_code].astype("Int64").astype("string")
-
-            self.data[postal_code] = (
-                self.data[postal_code]
-                .astype("string")
-                .str.upper()
-                .str.replace(r"[^0-9A-Z]", "", regex=True)  # remove non alphanumeric characters
-                .str.replace(r"^0+\B", "", regex=True)  # remove leading zeros
-            )
-            if (self.data[postal_code] == "").all():
-                raise ValidationError(self.bundle.get("invalid_postal_code").format(postal_code))
-
-    def __normalize_hem(self):
-        hem = self.etalon_def_checked.get(FileColumnMeaningType.HEM.value)
-        if hem is not None and hem in self.data.columns:
-            self.data[hem] = self.data[hem].str.lower()
-
-    def __remove_old_dates(self, silent_mode: bool = False):
-        date_column = self.etalon_def_checked.get(FileColumnMeaningType.DATE.value) or self.etalon_def_checked.get(
-            FileColumnMeaningType.DATETIME.value
-        )
-        if date_column is not None and is_numeric_dtype(self.data[date_column]):
-            old_subset = self.data[self.data[date_column] < self.MIN_SUPPORTED_DATE_TS]
-            if len(old_subset) > 0:
-                self.logger.info(f"df before dropping old rows: {self.data.shape}")
-                self.data.drop(index=old_subset.index, inplace=True)  # type: ignore
-                self.logger.info(f"df after dropping old rows: {self.data.shape}")
-                if len(self.data) == 0:
-                    raise ValidationError(self.bundle.get("dataset_all_dates_old"))
-                else:
-                    msg = self.bundle.get("dataset_drop_old_dates")
-                    self.logger.warning(msg)
-                    if not silent_mode:
-                        print(msg)
-                    self.warning_counter.increment()
-
-    def __drop_ignore_columns(self):
-        """Drop ignore columns"""
-        columns_to_drop = list(set(self.data.columns) & set(self.ignore_columns))
-        if len(columns_to_drop) > 0:
-            # self.logger.info(f"Dropping ignore columns: {self.ignore_columns}")
-            self.data.drop(columns_to_drop, axis=1, inplace=True)
 
     def __target_value(self) -> pd.Series:
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
@@ -526,52 +280,6 @@ class Dataset:  # (pd.DataFrame):
             self.data = resampled_data
             self.logger.info(f"Shape after threshold resampling: {self.data.shape}")
 
-    def __convert_phone(self):
-        """Convert phone/msisdn to int"""
-        # self.logger.info("Convert phone to int")
-        msisdn_column = self.etalon_def_checked.get(FileColumnMeaningType.MSISDN.value)
-        country_column = self.etalon_def_checked.get(FileColumnMeaningType.COUNTRY.value)
-        if msisdn_column is not None and msisdn_column in self.data.columns:
-            normalizer = PhoneNormalizer(self.data, msisdn_column, country_column)
-            self.data[msisdn_column] = normalizer.normalize()
-            if self.data[msisdn_column].isnull().all():
-                raise ValidationError(f"All values of PHONE column `{msisdn_column}` are invalid")
-
-    def __features(self):
-        return [
-            f for f, meaning_type in self.meaning_types_checked.items() if meaning_type == FileColumnMeaningType.FEATURE
-        ]
-
-    def __remove_dates_from_features(self, silent_mode: bool = False):
-        # self.logger.info("Remove date columns from features")
-
-        removed_features = []
-        for f in self.__features():
-            if is_datetime(self.data[f]) or is_period_dtype(self.data[f]):
-                removed_features.append(f)
-                self.data.drop(columns=f, inplace=True)
-                del self.meaning_types_checked[f]
-
-        if removed_features:
-            msg = self.bundle.get("dataset_date_features").format(removed_features)
-            self.logger.warning(msg)
-            if not silent_mode:
-                print(msg)
-            self.warning_counter.increment()
-
-    def __validate_features_count(self):
-        if len(self.__features()) > self.MAX_FEATURES_COUNT:
-            msg = self.bundle.get("dataset_too_many_features").format(self.MAX_FEATURES_COUNT)
-            self.logger.warning(msg)
-            raise ValidationError(msg)
-
-    def __convert_features_types(self):
-        # self.logger.info("Convert features to supported data types")
-
-        for f in self.__features():
-            if not is_numeric_dtype(self.data[f]):
-                self.data[f] = self.data[f].astype("string")
-
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
         # self.logger.info("validating etalon")
@@ -594,7 +302,7 @@ class Dataset:  # (pd.DataFrame):
             key
             for search_group in self.search_keys_checked
             for key in search_group
-            if self.columns_renaming.get(key) != EmailSearchKeyConverter.EMAIL_ONE_DOMAIN_COLUMN_NAME
+            if not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
         }
         ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
@@ -702,69 +410,7 @@ class Dataset:  # (pd.DataFrame):
         if len(self.data) == 0:
             raise ValidationError(self.bundle.get("all_search_keys_invalid"))
 
-    def __validate_meaning_types(self, validate_target: bool):
-        # self.logger.info("Validating meaning types")
-        if self.meaning_types is None or len(self.meaning_types) == 0:
-            raise ValueError(self.bundle.get("dataset_missing_meaning_types"))
-
-        if SYSTEM_RECORD_ID not in self.data.columns:
-            raise ValueError("Internal error")
-
-        for column in self.meaning_types:
-            if column not in self.data.columns:
-                raise ValueError(self.bundle.get("dataset_missing_meaning_column").format(column, self.data.columns))
-        if validate_target and FileColumnMeaningType.TARGET not in self.meaning_types.values():
-            raise ValueError(self.bundle.get("dataset_missing_target"))
-
-    def __validate_search_keys(self):
-        # self.logger.info("Validating search keys")
-        if self.search_keys is None or len(self.search_keys) == 0:
-            raise ValueError(self.bundle.get("dataset_missing_search_keys"))
-        for keys_group in self.search_keys:
-            for key in keys_group:
-                if key not in self.data.columns:
-                    showing_columns = set(self.data.columns) - SYSTEM_COLUMNS
-                    raise ValidationError(
-                        self.bundle.get("dataset_missing_search_key_column").format(key, showing_columns)
-                    )
-
     def validate(self, validate_target: bool = True, silent_mode: bool = False):
-        # self.logger.info("Validating dataset")
-
-        self.__validate_search_keys()
-
-        self.__validate_meaning_types(validate_target=validate_target)
-
-        self.__drop_ignore_columns()
-
-        self.__rename_columns()
-
-        self.__remove_dates_from_features(silent_mode)
-
-        self.__validate_features_count()
-
-        self.__validate_too_long_string_values()
-
-        self.__convert_bools()
-
-        self.__convert_float16()
-
-        self.__correct_decimal_comma()
-
-        self.__remove_old_dates(silent_mode)
-
-        self.__convert_ip()
-
-        self.__convert_phone()
-
-        self.__normalize_iso_code()
-
-        self.__normalize_postal_code()
-
-        self.__normalize_hem()
-
-        self.__convert_features_types()
-
         self.__validate_dataset(validate_target, silent_mode)
 
         if validate_target:
@@ -782,38 +428,39 @@ class Dataset:  # (pd.DataFrame):
         # self.logger.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.data.columns, self.data.dtypes)):
-            if column_name not in self.ignore_columns:
-                if column_name in self.meaning_types_checked:
-                    meaning_type = self.meaning_types_checked[column_name]
-                    # Temporary workaround while backend doesn't support datetime
-                    if meaning_type == FileColumnMeaningType.DATETIME:
-                        meaning_type = FileColumnMeaningType.DATE
-                else:
-                    meaning_type = FileColumnMeaningType.FEATURE
-                if meaning_type in {
-                    FileColumnMeaningType.DATE,
-                    FileColumnMeaningType.DATETIME,
-                    # FileColumnMeaningType.IP_ADDRESS,
-                }:
-                    min_max_values = NumericInterval(
-                        minValue=self.data[column_name].astype("Int64").min(),
-                        maxValue=self.data[column_name].astype("Int64").max(),
-                    )
-                else:
-                    min_max_values = None
-                column_meta = FileColumnMetadata(
-                    index=index,
-                    name=column_name,
-                    originalName=self.columns_renaming.get(column_name) or column_name,
-                    dataType=self.__get_data_type(column_type, column_name),
-                    meaningType=meaning_type,
-                    minMaxValues=min_max_values,
+            if column_name in self.meaning_types_checked:
+                meaning_type = self.meaning_types_checked[column_name]
+                # Temporary workaround while backend doesn't support datetime
+                if meaning_type == FileColumnMeaningType.DATETIME:
+                    meaning_type = FileColumnMeaningType.DATE
+            else:
+                meaning_type = FileColumnMeaningType.FEATURE
+            if meaning_type in {
+                FileColumnMeaningType.DATE,
+                FileColumnMeaningType.DATETIME,
+                # FileColumnMeaningType.IP_ADDRESS,
+            }:
+                min_value = self.data[column_name].astype("Int64").min()
+                max_value = self.data[column_name].astype("Int64").max()
+                min_max_values = NumericInterval(
+                    minValue=min_value,
+                    maxValue=max_value,
                 )
-                if self.unnest_search_keys and column_meta.originalName in self.unnest_search_keys:
-                    column_meta.isUnnest = True
-                    column_meta.unnestKeyNames = self.unnest_search_keys[column_meta.originalName]
+            else:
+                min_max_values = None
+            column_meta = FileColumnMetadata(
+                index=index,
+                name=column_name,
+                originalName=self.columns_renaming.get(column_name) or column_name,
+                dataType=self.__get_data_type(column_type, column_name),
+                meaningType=meaning_type,
+                minMaxValues=min_max_values,
+            )
+            if self.unnest_search_keys and column_meta.originalName in self.unnest_search_keys:
+                column_meta.isUnnest = True
+                column_meta.unnestKeyNames = self.unnest_search_keys[column_meta.originalName]
 
-                columns.append(column_meta)
+            columns.append(column_meta)
 
         return FileMetadata(
             name=self.dataset_name,
@@ -1045,7 +692,7 @@ class Dataset:  # (pd.DataFrame):
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
         self.data.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
         uploading_file_size = Path(parquet_file_path).stat().st_size
-        self.logger.info(f"Size of prepared uploading file: {uploading_file_size}")
+        self.logger.info(f"Size of prepared uploading file: {uploading_file_size}. {len(self.data)} rows")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
             raise ValidationError(self.bundle.get("dataset_too_big_file"))
         return parquet_file_path

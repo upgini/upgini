@@ -1,15 +1,15 @@
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
-from upgini.normalizer.phone_normalizer import PhoneNormalizer
+from upgini.utils.phone_utils import PhoneSearchKeyConverter
 
 
 def test_phone_float_to_int_safe():
     df = pd.DataFrame(
         data={"phone_num": [7.2, 0.1, 3.9, 123456789012345.1, None], "something_else": ["a", "b", "c", "d", "e"]}
     )
-    normalizer = PhoneNormalizer(df, "phone_num")
-    df["phone_num"] = normalizer.normalize()
+    normalizer = PhoneSearchKeyConverter("phone_num")
+    df = normalizer.convert(df)
 
     expected_df = pd.DataFrame(
         data={"phone_num": [None, None, None, 123456789012345, None], "something_else": ["a", "b", "c", "d", "e"]}
@@ -25,8 +25,8 @@ def test_phone_int_to_int_safe():
             "something_else": ["a", "b", "c", "d", "e", "f"],
         }
     )
-    normalizer = PhoneNormalizer(df, "phone_num")
-    df["phone_num"] = normalizer.normalize()
+    normalizer = PhoneSearchKeyConverter("phone_num")
+    df = normalizer.convert(df)
 
     expected_df = pd.DataFrame(
         data={
@@ -53,8 +53,8 @@ def test_phone_str_to_int_safe():
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
-    normalizer = PhoneNormalizer(df, "phone_num")
-    df["phone_num"] = normalizer.normalize()
+    normalizer = PhoneSearchKeyConverter("phone_num")
+    df = normalizer.convert(df)
 
     expected_df = pd.DataFrame(
         data={
@@ -82,8 +82,8 @@ def test_phone_prefix_normalization():
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
-    normalizer = PhoneNormalizer(df, "phone_num", "country")
-    df["phone_num"] = normalizer.normalize()
+    normalizer = PhoneSearchKeyConverter("phone_num", "country")
+    df = normalizer.convert(df)
 
     expected_df = pd.DataFrame(
         data={
@@ -113,8 +113,8 @@ def test_float_string_phone_prefix_normalization():
             "something_else": ["a", "b", "c", "d", "e", "f", "g"],
         }
     )
-    normalizer = PhoneNormalizer(df, "phone_num", "country")
-    df["phone_num"] = normalizer.normalize()
+    normalizer = PhoneSearchKeyConverter("phone_num", "country")
+    df = normalizer.convert(df)
 
     expected_df = pd.DataFrame(
         data={

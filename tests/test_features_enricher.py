@@ -8,9 +8,9 @@ import pytest
 from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 
-from upgini import FeaturesEnricher, SearchKey
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
+from upgini.features_enricher import FeaturesEnricher
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -20,7 +20,9 @@ from upgini.metadata import (
     ModelTaskType,
     ProviderTaskMetadataV2,
     RuntimeParameters,
+    SearchKey,
 )
+from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
@@ -176,7 +178,7 @@ def test_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -474,7 +476,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.021830, -0.006607, -0.018483],
+            enriched_gini: [0.016531, 0.003019, -0.021013],
         }
     )
     print("Expected metrics: ")
@@ -505,7 +507,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            enriched_gini: [0.054454],
+            enriched_gini: [0.053696],
         }
     )
     print("Expected metrics: ")
@@ -757,7 +759,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -876,7 +878,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -993,7 +995,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.014174, 0.030706, -0.003208],
+            enriched_gini: [0.000991, -0.032656, -0.033951],
         }
     )
     print("Expected metrics: ")
@@ -1042,7 +1044,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
                 },
                 {
                     "index": 1,
-                    "name": "cos_3_freq_w_sun_",
+                    "name": "cos_3_freq_w_sun__0a6bf9",
                     "originalName": "cos(3,freq=W-SUN)",
                     "dataType": "INT",
                     "meaningType": "FEATURE",
@@ -1071,13 +1073,13 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(name="f_feature123", type="numerical", source="ads", hit_rate=99.0, shap_value=0.9),
                 FeaturesMetadataV2(
-                    name="cos_3_freq_w_sun_", type="numerical", source="etalon", hit_rate=100.0, shap_value=0.1
+                    name="cos_3_freq_w_sun__0a6bf9", type="numerical", source="etalon", hit_rate=100.0, shap_value=0.1
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=5319, max_hit_count=5266, hit_rate=0.99, hit_rate_percent=99.0
             ),
-            features_used_for_embeddings=["cos_3_freq_w_sun_"],
+            features_used_for_embeddings=["cos_3_freq_w_sun__0a6bf9"],
         ),
     )
     path_to_mock_features = os.path.join(
@@ -1168,8 +1170,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         progress_bar=None,
         progress_callback=None,
     ):
-        assert "cos(3,freq=W-SUN)" in self.data.columns
-        assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun_"
+        assert "cos_3_freq_w_sun__0a6bf9" in self.data.columns
+        assert runtime_parameters.properties["features_for_embeddings"] == "cos_3_freq_w_sun__0a6bf9"
         return original_validation(
             self,
             trace_id,
@@ -1813,10 +1815,14 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     mock_features = pd.read_parquet(path_to_mock_features)
     converter = DateTimeSearchKeyConverter("rep_date")
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
+    search_keys_copy = search_keys.copy()
+    normalizer = Normalizer(search_keys_copy, converter.generated_features)
+    df_with_eval_set_index_with_date = normalizer.normalize(df_with_eval_set_index_with_date)
     mock_features["system_record_id"] = pd.util.hash_pandas_object(
-        df_with_eval_set_index_with_date[sorted(search_keys.keys())].reset_index(drop=True), index=False
+        df_with_eval_set_index_with_date[sorted(search_keys_copy.keys())].reset_index(drop=True), index=False
     ).astype("Float64")
     mock_features["entity_system_record_id"] = mock_features["system_record_id"]
+    mock_features = mock_features.drop_duplicates(subset=["entity_system_record_id"], keep="first")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)
 
     enriched_df_with_eval_set = enricher.transform(df_with_eval_set_index)
@@ -2256,12 +2262,12 @@ def test_email_search_key(requests_mock: Mocker):
             "system_record_id",
             "entity_system_record_id",
             "target",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
-            "email_domain_10c73f",
+            "email_822444_hem",
+            "email_822444_one_domain",
+            "email_domain",
             "current_date_b993c4",
         }
-        assert {"hashed_email_64ff8c", "email_one_domain_3b0a68", "current_date_b993c4"} == {
+        assert {"email_822444_hem", "email_822444_one_domain", "current_date_b993c4"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         raise TestException
@@ -2422,15 +2428,15 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "phone_45569d",
             "date_0e8763",
             "target",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
-            "email_domain_10c73f",
+            "eml_13033c_hem",
+            "eml_13033c_one_domain",
+            "eml_domain",
         }
         assert {
             "postal_code_13534a",
             "phone_45569d",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
+            "eml_13033c_hem",
+            "eml_13033c_one_domain",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         search_task = SearchTask(search_task_id, self, rest_client=enricher.rest_client)
@@ -2474,8 +2480,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             # "country_aff64e",
             "postal_code_13534a",
             "phone_45569d",
-            "hashed_email_64ff8c",
-            "email_one_domain_3b0a68",
+            "eml_13033c_hem",
+            "eml_13033c_one_domain",
             "date_0e8763",
         } == {sk for sublist in self.search_keys for sk in sublist}
         raise TestException
@@ -2690,6 +2696,12 @@ def test_unsupported_arguments(requests_mock: Mocker):
             )
     finally:
         Dataset.MIN_ROWS_COUNT = original_min_rows
+
+
+def test_multikey_metrics_without_external_features():
+    # TODO test case when there is no external features found and we have datetime + email
+    # that produce "client" features and multiple email produce multiple email_domain features
+    pass
 
 
 class DataFrameWrapper:

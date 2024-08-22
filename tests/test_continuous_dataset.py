@@ -4,8 +4,8 @@ from typing import Dict
 import pandas as pd
 import pytest
 
-from upgini.dataset import Dataset
 from upgini.ads import FileColumnMeaningType
+from upgini.dataset import Dataset
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 
 FIXTURE_DIR = os.path.join(
@@ -43,6 +43,7 @@ def test_continuous_dataset(datafiles, etalon_definition: Dict[str, FileColumnMe
         meaning_types=etalon_definition,  # type: ignore
         search_keys=etalon_search_keys,  # type: ignore
     )
+    ds.columns_renaming = {c: c for c in df.columns}
     ds.validate()
     expected_valid_rows = 20401
     assert len(ds) == expected_valid_rows
