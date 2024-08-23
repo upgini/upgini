@@ -23,7 +23,6 @@ from pandas.api.types import (
     is_datetime64_any_dtype,
     is_numeric_dtype,
     is_object_dtype,
-    is_period_dtype,
     is_string_dtype,
 )
 from scipy.stats import ks_2samp
@@ -1408,7 +1407,9 @@ class FeaturesEnricher(TransformerMixin):
         # TODO maybe there is no more need for these convertions
         # Remove datetime features
         datetime_features = [
-            f for f in fitting_X.columns if is_datetime64_any_dtype(fitting_X[f]) or is_period_dtype(fitting_X[f])
+            f
+            for f in fitting_X.columns
+            if is_datetime64_any_dtype(fitting_X[f]) or isinstance(fitting_X[f].dtype, pd.PeriodDtype)
         ]
         if len(datetime_features) > 0:
             self.logger.warning(self.bundle.get("dataset_date_features").format(datetime_features))

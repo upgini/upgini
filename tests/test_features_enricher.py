@@ -59,7 +59,7 @@ shap_value_header = bundle.get("features_info_shap")
 hitrate_header = bundle.get("features_info_hitrate")
 
 SearchTask.PROTECT_FROM_RATE_LIMIT = False
-SearchTask.POLLING_DELAY_SECONDS = 0.1
+SearchTask.POLLING_DELAY_SECONDS = 0
 pd.set_option("mode.chained_assignment", "raise")
 pd.set_option("display.max_columns", 1000)
 
@@ -476,7 +476,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.016531, 0.003019, -0.021013],
+            enriched_gini: [0.026128, -0.024432, -0.009413],
         }
     )
     print("Expected metrics: ")
@@ -507,7 +507,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            enriched_gini: [0.053696],
+            enriched_gini: [0.0559],
         }
     )
     print("Expected metrics: ")

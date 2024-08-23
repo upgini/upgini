@@ -1,4 +1,6 @@
 import importlib
+import importlib.util
+import importlib.machinery
 
 
 class LazyImport:
@@ -10,7 +12,18 @@ class LazyImport:
 
     def _load(self):
         if self._module is None:
-            self._module = importlib.import_module(self.module_name)
+            # Load module and save link to it
+            spec = importlib.util.find_spec(self.module_name)
+            if spec is None:
+                raise ImportError(f"Module {self.module_name} not found")
+
+            # Create module
+            self._module = importlib.util.module_from_spec(spec)
+
+            # Execute module
+            spec.loader.exec_module(self._module)
+
+            # Get class from module
             self._class = getattr(self._module, self.class_name)
 
     def __call__(self, *args, **kwargs):

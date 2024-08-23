@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 from pydantic import BaseModel
 
@@ -172,23 +172,23 @@ class FileMetricsInterval(BaseModel):
     date_cut: float
     count: float
     valid_count: float
-    avg_target: Optional[float]  # not for multiclass
-    avg_score_etalon: Optional[float]
+    avg_target: Optional[float] = None  # not for multiclass
+    avg_score_etalon: Optional[float] = None
 
 
 class FileMetrics(BaseModel):
     # etalon metadata
-    task_type: Optional[ModelTaskType]
-    label: Optional[ModelLabelType]
-    count: Optional[int]
-    valid_count: Optional[int]
-    valid_rate: Optional[float]
-    avg_target: Optional[float]
-    metrics_binary_etalon: Optional[BinaryTask]
-    metrics_regression_etalon: Optional[RegressionTask]
-    metrics_multiclass_etalon: Optional[MulticlassTask]
-    cuts: Optional[List[float]]
-    interval: Optional[List[FileMetricsInterval]]
+    task_type: Optional[ModelTaskType] = None
+    label: Optional[ModelLabelType] = None
+    count: Optional[int] = None
+    valid_count: Optional[int] = None
+    valid_rate: Optional[float] = None
+    avg_target: Optional[float] = None
+    metrics_binary_etalon: Optional[BinaryTask] = None
+    metrics_regression_etalon: Optional[RegressionTask] = None
+    metrics_multiclass_etalon: Optional[MulticlassTask] = None
+    cuts: Optional[List[float]] = None
+    interval: Optional[List[FileMetricsInterval]] = None
 
 
 class NumericInterval(BaseModel):
@@ -202,25 +202,25 @@ class FileColumnMetadata(BaseModel):
     dataType: DataType
     meaningType: FileColumnMeaningType
     minMaxValues: Optional[NumericInterval] = None
-    originalName: Optional[str]
+    originalName: Optional[str] = None
     # is this column contains keys from multiple key columns like msisdn1, msisdn2
     isUnnest: bool = False
     # list of original etalon key column names like msisdn1, msisdn2
-    unnestKeyNames: Optional[List[str]]
+    unnestKeyNames: Optional[List[str]] = None
 
 
 class FileMetadata(BaseModel):
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     columns: List[FileColumnMetadata]
     searchKeys: List[List[str]]
-    excludeFeaturesSources: Optional[List[str]]
-    hierarchicalGroupKeys: Optional[List[str]]
-    hierarchicalSubgroupKeys: Optional[List[str]]
-    taskType: Optional[ModelTaskType]
-    rowsCount: Optional[int]
-    checksumMD5: Optional[str]
-    digest: Optional[str]
+    excludeFeaturesSources: Optional[List[str]] = None
+    hierarchicalGroupKeys: Optional[List[str]] = None
+    hierarchicalSubgroupKeys: Optional[List[str]] = None
+    taskType: Optional[ModelTaskType] = None
+    rowsCount: Optional[int] = None
+    checksumMD5: Optional[str] = None
+    digest: Optional[str] = None
 
     def column_by_name(self, name: str) -> Optional[FileColumnMetadata]:
         for c in self.columns:
@@ -244,17 +244,17 @@ class FeaturesMetadataV2(BaseModel):
     source: str
     hit_rate: float
     shap_value: float
-    commercial_schema: Optional[str]
-    data_provider: Optional[str]
-    data_providers: Optional[List[str]]
-    data_provider_link: Optional[str]
-    data_provider_links: Optional[List[str]]
-    data_source: Optional[str]
-    data_sources: Optional[List[str]]
-    data_source_link: Optional[str]
-    data_source_links: Optional[List[str]]
-    doc_link: Optional[str]
-    update_frequency: Optional[str]
+    commercial_schema: Optional[str] = None
+    data_provider: Optional[str] = None
+    data_providers: Optional[List[str]] = None
+    data_provider_link: Optional[str] = None
+    data_provider_links: Optional[List[str]] = None
+    data_source: Optional[str] = None
+    data_sources: Optional[List[str]] = None
+    data_source_link: Optional[str] = None
+    data_source_links: Optional[List[str]] = None
+    doc_link: Optional[str] = None
+    update_frequency: Optional[str] = None
 
 
 class HitRateMetrics(BaseModel):
@@ -274,48 +274,48 @@ class ModelEvalSet(BaseModel):
 class BaseColumnMetadata(BaseModel):
     original_name: str
     hashed_name: str
-    ads_definition_id: Optional[str]
+    ads_definition_id: Optional[str] = None
     is_augmented: bool
 
 
 class GeneratedFeatureMetadata(BaseModel):
-    alias: Optional[str]
+    alias: Optional[str] = None
     formula: str
     display_index: str
     base_columns: List[BaseColumnMetadata]
-    operator_params: Optional[Dict[str, str]]
+    operator_params: Optional[Dict[str, str]] = None
 
 
 class ProviderTaskMetadataV2(BaseModel):
     features: List[FeaturesMetadataV2]
-    hit_rate_metrics: Optional[HitRateMetrics]
-    eval_set_metrics: Optional[List[ModelEvalSet]]
-    zero_hit_rate_search_keys: Optional[List[str]]
-    features_used_for_embeddings: Optional[List[str]]
-    shuffle_kfold: Optional[bool]
-    generated_features: Optional[List[GeneratedFeatureMetadata]]
+    hit_rate_metrics: Optional[HitRateMetrics] = None
+    eval_set_metrics: Optional[List[ModelEvalSet]] = None
+    zero_hit_rate_search_keys: Optional[List[str]] = None
+    features_used_for_embeddings: Optional[List[str]] = None
+    shuffle_kfold: Optional[bool] = None
+    generated_features: Optional[List[GeneratedFeatureMetadata]] = None
 
 
 class FeaturesFilter(BaseModel):
-    minImportance: Optional[float]
-    maxPSI: Optional[float]
-    maxCount: Optional[int]
-    selectedFeatures: Optional[List[str]]
+    minImportance: Optional[float] = None
+    maxPSI: Optional[float] = None
+    maxCount: Optional[int] = None
+    selectedFeatures: Optional[List[str]] = None
 
 
 class RuntimeParameters(BaseModel):
-    properties: Dict[str, str] = {}
+    properties: Dict[str, Any] = {}
 
 
 class SearchCustomization(BaseModel):
-    featuresFilter: Optional[FeaturesFilter]
-    extractFeatures: Optional[bool]
-    accurateModel: Optional[bool]
-    importanceThreshold: Optional[float]
-    maxFeatures: Optional[int]
-    returnScores: Optional[bool]
-    runtimeParameters: Optional[RuntimeParameters]
-    metricsCalculation: Optional[bool]
+    featuresFilter: Optional[FeaturesFilter] = None
+    extractFeatures: Optional[bool] = None
+    accurateModel: Optional[bool] = None
+    importanceThreshold: Optional[float] = None
+    maxFeatures: Optional[int] = None
+    returnScores: Optional[bool] = None
+    runtimeParameters: Optional[RuntimeParameters] = None
+    metricsCalculation: Optional[bool] = None
 
     def __repr__(self):
         return (

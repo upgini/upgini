@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 from upgini.autofe.operand import PandasOperand
 
@@ -38,10 +38,10 @@ class DateDiffMixin(BaseModel):
 
 
 class DateDiff(PandasOperand, DateDiffMixin):
-    name = "date_diff"
-    alias = "date_diff_type1"
-    is_binary = True
-    has_symmetry_importance = True
+    name: str = "date_diff"
+    alias: Optional[str] = "date_diff_type1"
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
 
     replace_negative: bool = False
 
@@ -70,9 +70,9 @@ class DateDiff(PandasOperand, DateDiffMixin):
 
 
 class DateDiffType2(PandasOperand, DateDiffMixin):
-    name = "date_diff_type2"
-    is_binary = True
-    has_symmetry_importance = True
+    name: str = "date_diff_type2"
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
@@ -104,8 +104,8 @@ _count_aggregations = ["nunique", "count"]
 
 
 class DateListDiff(PandasOperand, DateDiffMixin):
-    is_binary = True
-    has_symmetry_importance = True
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
 
     aggregation: str
     replace_negative: bool = False
@@ -165,8 +165,8 @@ class DateListDiff(PandasOperand, DateDiffMixin):
 
 
 class DateListDiffBounded(DateListDiff):
-    lower_bound: Optional[int]
-    upper_bound: Optional[int]
+    lower_bound: Optional[int] = None
+    upper_bound: Optional[int] = None
 
     def __init__(self, **data: Any) -> None:
         if "name" not in data:
@@ -191,8 +191,8 @@ class DateListDiffBounded(DateListDiff):
 
 
 class DatePercentileBase(PandasOperand, abc.ABC):
-    is_binary = True
-    output_type = "float"
+    is_binary: bool = True
+    output_type: Optional[str] = "float"
 
     date_unit: Optional[str] = None
 
@@ -226,12 +226,12 @@ class DatePercentileBase(PandasOperand, abc.ABC):
 
 
 class DatePercentile(DatePercentileBase):
-    name = "date_per"
-    alias = "date_per_method1"
+    name: str = "date_per"
+    alias: Optional[str] = "date_per_method1"
 
-    zero_month: Optional[int]
-    zero_year: Optional[int]
-    zero_bounds: Optional[List[float]]
+    zero_month: Optional[int] = None
+    zero_year: Optional[int] = None
+    zero_bounds: Optional[List[float]] = None
     step: int = 30
 
     def get_params(self) -> Dict[str, Optional[str]]:
@@ -246,7 +246,7 @@ class DatePercentile(DatePercentileBase):
         )
         return res
 
-    @validator("zero_bounds", pre=True)
+    @field_validator("zero_bounds", mode="before")
     def validate_bounds(cls, value):
         if value is None or isinstance(value, list):
             return value
@@ -264,7 +264,7 @@ class DatePercentile(DatePercentileBase):
 
 
 class DatePercentileMethod2(DatePercentileBase):
-    name = "date_per_method2"
+    name: str = "date_per_method2"
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         pass

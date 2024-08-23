@@ -9,32 +9,32 @@ from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 
 class Min(PandasOperand):
-    name = "min"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "min"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return np.minimum(left, right)
 
 
 class Max(PandasOperand):
-    name = "max"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "max"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return np.maximum(left, right)
 
 
 class Add(PandasOperand, VectorizableMixin):
-    name = "+"
-    alias = "add"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
-    is_vectorizable = True
+    name: str = "+"
+    alias: str = "add"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
+    is_vectorizable: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return left + right
@@ -48,12 +48,12 @@ class Add(PandasOperand, VectorizableMixin):
 
 
 class Subtract(PandasOperand, VectorizableMixin):
-    name = "-"
-    alias = "sub"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
-    is_vectorizable = True
+    name: str = "-"
+    alias: str = "sub"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
+    is_vectorizable: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return left - right
@@ -67,12 +67,12 @@ class Subtract(PandasOperand, VectorizableMixin):
 
 
 class Multiply(PandasOperand, VectorizableMixin):
-    name = "*"
-    alias = "mul"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
-    is_vectorizable = True
+    name: str = "*"
+    alias: str = "mul"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
+    is_vectorizable: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return left * right
@@ -86,12 +86,12 @@ class Multiply(PandasOperand, VectorizableMixin):
 
 
 class Divide(PandasOperand, VectorizableMixin):
-    name = "/"
-    alias = "div"
-    is_binary = True
-    has_symmetry_importance = True
-    is_vectorizable = True
-    output_type = "float"
+    name: str = "/"
+    alias: str = "div"
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
+    is_vectorizable: bool = True
+    output_type: Optional[str] = "float"
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return left / right.replace(0, np.nan)
@@ -105,10 +105,10 @@ class Divide(PandasOperand, VectorizableMixin):
 
 
 class Combine(PandasOperand):
-    name = "Combine"
-    is_binary = True
-    has_symmetry_importance = True
-    output_type = "object"
+    name: str = "Combine"
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
+    output_type: Optional[str] = "object"
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         temp = left.astype(str) + "_" + right.astype(str)
@@ -117,13 +117,13 @@ class Combine(PandasOperand):
 
 
 class CombineThenFreq(PandasOperand):
-    name = "CombineThenFreq"
-    is_binary = True
-    is_symmetrical = True
-    has_symmetry_importance = True
-    output_type = "float"
-    is_distribution_dependent = True
-    input_type = "discrete"
+    name: str = "CombineThenFreq"
+    is_binary: bool = True
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
+    output_type: Optional[str] = "float"
+    is_distribution_dependent: bool = True
+    input_type: Optional[str] = "discrete"
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         temp = left.astype(str) + "_" + right.astype(str)
@@ -133,11 +133,11 @@ class CombineThenFreq(PandasOperand):
 
 
 class Distance(PandasOperand):
-    name = "dist"
-    is_binary = True
-    output_type = "float"
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "dist"
+    is_binary: bool = True
+    output_type: Optional[str] = "float"
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return pd.Series(
@@ -155,11 +155,11 @@ class Distance(PandasOperand):
 
 # Left for backward compatibility
 class Sim(Distance):
-    name = "sim"
-    is_binary = True
-    output_type = "float"
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "sim"
+    is_binary: bool = True
+    output_type: Optional[str] = "float"
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return 1 - super().calculate_binary(left, right)
@@ -188,12 +188,12 @@ class StringSim(PandasOperand, abc.ABC):
 
 
 class JaroWinklerSim1(StringSim):
-    name = "sim_jw1"
-    is_binary = True
-    input_type = "string"
-    output_type = "float"
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "sim_jw1"
+    is_binary: bool = True
+    input_type: Optional[str] = "string"
+    output_type: Optional[str] = "float"
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         return value
@@ -203,12 +203,12 @@ class JaroWinklerSim1(StringSim):
 
 
 class JaroWinklerSim2(StringSim):
-    name = "sim_jw2"
-    is_binary = True
-    input_type = "string"
-    output_type = "float"
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "sim_jw2"
+    is_binary: bool = True
+    input_type: Optional[str] = "string"
+    output_type: Optional[str] = "float"
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         return value[::-1] if value is not None else None
@@ -218,12 +218,12 @@ class JaroWinklerSim2(StringSim):
 
 
 class LevenshteinSim(StringSim):
-    name = "sim_lv"
-    is_binary = True
-    input_type = "string"
-    output_type = "float"
-    is_symmetrical = True
-    has_symmetry_importance = True
+    name: str = "sim_lv"
+    is_binary: bool = True
+    input_type: Optional[str] = "string"
+    output_type: Optional[str] = "float"
+    is_symmetrical: bool = True
+    has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
         return value

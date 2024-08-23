@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import Normalizer
@@ -6,10 +7,10 @@ from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 
 class Abs(PandasOperand, VectorizableMixin):
-    name = "abs"
-    is_unary = True
-    is_vectorizable = True
-    group_index = 0
+    name: str = "abs"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return data.abs()
@@ -19,11 +20,11 @@ class Abs(PandasOperand, VectorizableMixin):
 
 
 class Log(PandasOperand, VectorizableMixin):
-    name = "log"
-    is_unary = True
-    is_vectorizable = True
-    output_type = "float"
-    group_index = 0
+    name: str = "log"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    output_type: Optional[str] = "float"
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return self._round_value(np.log(np.abs(data.replace(0, np.nan))), 10)
@@ -33,11 +34,11 @@ class Log(PandasOperand, VectorizableMixin):
 
 
 class Sqrt(PandasOperand, VectorizableMixin):
-    name = "sqrt"
-    is_unary = True
-    is_vectorizable = True
-    output_type = "float"
-    group_index = 0
+    name: str = "sqrt"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    output_type: Optional[str] = "float"
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return self._round_value(np.sqrt(np.abs(data)))
@@ -47,10 +48,10 @@ class Sqrt(PandasOperand, VectorizableMixin):
 
 
 class Square(PandasOperand, VectorizableMixin):
-    name = "square"
-    is_unary = True
-    is_vectorizable = True
-    group_index = 0
+    name: str = "square"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return np.square(data)
@@ -60,11 +61,11 @@ class Square(PandasOperand, VectorizableMixin):
 
 
 class Sigmoid(PandasOperand, VectorizableMixin):
-    name = "sigmoid"
-    is_unary = True
-    is_vectorizable = True
-    output_type = "float"
-    group_index = 0
+    name: str = "sigmoid"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    output_type: Optional[str] = "float"
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return self._round_value(1 / (1 + np.exp(-data)))
@@ -74,12 +75,12 @@ class Sigmoid(PandasOperand, VectorizableMixin):
 
 
 class Floor(PandasOperand, VectorizableMixin):
-    name = "floor"
-    is_unary = True
-    is_vectorizable = True
-    output_type = "int"
-    input_type = "continuous"
-    group_index = 0
+    name: str = "floor"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    output_type: Optional[str] = "int"
+    input_type: Optional[str] = "continuous"
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return np.floor(data)
@@ -89,11 +90,11 @@ class Floor(PandasOperand, VectorizableMixin):
 
 
 class Residual(PandasOperand, VectorizableMixin):
-    name = "residual"
-    is_unary = True
-    is_vectorizable = True
-    input_type = "continuous"
-    group_index = 0
+    name: str = "residual"
+    is_unary: bool = True
+    is_vectorizable: bool = True
+    input_type: Optional[str] = "continuous"
+    group_index: int = 0
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return data - np.floor(data)
@@ -103,11 +104,11 @@ class Residual(PandasOperand, VectorizableMixin):
 
 
 class Freq(PandasOperand):
-    name = "freq"
-    is_unary = True
-    output_type = "float"
-    is_distribution_dependent = True
-    input_type = "discrete"
+    name: str = "freq"
+    is_unary: bool = True
+    output_type: Optional[str] = "float"
+    is_distribution_dependent: bool = True
+    input_type: Optional[str] = "discrete"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         value_counts = data.value_counts(normalize=True)
@@ -115,9 +116,9 @@ class Freq(PandasOperand):
 
 
 class Norm(PandasOperand):
-    name = "norm"
-    is_unary = True
-    output_type = "float"
+    name: str = "norm"
+    is_unary: bool = True
+    output_type: Optional[str] = "float"
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         data_dropna = data.dropna()
@@ -131,7 +132,7 @@ class Norm(PandasOperand):
 
 
 class Embeddings(PandasOperand):
-    name = "emb"
-    is_unary = True
-    input_type = "string"
-    output_type = "vector"
+    name: str = "emb"
+    is_unary: bool = True
+    input_type: Optional[str] = "string"
+    output_type: Optional[str] = "vector"

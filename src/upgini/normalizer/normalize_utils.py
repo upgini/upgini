@@ -10,7 +10,6 @@ from pandas.api.types import (
     is_float_dtype,
     is_numeric_dtype,
     is_object_dtype,
-    is_period_dtype,
     is_string_dtype,
 )
 
@@ -135,7 +134,7 @@ class Normalizer:
 
         removed_features = []
         for f in features:
-            if is_datetime(df[f]) or is_period_dtype(df[f]):
+            if is_datetime(df[f]) or isinstance(df[f].dtype, pd.PeriodDtype):
                 removed_features.append(f)
                 df.drop(columns=f, inplace=True)
 

@@ -69,4 +69,4 @@ def expected_binary_etalon_metadata():
             {"date_cut": 1552989600000.0, "count": 3000.0, "valid_count": 3000.0, "avg_target": 0.5},
         ],
     }
-    return FileMetrics.parse_obj(metadata)
+    return FileMetrics.model_validate(metadata)

@@ -39,17 +39,6 @@ from upgini.metadata import (
 from upgini.resource_bundle import bundle
 from upgini.utils.track_info import get_track_metrics
 
-# try:
-#     from importlib.metadata import version  # type: ignore
-
-#     __version__ = version("upgini")
-# except ImportError:
-#     try:
-#         from importlib_metadata import version  # type: ignore
-
-#         __version__ = version("upgini")
-#     except ImportError:
-#         __version__ = "Upgini wasn't installed"
 
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
@@ -452,18 +441,18 @@ class _RestClient:
                 content = file.read()
                 md5_hash.update(content)
                 digest = md5_hash.hexdigest()
-                metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+                metadata_with_md5 = metadata.model_copy(update={"checksumMD5": digest})
 
             digest_sha256 = hashlib.sha256(
                 pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
             ).hexdigest()
-            metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
+            metadata_with_md5 = metadata_with_md5.model_copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
                 files = {
                     "metadata": (
                         "metadata.json",
-                        metadata_with_md5.json(exclude_none=True).encode(),
+                        metadata_with_md5.model_dump_json(exclude_none=True).encode(),
                         "application/json",
                     ),
                     "tracking": (
@@ -471,13 +460,13 @@ class _RestClient:
                         dumps(track_metrics).encode(),
                         "application/json",
                     ),
-                    "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+                    "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
                         "customization.json",
-                        search_customization.json(exclude_none=True).encode(),
+                        search_customization.model_dump_json(exclude_none=True).encode(),
                         "application/json",
                     )
                 additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
@@ -492,7 +481,7 @@ class _RestClient:
     def check_uploaded_file_v2(self, trace_id: str, file_upload_id: str, metadata: FileMetadata) -> bool:
         api_path = self.CHECK_UPLOADED_FILE_URL_FMT_V2.format(file_upload_id)
         response = self._with_unauth_retry(
-            lambda: self._send_post_req(api_path, trace_id, metadata.json(exclude_none=True))
+            lambda: self._send_post_req(api_path, trace_id, metadata.model_dump_json(exclude_none=True))
         )
         return bool(response)
 
@@ -506,11 +495,11 @@ class _RestClient:
     ) -> SearchTaskResponse:
         api_path = self.INITIAL_SEARCH_WITHOUT_UPLOAD_URI_FMT_V2.format(file_upload_id)
         files = {
-            "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
-            "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+            "metadata": ("metadata.json", metadata.model_dump_json(exclude_none=True).encode(), "application/json"),
+            "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
         }
         if search_customization is not None:
-            files["customization"] = search_customization.json(exclude_none=True).encode()
+            files["customization"] = search_customization.model_dump_json(exclude_none=True).encode()
         additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
         response = self._with_unauth_retry(
             lambda: self._send_post_file_req_v2(
@@ -536,18 +525,18 @@ class _RestClient:
                 content = file.read()
                 md5_hash.update(content)
                 digest = md5_hash.hexdigest()
-                metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
+                metadata_with_md5 = metadata.model_copy(update={"checksumMD5": digest})
 
             digest_sha256 = hashlib.sha256(
                 pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
             ).hexdigest()
-            metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
+            metadata_with_md5 = metadata_with_md5.model_copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
                 files = {
                     "metadata": (
                         "metadata.json",
-                        metadata_with_md5.json(exclude_none=True).encode(),
+                        metadata_with_md5.model_dump_json(exclude_none=True).encode(),
                         "application/json",
                     ),
                     "tracking": (
@@ -555,13 +544,13 @@ class _RestClient:
                         dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
                         "application/json",
                     ),
-                    "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+                    "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
                     files["customization"] = (
                         "customization.json",
-                        search_customization.json(exclude_none=True).encode(),
+                        search_customization.model_dump_json(exclude_none=True).encode(),
                         "application/json",
                     )
 
@@ -585,11 +574,11 @@ class _RestClient:
     ) -> SearchTaskResponse:
         api_path = self.VALIDATION_SEARCH_WITHOUT_UPLOAD_URI_FMT_V2.format(file_upload_id, initial_search_task_id)
         files = {
-            "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
-            "metrics": ("metrics.json", metrics.json(exclude_none=True).encode(), "application/json"),
+            "metadata": ("metadata.json", metadata.model_dump_json(exclude_none=True).encode(), "application/json"),
+            "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
         }
         if search_customization is not None:
-            files["customization"] = search_customization.json(exclude_none=True).encode()
+            files["customization"] = search_customization.model_dump_json(exclude_none=True).encode()
         additional_headers = {self.SEARCH_KEYS_HEADER_NAME: ",".join(self.search_keys_meaning_types(metadata))}
         response = self._with_unauth_retry(
             lambda: self._send_post_file_req_v2(
@@ -651,7 +640,7 @@ class _RestClient:
             with open(file_path, "rb") as file:
                 files = {
                     "file": (metadata.name, file, "application/octet-stream"),
-                    "metadata": ("metadata.json", metadata.json(exclude_none=True).encode(), "application/json"),
+                    "metadata": ("metadata.json", metadata.model_dump_json(exclude_none=True).encode(), "application/json"),
                 }
 
                 return self._send_post_file_req_v2(api_path, files)
@@ -661,12 +650,12 @@ class _RestClient:
     def get_search_file_metadata(self, search_task_id: str, trace_id: str) -> FileMetadata:
         api_path = self.SEARCH_FILE_METADATA_URI_FMT_V2.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
-        return FileMetadata.parse_obj(response)
+        return FileMetadata.model_validate(response)
 
     def get_provider_search_metadata_v3(self, provider_search_task_id: str, trace_id: str) -> ProviderTaskMetadataV2:
         api_path = self.SEARCH_TASK_METADATA_FMT_V3.format(provider_search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
-        return ProviderTaskMetadataV2.parse_obj(response)
+        return ProviderTaskMetadataV2.model_validate(response)
 
     def get_current_transform_usage(self, trace_id) -> TransformUsage:
         track_metrics = get_track_metrics(self.client_ip, self.client_visitorid)

@@ -1,12 +1,8 @@
 from typing import Optional
 
+import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_float_dtype,
-    is_int64_dtype,
-    is_object_dtype,
-    is_string_dtype,
-)
+from pandas.api.types import is_float_dtype, is_object_dtype, is_string_dtype
 
 from upgini.errors import ValidationError
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
@@ -63,7 +59,9 @@ class PhoneSearchKeyConverter:
             convert_func = self.phone_str_to_int_safe
         elif is_float_dtype(df[self.phone_column]):
             convert_func = self.phone_float_to_int_safe
-        elif is_int64_dtype(df[self.phone_column]):
+        elif df[self.phone_column].dtype == np.int64 or isinstance(
+            df[self.phone_column].dtype, pd.Int64Dtype
+        ):
             convert_func = self.phone_int_to_int_safe
         else:
             raise ValidationError(
