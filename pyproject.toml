@@ -79,7 +79,7 @@ python = "3.10"
 cov = 'pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=upgini --cov=tests'
 format = "black {args}"
 lint = "ruff check {args}"
-test_binary = 'pytest -s -vv tests/test_binary_dataset.py'
+test_all = 'pytest -s -vv tests'
 
 [[tool.hatch.envs.test.matrix]]
 python = ["3.8"]
@@ -103,7 +103,7 @@ dependencies = [
 #  "pytest-timeout",
   "requests-mock",
   "pytest-datafiles",
-  "pandas~={matrix:pandas}.0",
+  "pandas~={matrix:pandas}",
 ]
 
 [tool.black]
@@ -116,3 +116,4 @@ profile = "black"
 pythonpath = [
   "./src"
 ]
+addopts="-n 4"

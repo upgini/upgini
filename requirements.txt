@@ -31,3 +31,4 @@ pytest-parallel
 py
 build
 twine
+pytest-xdist
