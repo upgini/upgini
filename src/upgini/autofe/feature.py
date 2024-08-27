@@ -82,9 +82,9 @@ class Feature:
         self.alias = alias
 
     def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
-        obj_dict = self.op.model_dump().copy()
+        obj_dict = self.op.dict().copy()
         obj_dict.update(params or {})
-        self.op = self.op.__class__.model_validate(obj_dict)
+        self.op = self.op.__class__.parse_obj(obj_dict)
         self.op.set_params(params)
 
         for child in self.children:

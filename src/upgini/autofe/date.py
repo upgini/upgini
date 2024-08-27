@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, validator
 
 from upgini.autofe.operand import PandasOperand
 
@@ -246,7 +246,7 @@ class DatePercentile(DatePercentileBase):
         )
         return res
 
-    @field_validator("zero_bounds", mode="before")
+    @validator("zero_bounds", pre="true")
     def validate_bounds(cls, value):
         if value is None or isinstance(value, list):
             return value

@@ -41,7 +41,7 @@ dependencies = [
     "lightgbm>=3.3.2",
     "numpy>=1.19.0,<=1.26.4",
     "pandas>=1.1.0,<3.0.0",
-    "pydantic>=2.7.0",
+    "pydantic>1.0.0,<3.0.0",
     "pyjwt>=2.8.0",
     "python-dateutil>=2.8.0",
     "python-json-logger>=2.0.2",

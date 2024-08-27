@@ -39,7 +39,6 @@ from upgini.metadata import (
 from upgini.resource_bundle import bundle
 from upgini.utils.track_info import get_track_metrics
 
-
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
 DEMO_API_KEY: str = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
@@ -460,7 +459,11 @@ class _RestClient:
                         dumps(track_metrics).encode(),
                         "application/json",
                     ),
-                    "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
+                    "metrics": (
+                        "metrics.json",
+                        metrics.model_dump_json(exclude_none=True).encode(),
+                        "application/json",
+                    ),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
@@ -544,7 +547,11 @@ class _RestClient:
                         dumps(get_track_metrics(self.client_ip, self.client_visitorid)).encode(),
                         "application/json",
                     ),
-                    "metrics": ("metrics.json", metrics.model_dump_json(exclude_none=True).encode(), "application/json"),
+                    "metrics": (
+                        "metrics.json",
+                        metrics.model_dump_json(exclude_none=True).encode(),
+                        "application/json",
+                    ),
                     "file": (metadata_with_md5.name, file, "application/octet-stream"),
                 }
                 if search_customization is not None:
@@ -640,7 +647,11 @@ class _RestClient:
             with open(file_path, "rb") as file:
                 files = {
                     "file": (metadata.name, file, "application/octet-stream"),
-                    "metadata": ("metadata.json", metadata.model_dump_json(exclude_none=True).encode(), "application/json"),
+                    "metadata": (
+                        "metadata.json",
+                        metadata.model_dump_json(exclude_none=True).encode(),
+                        "application/json",
+                    ),
                 }
 
                 return self._send_post_file_req_v2(api_path, files)
