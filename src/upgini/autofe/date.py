@@ -4,9 +4,14 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, __version__ as pydantic_version
 
 from upgini.autofe.operand import PandasOperand
+
+
+def get_pydantic_version():
+    major_version = int(pydantic_version.split('.')[0])
+    return major_version
 
 
 class DateDiffMixin(BaseModel):
@@ -246,12 +251,25 @@ class DatePercentile(DatePercentileBase):
         )
         return res
 
-    @validator("zero_bounds", pre="true")
-    def validate_bounds(cls, value):
-        if value is None or isinstance(value, list):
+    # Check Pydantic version
+    if get_pydantic_version() >= 2:
+        # Use @field_validator for Pydantic 2.x
+        from pydantic import field_validator
+
+        @field_validator('zero_bounds', mode='before')
+        def parse_zero_bounds(cls, value):
+            if isinstance(value, str):
+                return value[1:-1].split(", ")
             return value
-        elif isinstance(value, str):
-            return value[1:-1].split(", ")
+    else:
+        # Use @validator for Pydantic 1.x
+        from pydantic import validator
+
+        @validator('zero_bounds', pre=True)
+        def parse_zero_bounds(cls, value):
+            if isinstance(value, str):
+                return value[1:-1].split(", ")
+            return value
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         months = date_col.dt.month

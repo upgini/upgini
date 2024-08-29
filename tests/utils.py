@@ -155,7 +155,7 @@ def mock_get_metadata(
 
 
 def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_id: str, meta: ProviderTaskMetadataV2):
-    requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.model_dump())
+    requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.dict())
 
 
 def mock_get_task_metadata_v2_from_file(requests_mock: Mocker, url: str, ads_search_task_id: str, meta_path: str):

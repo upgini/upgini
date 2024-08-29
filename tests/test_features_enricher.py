@@ -1820,7 +1820,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     df_with_eval_set_index_with_date = normalizer.normalize(df_with_eval_set_index_with_date)
     mock_features["system_record_id"] = pd.util.hash_pandas_object(
         df_with_eval_set_index_with_date[sorted(search_keys_copy.keys())].reset_index(drop=True), index=False
-    ).astype("Float64")
+    ).astype("float64")
     mock_features["entity_system_record_id"] = mock_features["system_record_id"]
     mock_features = mock_features.drop_duplicates(subset=["entity_system_record_id"], keep="first")
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, mock_features)

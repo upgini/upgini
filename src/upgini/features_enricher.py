@@ -2042,7 +2042,7 @@ class FeaturesEnricher(TransformerMixin):
 
             df[ENTITY_SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(
                 df[columns_for_system_record_id], index=False
-            ).astype("Float64")
+            ).astype("float64")
 
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
@@ -2108,7 +2108,7 @@ class FeaturesEnricher(TransformerMixin):
             # search keys might be changed after explode
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
             df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
-                "Float64"
+                "float64"
             )
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
             meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID

@@ -103,6 +103,7 @@ dependencies = [
 #  "pytest-timeout",
   "requests-mock",
   "pytest-datafiles",
+  "pytest-xdist",
   "pandas~={matrix:pandas}",
 ]
 
