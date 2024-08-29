@@ -141,7 +141,7 @@ class Distance(PandasOperand):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return pd.Series(
-            1 - self.__dot(left, right) / (self.__dot(left, left) * self.__dot(right, right)), index=left.index
+            1 - self.__dot(left, right) / (self.__norm(left) * self.__norm(right)), index=left.index
         )
 
     # row-wise dot product
@@ -151,6 +151,9 @@ class Distance(PandasOperand):
         res = (left.dropna() * right.dropna()).apply(np.sum)
         res = res.reindex(left.index.union(right.index))
         return res
+
+    def __norm(self, vector: pd.Series) -> pd.Series:
+        return np.sqrt(self.__dot(vector, vector))
 
 
 # Left for backward compatibility

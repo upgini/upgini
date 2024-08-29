@@ -346,8 +346,9 @@ def test_distance():
 
     op = Distance()
 
-    expected_values = pd.Series([0.0, 0.0, 0.5, 1.0, np.nan, np.nan])
+    expected_values = pd.Series([0.0, 0.0, 0.292893, 1.0, np.nan, np.nan])
     actual_values = op.calculate_binary(data.v1, data.v2)
+    print(actual_values)
 
     assert_series_equal(actual_values, expected_values)
 
