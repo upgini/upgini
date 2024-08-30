@@ -1,4 +1,5 @@
 import abc
+import json
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -268,7 +269,7 @@ class DatePercentile(DatePercentileBase):
         @validator('zero_bounds', pre=True)
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
-                return value[1:-1].split(", ")
+                return json.loads(value)
             return value
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
