@@ -1,4 +1,5 @@
 import abc
+import json
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -251,7 +252,7 @@ class DatePercentile(DatePercentileBase):
         if value is None or isinstance(value, list):
             return value
         elif isinstance(value, str):
-            return value[1:-1].split(", ")
+            return json.loads(value)
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         months = date_col.dt.month
