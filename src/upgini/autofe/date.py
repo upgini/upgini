@@ -260,7 +260,7 @@ class DatePercentile(DatePercentileBase):
         @field_validator('zero_bounds', mode='before')
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
-                return value[1:-1].split(", ")
+                return json.loads(value)
             return value
     else:
         # Use @validator for Pydantic 1.x
