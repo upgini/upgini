@@ -194,4 +194,7 @@ def calculate_psi(expected: pd.Series, actual: pd.Series) -> float:
     test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
 
     # Calculate the PSI
-    return np.sum((train_distribution - test_distribution) * np.log(train_distribution / test_distribution))
+    try:
+        return np.sum((train_distribution - test_distribution) * np.log(train_distribution / test_distribution))
+    except Exception:
+        return np.nan

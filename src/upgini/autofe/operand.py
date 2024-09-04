@@ -8,19 +8,19 @@ from pydantic import BaseModel
 
 class Operand(BaseModel):
     name: str
-    alias: Optional[str]
+    alias: Optional[str] = None
     is_unary: bool = False
     is_symmetrical: bool = False
     has_symmetry_importance: bool = False
-    input_type: Optional[str]
-    output_type: Optional[str]
+    input_type: Optional[str] = None
+    output_type: Optional[str] = None
     is_categorical: bool = False
     is_vectorizable: bool = False
     is_grouping: bool = False
     is_binary: bool = False
     is_vector: bool = False
     is_distribution_dependent: bool = False
-    params: Optional[Dict[str, str]]
+    params: Optional[Dict[str, str]] = None
 
     def set_params(self, params: Dict[str, str]):
         self.params = params

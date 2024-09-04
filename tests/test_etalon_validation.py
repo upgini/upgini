@@ -493,7 +493,7 @@ def test_time_cutoff_from_datetime():
 
 
 def test_time_cutoff_from_period():
-    df = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=24, freq="H")})
+    df = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=24, freq="h")})
     converter = DateTimeSearchKeyConverter("date")
     dataset = converter.convert(df)
     for i in range(24):

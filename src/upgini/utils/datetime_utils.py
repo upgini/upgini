@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from pandas.api.types import is_numeric_dtype, is_period_dtype
+from pandas.api.types import is_numeric_dtype
 
 from upgini.errors import ValidationError
 from upgini.metadata import EVAL_SET_INDEX, SearchKey
@@ -84,7 +84,7 @@ class DateTimeSearchKeyConverter:
             df[self.date_column] = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
         elif isinstance(df[self.date_column].values[0], datetime.date):
             df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
-        elif is_period_dtype(df[self.date_column]):
+        elif isinstance(df[self.date_column].dtype, pd.PeriodDtype):
             df[self.date_column] = df[self.date_column].dt.to_timestamp()
         elif is_numeric_dtype(df[self.date_column]):
             # 315532801 - 2524608001    - seconds
@@ -207,7 +207,7 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
 def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[str]) -> bool:
     df = df.copy()
     seconds = "datetime_seconds"
-    if is_period_dtype(df[date_col]):
+    if isinstance(df[date_col].dtype, pd.PeriodDtype):
         df[date_col] = df[date_col].dt.to_timestamp()
     else:
         df[date_col] = pd.to_datetime(df[date_col])
@@ -275,7 +275,7 @@ def validate_dates_distribution(
             if col in search_keys:
                 continue
             try:
-                if is_period_dtype(X[col]):
+                if isinstance(X[col].dtype, pd.PeriodDtype):
                     pass
                 elif pd.__version__ >= "2.0.0":
                     # Format mixed to avoid massive warnings
@@ -290,7 +290,7 @@ def validate_dates_distribution(
     if maybe_date_col is None:
         return
 
-    if is_period_dtype(X[maybe_date_col]):
+    if isinstance(X[maybe_date_col].dtype, pd.PeriodDtype):
         dates = X[maybe_date_col].dt.to_timestamp().dt.date
     elif pd.__version__ >= "2.0.0":
         dates = pd.to_datetime(X[maybe_date_col], format="mixed").dt.date

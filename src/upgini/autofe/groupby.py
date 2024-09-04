@@ -7,9 +7,9 @@ from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
 class GroupByThenAgg(PandasOperand, VectorizableMixin):
     agg: Optional[str]
-    is_vectorizable = True
-    is_grouping = True
-    is_distribution_dependent = True
+    is_vectorizable: bool = True
+    is_grouping: bool = True
+    is_distribution_dependent: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         temp = left.groupby(right).agg(self.agg)
@@ -24,17 +24,17 @@ class GroupByThenAgg(PandasOperand, VectorizableMixin):
 
 
 class GroupByThenMedian(GroupByThenAgg):
-    name = "GroupByThenMedian"
-    pandas_agg = "median"
-    is_distribution_dependent = True
+    name: str = "GroupByThenMedian"
+    pandas_agg: str = "median"
+    is_distribution_dependent: bool = True
 
 
 class GroupByThenRank(PandasOperand, VectorizableMixin):
-    name = "GroupByThenRank"
-    is_vectorizable = True
-    is_grouping = True
-    output_type = "float"
-    is_distribution_dependent = True
+    name: str = "GroupByThenRank"
+    is_vectorizable: bool = True
+    is_grouping: bool = True
+    output_type: Optional[str] = "float"
+    is_distribution_dependent: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         temp = pd.DataFrame(left[~right.isna()].groupby(right).rank(ascending=True, pct=True)).reset_index()
@@ -49,12 +49,12 @@ class GroupByThenRank(PandasOperand, VectorizableMixin):
 
 
 class GroupByThenNUnique(PandasOperand, VectorizableMixin):
-    name = "GroupByThenNUnique"
-    is_vectorizable = True
-    is_grouping = True
-    output_type = "int"
-    is_distribution_dependent = True
-    input_type = "discrete"
+    name: str = "GroupByThenNUnique"
+    is_vectorizable: bool = True
+    is_grouping: bool = True
+    output_type: Optional[str] = "int"
+    is_distribution_dependent: bool = True
+    input_type: Optional[str] = "discrete"
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         nunique = left.groupby(right).nunique()
@@ -69,11 +69,11 @@ class GroupByThenNUnique(PandasOperand, VectorizableMixin):
 
 
 class GroupByThenFreq(PandasOperand):
-    name = "GroupByThenFreq"
-    is_grouping = True
-    output_type = "float"
-    is_distribution_dependent = True
-    input_type = "discrete"
+    name: str = "GroupByThenFreq"
+    is_grouping: bool = True
+    output_type: Optional[str] = "float"
+    is_distribution_dependent: bool = True
+    input_type: Optional[str] = "discrete"
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         def _f(x):

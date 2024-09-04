@@ -23,7 +23,6 @@ from pandas.api.types import (
     is_datetime64_any_dtype,
     is_numeric_dtype,
     is_object_dtype,
-    is_period_dtype,
     is_string_dtype,
 )
 from scipy.stats import ks_2samp
@@ -1408,7 +1407,9 @@ class FeaturesEnricher(TransformerMixin):
         # TODO maybe there is no more need for these convertions
         # Remove datetime features
         datetime_features = [
-            f for f in fitting_X.columns if is_datetime64_any_dtype(fitting_X[f]) or is_period_dtype(fitting_X[f])
+            f
+            for f in fitting_X.columns
+            if is_datetime64_any_dtype(fitting_X[f]) or isinstance(fitting_X[f].dtype, pd.PeriodDtype)
         ]
         if len(datetime_features) > 0:
             self.logger.warning(self.bundle.get("dataset_date_features").format(datetime_features))
@@ -2041,7 +2042,7 @@ class FeaturesEnricher(TransformerMixin):
 
             df[ENTITY_SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(
                 df[columns_for_system_record_id], index=False
-            ).astype("Float64")
+            ).astype("float64")
 
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
@@ -2107,7 +2108,7 @@ class FeaturesEnricher(TransformerMixin):
             # search keys might be changed after explode
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
             df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
-                "Float64"
+                "float64"
             )
             meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
             meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID

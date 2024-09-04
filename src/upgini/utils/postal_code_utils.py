@@ -25,7 +25,7 @@ class PostalCodeSearchKeyConverter:
         if is_string_dtype(df[self.postal_code_column]) or is_object_dtype(df[self.postal_code_column]):
             try:
                 df[self.postal_code_column] = (
-                    df[self.postal_code_column].astype("string").astype("Float64").astype("Int64").astype("string")
+                    df[self.postal_code_column].astype("string").astype("float64").astype("Int64").astype("string")
                 )
             except Exception:
                 pass

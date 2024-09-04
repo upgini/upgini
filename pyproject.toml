@@ -39,9 +39,9 @@ dependencies = [
     "fastparquet>=0.8.1",
     "ipywidgets>=8.1.0",
     "lightgbm>=3.3.2",
-    "numpy>=1.19.0",
+    "numpy>=1.19.0,<=1.26.4",
     "pandas>=1.1.0,<3.0.0",
-    "pydantic>=1.8.2,<2.0.0",
+    "pydantic>1.0.0,<3.0.0",
     "pyjwt>=2.8.0",
     "python-dateutil>=2.8.0",
     "python-json-logger>=2.0.2",
@@ -79,7 +79,7 @@ python = "3.10"
 cov = 'pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=upgini --cov=tests'
 format = "black {args}"
 lint = "ruff check {args}"
-test_binary = 'pytest -s -vv tests/test_binary_dataset.py'
+test_all = 'pytest -s -vv tests'
 
 [[tool.hatch.envs.test.matrix]]
 python = ["3.8"]
@@ -103,7 +103,8 @@ dependencies = [
 #  "pytest-timeout",
   "requests-mock",
   "pytest-datafiles",
-  "pandas~={matrix:pandas}.0",
+  "pytest-xdist",
+  "pandas~={matrix:pandas}",
 ]
 
 [tool.black]
@@ -116,3 +117,4 @@ profile = "black"
 pythonpath = [
   "./src"
 ]
+addopts="-n 4"

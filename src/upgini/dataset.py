@@ -18,6 +18,7 @@ from pandas.api.types import (
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
+    ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
@@ -157,7 +158,11 @@ class Dataset:  # (pd.DataFrame):
             raise ValidationError(self.bundle.get("dataset_too_few_rows").format(self.MIN_ROWS_COUNT))
 
     def __validate_max_row_count(self):
-        if len(self.data) > self.MAX_ROWS:
+        if ENTITY_SYSTEM_RECORD_ID in self.data.columns:
+            rows_count = self.data[ENTITY_SYSTEM_RECORD_ID].nunique()
+        else:
+            rows_count = len(self.data)
+        if rows_count > self.MAX_ROWS:
             raise ValidationError(self.bundle.get("dataset_too_many_rows_registered").format(self.MAX_ROWS))
 
     def __target_value(self) -> pd.Series:
@@ -199,14 +204,14 @@ class Dataset:  # (pd.DataFrame):
         elif self.task_type == ModelTaskType.REGRESSION:
             if not is_float_dtype(target):
                 try:
-                    self.data[target_column] = self.data[target_column].astype("float")
+                    self.data[target_column] = self.data[target_column].astype("float64")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for regression task type")
                     raise ValidationError(self.bundle.get("dataset_invalid_regression_target").format(target.dtype))
         elif self.task_type == ModelTaskType.TIMESERIES:
             if not is_float_dtype(target):
                 try:
-                    self.data[target_column] = self.data[target_column].astype("float")
+                    self.data[target_column] = self.data[target_column].astype("float64")
                 except ValueError:
                     self.logger.exception("Failed to cast target to float for timeseries task type")
                     raise ValidationError(self.bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
