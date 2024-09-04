@@ -3,6 +3,7 @@ import tempfile
 import time
 from functools import lru_cache
 from typing import Dict, List, Optional
+import uuid
 
 import pandas as pd
 
@@ -97,10 +98,7 @@ class SearchTask:
                     time.sleep(self.POLLING_DELAY_SECONDS)
         except KeyboardInterrupt as e:
             if not check_fit:
-                print(bundle.get("search_stopping"))
-                self.rest_client.stop_search_task_v2(trace_id, search_task_id)
-                self.logger.warning(f"Search {search_task_id} stopped by user")
-                print(bundle.get("search_stopped"))
+                self._stop(trace_id)
             raise e
         print()
 
@@ -132,6 +130,14 @@ class SearchTask:
                         self.unused_features_for_generation.extend(provider_summary.unused_features_for_generation)
 
         return self
+
+    def _stop(self, trace_id: Optional[str] = None):
+        trace_id = trace_id or uuid.uuid4()
+        search_task_id = self.initial_search_task_id if self.initial_search_task_id is not None else self.search_task_id
+        print(bundle.get("search_stopping"))
+        self.rest_client.stop_search_task_v2(trace_id, search_task_id)
+        self.logger.warning(f"Search {search_task_id} stopped by user")
+        print(bundle.get("search_stopped"))
 
     def get_all_features_metadata_v2(self) -> Optional[List[FeaturesMetadataV2]]:
         if self.provider_metadata_v2 is None:

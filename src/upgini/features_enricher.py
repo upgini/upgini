@@ -2667,6 +2667,7 @@ class FeaturesEnricher(TransformerMixin):
 
         autofe_description = self.get_autofe_features_description()
         if autofe_description is not None:
+            self.logger.info(f"AutoFE descriptions: {autofe_description}")
             display_html_dataframe(autofe_description, autofe_description, "*Description of AutoFE feature names")
 
         if self._has_paid_features(exclude_features_sources):
