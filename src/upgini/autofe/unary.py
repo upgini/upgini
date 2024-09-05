@@ -136,7 +136,7 @@ class Norm(PandasOperand):
     def set_params(self, params: Dict[str, str]):
         super().set_params(params)
         if params is not None and "norm" in params:
-            self.norm = params["norm"]
+            self.norm = float(params["norm"])
         return self
 
     def get_params(self) -> Dict[str, Optional[str]]:
