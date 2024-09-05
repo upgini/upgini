@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -199,7 +200,6 @@ def test_norm():
         columns=["a", "b", "c"],
         index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
-    operand = Norm()
 
     expected_result = pd.DataFrame(
         [
@@ -218,8 +218,27 @@ def test_norm():
         index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
     )
 
+    operand_by_column: Dict[str, Norm] = {}
     for c in data.columns:
+        operand = Norm()
+        operand_by_column[c] = operand
         assert_series_equal(operand.calculate_unary(data[c]), expected_result[c])
+
+    transform_data = pd.DataFrame({
+        "a": [None, 1, 50, 100],
+        "b": [1, 50, 100, None],
+        "c": [1, 2, 3, 4],
+    })
+
+    expected_transform_result = pd.DataFrame({
+        "a": [None, 0.00300266, 0.15013255, 0.30026510],
+        "b": [0.00450218, 0.22510878, 0.45021756, None],
+        "c": [0.18257418, 0.36514837, 0.54772255, 0.73029674],
+    })
+
+    for c in transform_data.columns:
+        operand = operand_by_column[c]
+        assert_series_equal(operand.calculate_unary(transform_data[c]), expected_transform_result[c])
 
 
 def test_get_display_name():

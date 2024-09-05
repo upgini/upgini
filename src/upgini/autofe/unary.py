@@ -1,7 +1,6 @@
-from typing import Optional
+from typing import Dict, Optional
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import Normalizer
 
 from upgini.autofe.operand import PandasOperand, VectorizableMixin
 
@@ -119,16 +118,31 @@ class Norm(PandasOperand):
     name: str = "norm"
     is_unary: bool = True
     output_type: Optional[str] = "float"
+    norm: Optional[float] = None
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         data_dropna = data.dropna()
         if data_dropna.empty:
             return data
 
-        normalized_data = Normalizer().transform(data_dropna.to_frame().T).T
-        normalized_data = pd.Series(normalized_data[:, 0], index=data_dropna.index, name=data.name)
-        normalized_data = normalized_data.reindex(data.index)
+        if self.norm is not None:
+            normalized_data = data / self.norm
+        else:
+            self.norm = np.sqrt(np.sum(data * data))
+            normalized_data = data / self.norm
+
         return normalized_data
+
+    def set_params(self, params: Dict[str, str]):
+        super().set_params(params)
+        if "norm" in params:
+            self.norm = params["norm"]
+        return self
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res["norm"] = self.norm
+        return res
 
 
 class Embeddings(PandasOperand):
