@@ -217,7 +217,9 @@ We do dataset verification and cleaning under the hood, but still there are some
 *Search keys* columns will be used to match records from all potential external data sources / features.   
 Define one or multiple columns as a search keys with `FeaturesEnricher` class initialization.  
 ```python
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey
+
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
@@ -303,7 +305,9 @@ enricher = FeaturesEnricher(
 
 For the meaning types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with dtypes <tt>object</tt> or <tt>string</tt> you have to clarify date/datetime format by passing <tt>date_format</tt> parameter to `FeaturesEnricher`. For example:
 ```python
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey
+
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
@@ -324,7 +328,9 @@ df["date"] = df.date.astype("datetime64").dt.tz_localize("Europe/Warsaw")
 
 Single country for the whole training dataset can be passed with `country_code` parameter:
 ```python
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey
+
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
@@ -343,7 +349,8 @@ Create instance of the `FeaturesEnricher` class and call:
 Let's try it out!
 ```python
 import pandas as pd
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey
 
 # load labeled training dataset to initiate search
 train_df = pd.read_csv("customer_churn_prediction_train.csv")
@@ -434,7 +441,9 @@ We detect ML task under the hood based on label column values. Currently we supp
 
 But for certain search datasets you can pass parameter to `FeaturesEnricher` with correct ML taks type:
 ```python
-from upgini import ModelTaskType
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey, ModelTaskType
+
 enricher = FeaturesEnricher(
 	search_keys={"subscription_activation_date": SearchKey.DATE},
 	model_task_type=ModelTaskType.REGRESSION
@@ -447,7 +456,9 @@ enricher = FeaturesEnricher(
 
 To initiate feature search you can pass cross-validation type parameter to `FeaturesEnricher` with time series specific CV type:
 ```python
-from upgini.metadata import CVType
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey, CVType
+
 enricher = FeaturesEnricher(
 	search_keys={"sales_date": SearchKey.DATE},
 	cv=CVType.time_series
@@ -581,7 +592,9 @@ But you can easily define new split by passing child of BaseCrossValidator to pa
 
 Example with more tips-and-tricks:
 ```python
-from upgini import FeaturesEnricher, SearchKey
+from upgini.features_enricher import FeaturesEnricher
+from upgini.metadata import SearchKey
+
 enricher = FeaturesEnricher(search_keys={"registration_date": SearchKey.DATE})
 
 # Fit with default setup for metrics calculation
@@ -754,7 +767,7 @@ You may publish ANY data which you consider as royalty / license free ([Open Dat
 2. Copy *Upgini API key* from profile and upload your data from Upgini python library with this key:
 ```python
 import pandas as pd
-from upgini import SearchKey
+from upgini.metadata import SearchKey
 from upgini.ads import upload_user_ads
 import os
 os.environ["UPGINI_API_KEY"] = "your_long_string_api_key_goes_here"
