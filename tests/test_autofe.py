@@ -241,6 +241,19 @@ def test_norm():
         assert_series_equal(operand.calculate_unary(transform_data[c]), expected_transform_result[c])
 
 
+def test_abs():
+    f = Feature.from_formula("abs(f2)")
+    df = pd.DataFrame({
+        "f2": [None, None, None, None, None, None],
+    })
+    result = f.calculate(df)
+    print(result)
+    expected = pd.DataFrame({
+        "f2": [None, None, None, None,  None, None]
+    })
+    assert_series_equal(result, expected["f2"].astype(np.float64))
+
+
 def test_get_display_name():
     feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
     assert feature1.get_display_name() == "f_f1_autofe_abs_123"
