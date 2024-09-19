@@ -352,8 +352,9 @@ class FeatureGroup:
     def calculate(self, data: pd.DataFrame, is_root=False) -> pd.DataFrame:
         if isinstance(self.op, PandasOperand):
             main_column = None if self.main_column_node is None else self.main_column_node.get_display_name()
+            lower_order_children = []
             if self.main_column_node is not None:
-                lower_order_children = [self.main_column_node]
+                lower_order_children.append(self.main_column_node)
             lower_order_children.extend(
                 ch for f in self.children for ch in f.children if ch.get_display_name() != main_column
             )

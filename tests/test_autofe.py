@@ -376,9 +376,10 @@ def test_feature_group():
         [
             Feature.from_formula("GroupByThenMin(f2,f1)"),
             Feature.from_formula("GroupByThenMin(f3,f1)"),
+            Feature.from_formula("abs(f2)"),
         ]
     )
-    assert len(group1) == 1
+    assert len(group1) == 2
     expected_group1_res = pd.DataFrame(
         [
             [1, -3],
@@ -392,6 +393,20 @@ def test_feature_group():
     )
     group1_res = group1[0].calculate(data)
     assert_frame_equal(group1_res, expected_group1_res)
+
+    expected_group1_res2 = pd.DataFrame(
+        [
+            [1.0],
+            [2.0],
+            [3.0],
+            [0.0],
+            [4.0],
+        ],
+        columns=["f_f2_autofe_abs"],
+        dtype="float",
+    )
+    group1_res2 = group1[1].calculate(data)
+    assert_frame_equal(group1_res2, expected_group1_res2)
 
     group2 = FeatureGroup.make_groups(
         [
