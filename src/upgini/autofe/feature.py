@@ -326,24 +326,25 @@ class FeatureGroup:
         return names
 
     def calculate(self, data: pd.DataFrame, is_root=False) -> pd.DataFrame:
-        main_column = None if self.main_column_node is None else self.main_column_node.get_columns()[0]
         if isinstance(self.op, PandasOperand):
-            columns = self.get_columns()
-            lower_order_children = [
+            main_column = None if self.main_column_node is None else self.main_column_node.get_display_name()
+            if self.main_column_node is not None:
+                lower_order_children = [self.main_column_node]
+            lower_order_children.extend(
                 ch for f in self.children for ch in f.children if ch.get_display_name() != main_column
-            ]
+            )
             lower_order_names = [ch.get_display_name() for ch in lower_order_children]
-            if any(isinstance(f, Feature) for f in lower_order_children):
-                child_data = pd.concat(
-                    [data[main_column or []]] + [ch.calculate(data) for ch in lower_order_children],
-                    axis=1,
-                )
-                child_data.columns = ([main_column] if main_column is not None else []) + lower_order_names
-            else:
-                child_data = data[columns]
+            child_data = pd.concat(
+                [ch.calculate(data) for ch in lower_order_children],
+                axis=1,
+            )
+            child_data.columns = lower_order_names
 
             new_data = self.op.calculate_group(child_data, main_column=main_column)
-            new_data.rename(columns=dict(zip(lower_order_names, self.get_display_names())), inplace=True)
+            new_data.rename(
+                columns=dict(zip((n for n in lower_order_names if n != main_column), self.get_display_names())),
+                inplace=True,
+            )
         else:
             raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
 
