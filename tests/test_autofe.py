@@ -8,6 +8,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 
 from upgini.autofe.binary import (
     Distance,
+    Divide,
     JaroWinklerSim1,
     JaroWinklerSim2,
     LevenshteinSim,
@@ -19,8 +20,8 @@ from upgini.autofe.date import (
     DateListDiffBounded,
     DatePercentile,
 )
-from upgini.autofe.feature import Feature, FeatureGroup
-from upgini.autofe.unary import Norm
+from upgini.autofe.feature import Column, Feature, FeatureGroup
+from upgini.autofe.unary import Abs, Norm
 
 
 def test_date_diff():
@@ -520,3 +521,37 @@ def test_from_formula():
 
     with pytest.raises(ValueError):
         check_formula("a/b")
+
+
+def test_op_params():
+    norm1 = Feature(Norm(), [Column("a")]).set_op_params({"norm": "1"})
+    assert norm1.op.norm == 1
+
+    norm2 = Feature(Norm(), [Column("b")]).set_op_params({"norm": "2"})
+    assert norm2.op.norm == 2
+
+    feature = Feature(
+        Divide(),
+        [
+            norm1,
+            Feature(Abs(), [norm2]),
+        ],
+    )
+
+    assert feature.get_op_params() == {
+        "alias": "div",
+        "f_a_autofe_norm_norm": "1.0",
+        "f_b_autofe_norm_abs_f_b_autofe_norm_norm": "2.0",
+    }
+
+    feature.set_op_params({"norm": "3"})
+    assert norm1.op.norm == 3
+    assert norm2.op.norm == 3
+
+    feature.set_op_params(
+        {"alias": "div", "f_a_autofe_norm_norm": "4", "f_b_autofe_norm_abs_f_b_autofe_norm_norm": "5"}
+    )
+    assert norm1.op.norm == 4
+    assert norm1.op.alias is None
+    assert norm2.op.norm == 5
+    assert norm2.op.alias is None

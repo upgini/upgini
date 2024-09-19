@@ -22,6 +22,9 @@ class Column:
     def set_op_params(self, params: Dict[str, str]) -> "Column":
         return self
 
+    def get_op_params(self):
+        return dict()
+
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
         self.name = self._unhash(mapping.get(self.name) or self.name)
         return self
@@ -88,8 +91,29 @@ class Feature:
         self.op.set_params(params)
 
         for child in self.children:
-            child.set_op_params(params)
+            child_params = {
+                k[len(child.get_display_name()) + 1 :]: v
+                for k, v in params.items()
+                if k.startswith(child.get_display_name())
+            }
+            if not child_params:
+                child_params = params
+            child.set_op_params(child_params)
         return self
+
+    def get_op_params(self) -> Dict[str, str]:
+        return {
+            k: str(v)
+            for k, v in dict(
+                (
+                    (f"{child.get_display_name()}_{k}", v)
+                    for child in self.children
+                    for k, v in child.get_op_params().items()
+                ),
+                **(self.op.get_params() or {}),
+            ).items()
+            if v is not None
+        }
 
     def get_hash(self) -> str:
         return hashlib.sha256(
