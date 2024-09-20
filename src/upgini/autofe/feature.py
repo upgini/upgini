@@ -22,7 +22,7 @@ class Column:
     def set_op_params(self, params: Dict[str, str]) -> "Column":
         return self
 
-    def get_op_params(self):
+    def get_op_params(self, **kwargs):
         return dict()
 
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
@@ -101,14 +101,14 @@ class Feature:
             child.set_op_params(child_params)
         return self
 
-    def get_op_params(self) -> Dict[str, str]:
+    def get_op_params(self, **kwargs) -> Dict[str, str]:
         return {
             k: str(v)
             for k, v in dict(
                 (
-                    (f"{child.get_display_name()}_{k}", v)
+                    (f"{child.get_display_name(**kwargs)}_{k}", v)
                     for child in self.children
-                    for k, v in child.get_op_params().items()
+                    for k, v in child.get_op_params(**kwargs).items()
                 ),
                 **(self.op.get_params() or {}),
             ).items()
