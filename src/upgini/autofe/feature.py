@@ -47,6 +47,10 @@ class Column:
     def get_columns(self, **kwargs) -> List[str]:
         return [self.name]
 
+    @property
+    def children(self) -> List[Union["Feature", "Column"]]:
+        return []
+
     def infer_type(self, data: pd.DataFrame) -> DtypeObj:
         return data[self.name].dtype
 
