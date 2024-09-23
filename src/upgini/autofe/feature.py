@@ -22,6 +22,9 @@ class Column:
     def set_op_params(self, params: Dict[str, str]) -> "Column":
         return self
 
+    def get_op_params(self, **kwargs):
+        return dict()
+
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
         self.name = self._unhash(mapping.get(self.name) or self.name)
         return self
@@ -43,6 +46,10 @@ class Column:
 
     def get_columns(self, **kwargs) -> List[str]:
         return [self.name]
+
+    @property
+    def children(self) -> List[Union["Feature", "Column"]]:
+        return []
 
     def infer_type(self, data: pd.DataFrame) -> DtypeObj:
         return data[self.name].dtype
@@ -88,8 +95,29 @@ class Feature:
         self.op.set_params(params)
 
         for child in self.children:
-            child.set_op_params(params)
+            child_params = {
+                k[len(child.get_display_name()) + 1 :]: v
+                for k, v in params.items()
+                if k.startswith(child.get_display_name())
+            }
+            if not child_params:
+                child_params = params
+            child.set_op_params(child_params)
         return self
+
+    def get_op_params(self, **kwargs) -> Dict[str, str]:
+        return {
+            k: str(v)
+            for k, v in dict(
+                (
+                    (f"{child.get_display_name(**kwargs)}_{k}", v)
+                    for child in self.children
+                    for k, v in child.get_op_params(**kwargs).items()
+                ),
+                **(self.op.get_params() or {}),
+            ).items()
+            if v is not None
+        }
 
     def get_hash(self) -> str:
         return hashlib.sha256(
@@ -326,24 +354,26 @@ class FeatureGroup:
         return names
 
     def calculate(self, data: pd.DataFrame, is_root=False) -> pd.DataFrame:
-        main_column = None if self.main_column_node is None else self.main_column_node.get_columns()[0]
         if isinstance(self.op, PandasOperand):
-            columns = self.get_columns()
-            lower_order_children = [
+            main_column = None if self.main_column_node is None else self.main_column_node.get_display_name()
+            lower_order_children = []
+            if self.main_column_node is not None:
+                lower_order_children.append(self.main_column_node)
+            lower_order_children.extend(
                 ch for f in self.children for ch in f.children if ch.get_display_name() != main_column
-            ]
+            )
             lower_order_names = [ch.get_display_name() for ch in lower_order_children]
-            if any(isinstance(f, Feature) for f in lower_order_children):
-                child_data = pd.concat(
-                    [data[main_column or []]] + [ch.calculate(data) for ch in lower_order_children],
-                    axis=1,
-                )
-                child_data.columns = ([main_column] if main_column is not None else []) + lower_order_names
-            else:
-                child_data = data[columns]
+            child_data = pd.concat(
+                [ch.calculate(data) for ch in lower_order_children],
+                axis=1,
+            )
+            child_data.columns = lower_order_names
 
             new_data = self.op.calculate_group(child_data, main_column=main_column)
-            new_data.rename(columns=dict(zip(lower_order_names, self.get_display_names())), inplace=True)
+            new_data.rename(
+                columns=dict(zip((n for n in lower_order_names if n != main_column), self.get_display_names())),
+                inplace=True,
+            )
         else:
             raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
 

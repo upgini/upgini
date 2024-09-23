@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Dict
 
 from upgini.autofe.binary import (
@@ -83,4 +84,4 @@ ALL_OPERANDS: Dict[str, Operand] = {
 
 
 def find_op(name):
-    return ALL_OPERANDS.get(name)
+    return deepcopy(ALL_OPERANDS.get(name))

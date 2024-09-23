@@ -8,6 +8,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 
 from upgini.autofe.binary import (
     Distance,
+    Divide,
     JaroWinklerSim1,
     JaroWinklerSim2,
     LevenshteinSim,
@@ -19,8 +20,8 @@ from upgini.autofe.date import (
     DateListDiffBounded,
     DatePercentile,
 )
-from upgini.autofe.feature import Feature, FeatureGroup
-from upgini.autofe.unary import Norm
+from upgini.autofe.feature import Column, Feature, FeatureGroup
+from upgini.autofe.unary import Abs, Norm
 
 
 def test_date_diff():
@@ -224,33 +225,99 @@ def test_norm():
         operand_by_column[c] = operand
         assert_series_equal(operand.calculate_unary(data[c]), expected_result[c])
 
-    transform_data = pd.DataFrame({
-        "a": [None, 1, 50, 100],
-        "b": [1, 50, 100, None],
-        "c": [1, 2, 3, 4],
-    })
+    transform_data = pd.DataFrame(
+        {
+            "a": [None, 1, 50, 100],
+            "b": [1, 50, 100, None],
+            "c": [1, 2, 3, 4],
+        }
+    )
 
-    expected_transform_result = pd.DataFrame({
-        "a": [None, 0.00300266, 0.15013255, 0.30026510],
-        "b": [0.00450218, 0.22510878, 0.45021756, None],
-        "c": [0.18257418, 0.36514837, 0.54772255, 0.73029674],
-    })
+    expected_transform_result = pd.DataFrame(
+        {
+            "a": [None, 0.00300266, 0.15013255, 0.30026510],
+            "b": [0.00450218, 0.22510878, 0.45021756, None],
+            "c": [0.18257418, 0.36514837, 0.54772255, 0.73029674],
+        }
+    )
 
     for c in transform_data.columns:
         operand = operand_by_column[c]
         assert_series_equal(operand.calculate_unary(transform_data[c]), expected_transform_result[c])
 
 
+def test_feature_group_nested():
+    data = pd.DataFrame(
+        [
+            [None, 1],
+            [1, 222],
+            [333, 4],
+            [1, 2],
+            [3, 4],
+            [0, 1],
+            [1, 0],
+            [2, 3],
+            [3, 2],
+            [1, None],
+        ],
+        columns=["a", "b"],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
+    )
+
+    norm_data = pd.DataFrame(
+        [
+            [None, 0.00450218],
+            [0.00300266, 0.99948299],
+            [0.99988729, 0.0180087],
+            [0.00300266, 0.00900435],
+            [0.00900799, 0.0180087],
+            [0.0, 0.00450218],
+            [0.00300266, 0.0],
+            [0.00600533, 0.01350653],
+            [0.00900799, 0.00900435],
+            [0.00300266, None],
+        ],
+        columns=["a", "b"],
+        index=[9, 8, 7, 6, 5, 1, 2, 3, 4, 0],
+    )
+
+    features = FeatureGroup.make_groups(
+        [
+            Feature.from_formula("(a/b)").set_display_index("i1"),
+            Feature.from_formula("(norm(b)/a)").set_display_index("i2"),
+            Feature.from_formula("(a/norm(b))").set_display_index("i3"),
+            Feature.from_formula("(norm(a)/b)").set_display_index("i4"),
+            Feature.from_formula("(norm(a)/norm(b))").set_display_index("i5"),
+        ]
+    )
+
+    assert len(features) == 5
+
+    expected_result = pd.DataFrame(
+        {
+            "f_a_f_b_autofe_div_i1": data["a"] / data["b"].replace(0, np.nan),
+            "f_b_f_a_autofe_div_i2": norm_data["b"] / data["a"].replace(0, np.nan),
+            "f_a_f_b_autofe_div_i3": data["a"] / norm_data["b"].replace(0, np.nan),
+            "f_a_f_b_autofe_div_i4": norm_data["a"] / data["b"].replace(0, np.nan),
+            "f_a_f_b_autofe_div_i5": norm_data["a"] / norm_data["b"].replace(0, np.nan),
+        }
+    )
+
+    result = pd.DataFrame({f.get_display_names()[0]: f.calculate(data).iloc[:, 0] for f in features})
+
+    assert_frame_equal(result, expected_result)
+
+
 def test_abs():
     f = Feature.from_formula("abs(f2)")
-    df = pd.DataFrame({
-        "f2": [None, None, None, None, None, None],
-    })
+    df = pd.DataFrame(
+        {
+            "f2": [None, None, None, None, None, None],
+        }
+    )
     result = f.calculate(df)
     print(result)
-    expected = pd.DataFrame({
-        "f2": [None, None, None, None,  None, None]
-    })
+    expected = pd.DataFrame({"f2": [None, None, None, None, None, None]})
     assert_series_equal(result, expected["f2"].astype(np.float64))
 
 
@@ -296,11 +363,11 @@ def test_get_hash():
 def test_feature_group():
     data = pd.DataFrame(
         [
-            ["a", 1, -1],
-            ["a", 2, -3],
-            ["b", 3, -1],
-            ["b", 0, 0],
-            ["c", -4, -2],
+            ["a", 1.0, -1.0],
+            ["a", 2.0, -3.0],
+            ["b", 3.0, -1.0],
+            ["b", 0.0, 0.0],
+            ["c", -4.0, -2.0],
         ],
         columns=["f1", "f2", "f3"],
     )
@@ -309,9 +376,10 @@ def test_feature_group():
         [
             Feature.from_formula("GroupByThenMin(f2,f1)"),
             Feature.from_formula("GroupByThenMin(f3,f1)"),
+            Feature.from_formula("abs(f2)"),
         ]
     )
-    assert len(group1) == 1
+    assert len(group1) == 2
     expected_group1_res = pd.DataFrame(
         [
             [1, -3],
@@ -321,9 +389,24 @@ def test_feature_group():
             [-4, -2],
         ],
         columns=["f_f2_f_f1_autofe_groupbythenmin", "f_f3_f_f1_autofe_groupbythenmin"],
+        dtype="float",
     )
     group1_res = group1[0].calculate(data)
     assert_frame_equal(group1_res, expected_group1_res)
+
+    expected_group1_res2 = pd.DataFrame(
+        [
+            [1.0],
+            [2.0],
+            [3.0],
+            [0.0],
+            [4.0],
+        ],
+        columns=["f_f2_autofe_abs"],
+        dtype="float",
+    )
+    group1_res2 = group1[1].calculate(data)
+    assert_frame_equal(group1_res2, expected_group1_res2)
 
     group2 = FeatureGroup.make_groups(
         [
@@ -346,6 +429,7 @@ def test_feature_group():
             "f_f3_f_f1_autofe_groupbythenmin",
             "f_f2_f_f3_f_f1_autofe_groupbythenmin",
         ],
+        dtype="float",
     )
     group2_res = group2[0].calculate(data)
     assert_frame_equal(group2_res, expected_group2_res)
@@ -374,10 +458,12 @@ def test_parse_sim():
     feature = Feature.from_formula(meta["formula"]).set_display_index(meta["display_index"])
     assert feature.get_op_display_name() == "sim_jw2"
 
-    df = pd.DataFrame({
-        "msisdn_ads_1617304852_education_phone_competition_role": ["test1", "test2", "test3"],
-        "telegram_ads_full_1841355682_web_phone_top_country_fb": ["test1", "test23", "test345"],
-    })
+    df = pd.DataFrame(
+        {
+            "msisdn_ads_1617304852_education_phone_competition_role": ["test1", "test2", "test3"],
+            "telegram_ads_full_1841355682_web_phone_top_country_fb": ["test1", "test23", "test345"],
+        }
+    )
     result = feature.calculate(df)
 
     expected_result = pd.Series([1.0, 0.944444, 0.904762])
@@ -450,3 +536,37 @@ def test_from_formula():
 
     with pytest.raises(ValueError):
         check_formula("a/b")
+
+
+def test_op_params():
+    norm1 = Feature(Norm(), [Column("a")]).set_op_params({"norm": "1"})
+    assert norm1.op.norm == 1
+
+    norm2 = Feature(Norm(), [Column("b")]).set_op_params({"norm": "2"})
+    assert norm2.op.norm == 2
+
+    feature = Feature(
+        Divide(),
+        [
+            norm1,
+            Feature(Abs(), [norm2]),
+        ],
+    )
+
+    assert feature.get_op_params() == {
+        "alias": "div",
+        "f_a_autofe_norm_norm": "1.0",
+        "f_b_autofe_norm_abs_f_b_autofe_norm_norm": "2.0",
+    }
+
+    feature.set_op_params({"norm": "3"})
+    assert norm1.op.norm == 3
+    assert norm2.op.norm == 3
+
+    feature.set_op_params(
+        {"alias": "div", "f_a_autofe_norm_norm": "4", "f_b_autofe_norm_abs_f_b_autofe_norm_norm": "5"}
+    )
+    assert norm1.op.norm == 4
+    assert norm1.op.alias is None
+    assert norm2.op.norm == 5
+    assert norm2.op.alias is None
