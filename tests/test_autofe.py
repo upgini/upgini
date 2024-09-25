@@ -308,6 +308,40 @@ def test_feature_group_nested():
     assert_frame_equal(result, expected_result)
 
 
+def test_deserialization_norm():
+    formulae = {
+        "formula": "(norm(postal_code_landuse_2km_area_413200106_location_country_postal_residential_2km_area_to_postal_area)*postal_code_poi_5km_cnt_1046005976_location_country_postal_poi_accommodation_guest_house_5km_cnt)",  # noqa: E501
+        "display_index": "9d938aac",
+        "base_columns": [
+            {
+                "original_name": "postal_code_landuse_2km_area_413200106_location_country_postal_residential_2km_area_to_postal_area",  # noqa: E501
+                "hashed_name": "f_location_country_postal_residential_2km_area_to_postal_area_c695d4eb",
+                "ads_definition_id": "4cc902f7-7768-469e-a5e1-0f9f18d16dd5",
+                "is_augmented": False,
+            },
+            {
+                "original_name": "postal_code_poi_5km_cnt_1046005976_location_country_postal_poi_accommodation_guest_house_5km_cnt",  # noqa: E501
+                "hashed_name": "f_location_country_postal_poi_accommodation_guest_house_5km_cnt_8d1d59d8",
+                "ads_definition_id": "e4d418e0-e6b0-4d2d-acd2-09186efef827",
+                "is_augmented": False,
+            },
+        ],
+        "operator_params": {"norm": "1741.9150381117904", "alias": "mul"},
+    }
+    feature = (
+        Feature.from_formula(formulae["formula"])
+        .set_display_index(formulae["display_index"])
+        .set_op_params(formulae["operator_params"])
+    )
+    df = pd.DataFrame({
+        "postal_code_landuse_2km_area_413200106_location_country_postal_residential_2km_area_to_postal_area": [0.58532],
+        "postal_code_poi_5km_cnt_1046005976_location_country_postal_poi_accommodation_guest_house_5km_cnt": [2]
+    })
+    result = feature.calculate(df)
+    print(result)
+    assert result.values[0] == 0.0006720419620861393
+
+
 def test_abs():
     f = Feature.from_formula("abs(f2)")
     df = pd.DataFrame(
