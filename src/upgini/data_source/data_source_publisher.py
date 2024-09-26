@@ -64,6 +64,7 @@ class DataSourcePublisher:
         date_features: Optional[List[str]] = None,
         date_vector_features: Optional[List[str]] = None,
         generate_runtime_embeddings: Optional[List[str]] = None,
+        exclude_raw: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
@@ -87,6 +88,8 @@ class DataSourcePublisher:
 
         features_for_embeddings - optional list of str - list of features that should be used for GPT features
             generation
+
+        exclude_raw - optional list of str - list of features that should NOT be used as raw features
 
         ...
 
@@ -166,6 +169,8 @@ class DataSourcePublisher:
                     request["dateVectorFeatures"] = date_vector_features
                 if generate_runtime_embeddings is not None:
                     request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
+                if exclude_raw is not None:
+                    request["excludeRaw"] = exclude_raw
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -281,6 +286,7 @@ class DataSourcePublisher:
         date_vector_features: Optional[List[str]] = None,
         exclude_from_autofe_generation: Optional[List[str]] = None,
         generate_runtime_embeddings: Optional[List[str]] = None,
+        exclude_raw: Optional[List[str]] = None,
     ):
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
@@ -336,6 +342,8 @@ class DataSourcePublisher:
                     request["excludeFromGenerationFeatures"] = exclude_from_autofe_generation
                 if generate_runtime_embeddings is not None:
                     request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
+                if exclude_raw is not None:
+                    request["excludeRaw"] = exclude_raw
                 self.logger.info(f"Activating data tables with request {request}")
 
                 self._rest_client.activate_datatables(request, trace_id)
