@@ -57,17 +57,17 @@ class IpSearchKeyConverter:
         except ValueError:
             pass
 
-    @staticmethod
-    def _is_ipv4(ip: Optional[_BaseAddress]):
-        return ip is not None and (
-            isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
-        )
+    # @staticmethod
+    # def _is_ipv4(ip: Optional[_BaseAddress]):
+    #     return ip is not None and (
+    #         isinstance(ip, IPv4Address) or (isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None)
+    #     )
 
-    @staticmethod
-    def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
-        if isinstance(ip, IPv4Address):
-            return ip
-        return None
+    # @staticmethod
+    # def _to_ipv4(ip: Optional[_BaseAddress]) -> Optional[IPv4Address]:
+    #     if isinstance(ip, IPv4Address):
+    #         return ip
+    #     return None
 
     @staticmethod
     def _to_ipv6(ip: Optional[_BaseAddress]) -> Optional[IPv6Address]:
@@ -87,10 +87,10 @@ class IpSearchKeyConverter:
             raise ValidationError(self.bundle.get("invalid_ip").format(self.ip_column))
 
         # legacy support
-        ipv4 = self.ip_column + "_v4"
-        df[ipv4] = df[self.ip_column].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
-        self.search_keys[ipv4] = SearchKey.IP
-        self.columns_renaming[ipv4] = original_ip
+        # ipv4 = self.ip_column + "_v4"
+        # df[ipv4] = df[self.ip_column].apply(self._to_ipv4).apply(self._ip_to_int).astype("Int64")
+        # self.search_keys[ipv4] = SearchKey.IP
+        # self.columns_renaming[ipv4] = original_ip
 
         ipv6 = self.ip_column + "_v6"
         df[ipv6] = (

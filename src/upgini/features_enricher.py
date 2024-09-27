@@ -2095,7 +2095,9 @@ class FeaturesEnricher(TransformerMixin):
             features_not_to_pass = [
                 c
                 for c in df.columns
-                if c not in search_keys.keys() and c not in features_for_transform and c != ENTITY_SYSTEM_RECORD_ID
+                if c not in search_keys.keys()
+                and c not in features_for_transform
+                and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
             ]
 
             if add_fit_system_record_id:
