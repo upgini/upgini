@@ -1,6 +1,6 @@
 import logging
 from logging import Logger
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
@@ -22,6 +22,7 @@ class FeaturesValidator:
         df: pd.DataFrame,
         features: List[str],
         features_for_generate: Optional[List[str]],
+        columns_renaming: Dict[str, str],
         warning_counter: WarningCounter,
     ) -> List[str]:
         # one_hot_encoded_features = []
@@ -63,7 +64,9 @@ class FeaturesValidator:
 
         high_cardinality_features = self.find_high_cardinality(df[features])
         if features_for_generate:
-            high_cardinality_features = [f for f in high_cardinality_features if f not in features_for_generate]
+            high_cardinality_features = [
+                f for f in high_cardinality_features if columns_renaming[f] not in features_for_generate
+            ]
         if high_cardinality_features:
             msg = bundle.get("high_cardinality_features").format(high_cardinality_features)
             print(msg)

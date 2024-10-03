@@ -2531,7 +2531,7 @@ class FeaturesEnricher(TransformerMixin):
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
         features_to_drop = FeaturesValidator(self.logger).validate(
-            df, features_columns, self.generate_features, self.warning_counter
+            df, features_columns, self.generate_features, columns_renaming, self.warning_counter
         )
         self.fit_dropped_features.update(features_to_drop)
         df = df.drop(columns=features_to_drop)
@@ -2657,7 +2657,7 @@ class FeaturesEnricher(TransformerMixin):
             and len(self._search_task.unused_features_for_generation) > 0
         ):
             unused_features_for_generation = [
-                dataset.columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
+                columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
             ]
             msg = self.bundle.get("features_not_generated").format(unused_features_for_generation)
             self.logger.warning(msg)

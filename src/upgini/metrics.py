@@ -10,7 +10,6 @@ import catboost
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
@@ -406,6 +405,7 @@ class EstimatorWrapper:
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 try:
+                    from lightgbm import LGBMClassifier, LGBMRegressor
                     if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
                         estimator = LightGBMWrapper(**kwargs)
                     else:
