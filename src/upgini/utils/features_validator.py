@@ -87,4 +87,4 @@ class FeaturesValidator:
 
     @staticmethod
     def find_constant_features(df: pd.DataFrame) -> List[str]:
-        return [i for i in df if df[i].nunique() == 1]
+        return [i for i in df if df[i].nunique() <= 1]

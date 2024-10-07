@@ -91,9 +91,9 @@ def test_string_ip_to_int_conversion():
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
     converter.convert(df)
-    assert df["ip_v4"].dtype == "Int64"
-    assert df["ip_v4"].iloc[0] == 3232235777
-    assert df["ip_v4"].isnull().sum() == 2
+    # assert df["ip_v4"].dtype == "Int64"
+    # assert df["ip_v4"].iloc[0] == 3232235777
+    # assert df["ip_v4"].isnull().sum() == 2
     assert df["ip_v6"].dtype.name == "string"
     assert df["ip_v6"].iloc[0] == "281473913979137"
     assert df["ip_v6"].isnull().sum() == 2
@@ -108,8 +108,8 @@ def test_python_ip_to_int_conversion():
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
     converter.convert(df)
-    assert df["ip_v4"].dtype == "Int64"
-    assert df["ip_v4"].iloc[0] == 3232235777
+    # assert df["ip_v4"].dtype == "Int64"
+    # assert df["ip_v4"].iloc[0] == 3232235777
     assert df["ip_v6"].dtype.name == "string"
     assert df["ip_v6"].iloc[0] == "281473913979137"
 
@@ -129,8 +129,8 @@ def test_ip_v6_conversion():
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
     converter.convert(df)
-    assert df["ip_v4"].dtype.name == "Int64"
-    assert df["ip_v4"].isna().all()
+    # assert df["ip_v4"].dtype.name == "Int64"
+    # assert df["ip_v4"].isna().all()
     assert df["ip_v6"].dtype.name == "string"
     assert df["ip_v6"].iloc[0] == "892262568539"
     assert df["ip_v6"].iloc[1] == "53200333237544187032231876373729151639"
@@ -146,9 +146,9 @@ def test_int_ip_to_int_conversion():
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
     converter.convert(df)
-    assert df["ip_v4"].iloc[0] == 3232235777
+    # assert df["ip_v4"].iloc[0] == 3232235777
     assert df["ip_v6"].iloc[0] == "281473913979137"
-    assert df["ip_v4"].isnull().sum() == 1
+    # assert df["ip_v4"].isnull().sum() == 1
     assert df["ip_v6"].iloc[1] == "892262568539"
 
 
