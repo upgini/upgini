@@ -1103,7 +1103,7 @@ class FeaturesEnricher(TransformerMixin):
                             else:
                                 eval_uplift = None
 
-                            effective_eval_set = eval_set if eval_set is not None else self.eval_set
+                            # effective_eval_set = eval_set if eval_set is not None else self.eval_set
                             eval_metrics = {
                                 self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
                                     "quality_metrics_eval_segment"
@@ -1369,6 +1369,7 @@ class FeaturesEnricher(TransformerMixin):
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
+        self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
 
         filtered_enriched_features = self.__filtered_enriched_features(
             importance_threshold,
@@ -1435,31 +1436,19 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
         fitting_eval_set_dict = {}
+        fitting_x_columns = fitting_X.columns.to_list()
+        self.logger.info(f"Final list of fitting X columns: {fitting_x_columns}")
+        fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
+        self.logger.info(f"Final list of fitting enriched X columns: {fitting_enriched_x_columns}")
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
             eval_X_sorted, eval_y_sorted = self._sort_by_system_record_id(eval_X_sampled, eval_y_sampled, self.cv)
             enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_system_record_id(
                 enriched_eval_X, eval_y_sampled, self.cv
             )
-            fitting_eval_X = eval_X_sorted[client_features].copy()
-            fitting_enriched_eval_X = enriched_eval_X_sorted[
-                client_features + existing_filtered_enriched_features
-            ].copy()
+            fitting_eval_X = eval_X_sorted[fitting_x_columns].copy()
+            fitting_enriched_eval_X = enriched_eval_X_sorted[fitting_enriched_x_columns].copy()
 
-            # # Drop high cardinality features in eval set
-            if len(columns_with_high_cardinality) > 0:
-                fitting_eval_X = fitting_eval_X.drop(columns=columns_with_high_cardinality, errors="ignore")
-                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(
-                    columns=columns_with_high_cardinality, errors="ignore"
-                )
-            # Drop constant features in eval_set
-            if len(constant_columns) > 0:
-                fitting_eval_X = fitting_eval_X.drop(columns=constant_columns, errors="ignore")
-                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(columns=constant_columns, errors="ignore")
-            # Drop datetime features in eval_set
-            if len(datetime_features) > 0:
-                fitting_eval_X = fitting_eval_X.drop(columns=datetime_features, errors="ignore")
-                fitting_enriched_eval_X = fitting_enriched_eval_X.drop(columns=datetime_features, errors="ignore")
             # Convert bool to string in eval_set
             if len(bool_columns) > 0:
                 fitting_eval_X[col] = fitting_eval_X[col].astype(str)
@@ -1680,6 +1669,7 @@ class FeaturesEnricher(TransformerMixin):
         X_sampled = enriched_Xy[x_columns].copy()
         y_sampled = enriched_Xy[TARGET].copy()
         enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
+        enriched_X_columns = enriched_X.columns.to_list()
 
         self.logger.info(f"Shape of enriched_X: {enriched_X.shape}")
         self.logger.info(f"Shape of X after sampling: {X_sampled.shape}")
@@ -1694,7 +1684,7 @@ class FeaturesEnricher(TransformerMixin):
             for idx in range(len(eval_set)):
                 eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
                 eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
-                enriched_eval_X = enriched_eval_sets[idx + 1].drop(columns=[TARGET, EVAL_SET_INDEX])
+                enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         self.__cached_sampled_datasets = (
@@ -1773,12 +1763,13 @@ class FeaturesEnricher(TransformerMixin):
             X_sampled = enriched_Xy[x_columns].copy()
             y_sampled = enriched_Xy[TARGET].copy()
             enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX])
+            enriched_X_columns = enriched_X.columns.tolist()
 
             for idx in range(len(eval_set)):
                 enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
                 eval_x_sampled = enriched_eval_xy[x_columns].copy()
                 eval_y_sampled = enriched_eval_xy[TARGET].copy()
-                enriched_eval_x = enriched_eval_xy.drop(columns=[TARGET, EVAL_SET_INDEX])
+                enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
         else:
             self.logger.info("Transform without eval_set")

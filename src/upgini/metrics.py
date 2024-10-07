@@ -254,6 +254,7 @@ class EstimatorWrapper:
     def _prepare_data(
         self, x: pd.DataFrame, y: pd.Series, groups: Optional[np.ndarray] = None
     ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+        self.logger.info(f"Before preparing data columns: {x.columns.to_list()}")
         for c in x.columns:
             if is_numeric_dtype(x[c]):
                 x[c] = x[c].astype(float)
@@ -272,6 +273,7 @@ class EstimatorWrapper:
         else:
             x, y = self._remove_empty_target_rows(x, y)
 
+        self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
 
     def _remove_empty_target_rows(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
@@ -493,7 +495,9 @@ class CatBoostWrapper(EstimatorWrapper):
             if x[name].nunique() > 1:
                 unique_cat_features.append(name)
             else:
+                self.logger.info(f"Drop column {name} on preparing data for fit")
                 x = x.drop(columns=name)
+                self.exclude_features.append(name)
         self.cat_features = unique_cat_features
         if (
             hasattr(self.estimator, "get_param")
