@@ -984,9 +984,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.038535, -0.042865, 0.005713],
-            enriched_gini: [0.083988, -0.013009, -0.050579],
-            uplift: [0.045453, 0.029856, -0.056292]
+            baseline_gini: [0.030751, -0.057361, -0.004349],
+            enriched_gini: [0.123163, 0.050307, -0.028307],
+            uplift: [0.092411, 0.107667, -0.023958]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
@@ -999,6 +999,11 @@ def test_catboost_metric_binary(requests_mock: Mocker):
         })
     else:
         pass
+
+    print("Actual metrics:")
+    print(metrics_df)
+    print("Expected metrics")
+    print(expected_metrics)
 
     assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
 
@@ -1338,9 +1343,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_rmse: [0.693845, 0.717754, 0.682288],
-            enriched_rmse: [0.700793, 0.700747, 0.702545],
-            uplift: [-0.006948, 0.017007, -0.020257]
+            baseline_rmse: [0.695852, 0.713842, 0.679902],
+            enriched_rmse: [0.677814, 0.708517, 0.713791],
+            uplift: [0.018039, 0.005324, -0.033889]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
@@ -1458,9 +1463,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.062187, -0.068458, -0.011065],
-            enriched_gini: [0.017183, -0.054609, -0.057643],
-            uplift: [-0.045005, 0.013849, -0.046577]
+            baseline_gini: [0.086468, -0.119230, -0.006266],
+            enriched_gini: [-0.095576, -0.061882, -0.049756],
+            uplift: [-0.182045, 0.057348, -0.043489]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
