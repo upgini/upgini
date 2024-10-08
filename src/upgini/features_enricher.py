@@ -1577,7 +1577,7 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        normalizer = Normalizer(self.search_keys, generated_features, self.bundle, self.logger, self.warning_counter)
+        normalizer = Normalizer(search_keys, generated_features, self.bundle, self.logger, self.warning_counter)
         df = normalizer.normalize(df)
         columns_renaming = normalizer.columns_renaming
 
@@ -2522,7 +2522,7 @@ class FeaturesEnricher(TransformerMixin):
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
         features_to_drop = FeaturesValidator(self.logger).validate(
-            df, features_columns, self.generate_features, self.warning_counter
+            df, features_columns, self.generate_features, self.warning_counter, columns_renaming
         )
         self.fit_dropped_features.update(features_to_drop)
         df = df.drop(columns=features_to_drop)

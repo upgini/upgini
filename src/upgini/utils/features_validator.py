@@ -1,6 +1,6 @@
 import logging
 from logging import Logger
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
@@ -23,6 +23,7 @@ class FeaturesValidator:
         features: List[str],
         features_for_generate: Optional[List[str]],
         warning_counter: WarningCounter,
+        columns_renaming: Optional[Dict[str, str]] = None,
     ) -> List[str]:
         # one_hot_encoded_features = []
         empty_or_constant_features = []
@@ -56,7 +57,11 @@ class FeaturesValidator:
         #     warning_counter.increment()
 
         if empty_or_constant_features:
-            msg = bundle.get("empty_or_contant_features").format(empty_or_constant_features)
+            if columns_renaming:
+                display_names = [columns_renaming.get(f, f) for f in empty_or_constant_features]
+            else:
+                display_names = empty_or_constant_features
+            msg = bundle.get("empty_or_contant_features").format(display_names)
             print(msg)
             self.logger.warning(msg)
             warning_counter.increment()
@@ -65,7 +70,11 @@ class FeaturesValidator:
         if features_for_generate:
             high_cardinality_features = [f for f in high_cardinality_features if f not in features_for_generate]
         if high_cardinality_features:
-            msg = bundle.get("high_cardinality_features").format(high_cardinality_features)
+            if columns_renaming:
+                display_names = [columns_renaming.get(f, f) for f in high_cardinality_features]
+            else:
+                display_names = empty_or_constant_features
+            msg = bundle.get("high_cardinality_features").format(display_names)
             print(msg)
             self.logger.warning(msg)
             warning_counter.increment()
