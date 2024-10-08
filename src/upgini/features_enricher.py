@@ -1633,10 +1633,10 @@ class FeaturesEnricher(TransformerMixin):
 
         rows_to_drop = None
         has_date = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME]) is not None
-        task_type = self.model_task_type or define_task(
+        self.model_task_type = self.model_task_type or define_task(
             self.df_with_original_index[TARGET], has_date, self.logger, silent=True
         )
-        if task_type == ModelTaskType.REGRESSION:
+        if self.model_task_type == ModelTaskType.REGRESSION:
             target_outliers_df = self._search_task.get_target_outliers(trace_id)
             if target_outliers_df is not None and len(target_outliers_df) > 0:
                 outliers = pd.merge(
@@ -2391,12 +2391,12 @@ class FeaturesEnricher(TransformerMixin):
 
         maybe_date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
         has_date = maybe_date_column is not None
-        model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
+        self.model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
 
-        self._validate_binary_observations(validated_y, model_task_type)
+        self._validate_binary_observations(validated_y, self.model_task_type)
 
         self.runtime_parameters = get_runtime_params_custom_loss(
-            self.loss, model_task_type, self.runtime_parameters, self.logger
+            self.loss, self.model_task_type, self.runtime_parameters, self.logger
         )
 
         if validated_eval_set is not None and len(validated_eval_set) > 0:
@@ -2449,7 +2449,7 @@ class FeaturesEnricher(TransformerMixin):
         if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
-        self.__adjust_cv(df, maybe_date_column, model_task_type)
+        self.__adjust_cv(df, maybe_date_column, self.model_task_type)
 
         normalizer = Normalizer(
             self.fit_search_keys, self.fit_generated_features, self.bundle, self.logger, self.warning_counter
@@ -2557,7 +2557,7 @@ class FeaturesEnricher(TransformerMixin):
             meaning_types=meaning_types,
             search_keys=combined_search_keys,
             unnest_search_keys=unnest_search_keys,
-            model_task_type=model_task_type,
+            model_task_type=self.model_task_type,
             date_format=self.date_format,
             random_state=self.random_state,
             rest_client=self.rest_client,
@@ -2780,6 +2780,8 @@ class FeaturesEnricher(TransformerMixin):
             raise ValidationError(self.bundle.get("x_contains_reserved_column_name").format(EVAL_SET_INDEX))
         if SYSTEM_RECORD_ID in validated_X.columns:
             raise ValidationError(self.bundle.get("x_contains_reserved_column_name").format(SYSTEM_RECORD_ID))
+        if ENTITY_SYSTEM_RECORD_ID in validated_X.columns:
+            raise ValidationError(self.bundle.get("x_contains_reserved_column_name").format(ENTITY_SYSTEM_RECORD_ID))
 
         return validated_X
 
@@ -3760,7 +3762,10 @@ class FeaturesEnricher(TransformerMixin):
             display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
-        msg = self.bundle.get("features_info_header").format(len(self.feature_names_), list(search_keys.keys()))
+        search_key_names = search_keys.keys()
+        if self.fit_columns_renaming:
+            search_key_names = [self.fit_columns_renaming.get(col, col) for col in search_key_names]
+        msg = self.bundle.get("features_info_header").format(len(self.feature_names_), search_key_names)
 
         try:
             _ = get_ipython()  # type: ignore

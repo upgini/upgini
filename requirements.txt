@@ -8,7 +8,7 @@ pydantic>1.0.0,<3.0.0
 fastparquet>=0.8.1
 python-json-logger>=2.0.2
 catboost>=1.0.3
-lightgbm>=3.3.2
+# lightgbm>=3.3.2
 pyjwt>=2.8.0
 xhtml2pdf==0.2.11
 python-bidi==0.4.2
