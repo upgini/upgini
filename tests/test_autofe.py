@@ -333,10 +333,14 @@ def test_deserialization_norm():
         .set_display_index(formulae["display_index"])
         .set_op_params(formulae["operator_params"])
     )
-    df = pd.DataFrame({
-        "postal_code_landuse_2km_area_413200106_location_country_postal_residential_2km_area_to_postal_area": [0.58532],
-        "postal_code_poi_5km_cnt_1046005976_location_country_postal_poi_accommodation_guest_house_5km_cnt": [2]
-    })
+    df = pd.DataFrame(
+        {
+            "postal_code_landuse_2km_area_413200106_location_country_postal_residential_2km_area_to_postal_area": [
+                0.58532
+            ],
+            "postal_code_poi_5km_cnt_1046005976_location_country_postal_poi_accommodation_guest_house_5km_cnt": [2],
+        }
+    )
     result = feature.calculate(df)
     print(result)
     assert result.values[0] == 0.0006720419620861393
@@ -604,3 +608,46 @@ def test_op_params():
     assert norm1.op.alias is None
     assert norm2.op.norm == 5
     assert norm2.op.alias is None
+
+
+def test_emb_fasttext():
+    meta = {
+        "formula": "sim(emb(telesign_mx_ads_1541317027_verification_phone_a2p_carrier),emb(telesign_mx_ads_1541317027_verification_phone_a2p_location_city))",  # noqa: E501
+        "display_index": "c15c44b1",
+        "base_columns": [
+            {
+                "original_name": "telesign_mx_ads_1541317027_verification_phone_a2p_carrier",
+                "hashed_name": "f_verification_phone_a2p_carrier_8eb19cc2",
+                "ads_definition_id": "169343db-e187-4a4b-96ae-2296642fa21b",
+                "is_augmented": False,
+            },
+            {
+                "original_name": "telesign_mx_ads_1541317027_verification_phone_a2p_location_city",
+                "hashed_name": "f_verification_phone_a2p_location_city_fba2fb28",
+                "ads_definition_id": "169343db-e187-4a4b-96ae-2296642fa21b",
+                "is_augmented": False,
+            },
+        ],
+        "operator_params": {"alias": "sim", "lang": "en", "model_type": "fasttext"},
+    }
+
+    feature = (
+        Feature.from_formula(meta["formula"])
+        .set_display_index(meta["display_index"])
+        .set_op_params(meta["operator_params"])
+    )
+
+    df = pd.DataFrame(
+        {
+            "telesign_mx_ads_1541317027_verification_phone_a2p_carrier": ["Pegaso PCS, S.A. de C.V."],
+            "telesign_mx_ads_1541317027_verification_phone_a2p_location_city": ["Chihuahua"],
+        }
+    )
+
+    result = feature.calculate(df)
+
+    print(result)
+
+    expected_features = {"f_autofe_sim_c15c44b1": 1.0}
+
+    assert result == expected_features

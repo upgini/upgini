@@ -56,25 +56,25 @@ class FeaturesValidator:
         #     self.logger.warning(msg)
         #     warning_counter.increment()
 
+        columns_renaming = columns_renaming or {}
+
         if empty_or_constant_features:
-            if columns_renaming:
-                display_names = [columns_renaming.get(f, f) for f in empty_or_constant_features]
-            else:
-                display_names = empty_or_constant_features
-            msg = bundle.get("empty_or_contant_features").format(display_names)
+            msg = bundle.get("empty_or_contant_features").format(
+                [columns_renaming.get(f, f) for f in empty_or_constant_features]
+            )
             print(msg)
             self.logger.warning(msg)
             warning_counter.increment()
 
         high_cardinality_features = self.find_high_cardinality(df[features])
         if features_for_generate:
-            high_cardinality_features = [f for f in high_cardinality_features if f not in features_for_generate]
+            high_cardinality_features = [
+                f for f in high_cardinality_features if columns_renaming.get(f, f) not in features_for_generate
+            ]
         if high_cardinality_features:
-            if columns_renaming:
-                display_names = [columns_renaming.get(f, f) for f in high_cardinality_features]
-            else:
-                display_names = empty_or_constant_features
-            msg = bundle.get("high_cardinality_features").format(display_names)
+            msg = bundle.get("high_cardinality_features").format(
+                [columns_renaming.get(f, f) for f in high_cardinality_features]
+            )
             print(msg)
             self.logger.warning(msg)
             warning_counter.increment()
