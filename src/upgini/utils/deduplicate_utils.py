@@ -25,12 +25,11 @@ def remove_fintech_duplicates(
     silent=False,
     bundle: ResourceBundle = None,
 ) -> pd.DataFrame:
-    # Base checks
+    # Initial checks for target type and date column
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
     if define_task(df[TARGET], date_col is not None, silent=True) != ModelTaskType.BINARY:
         return df
 
-    date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
     if date_col is None:
         return df
 
@@ -47,97 +46,103 @@ def remove_fintech_duplicates(
     if len(personal_cols) == 0:
         return df
 
-    sub_df = df[personal_cols + [date_col, TARGET]]
+    # Splitting into train and eval_set parts
+    if EVAL_SET_INDEX in df.columns:
+        train_df = df[df[EVAL_SET_INDEX] == 0]
+        eval_dfs = [df[df[EVAL_SET_INDEX] == idx] for idx in df[EVAL_SET_INDEX].unique() if idx != 0]
+    else:
+        train_df = df
+        eval_dfs = []
 
-    # Fast check for duplicates by personal keys
-    if not sub_df[personal_cols].duplicated().any():
-        return df
+    def process_df(segment_df: pd.DataFrame, eval_index=0) -> pd.DataFrame:
+        """Process a subset of the dataset to remove duplicates based on personal keys."""
+        # Fast check for duplicates based on personal keys
+        if not segment_df[personal_cols].duplicated().any():
+            return segment_df
 
-    grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
+        sub_df = segment_df[personal_cols + [date_col, TARGET]].copy()
 
-    # counts of diff dates by set of personal keys
-    uniques = grouped_by_personal_cols[date_col].nunique()
-    total = len(uniques)
-    diff_dates = len(uniques[uniques > 1])
-    if diff_dates / total >= 0.6:
-        return df
+        # Group by personal columns to check for unique dates
+        grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
 
-    # Additional checks
+        # Checking for different dates by the same personal keys
+        uniques = grouped_by_personal_cols[date_col].nunique()
+        total = len(uniques)
+        diff_dates = len(uniques[uniques > 1])
+        if diff_dates / total >= 0.6:
+            return segment_df
 
-    duplicates = sub_df.duplicated(personal_cols, keep=False)
-    duplicate_rows = sub_df[duplicates]
-    if len(duplicate_rows) == 0:
-        return df
+        # Check for duplicate rows
+        duplicates = sub_df.duplicated(personal_cols, keep=False)
+        duplicate_rows = sub_df[duplicates]
+        if len(duplicate_rows) == 0:
+            return segment_df
 
-    # if there is no different target values in personal keys duplicate rows
-    nonunique_target_groups = grouped_by_personal_cols[TARGET].nunique() > 1
-    if nonunique_target_groups.sum() == 0:
-        return df
+        # Check if there are different target values for the same personal keys
+        nonunique_target_groups = grouped_by_personal_cols[TARGET].nunique() > 1
+        if nonunique_target_groups.sum() == 0:
+            return segment_df
 
-    def has_diff_target_within_60_days(rows):
-        rows = rows.sort_values(by=date_col)
-        return len(rows[rows[TARGET].ne(rows[TARGET].shift()) & (rows[date_col].diff() < 60 * 24 * 60 * 60 * 1000)]) > 0
-
-    nonunique_target_rows = nonunique_target_groups[nonunique_target_groups].reset_index().drop(columns=TARGET)
-    sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
-
-    sub_df = DateTimeSearchKeyConverter(date_col, date_format=date_format, logger=logger, bundle=bundle).convert(sub_df)
-    grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
-    rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
-    if len(rows_with_diff_target) > 0:
-        unique_keys_to_delete = rows_with_diff_target[personal_cols].drop_duplicates()
-        if EVAL_SET_INDEX not in df.columns:
-            rows_to_remove = pd.merge(df.reset_index(), unique_keys_to_delete, on=personal_cols)
-            rows_to_remove = rows_to_remove.set_index(df.index.name or "index")
-            perc = len(rows_to_remove) * 100 / len(df)
-            msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
-                perc, len(rows_to_remove), rows_to_remove.index.to_list()
+        # Helper function to check if there are different target values within 60 days
+        def has_diff_target_within_60_days(rows: pd.DataFrame):
+            rows = rows.sort_values(by=date_col)
+            return (
+                len(rows[rows[TARGET].ne(rows[TARGET].shift()) & (rows[date_col].diff() < 60 * 24 * 60 * 60 * 1000)])
+                > 0
             )
-            if not silent:
-                print(msg)
-            if logger:
-                logger.warning(msg)
-            logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
-            df = df[~df.index.isin(rows_to_remove.index)]
-            logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
-        else:
-            # Indices in train and eval_set can be the same so we remove rows from them separately
-            train = df.query(f"{EVAL_SET_INDEX} == 0")
-            train_rows_to_remove = pd.merge(train.reset_index(), unique_keys_to_delete, on=personal_cols)
-            train_rows_to_remove = train_rows_to_remove.set_index(train.index.name or "index")
-            train_perc = len(train_rows_to_remove) * 100 / len(train)
-            msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
-                train_perc, len(train_rows_to_remove), train_rows_to_remove.index.to_list()
-            )
-            if not silent:
-                print(msg)
-            if logger:
-                logger.warning(msg)
-            logger.info(f"Train dataset shape before clean fintech duplicates: {train.shape}")
-            train = train[~train.index.isin(train_rows_to_remove.index)]
-            logger.info(f"Train dataset shape after clean fintech duplicates: {train.shape}")
 
-            evals = [df.query(f"{EVAL_SET_INDEX} == {i}") for i in df[EVAL_SET_INDEX].unique() if i != 0]
-            new_evals = []
-            for i, eval in enumerate(evals):
-                eval_rows_to_remove = pd.merge(eval.reset_index(), unique_keys_to_delete, on=personal_cols)
-                eval_rows_to_remove = eval_rows_to_remove.set_index(eval.index.name or "index")
-                eval_perc = len(eval_rows_to_remove) * 100 / len(eval)
-                msg = bundle.get("dataset_eval_diff_target_duplicates_fintech").format(
-                    eval_perc, len(eval_rows_to_remove), i + 1, eval_rows_to_remove.index.to_list()
+        # Filter rows with different target values within 60 days
+        nonunique_target_rows = nonunique_target_groups[nonunique_target_groups].reset_index().drop(columns=TARGET)
+        sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
+
+        # Convert date columns for further checks
+        sub_df = DateTimeSearchKeyConverter(date_col, date_format=date_format, logger=logger, bundle=bundle).convert(
+            sub_df
+        )
+        grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
+        rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
+
+        if len(rows_with_diff_target) > 0:
+            unique_keys_to_delete = rows_with_diff_target[personal_cols].drop_duplicates()
+            rows_to_remove = pd.merge(segment_df.reset_index(), unique_keys_to_delete, on=personal_cols)
+            rows_to_remove = rows_to_remove.set_index(segment_df.index.name or "index")
+            perc = len(rows_to_remove) * 100 / len(segment_df)
+            if eval_index == 0:
+                msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
+                    perc, len(rows_to_remove), rows_to_remove.index.to_list()
                 )
-                if not silent:
-                    print(msg)
-                if logger:
-                    logger.warning(msg)
-                logger.info(f"Eval {i + 1} dataset shape before clean fintech duplicates: {eval.shape}")
-                eval = eval[~eval.index.isin(eval_rows_to_remove.index)]
-                logger.info(f"Eval {i + 1} dataset shape after clean fintech duplicates: {eval.shape}")
-                new_evals.append(eval)
+            else:
+                msg = bundle.get("dataset_eval_diff_target_duplicates_fintech").format(
+                    perc, len(rows_to_remove), eval_index, rows_to_remove.index.to_list()
+                )
+            if not silent:
+                print(msg)
+            if logger:
+                logger.warning(msg)
+            return segment_df[~segment_df.index.isin(rows_to_remove.index)]
+        return segment_df
 
-            logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
-            df = pd.concat([train] + new_evals)
-            logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
+    # Process the train part separately
+    logger.info(f"Train dataset shape before clean fintech duplicates: {train_df.shape}")
+    train_df = process_df(train_df)
+    logger.info(f"Train dataset shape after clean fintech duplicates: {train_df.shape}")
+
+    # Process each eval_set part separately
+    new_eval_dfs = []
+    for i, eval_df in enumerate(eval_dfs, 1):
+        logger.info(f"Eval {i} dataset shape before clean fintech duplicates: {eval_df.shape}")
+        cleaned_eval_df = process_df(eval_df, i)
+        logger.info(f"Eval {i} dataset shape after clean fintech duplicates: {cleaned_eval_df.shape}")
+        new_eval_dfs.append(cleaned_eval_df)
+
+    # Combine the processed train and eval parts back into one dataset
+    logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
+    if new_eval_dfs:
+        df = pd.concat([train_df] + new_eval_dfs)
+    else:
+        df = train_df
+    logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
+
     return df
 
 

@@ -3322,6 +3322,7 @@ class FeaturesEnricher(TransformerMixin):
         # index overrites from result_features
         original_index_name = df_with_original_index.index.name
         df_with_original_index = df_with_original_index.reset_index()
+        # TODO drop system_record_id before merge
         result_features = pd.merge(
             df_with_original_index,
             result_features,
