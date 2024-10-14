@@ -132,7 +132,7 @@ class CombineThenFreq(PandasOperand):
         self._loc(temp, value_counts)
 
 
-class Distance:
+class Distance(PandasOperand):
     name: str = "dist"
     is_binary: bool = True
     output_type: Optional[str] = "float"
