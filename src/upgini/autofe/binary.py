@@ -140,10 +140,6 @@ class Distance(PandasOperand):
     has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        # Handle None values by replacing them with 0 in the dot product and norm calculations
-        # left = left.apply(lambda x: np.array(x) if x is not None else np.zeros_like(right[0]))
-        # right = right.apply(lambda x: np.array(x) if x is not None else np.zeros_like(left[0]))
-
         return pd.Series(
             1 - self.__dot(left, right) / (self.__norm(left) * self.__norm(right)), index=left.index
         ).astype(np.float64)
