@@ -132,7 +132,7 @@ class CombineThenFreq(PandasOperand):
         self._loc(temp, value_counts)
 
 
-class Distance(PandasOperand):
+class Distance:
     name: str = "dist"
     is_binary: bool = True
     output_type: Optional[str] = "float"
@@ -140,19 +140,27 @@ class Distance(PandasOperand):
     has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        # Handle None values by replacing them with 0 in the dot product and norm calculations
+        left = left.apply(lambda x: np.array(x) if x is not None else np.zeros_like(right[0]))
+        right = right.apply(lambda x: np.array(x) if x is not None else np.zeros_like(left[0]))
+
         return pd.Series(
             1 - self.__dot(left, right) / (self.__norm(left) * self.__norm(right)), index=left.index
         )
 
-    # row-wise dot product
+    # row-wise dot product, handling None values
     def __dot(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        left = left.apply(lambda x: np.array(x))
-        right = right.apply(lambda x: np.array(x))
-        res = (left.dropna() * right.dropna()).apply(np.sum)
-        res = res.reindex(left.index.union(right.index))
+        left = left.apply(lambda x: np.array(x) if x is not None else np.zeros_like(right[0]))
+        right = right.apply(lambda x: np.array(x) if x is not None else np.zeros_like(left[0]))
+
+        # Perform element-wise multiplication and handle missing values
+        res = (left * right).apply(np.sum)
         return res
 
+    # Calculate the norm of a vector, handling None values
     def __norm(self, vector: pd.Series) -> pd.Series:
+        # Replace None with a zero vector
+        vector = vector.apply(lambda x: np.array(x) if x is not None else np.zeros_like(vector[0]))
         return np.sqrt(self.__dot(vector, vector))
 
 
