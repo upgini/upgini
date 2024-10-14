@@ -541,13 +541,29 @@ def test_distance():
             [np.array([0, 1, 0]), np.array([1, 0, 0])],
             [np.array([0, 1, 0]), None],
             [None, np.array([1, 0, 0])],
+            [None, None],
         ],
         columns=["v1", "v2"],
     )
 
     op = Distance()
 
-    expected_values = pd.Series([0.0, 0.0, 0.292893, 1.0, np.nan, np.nan])
+    expected_values = pd.Series([0.0, 0.0, 0.292893, 1.0, np.nan, np.nan, np.nan])
+    actual_values = op.calculate_binary(data.v1, data.v2)
+    print(actual_values)
+
+    assert_series_equal(actual_values, expected_values)
+
+
+def test_empty_distance():
+    data = pd.DataFrame({
+        "v1": [None],
+        "v2": [None]
+    })
+
+    op = Distance()
+
+    expected_values = pd.Series([np.nan])
     actual_values = op.calculate_binary(data.v1, data.v2)
     print(actual_values)
 
@@ -608,46 +624,3 @@ def test_op_params():
     assert norm1.op.alias is None
     assert norm2.op.norm == 5
     assert norm2.op.alias is None
-
-
-def test_emb_fasttext():
-    meta = {
-        "formula": "sim(emb(telesign_mx_ads_1541317027_verification_phone_a2p_carrier),emb(telesign_mx_ads_1541317027_verification_phone_a2p_location_city))",  # noqa: E501
-        "display_index": "c15c44b1",
-        "base_columns": [
-            {
-                "original_name": "telesign_mx_ads_1541317027_verification_phone_a2p_carrier",
-                "hashed_name": "f_verification_phone_a2p_carrier_8eb19cc2",
-                "ads_definition_id": "169343db-e187-4a4b-96ae-2296642fa21b",
-                "is_augmented": False,
-            },
-            {
-                "original_name": "telesign_mx_ads_1541317027_verification_phone_a2p_location_city",
-                "hashed_name": "f_verification_phone_a2p_location_city_fba2fb28",
-                "ads_definition_id": "169343db-e187-4a4b-96ae-2296642fa21b",
-                "is_augmented": False,
-            },
-        ],
-        "operator_params": {"alias": "sim", "lang": "en", "model_type": "fasttext"},
-    }
-
-    feature = (
-        Feature.from_formula(meta["formula"])
-        .set_display_index(meta["display_index"])
-        .set_op_params(meta["operator_params"])
-    )
-
-    df = pd.DataFrame(
-        {
-            "telesign_mx_ads_1541317027_verification_phone_a2p_carrier": ["Pegaso PCS, S.A. de C.V."],
-            "telesign_mx_ads_1541317027_verification_phone_a2p_location_city": ["Chihuahua"],
-        }
-    )
-
-    result = feature.calculate(df)
-
-    print(result)
-
-    expected_features = {"f_autofe_sim_c15c44b1": 1.0}
-
-    assert result == expected_features

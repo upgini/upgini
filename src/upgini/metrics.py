@@ -526,7 +526,7 @@ class CatBoostWrapper(EstimatorWrapper):
         emb_name = "__grouped_embeddings"
         df = df.copy()
         df[self.emb_features] = df[self.emb_features].fillna(0.0)
-        df[emb_name] = df[self.emb_features].values.tolist()
+        df[emb_name] = pd.Series(df[self.emb_features].values.tolist())
         df = df.drop(columns=self.emb_features)
 
         return df, [emb_name]

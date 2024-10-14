@@ -984,9 +984,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.030751, -0.057361, -0.004349],
-            enriched_gini: [0.123163, 0.050307, -0.028307],
-            uplift: [0.092411, 0.107667, -0.023958]
+            baseline_gini: [0.089752, -0.069414, -0.028294],
+            enriched_gini: [0.153425, 0.023577, 0.027663],
+            uplift: [0.063673, 0.092991, 0.055957]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
@@ -1343,9 +1343,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_rmse: [0.695852, 0.713842, 0.679902],
-            enriched_rmse: [0.677814, 0.708517, 0.713791],
-            uplift: [0.018039, 0.005324, -0.033889]
+            baseline_rmse: [0.677555, 0.712675, 0.684044],
+            enriched_rmse: [0.682417, 0.705819, 0.705374],
+            uplift: [-0.004862, 0.006856, -0.021330]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
@@ -1463,9 +1463,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.086468, -0.119230, -0.006266],
-            enriched_gini: [-0.095576, -0.061882, -0.049756],
-            uplift: [-0.182045, 0.057348, -0.043489]
+            baseline_gini: [0.064294, -0.053924, -0.052663],
+            enriched_gini: [0.002265, -0.012131, -0.063446],
+            uplift: [-0.062028, 0.041793, -0.010782]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame({
