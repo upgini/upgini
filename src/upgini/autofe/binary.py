@@ -150,17 +150,15 @@ class Distance(PandasOperand):
 
     # row-wise dot product, handling None values
     def __dot(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        left = left.apply(lambda x: np.array(x) if x is not None else np.zeros_like(right[0]))
-        right = right.apply(lambda x: np.array(x) if x is not None else np.zeros_like(left[0]))
-
-        # Perform element-wise multiplication and handle missing values
-        res = (left * right).apply(np.sum)
+        left = left.apply(lambda x: np.array(x))
+        right = right.apply(lambda x: np.array(x))
+        res = (left.dropna() * right.dropna()).apply(np.sum)
+        res = res.reindex(left.index.union(right.index))
         return res
 
     # Calculate the norm of a vector, handling None values
     def __norm(self, vector: pd.Series) -> pd.Series:
-        # Replace None with a zero vector
-        vector = vector.apply(lambda x: np.array(x) if x is not None else np.zeros_like(vector[0]))
+        vector = vector.fillna(np.nan)
         return np.sqrt(self.__dot(vector, vector))
 
 
