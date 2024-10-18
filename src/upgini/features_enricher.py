@@ -2449,14 +2449,16 @@ class FeaturesEnricher(TransformerMixin):
         if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
-        self.__adjust_cv(df, maybe_date_column, self.model_task_type)
-
         normalizer = Normalizer(
             self.fit_search_keys, self.fit_generated_features, self.bundle, self.logger, self.warning_counter
         )
         df = normalizer.normalize(df)
         columns_renaming = normalizer.columns_renaming
         self.fit_columns_renaming = columns_renaming
+
+        self.__adjust_cv(
+            df, normalizer.search_keys, self.model_task_type
+        )
 
         df = remove_fintech_duplicates(
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
@@ -2710,24 +2712,24 @@ class FeaturesEnricher(TransformerMixin):
         if not self.warning_counter.has_warnings():
             self.__display_support_link(self.bundle.get("all_ok_community_invite"))
 
-    def __adjust_cv(self, df: pd.DataFrame, date_column: pd.Series, model_task_type: ModelTaskType):
+    def __adjust_cv(self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], model_task_type: ModelTaskType):
+        date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
         # Check Multivariate time series
         if (
             self.cv is None
             and date_column
             and model_task_type == ModelTaskType.REGRESSION
-            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
-            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
+            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(search_keys.keys())) == 0
+            and is_blocked_time_series(df, date_column, list(search_keys.keys()) + [TARGET])
         ):
             msg = self.bundle.get("multivariate_timeseries_detected")
             self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
-        elif (
-            self.cv is None
-            and model_task_type != ModelTaskType.REGRESSION
-            and self._get_group_columns(df, self.fit_search_keys)
-        ):
+        elif self.cv is None and model_task_type != ModelTaskType.REGRESSION:
             msg = self.bundle.get("group_k_fold_in_classification")
             self.__override_cv(CVType.group_k_fold, msg, print_warning=self.cv is not None)
+            group_columns = self._get_group_columns(df, search_keys)
+            self.runtime_parameters.properties["cv_params.group_columns"] = ",".join(group_columns)
+            self.runtime_parameters.properties["cv_params.shuffle_kfold"] = "True"
 
     def __override_cv(self, cv: CVType, msg: str, print_warning: bool = True):
         if print_warning:
