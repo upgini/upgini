@@ -1578,7 +1578,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features.extend(generator.generated_features)
 
         normalizer = Normalizer(self.bundle, self.logger, self.warning_counter)
-        df = normalizer.normalize(df, search_keys, generated_features)
+        df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
         df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
@@ -2018,7 +2018,7 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(generator.generated_features)
 
             normalizer = Normalizer(self.bundle, self.logger, self.warning_counter, silent_mode)
-            df = normalizer.normalize(df, search_keys, generated_features)
+            df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
             columns_renaming = normalizer.columns_renaming
 
             # Don't pass all features in backend on transform
@@ -2448,11 +2448,10 @@ class FeaturesEnricher(TransformerMixin):
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
         normalizer = Normalizer(self.bundle, self.logger, self.warning_counter)
-        df = normalizer.normalize(df, self.fit_search_keys, self.fit_generated_features)
-        columns_renaming = normalizer.columns_renaming
-        self.fit_columns_renaming = columns_renaming
-        self.fit_search_keys = normalizer.search_keys
-        self.fit_generated_features = normalizer.generated_features
+        df, self.fit_search_keys, self.fit_generated_features = normalizer.normalize(
+            df, self.fit_search_keys, self.fit_generated_features
+        )
+        self.fit_columns_renaming = normalizer.columns_renaming
 
         self.__adjust_cv(df)
 

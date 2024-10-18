@@ -1,6 +1,6 @@
 import hashlib
 from logging import Logger, getLogger
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -50,7 +50,7 @@ class Normalizer:
 
     def normalize(
         self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], generated_features: List[str]
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Dict[str, SearchKey], List[str]]:
         self.search_keys = search_keys.copy()
         self.generated_features = generated_features.copy()
 
@@ -71,7 +71,7 @@ class Normalizer:
 
         df = self.__convert_features_types(df)
 
-        return df
+        return df, self.search_keys, self.generated_features
 
     def _rename_columns(self, df: pd.DataFrame):
         # logger.info("Replace restricted symbols in column names")

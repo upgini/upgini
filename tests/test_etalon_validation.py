@@ -660,7 +660,7 @@ def test_columns_renaming():
     df = pd.concat([df1, df2], axis=1)
     search_keys = {"date": SearchKey.DATE}
     normalizer = Normalizer()
-    df = normalizer.normalize(df, search_keys, [])
+    df, _, _ = normalizer.normalize(df, search_keys, [])
     assert set(df.columns.to_list()) == {"feature1_422b73", "date_0e8763", "feature1_422b73_0"}
 
 
@@ -675,7 +675,7 @@ def test_too_long_columns():
 
     search_keys = {"date": SearchKey.DATE}
     normalizer = Normalizer()
-    df = normalizer.normalize(df, search_keys, [])
+    df, _, _ = normalizer.normalize(df, search_keys, [])
     assert set(df.columns.to_list()) == {
         "date_0e8763",
         (

@@ -440,7 +440,7 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
     search_keys_copy = search_keys.copy()
     normalizer = Normalizer()
-    df_with_eval_set_index_with_date = normalizer.normalize(
+    df_with_eval_set_index_with_date, search_keys_copy, converter.generated_features = normalizer.normalize(
         df_with_eval_set_index_with_date, search_keys_copy, converter.generated_features
     )
 
