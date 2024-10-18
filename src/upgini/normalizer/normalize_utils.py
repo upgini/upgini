@@ -1,6 +1,6 @@
 import hashlib
 from logging import Logger, getLogger
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -35,22 +35,25 @@ class Normalizer:
 
     def __init__(
         self,
-        search_keys: Dict[str, SearchKey],
-        generated_features: List[str],
         bundle: ResourceBundle = None,
         logger: Logger = None,
         warnings_counter: WarningCounter = None,
         silent_mode=False,
     ):
-        self.search_keys = search_keys
-        self.generated_features = generated_features
         self.bundle = bundle or get_custom_bundle()
         self.logger = logger or getLogger()
         self.warnings_counter = warnings_counter or WarningCounter()
         self.silent_mode = silent_mode
         self.columns_renaming = {}
+        self.search_keys = {}
+        self.generated_features = []
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def normalize(
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], generated_features: List[str]
+    ) -> Tuple[pd.DataFrame, Dict[str, SearchKey], List[str]]:
+        self.search_keys = search_keys.copy()
+        self.generated_features = generated_features.copy()
+
         df = df.copy()
         df = self._rename_columns(df)
 
@@ -68,21 +71,25 @@ class Normalizer:
 
         df = self.__convert_features_types(df)
 
-        return df
+        return df, self.search_keys, self.generated_features
 
     def _rename_columns(self, df: pd.DataFrame):
         # logger.info("Replace restricted symbols in column names")
         new_columns = []
         dup_counter = 0
         for column in df.columns:
-            if column in [
-                TARGET,
-                EVAL_SET_INDEX,
-                SYSTEM_RECORD_ID,
-                ENTITY_SYSTEM_RECORD_ID,
-                SEARCH_KEY_UNNEST,
-                DateTimeSearchKeyConverter.DATETIME_COL,
-            ] + self.generated_features:
+            if (
+                column
+                in [
+                    TARGET,
+                    EVAL_SET_INDEX,
+                    SYSTEM_RECORD_ID,
+                    ENTITY_SYSTEM_RECORD_ID,
+                    SEARCH_KEY_UNNEST,
+                    DateTimeSearchKeyConverter.DATETIME_COL,
+                ]
+                + self.generated_features
+            ):
                 self.columns_renaming[column] = column
                 new_columns.append(column)
                 continue
