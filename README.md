@@ -103,7 +103,7 @@
 
 ## 💼 Tutorials
 
-###  [Search of relevant external features & Automated feature generation for Salary predicton task (use as a template)](https://github.com/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb)
+###  [Search of relevant external features & Automated feature generation for Salary prediction task (use as a template)](https://github.com/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb)
 
 * The goal is to predict salary for data science job postning based on information about employer and job description.
 * Following this guide, you'll learn how to **search & auto generate new relevant features with Upgini library**
