@@ -53,7 +53,8 @@ class Dataset:  # (pd.DataFrame):
     FIT_SAMPLE_THRESHOLD = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_ROWS = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
-    MIN_SAMPLE_THRESHOLD = 5_000
+    BINARY_MIN_SAMPLE_THRESHOLD = 5_000
+    MULTICLASS_MIN_SAMPLE_THRESHOLD = 25_000
     IMBALANCE_THESHOLD = 0.6
     BINARY_BOOTSTRAP_LOOPS = 5
     MULTICLASS_BOOTSTRAP_LOOPS = 2
@@ -225,7 +226,7 @@ class Dataset:  # (pd.DataFrame):
             train_segment = self.data
 
         if self.task_type == ModelTaskType.MULTICLASS or (
-            self.task_type == ModelTaskType.BINARY and len(train_segment) > self.MIN_SAMPLE_THRESHOLD
+            self.task_type == ModelTaskType.BINARY and len(train_segment) > self.BINARY_MIN_SAMPLE_THRESHOLD
         ):
             count = len(train_segment)
             target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
@@ -253,6 +254,7 @@ class Dataset:  # (pd.DataFrame):
             min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
             min_class_threshold = min_class_percent * count
 
+            # If min class count less than 30% for binary or (60 / classes_count)% for multiclass
             if min_class_count < min_class_threshold:
                 self.imbalanced = True
                 self.data = balance_undersample(
@@ -260,7 +262,8 @@ class Dataset:  # (pd.DataFrame):
                     target_column=target_column,
                     task_type=self.task_type,
                     random_state=self.random_state,
-                    imbalance_threshold=self.IMBALANCE_THESHOLD,
+                    binary_min_sample_threshold=self.BINARY_MIN_SAMPLE_THRESHOLD,
+                    multiclass_min_sample_threshold=self.MULTICLASS_MIN_SAMPLE_THRESHOLD,
                     binary_bootstrap_loops=self.BINARY_BOOTSTRAP_LOOPS,
                     multiclass_bootstrap_loops=self.MULTICLASS_BOOTSTRAP_LOOPS,
                     logger=self.logger,

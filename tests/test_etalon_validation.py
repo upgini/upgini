@@ -273,14 +273,15 @@ def test_imbalanced_target():
         "target": FileColumnMeaningType.TARGET,
     }
     dataset.task_type = ModelTaskType.MULTICLASS
+    dataset.MULTICLASS_MIN_SAMPLE_THRESHOLD = 1000
     dataset._Dataset__resample()
-    assert len(dataset) == 1800
+    assert len(dataset) == 1600
     value_counts = dataset.data["target"].value_counts()
     assert len(value_counts) == 4
     assert value_counts["a"] == 100
     assert value_counts["b"] == 400
     assert value_counts["c"] == 500
-    assert value_counts["d"] == 800
+    assert value_counts["d"] == 600
 
 
 def test_fail_on_small_class_observations():
@@ -707,12 +708,12 @@ def test_downsampling_binary():
     dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.BINARY
 
-    old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    old_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
     old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
     old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
     old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
     old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
-    Dataset.MIN_SAMPLE_THRESHOLD = 3
+    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 3
     Dataset.MIN_TARGET_CLASS_ROWS = 1
     Dataset.IMBALANCE_THESHOLD = 0.6
     Dataset.FIT_SAMPLE_THRESHOLD = 1
@@ -722,7 +723,7 @@ def test_downsampling_binary():
         dataset._Dataset__resample()
         assert len(dataset.data) == 1
     finally:
-        Dataset.MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
+        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
         Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
         Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
         Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
@@ -750,12 +751,12 @@ def test_downsampling_multiclass():
     dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.MULTICLASS
 
-    old_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
+    old_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
     old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
     old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
     old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
     old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
-    Dataset.MIN_SAMPLE_THRESHOLD = 3
+    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 3
     Dataset.MIN_TARGET_CLASS_ROWS = 1
     Dataset.IMBALANCE_THESHOLD = 0.8
     Dataset.FIT_SAMPLE_THRESHOLD = 1
@@ -765,7 +766,7 @@ def test_downsampling_multiclass():
         dataset._Dataset__resample()
         assert len(dataset.data) == 1
     finally:
-        Dataset.MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
+        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
         Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
         Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
         Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
