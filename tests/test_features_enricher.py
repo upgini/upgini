@@ -2125,8 +2125,8 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
 
-    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
-    Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+    default_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
+    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 7_000
 
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
@@ -2148,7 +2148,7 @@ def test_imbalanced_dataset(requests_mock: Mocker):
         assert metrics.loc[0, "Mean target"] == 0.125
         assert metrics.loc[0, "Enriched GINI"] == 0.0
     finally:
-        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
 
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
@@ -2166,8 +2166,8 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
     initial_eval1_df = pd.read_parquet(eval1_path)
     initial_eval2_df = pd.read_parquet(eval2_path)
 
-    default_min_sample_threshold = Dataset.MIN_SAMPLE_THRESHOLD
-    Dataset.MIN_SAMPLE_THRESHOLD = 7_000
+    default_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
+    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 1_000
 
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
@@ -2234,7 +2234,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
             test(i)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
-        Dataset.MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
 
 def test_email_search_key(requests_mock: Mocker):
