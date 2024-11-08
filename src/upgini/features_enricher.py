@@ -336,6 +336,7 @@ class FeaturesEnricher(TransformerMixin):
         self.exclude_columns = exclude_columns
         self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
+        self.features_info_display_handle = None
 
     def _get_api_key(self):
         return self._api_key
@@ -871,6 +872,13 @@ class FeaturesEnricher(TransformerMixin):
                 else None
             )
 
+            if self.X is None:
+                self.X = X
+            if self.y is None:
+                self.y = y
+            if self.eval_set is None:
+                self.eval_set = effective_eval_set
+
             try:
                 self.__log_debug_information(
                     validated_X,
@@ -938,14 +946,14 @@ class FeaturesEnricher(TransformerMixin):
 
                 gc.collect()
 
+                if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
+                    print(self.bundle.get("metrics_no_important_free_features"))
+                    self.logger.warning("No client or free relevant ADS features found to calculate metrics")
+                    self.warning_counter.increment()
+                    return None
+
                 print(self.bundle.get("metrics_start"))
                 with Spinner():
-                    if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                        print(self.bundle.get("metrics_no_important_free_features"))
-                        self.logger.warning("No client or free relevant ADS features found to calculate metrics")
-                        self.warning_counter.increment()
-                        return None
-
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     has_date = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME]) is not None
@@ -989,7 +997,7 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        etalon_metric = baseline_estimator.cross_val_predict(
+                        etalon_metric, _ = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
                         )
                         if etalon_metric is None:
@@ -1023,7 +1031,13 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        enriched_metric = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        enriched_metric, enriched_shaps = enriched_estimator.cross_val_predict(
+                            fitting_enriched_X, enriched_y_sorted
+                        )
+
+                        if enriched_shaps is not None:
+                            self._update_shap_values(enriched_shaps)
+
                         if enriched_metric is None:
                             self.logger.warning(
                                 f"Enriched {metric} on train combined features is None (maybe all features was removed)"
@@ -1156,13 +1170,6 @@ class FeaturesEnricher(TransformerMixin):
                     elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
                         self.logger.warning("Uplift is negative")
 
-                    if self.X is None:
-                        self.X = X
-                    if self.y is None:
-                        self.y = y
-                    if self.eval_set is None:
-                        self.eval_set = effective_eval_set
-
                     return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
@@ -1186,6 +1193,48 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
+
+    def _update_shap_values(self, new_shaps: Dict[str, float]):
+        new_shaps = {
+            feature: self._round_shap_value(shap)
+            for feature, shap in new_shaps.items()
+            if feature in self.feature_names_
+        }
+        features_importances = list(new_shaps.items())
+        features_importances.sort(key=lambda m: (-m[1], m[0]))
+        self.feature_names_, self.feature_importances_ = zip(*features_importances)
+        self.feature_names_ = list(self.feature_names_)
+        self.feature_importances_ = list(self.feature_importances_)
+
+        feature_name_header = self.bundle.get("features_info_name")
+        shap_value_header = self.bundle.get("features_info_shap")
+
+        def update_shap(row):
+            return new_shaps.get(row[feature_name_header], row[shap_value_header])
+
+        self.features_info[shap_value_header] = self.features_info.apply(update_shap, axis=1)
+        self._internal_features_info[shap_value_header] = self._internal_features_info.apply(update_shap, axis=1)
+        self._features_info_without_links[shap_value_header] = self._features_info_without_links.apply(
+            update_shap, axis=1
+        )
+        self.logger.info(f"Recalculated SHAP values:\n{self._features_info_without_links}")
+
+        self.features_info.sort_values(by=shap_value_header, ascending=False, inplace=True)
+        self._internal_features_info.sort_values(by=shap_value_header, ascending=False, inplace=True)
+        self._features_info_without_links.sort_values(by=shap_value_header, ascending=False, inplace=True)
+
+        if self.features_info_display_handle:
+            try:
+                _ = get_ipython()  # type: ignore
+
+                display_html_dataframe(
+                    self.features_info,
+                    self._features_info_without_links,
+                    self.bundle.get("relevant_features_header"),
+                    display_handle=self.features_info_display_handle,
+                )
+            except (ImportError, NameError):
+                print(self._internal_features_info)
 
     def _check_train_and_eval_target_distribution(self, y, eval_set_dict):
         uneven_distribution = False
@@ -1515,11 +1564,19 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
-        elif not self.imbalanced and not exclude_features_sources and is_input_same_as_fit:
+        elif (
+            not self.imbalanced
+            and not exclude_features_sources
+            and is_input_same_as_fit
+            and self.df_with_original_index is not None
+        ):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__sample_balanced(eval_set, trace_id, remove_outliers_calc_metrics)
         else:
-            self.logger.info("Dataset is imbalanced or exclude_features_sources or X was passed. Run transform")
+            self.logger.info(
+                "Dataset is imbalanced or exclude_features_sources or X was passed or this is saved search."
+                " Run transform"
+            )
             print(self.bundle.get("prepare_data_for_metrics"))
             return self.__sample_imbalanced(
                 validated_X,
@@ -3374,6 +3431,13 @@ class FeaturesEnricher(TransformerMixin):
 
         return result_train, result_eval_sets
 
+    @staticmethod
+    def _round_shap_value(shap: float) -> float:
+        if shap > 0.0 and shap < 0.0001:
+            return 0.0001
+        else:
+            return round(shap, 4)
+
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
         llm_source = "LLM with external data augmentation"
         if self._search_task is None:
@@ -3390,12 +3454,6 @@ class FeaturesEnricher(TransformerMixin):
         features_info = []
         features_info_without_links = []
         internal_features_info = []
-
-        def round_shap_value(shap: float) -> float:
-            if shap > 0.0 and shap < 0.0001:
-                return 0.0001
-            else:
-                return round(shap, 4)
 
         def list_or_single(lst: List[str], single: str):
             return lst or ([single] if single else [])
@@ -3429,7 +3487,7 @@ class FeaturesEnricher(TransformerMixin):
 
             feature_sample = []
             self.feature_names_.append(feature_meta.name)
-            self.feature_importances_.append(round_shap_value(feature_meta.shap_value))
+            self.feature_importances_.append(self._round_shap_value(feature_meta.shap_value))
             if feature_meta.name in features_df.columns:
                 feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
                 if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
@@ -3468,7 +3526,7 @@ class FeaturesEnricher(TransformerMixin):
             features_info.append(
                 {
                     self.bundle.get("features_info_name"): feature_name,
-                    self.bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
                     self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
                     self.bundle.get("features_info_value_preview"): feature_sample,
                     self.bundle.get("features_info_provider"): provider,
@@ -3479,7 +3537,7 @@ class FeaturesEnricher(TransformerMixin):
             features_info_without_links.append(
                 {
                     self.bundle.get("features_info_name"): internal_feature_name,
-                    self.bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
                     self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
                     self.bundle.get("features_info_value_preview"): feature_sample,
                     self.bundle.get("features_info_provider"): internal_provider,
@@ -3491,7 +3549,7 @@ class FeaturesEnricher(TransformerMixin):
                 {
                     self.bundle.get("features_info_name"): internal_feature_name,
                     "feature_link": feature_meta.doc_link,
-                    self.bundle.get("features_info_shap"): round_shap_value(feature_meta.shap_value),
+                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
                     self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
                     self.bundle.get("features_info_value_preview"): feature_sample,
                     self.bundle.get("features_info_provider"): internal_provider,
@@ -3771,8 +3829,11 @@ class FeaturesEnricher(TransformerMixin):
             print(Format.GREEN + Format.BOLD + msg + Format.END)
             self.logger.info(msg)
             if len(self.feature_names_) > 0:
-                display_html_dataframe(
-                    self.features_info, self._features_info_without_links, self.bundle.get("relevant_features_header")
+                self.features_info_display_handle = display_html_dataframe(
+                    self.features_info,
+                    self._features_info_without_links,
+                    self.bundle.get("relevant_features_header"),
+                    display_id="features_info",
                 )
 
                 display_html_dataframe(
