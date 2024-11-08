@@ -3,13 +3,14 @@ from __future__ import annotations
 import inspect
 import logging
 import re
+from collections import defaultdict
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import catboost
 import numpy as np
 import pandas as pd
-from catboost import CatBoostClassifier, CatBoostRegressor
+from catboost import CatBoost, CatBoostClassifier, CatBoostRegressor, Pool
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
@@ -288,9 +289,12 @@ class EstimatorWrapper:
         x, y, _ = self._prepare_data(x, y)
         return x, y, {}
 
+    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
+        return None
+
     def cross_val_predict(
         self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
-    ) -> Optional[float]:
+    ) -> Tuple[Optional[float], Optional[Dict[str, float]]]:
         x, y, groups, fit_params = self._prepare_to_fit(x, y)
 
         if x.shape[1] == 0:
@@ -298,6 +302,7 @@ class EstimatorWrapper:
 
         scorer = check_scoring(self.estimator, scoring=self.scorer)
 
+        shap_values_all_folds = defaultdict(list)
         if baseline_score_column is not None and self.metric_name == "GINI":
             self.logger.info("Calculate baseline GINI on passed baseline_score_column and target")
             metric = roc_auc_score(y, x[baseline_score_column])
@@ -319,7 +324,29 @@ class EstimatorWrapper:
             self.check_fold_metrics(metrics_by_fold)
 
             metric = np.mean(metrics_by_fold) * self.multiplier
-        return self.post_process_metric(metric)
+
+            splits = self.cv.split(x, y, groups)
+
+            for estimator, split in zip(self.cv_estimators, splits):
+                _, validation_idx = split
+                cv_x = x.iloc[validation_idx]
+                cv_y = y[validation_idx]
+                shaps = self.calculate_shap(cv_x, cv_y, estimator)
+                if shaps is not None:
+                    for feature, shap_value in shaps.items():
+                        # shap_values_all_folds[feature] = shap_values_all_folds.get(feature, []) + shap_value.tolist()
+                        shap_values_all_folds[feature].extend(shap_value.tolist())
+
+        if shap_values_all_folds:
+            average_shap_values = {
+                feature: np.mean(np.array(shaps)) for feature, shaps in shap_values_all_folds.items() if len(shaps) > 0
+            }
+            if len(average_shap_values) == 0:
+                average_shap_values = None
+        else:
+            average_shap_values = None
+
+        return self.post_process_metric(metric), average_shap_values
 
     def check_fold_metrics(self, metrics_by_fold: List[float]):
         first_metric_sign = 1 if metrics_by_fold[0] >= 0 else -1
@@ -453,6 +480,7 @@ class CatBoostWrapper(EstimatorWrapper):
         )
         self.cat_features = None
         self.emb_features = None
+        self.grouped_embedding_features = None
         self.exclude_features = []
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
@@ -462,17 +490,16 @@ class CatBoostWrapper(EstimatorWrapper):
         if hasattr(CatBoostClassifier, "get_embedding_feature_indices"):
             emb_pattern = r"(.+)_emb\d+"
             self.emb_features = [c for c in x.columns if re.match(emb_pattern, c) and is_numeric_dtype(x[c])]
-            embedding_features = []
             if len(self.emb_features) > 3:  # There is no reason to reduce embeddings dimension with less than 4
                 self.logger.info(
                     "Embedding features count more than 3, so group them into one vector for CatBoost: "
                     f"{self.emb_features}"
                 )
-                x, embedding_features = self.group_embeddings(x)
-                params["embedding_features"] = embedding_features
+                x, self.grouped_embedding_features = self.group_embeddings(x)
+                params["embedding_features"] = self.grouped_embedding_features
             else:
                 self.logger.info(f"Embedding features count less than 3, so use them separately: {self.emb_features}")
-                self.emb_features = []
+                self.grouped_embedding_features = None
         else:
             self.logger.warning(f"Embedding features are not supported by Catboost version {catboost.__version__}")
 
@@ -488,7 +515,7 @@ class CatBoostWrapper(EstimatorWrapper):
             self.logger.warning(f"Text features are not supported by this Catboost version {catboost.__version__}")
 
         # Find rest categorical features
-        self.cat_features = _get_cat_features(x, self.text_features, embedding_features)
+        self.cat_features = _get_cat_features(x, self.text_features, self.grouped_embedding_features)
         # x = fill_na_cat_features(x, self.cat_features)
         unique_cat_features = []
         for name in self.cat_features:
@@ -548,7 +575,7 @@ class CatBoostWrapper(EstimatorWrapper):
 
     def cross_val_predict(
         self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
-    ) -> Optional[float]:
+    ) -> Tuple[Optional[float], Optional[Dict[str, float]]]:
         try:
             return super().cross_val_predict(x, y, baseline_score_column)
         except Exception as e:
@@ -572,6 +599,36 @@ class CatBoostWrapper(EstimatorWrapper):
                 return super().cross_val_predict(x, y, baseline_score_column)
             else:
                 raise e
+
+    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator: CatBoost) -> Optional[Dict[str, float]]:
+        try:
+            # Create Pool for fold data, if need (for example, when categorical features are present)
+            fold_pool = Pool(
+                x,
+                y,
+                cat_features=self.cat_features,
+                text_features=self.text_features,
+                embedding_features=self.grouped_embedding_features,
+            )
+
+            # Get SHAP values of current estimator
+            shap_values_fold = estimator.get_feature_importance(data=fold_pool, type="ShapValues")
+
+            # Remove last columns (base value) and flatten
+            if self.target_type == ModelTaskType.MULTICLASS:
+                all_shaps = shap_values_fold[:, :, :-1]
+                all_shaps = [all_shaps[:, :, k].flatten() for k in range(all_shaps.shape[2])]
+            else:
+                all_shaps = shap_values_fold[:, :-1]
+                all_shaps = [all_shaps[:, k].flatten() for k in range(all_shaps.shape[1])]
+
+            all_shaps = np.abs(all_shaps)
+
+            return dict(zip(estimator.feature_names_, all_shaps))
+
+        except Exception:
+            self.logger.exception("Failed to recalculate new SHAP values")
+            return None
 
 
 class LightGBMWrapper(EstimatorWrapper):

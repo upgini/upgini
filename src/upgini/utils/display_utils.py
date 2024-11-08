@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 import pandas as pd
 from xhtml2pdf import pisa
+
 from upgini.__about__ import __version__
 
 
@@ -72,7 +73,9 @@ def make_table(df: pd.DataFrame, wrap_long_string=None) -> str:
     )
 
 
-def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: str):
+def display_html_dataframe(
+    df: pd.DataFrame, internal_df: pd.DataFrame, header: str, display_id: Optional[str] = None, display_handle=None
+):
     if not ipython_available():
         print(header)
         print(internal_df)
@@ -133,7 +136,10 @@ def display_html_dataframe(df: pd.DataFrame, internal_df: pd.DataFrame, header: 
             {table_html}
         </div>
         """
-    display(HTML(result_html))
+    if display_handle:
+        return display_handle.update(HTML(result_html))
+    else:
+        return display(HTML(result_html), display_id=display_id)
 
 
 def make_html_report(

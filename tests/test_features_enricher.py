@@ -192,11 +192,11 @@ def test_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0186]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0186
 
 
 def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
@@ -490,11 +490,11 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0241]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0241
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -629,11 +629,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0063]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0063
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -773,11 +773,11 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0186]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0186
 
     enricher.transform(train_features)
 
@@ -892,11 +892,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0186]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0186
 
 
 def test_features_enricher_with_index_column(requests_mock: Mocker):
@@ -1009,11 +1009,11 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
+    assert enricher.feature_importances_ == [0.0186]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 10.1
+    assert first_feature_info[shap_value_header] == 0.0186
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
@@ -1131,17 +1131,12 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     print(features_info)
 
     assert enricher.feature_names_ == ["f_feature123"]
-    assert enricher.feature_importances_ == [0.9]
+    assert enricher.feature_importances_ == [0.0136]
     assert len(features_info) == 1
     first_feature_info = features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "f_feature123"
-    assert first_feature_info[shap_value_header] == 0.9
+    assert first_feature_info[shap_value_header] == 0.0136
     assert first_feature_info[hitrate_header] == 99.0
-    # Client features are no longer shown
-    # second_feature_info = features_info.iloc[1]
-    # assert second_feature_info[feature_name_header] == "cos(3,freq=W-SUN)"
-    # assert second_feature_info[shap_value_header] == 0.1
-    # assert second_feature_info[hitrate_header] == 100.0
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_progress(requests_mock, url, validation_search_task_id)
