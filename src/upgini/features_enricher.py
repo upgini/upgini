@@ -337,6 +337,8 @@ class FeaturesEnricher(TransformerMixin):
         self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
         self.features_info_display_handle = None
+        self.data_sources_display_handle = None
+        self.report_button_handle = None
 
     def _get_api_key(self):
         return self._api_key
@@ -1223,7 +1225,12 @@ class FeaturesEnricher(TransformerMixin):
         self._internal_features_info.sort_values(by=shap_value_header, ascending=False, inplace=True)
         self._features_info_without_links.sort_values(by=shap_value_header, ascending=False, inplace=True)
 
-        if self.features_info_display_handle:
+        self.relevant_data_sources = self._group_relevant_data_sources(self.features_info, self.bundle)
+        self._relevant_data_sources_wo_links = self._group_relevant_data_sources(
+            self._features_info_without_links, self.bundle
+        )
+
+        if self.features_info_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1235,6 +1242,25 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except (ImportError, NameError):
                 print(self._internal_features_info)
+        if self.data_sources_display_handle is not None:
+            try:
+                _ = get_ipython()  # type: ignore
+
+                display_html_dataframe(
+                    self.relevant_data_sources,
+                    self._relevant_data_sources_wo_links,
+                    self.bundle.get("relevant_features_header"),
+                    display_handle=self.data_sources_display_handle,
+                )
+            except (ImportError, NameError):
+                print(self._relevant_data_sources_wo_links)
+        if self.report_button_handle is not None:
+            try:
+                _ = get_ipython()  # type: ignore
+
+                self.__show_report_button(display_handle=self.report_button_handle)
+            except (ImportError, NameError):
+                pass
 
     def _check_train_and_eval_target_distribution(self, y, eval_set_dict):
         uneven_distribution = False
@@ -2082,6 +2108,13 @@ class FeaturesEnricher(TransformerMixin):
             runtime_parameters = self._get_copy_of_runtime_parameters()
             features_for_transform = self._search_task.get_features_for_transform() or []
             if len(features_for_transform) > 0:
+                missing_features_for_transform = [
+                    columns_renaming.get(f) for f in features_for_transform if f not in df.columns
+                ]
+                if len(missing_features_for_transform) > 0:
+                    raise ValidationError(
+                        self.bundle.get("missing_features_for_transform").format(missing_features_for_transform)
+                    )
                 runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
@@ -2756,10 +2789,10 @@ class FeaturesEnricher(TransformerMixin):
                         progress_callback,
                     )
                 except Exception:
-                    self.__show_report_button()
+                    self.report_button_handle = self.__show_report_button(display_id="report_button")
                     raise
 
-        self.__show_report_button()
+        self.report_button_handle = self.__show_report_button(display_id="report_button")
 
         if not self.warning_counter.has_warnings():
             self.__display_support_link(self.bundle.get("all_ok_community_invite"))
@@ -3836,10 +3869,11 @@ class FeaturesEnricher(TransformerMixin):
                     display_id="features_info",
                 )
 
-                display_html_dataframe(
+                self.data_sources_display_handle = display_html_dataframe(
                     self.relevant_data_sources,
                     self._relevant_data_sources_wo_links,
                     self.bundle.get("relevant_data_sources_header"),
+                    display_id="data_sources",
                 )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
@@ -3850,9 +3884,9 @@ class FeaturesEnricher(TransformerMixin):
             print(msg)
             print(self._internal_features_info)
 
-    def __show_report_button(self):
+    def __show_report_button(self, display_id: Optional[str] = None, display_handle=None):
         try:
-            prepare_and_show_report(
+            return prepare_and_show_report(
                 relevant_features_df=self._features_info_without_links,
                 relevant_datasources_df=self.relevant_data_sources,
                 metrics_df=self.metrics,
@@ -3860,6 +3894,8 @@ class FeaturesEnricher(TransformerMixin):
                 search_id=self._search_task.search_task_id,
                 email=self.rest_client.get_current_email(),
                 search_keys=[str(sk) for sk in self.search_keys.values()],
+                display_id=display_id,
+                display_handle=display_handle,
             )
         except Exception:
             pass

@@ -285,6 +285,8 @@ def prepare_and_show_report(
     search_id: str,
     email: Optional[str],
     search_keys: Optional[List[str]] = None,
+    display_id: Optional[str] = None,
+    display_handle=None,
 ):
     if not ipython_available():
         return
@@ -294,10 +296,12 @@ def prepare_and_show_report(
     )
 
     if len(relevant_features_df) > 0:
-        show_button_download_pdf(report)
+        return show_button_download_pdf(report, display_id=display_id, display_handle=display_handle)
 
 
-def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"):
+def show_button_download_pdf(
+    source: str, title="\U0001F4CA Download PDF report", display_id: Optional[str] = None, display_handle=None
+):
     from IPython.display import HTML, display
 
     file_name = f"upgini-report-{uuid.uuid4()}.pdf"
@@ -309,7 +313,10 @@ def show_button_download_pdf(source: str, title="\U0001F4CA Download PDF report"
         payload = b64.decode()
         html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
         <button>{title}</button></a>"""
-        display(HTML(html))
+        if display_handle is not None:
+            display_handle.update(HTML(html))
+        else:
+            return display(HTML(html), display_id=display_id)
 
 
 def show_request_quote_button():
