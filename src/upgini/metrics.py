@@ -564,7 +564,7 @@ class CatBoostWrapper(EstimatorWrapper):
         x, y, params = super()._prepare_to_calculate(x, y)
         if self.text_features:
             params["text_features"] = self.text_features
-        if self.emb_features:
+        if self.grouped_embedding_features:
             x, emb_columns = self.group_embeddings(x)
             params["embedding_features"] = emb_columns
         if self.cat_features:
