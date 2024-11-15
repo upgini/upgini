@@ -343,10 +343,15 @@ class EstimatorWrapper:
             }
             if len(average_shap_values) == 0:
                 average_shap_values = None
+            else:
+                average_shap_values = self.process_shap_values(average_shap_values)
         else:
             average_shap_values = None
 
         return self.post_process_metric(metric), average_shap_values
+
+    def process_shap_values(self, shap_values: Dict[str, float]) -> Dict[str, float]:
+        return shap_values
 
     def check_fold_metrics(self, metrics_by_fold: List[float]):
         first_metric_sign = 1 if metrics_by_fold[0] >= 0 else -1
@@ -557,6 +562,13 @@ class CatBoostWrapper(EstimatorWrapper):
         df = df.drop(columns=self.emb_features)
 
         return df, [emb_name]
+
+    def process_shap_values(self, shap_values: Dict[str, float]) -> Dict[str, float]:
+        if "__grouped_embeddings" in shap_values:
+            for emb_feature in self.emb_features:
+                shap_values[emb_feature] = shap_values["__grouped_embeddings"]
+            del shap_values["__grouped_embeddings"]
+        return shap_values
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         if self.exclude_features:
