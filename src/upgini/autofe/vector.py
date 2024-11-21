@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -42,10 +42,18 @@ class TimeSeriesBase(PandasOperand):
         return res
 
 
-# TODO agg and window in name
 class Roll(TimeSeriesBase):
-    name: str = "roll"
     aggregation: str
+
+    def __init__(self, **data: Any) -> None:
+        if "name" not in data:
+            components = [
+                "roll",
+                str(data.get("window_size") or 1) + str(data.get("window_unit") or "D"),
+                data.get("aggregation"),
+            ]
+            data["name"] = "_".join(components).lower()
+        super().__init__(**data)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()

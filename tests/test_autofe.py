@@ -634,6 +634,7 @@ def test_roll_date():
 
     def check_agg(agg: str, expected_values: List[float]):
         feature = Feature(op=Roll(window_size=2, aggregation=agg), children=[Column("date"), Column("value")])
+        assert feature.op.name == f"roll_2d_{agg}"
         expected_res = pd.Series(expected_values, name="value")
         assert_series_equal(feature.calculate(df), expected_res)
 
