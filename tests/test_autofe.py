@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,7 @@ from upgini.autofe.date import (
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
 from upgini.autofe.unary import Abs, Norm
+from upgini.autofe.vector import Roll
 
 
 def test_date_diff():
@@ -556,10 +557,7 @@ def test_distance():
 
 
 def test_empty_distance():
-    data = pd.DataFrame({
-        "v1": [None],
-        "v2": [None]
-    })
+    data = pd.DataFrame({"v1": [None], "v2": [None]})
 
     op = Distance()
 
@@ -624,3 +622,56 @@ def test_op_params():
     assert norm1.op.alias is None
     assert norm2.op.norm == 5
     assert norm2.op.alias is None
+
+
+def test_roll_date():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-09", "---", "2024-05-07", "2024-05-08", "2024-05-08", "2024-05-08"],
+            "value": [1, 2, 3, 4, 5, 5, 6],
+        }
+    )
+
+    def check_agg(agg: str, expected_values: List[float]):
+        feature = Feature(op=Roll(window_size=2, aggregation=agg), children=[Column("date"), Column("value")])
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_agg("mean", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg("min", [np.nan, 2.0, np.nan, 1.0, 4.0, 4.0, 4.0])
+    check_agg("max", [np.nan, 5.0, np.nan, 4.0, 5.0, 5.0, 5.0])
+    check_agg(
+        "std",
+        [
+            np.nan,
+            2.1213203435596424,
+            np.nan,
+            2.1213203435596424,
+            0.7071067811865476,
+            0.7071067811865476,
+            0.7071067811865476,
+        ],
+    )
+    check_agg("median", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+
+
+def test_roll_date_groups():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-06", "---", "2024-05-07", "2024-05-07", "2024-05-07"],
+            "f1": ["a", "b", "a", "a", "a", "c"],
+            "f2": [1, 2, 1, 1, 1, 2],
+            "value": [1, 2, 3, 4, 4, 5],
+        },
+    )
+
+    def check_period(period: int, expected_values: List[float]):
+        feature = Feature(
+            op=Roll(window_size=period, aggregation="mean"),
+            children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_period(1, [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
+    check_period(2, [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])

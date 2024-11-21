@@ -11,7 +11,7 @@ from upgini.autofe.operand import PandasOperand
 
 
 def get_pydantic_version():
-    major_version = int(pydantic_version.split('.')[0])
+    major_version = int(pydantic_version.split(".")[0])
     return major_version
 
 
@@ -257,16 +257,17 @@ class DatePercentile(DatePercentileBase):
         # Use @field_validator for Pydantic 2.x
         from pydantic import field_validator
 
-        @field_validator('zero_bounds', mode='before')
+        @field_validator("zero_bounds", mode="before")
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
                 return json.loads(value)
             return value
+
     else:
         # Use @validator for Pydantic 1.x
         from pydantic import validator
 
-        @validator('zero_bounds', pre=True)
+        @validator("zero_bounds", pre=True)
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
                 return json.loads(value)

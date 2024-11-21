@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -22,3 +22,49 @@ class Sum(PandasOperand, VectorizableMixin):
 
     def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
         return pd.DataFrame(data).T.fillna(0).sum(axis=1)
+
+
+class TimeSeriesBase(PandasOperand):
+    is_vector: bool = True
+    window_size: int = 1
+    window_unit: str = "D"
+    date_unit: Optional[str] = None
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "window_size": self.window_size,
+                "window_unit": self.window_unit,
+                "date_unit": self.date_unit,
+            }
+        )
+        return res
+
+
+# TODO agg and window in name
+class Roll(TimeSeriesBase):
+    name: str = "roll"
+    aggregation: str
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "aggregation": self.aggregation,
+            }
+        )
+        return res
+
+    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+        # assuming first is date, last is value, rest is group columns
+        date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
+        ts = pd.concat([date] + data[1:], axis=1)
+        ts.drop_duplicates(subset=ts.columns[:-1], keep="first", inplace=True)
+        ts.set_index(date.name, inplace=True)
+        ts = ts[ts.index.notna()].sort_index()
+        ts = ts.groupby([c.name for c in data[1:-1]]) if len(data) > 2 else ts
+        ts = ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=self.window_size).agg(self.aggregation)
+        ts = ts.reindex(data[1:-1] + [date] if len(data) > 2 else date).reset_index()
+
+        return ts.iloc[:, -1]
