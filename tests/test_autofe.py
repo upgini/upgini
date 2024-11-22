@@ -21,7 +21,8 @@ from upgini.autofe.date import (
     DatePercentile,
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
-from upgini.autofe.unary import Abs, Norm
+from upgini.autofe.operand import OperandRegistry
+from upgini.autofe.unary import Abs, Freq, Norm
 from upgini.autofe.vector import Roll
 
 
@@ -624,6 +625,36 @@ def test_op_params():
     assert norm2.op.alias is None
 
 
+def test_date_list_diff_bounded_from_formula():
+    # Test with both bounds specified
+    op = DateListDiffBounded.from_formula("date_diff_Y_18_23_count")
+    assert op.diff_unit == "Y"
+    assert op.lower_bound == 18
+    assert op.upper_bound == 23
+    assert op.aggregation == "count"
+    assert op.name == "date_diff_Y_18_23_count"
+
+    # Test with only lower bound
+    op = DateListDiffBounded.from_formula("date_diff_D_60_plusinf_mean")
+    assert op.diff_unit == "D"
+    assert op.lower_bound == 60
+    assert op.upper_bound is None
+    assert op.aggregation == "mean"
+    assert op.name == "date_diff_D_60_plusinf_mean"
+
+    # Test with only upper bound
+    op = DateListDiffBounded.from_formula("date_diff_Y_minusinf_18_nunique")
+    assert op.diff_unit == "Y"
+    assert op.lower_bound is None
+    assert op.upper_bound == 18
+    assert op.aggregation == "nunique"
+    assert op.name == "date_diff_Y_minusinf_18_nunique"
+
+    # Test invalid formula returns None
+    assert DateListDiffBounded.from_formula("invalid_formula") is None
+    assert DateListDiffBounded.from_formula("date_diff_invalid") is None
+
+
 def test_roll_date():
     df = pd.DataFrame(
         {
@@ -676,3 +707,46 @@ def test_roll_date_groups():
 
     check_period(1, [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
     check_period(2, [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])
+
+
+def test_roll_from_formula():
+    roll = Roll.from_formula("roll_3d_mean")
+    assert roll.window_size == 3
+    assert roll.window_unit == "d"
+    assert roll.aggregation == "mean"
+    assert roll.name == "roll_3d_mean"
+
+    roll = Roll.from_formula("roll_10D_max")
+    assert roll.window_size == 10
+    assert roll.window_unit == "D"
+    assert roll.aggregation == "max"
+    assert roll.name == "roll_10d_max"
+
+    # Test invalid formulas
+    roll = Roll.from_formula("not_a_roll_formula")
+    assert roll is None
+
+    roll = Roll.from_formula("roll_abc_mean")
+    assert roll is None
+
+    roll = Roll.from_formula("roll_3d")
+    assert roll is None
+
+    # Test that constructed name matches formula pattern
+    roll = Roll(window_size=5, window_unit="D", aggregation="median")
+    assert roll.name == "roll_5d_median"
+
+
+def test_get_operands_from_registry():
+    freq = OperandRegistry.get_operand("freq")
+    assert freq == Freq()
+
+    parsed = OperandRegistry.get_operand("date_diff_Y_18_23_count")
+    constructed = DateListDiffBounded(diff_unit="Y", lower_bound=18, upper_bound=23, aggregation="count")
+    assert parsed == constructed
+
+    parsed = OperandRegistry.get_operand("roll_3d_mean")
+    constructed = Roll(window_size=3, window_unit="d", aggregation="mean")
+    assert parsed == constructed
+
+    assert OperandRegistry.get_operand("not_an_operand") is None

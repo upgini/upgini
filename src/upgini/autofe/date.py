@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
-from upgini.autofe.operand import PandasOperand
+from upgini.autofe.operand import PandasOperand, ParametrizedOperand
 
 
 def get_pydantic_version():
@@ -109,7 +109,7 @@ _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len,
 _count_aggregations = ["nunique", "count"]
 
 
-class DateListDiff(PandasOperand, DateDiffMixin):
+class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
     is_binary: bool = True
     has_symmetry_importance: bool = True
 
@@ -133,6 +133,13 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         if "name" not in data:
             data["name"] = f"date_diff_{data.get('aggregation')}"
         super().__init__(**data)
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiff"]:
+        if not formula.startswith("date_diff_"):
+            return None
+        aggregation = formula.replace("date_diff_", "")
+        return cls(aggregation=aggregation)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
@@ -170,7 +177,7 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         return method(x) if len(x) > 0 else default
 
 
-class DateListDiffBounded(DateListDiff):
+class DateListDiffBounded(DateListDiff, ParametrizedOperand):
     lower_bound: Optional[int] = None
     upper_bound: Optional[int] = None
 
@@ -187,6 +194,23 @@ class DateListDiffBounded(DateListDiff):
             components.append(data.get("aggregation"))
             data["name"] = "_".join(components)
         super().__init__(**data)
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiffBounded"]:
+        import re
+
+        pattern = r"^date_diff_([^_]+)_((minusinf|\d+))_((plusinf|\d+))_(\w+)$"
+        match = re.match(pattern, formula)
+
+        if not match:
+            return None
+
+        diff_unit = match.group(1)
+        lower_bound = None if match.group(2) == "minusinf" else int(match.group(2))
+        upper_bound = None if match.group(4) == "plusinf" else int(match.group(4))
+        aggregation = match.group(6)
+
+        return cls(diff_unit=diff_unit, lower_bound=lower_bound, upper_bound=upper_bound, aggregation=aggregation)
 
     def _agg(self, x):
         x = x[

@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
+from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
 
 
 class Mean(PandasOperand, VectorizableMixin):
@@ -42,7 +42,7 @@ class TimeSeriesBase(PandasOperand):
         return res
 
 
-class Roll(TimeSeriesBase):
+class Roll(TimeSeriesBase, ParametrizedOperand):
     aggregation: str
 
     def __init__(self, **data: Any) -> None:
@@ -54,6 +54,22 @@ class Roll(TimeSeriesBase):
             ]
             data["name"] = "_".join(components).lower()
         super().__init__(**data)
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["Roll"]:
+        import re
+
+        pattern = r"^roll_(\d+)([a-zA-Z])_(\w+)$"
+        match = re.match(pattern, formula)
+
+        if not match:
+            return None
+
+        window_size = int(match.group(1))
+        window_unit = match.group(2)
+        aggregation = match.group(3)
+
+        return cls(window_size=window_size, window_unit=window_unit, aggregation=aggregation)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()

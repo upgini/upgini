@@ -2,6 +2,7 @@ import os
 
 from upgini.features_enricher import FeaturesEnricher  # noqa: F401
 from upgini.metadata import SearchKey, CVType, RuntimeParameters, ModelTaskType  # noqa: F401
+
 # from .lazy_import import LazyImport
 
 os.environ["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"

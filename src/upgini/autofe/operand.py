@@ -6,7 +6,33 @@ import pandas as pd
 from pydantic import BaseModel
 
 
-class Operand(BaseModel):
+class OperandRegistry(type(BaseModel)):
+    _registry = {}
+    _parametrized_registry = {}
+
+    def __new__(cls, name, bases, attrs):
+        new_class = super().__new__(cls, name, bases, attrs)
+        # Only register if it's a concrete class that inherits from Operand
+        bases = [b.__name__ for b in bases]
+        if "Operand" in bases:
+            cls._registry[name] = new_class
+            # Track parametrized operands separately
+            if "ParametrizedOperand" in bases:
+                cls._parametrized_registry[name] = new_class
+        return new_class
+
+    @classmethod
+    def get_operand(cls, name: str) -> Optional["Operand"]:
+        # First try to resolve as a parametrized operand formula
+        for operand_cls in cls._parametrized_registry.values():
+            resolved = operand_cls.from_formula(name)
+            if resolved is not None:
+                return resolved
+        # Fall back to direct registry lookup
+        return cls._registry.get(name)
+
+
+class Operand(BaseModel, metaclass=OperandRegistry):
     name: str
     alias: Optional[str] = None
     is_unary: bool = False
@@ -30,6 +56,12 @@ class Operand(BaseModel):
         res = {"alias": self.alias}
         res.update(self.params or {})
         return res
+
+
+class ParametrizedOperand(Operand):
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["Operand"]:
+        pass
 
 
 MAIN_COLUMN = "main_column"
