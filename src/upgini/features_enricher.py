@@ -2474,8 +2474,16 @@ class FeaturesEnricher(TransformerMixin):
 
         df = pd.concat([validated_X, validated_y], axis=1)
 
+        if validated_eval_set is not None and len(validated_eval_set) > 0:
+            df[EVAL_SET_INDEX] = 0
+            for idx, (eval_X, eval_y) in enumerate(validated_eval_set):
+                eval_df = pd.concat([eval_X, eval_y], axis=1)
+                eval_df[EVAL_SET_INDEX] = idx + 1
+                df = pd.concat([df, eval_df])
+
         self.fit_search_keys = self.search_keys.copy()
-        self.fit_search_keys = self.__prepare_search_keys(validated_X, self.fit_search_keys, is_demo_dataset)
+        df = self.__handle_index_search_keys(df, self.fit_search_keys)
+        self.fit_search_keys = self.__prepare_search_keys(df, self.fit_search_keys, is_demo_dataset)
 
         maybe_date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
         has_date = maybe_date_column is not None
@@ -2487,16 +2495,7 @@ class FeaturesEnricher(TransformerMixin):
             self.loss, self.model_task_type, self.runtime_parameters, self.logger
         )
 
-        if validated_eval_set is not None and len(validated_eval_set) > 0:
-            df[EVAL_SET_INDEX] = 0
-            for idx, (eval_X, eval_y) in enumerate(validated_eval_set):
-                eval_df = pd.concat([eval_X, eval_y], axis=1)
-                eval_df[EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df])
-
         df = self.__correct_target(df)
-
-        df = self.__handle_index_search_keys(df, self.fit_search_keys)
 
         if DEFAULT_INDEX in df.columns:
             msg = self.bundle.get("unsupported_index_column")
