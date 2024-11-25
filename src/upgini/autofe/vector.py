@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from pydantic import field_validator
 
 from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
 
@@ -29,6 +30,16 @@ class TimeSeriesBase(PandasOperand):
     window_size: int = 1
     window_unit: str = "D"
     date_unit: Optional[str] = None
+
+    @field_validator("window_unit")
+    def validate_window_unit(cls, v: str) -> str:
+        try:
+            pd.tseries.frequencies.to_offset(v)
+            return v
+        except ValueError:
+            raise ValueError(
+                f"Invalid window_unit: {v}. Must be a valid pandas frequency string (e.g. 'D', 'H', 'T', etc)"
+            )
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
