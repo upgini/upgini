@@ -2,7 +2,7 @@ import abc
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from pydantic import field_validator
+from pydantic import validator
 
 from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
 
@@ -65,7 +65,7 @@ class Roll(TimeSeriesBase, ParametrizedOperand):
     window_size: int = 1
     window_unit: str = "D"
 
-    @field_validator("window_unit")
+    @validator("window_unit")
     def validate_window_unit(cls, v: str) -> str:
         try:
             pd.tseries.frequencies.to_offset(v)
