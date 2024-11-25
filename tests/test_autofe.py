@@ -23,7 +23,7 @@ from upgini.autofe.date import (
 from upgini.autofe.feature import Column, Feature, FeatureGroup
 from upgini.autofe.operand import OperandRegistry
 from upgini.autofe.unary import Abs, Freq, Norm
-from upgini.autofe.vector import Roll
+from upgini.autofe.vector import Lag, Roll
 
 
 def test_date_diff():
@@ -735,6 +735,71 @@ def test_roll_from_formula():
     # Test that constructed name matches formula pattern
     roll = Roll(window_size=5, window_unit="D", aggregation="median")
     assert roll.name == "roll_5d_median"
+
+
+def test_lag_date():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-07", "2024-05-08", "2024-05-09"],
+            "value": [1, 2, 3, 4],
+        },
+    )
+
+    def check_lag(lag_size: int, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, [np.nan, 1.0, 2.0, 3.0])
+    check_lag(2, [np.nan, np.nan, 1.0, 2.0])
+
+
+def test_lag_date_groups():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-06", "---", "2024-05-07", "2024-05-07", "2024-05-07"],
+            "f1": ["a", "b", "a", "a", "a", "c"],
+            "f2": [1, 2, 1, 1, 1, 2],
+            "value": [1, 2, 3, 4, 4, 5],
+        },
+    )
+
+    def check_lag(lag_size: int, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size),
+            children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, [np.nan, np.nan, np.nan, 1.0, 1.0, np.nan])
+    check_lag(2, [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+
+
+def test_lag_from_formula():
+    lag = Lag.from_formula("lag_3d")
+    assert lag.lag_size == 3
+    assert lag.lag_unit == "d"
+    assert lag.name == "lag_3d"
+
+    lag = Lag.from_formula("lag_10D")
+    assert lag.lag_size == 10
+    assert lag.lag_unit == "D"
+    assert lag.name == "lag_10d"
+
+    # Test invalid formulas
+    lag = Lag.from_formula("not_a_lag_formula")
+    assert lag is None
+
+    lag = Lag.from_formula("lag_abc")
+    assert lag is None
+
+    # Test that constructed name matches formula pattern
+    lag = Lag(lag_size=5, lag_unit="D")
+    assert lag.name == "lag_5d"
 
 
 def test_get_operands_from_registry():

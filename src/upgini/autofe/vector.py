@@ -1,3 +1,4 @@
+import abc
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -25,11 +26,41 @@ class Sum(PandasOperand, VectorizableMixin):
         return pd.DataFrame(data).T.fillna(0).sum(axis=1)
 
 
-class TimeSeriesBase(PandasOperand):
+class TimeSeriesBase(PandasOperand, abc.ABC):
     is_vector: bool = True
+    date_unit: Optional[str] = None
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "date_unit": self.date_unit,
+            }
+        )
+        return res
+
+    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+        # assuming first is date, last is value, rest is group columns
+        date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
+        ts = pd.concat([date] + data[1:], axis=1)
+        ts.drop_duplicates(subset=ts.columns[:-1], keep="first", inplace=True)
+        ts.set_index(date.name, inplace=True)
+        ts = ts[ts.index.notna()].sort_index()
+        ts = ts.groupby([c.name for c in data[1:-1]]) if len(data) > 2 else ts
+        ts = self._aggregate(ts)
+        ts = ts.reindex(data[1:-1] + [date] if len(data) > 2 else date).reset_index()
+
+        return ts.iloc[:, -1]
+
+    @abc.abstractmethod
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        pass
+
+
+class Roll(TimeSeriesBase, ParametrizedOperand):
+    aggregation: str
     window_size: int = 1
     window_unit: str = "D"
-    date_unit: Optional[str] = None
 
     @field_validator("window_unit")
     def validate_window_unit(cls, v: str) -> str:
@@ -40,21 +71,6 @@ class TimeSeriesBase(PandasOperand):
             raise ValueError(
                 f"Invalid window_unit: {v}. Must be a valid pandas frequency string (e.g. 'D', 'H', 'T', etc)"
             )
-
-    def get_params(self) -> Dict[str, Optional[str]]:
-        res = super().get_params()
-        res.update(
-            {
-                "window_size": self.window_size,
-                "window_unit": self.window_unit,
-                "date_unit": self.date_unit,
-            }
-        )
-        return res
-
-
-class Roll(TimeSeriesBase, ParametrizedOperand):
-    aggregation: str
 
     def __init__(self, **data: Any) -> None:
         if "name" not in data:
@@ -86,20 +102,49 @@ class Roll(TimeSeriesBase, ParametrizedOperand):
         res = super().get_params()
         res.update(
             {
+                "window_size": self.window_size,
+                "window_unit": self.window_unit,
                 "aggregation": self.aggregation,
             }
         )
         return res
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
-        # assuming first is date, last is value, rest is group columns
-        date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
-        ts = pd.concat([date] + data[1:], axis=1)
-        ts.drop_duplicates(subset=ts.columns[:-1], keep="first", inplace=True)
-        ts.set_index(date.name, inplace=True)
-        ts = ts[ts.index.notna()].sort_index()
-        ts = ts.groupby([c.name for c in data[1:-1]]) if len(data) > 2 else ts
-        ts = ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=self.window_size).agg(self.aggregation)
-        ts = ts.reindex(data[1:-1] + [date] if len(data) > 2 else date).reset_index()
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        return ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=self.window_size).agg(self.aggregation)
 
-        return ts.iloc[:, -1]
+
+class Lag(TimeSeriesBase, ParametrizedOperand):
+    lag_size: int
+    lag_unit: str = "D"
+
+    def __init__(self, **data: Any) -> None:
+        if "name" not in data:
+            components = [
+                "lag",
+                str(data.get("lag_size") or 1) + str(data.get("lag_unit") or "D"),
+            ]
+            data["name"] = "_".join(components).lower()
+        super().__init__(**data)
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["Lag"]:
+        import re
+
+        pattern = r"^lag_(\d+)([a-zA-Z])$"
+        match = re.match(pattern, formula)
+
+        if not match:
+            return None
+
+        lag_size = int(match.group(1))
+        lag_unit = match.group(2)
+
+        return cls(lag_size=lag_size, lag_unit=lag_unit)
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        return res
+
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        lag_window = self.lag_size + 1
+        return ts.rolling(f"{lag_window}{self.lag_unit}", min_periods=lag_window).agg(lambda x: x[0])
