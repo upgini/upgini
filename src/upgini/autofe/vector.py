@@ -57,6 +57,9 @@ class TimeSeriesBase(PandasOperand, abc.ABC):
         pass
 
 
+_roll_aggregations = {"norm_mean": lambda x: x[-1] / x.mean()}
+
+
 class Roll(TimeSeriesBase, ParametrizedOperand):
     aggregation: str
     window_size: int = 1
@@ -110,7 +113,9 @@ class Roll(TimeSeriesBase, ParametrizedOperand):
         return res
 
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=self.window_size).agg(self.aggregation)
+        return ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=self.window_size).agg(
+            _roll_aggregations.get(self.aggregation, self.aggregation)
+        )
 
 
 class Lag(TimeSeriesBase, ParametrizedOperand):

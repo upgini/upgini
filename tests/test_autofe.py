@@ -685,6 +685,10 @@ def test_roll_date():
         ],
     )
     check_agg("median", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg(
+        "norm_mean",
+        [np.nan, 0.5714285714285714, np.nan, 1.6, 1.1111111111111112, 1.1111111111111112, 1.1111111111111112],
+    )
 
 
 def test_roll_date_groups():
@@ -697,16 +701,17 @@ def test_roll_date_groups():
         },
     )
 
-    def check_period(period: int, expected_values: List[float]):
+    def check_period(period: int, agg: str, expected_values: List[float]):
         feature = Feature(
-            op=Roll(window_size=period, aggregation="mean"),
+            op=Roll(window_size=period, aggregation=agg),
             children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
         )
         expected_res = pd.Series(expected_values, name="value")
         assert_series_equal(feature.calculate(df), expected_res)
 
-    check_period(1, [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
-    check_period(2, [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])
+    check_period(1, "mean", [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
+    check_period(2, "mean", [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])
+    check_period(2, "norm_mean", [np.nan, np.nan, np.nan, 1.6, 1.6, np.nan])
 
 
 def test_roll_from_formula():
