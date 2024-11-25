@@ -139,6 +139,8 @@ class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
         if not formula.startswith("date_diff_"):
             return None
         aggregation = formula.replace("date_diff_", "")
+        if "_" in aggregation:
+            return None
         return cls(aggregation=aggregation)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:

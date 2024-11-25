@@ -8,28 +8,42 @@ from pydantic import BaseModel
 
 class OperandRegistry(type(BaseModel)):
     _registry = {}
-    _parametrized_registry = {}
+    _parametrized_registry = []
 
     def __new__(cls, name, bases, attrs):
         new_class = super().__new__(cls, name, bases, attrs)
         # Only register if it's a concrete class that inherits from Operand
-        bases = [b.__name__ for b in bases]
-        if "Operand" in bases:
-            cls._registry[name] = new_class
+        base_classes = [b for b in bases]
+        base_names = {b.__name__ for b in bases}
+        while base_classes:
+            base = base_classes.pop()
+            base_names.update(b.__name__ for b in base.__bases__)
+            base_classes.extend(base.__bases__)
+
+        if "Operand" in base_names:
             # Track parametrized operands separately
-            if "ParametrizedOperand" in bases:
-                cls._parametrized_registry[name] = new_class
+            if "ParametrizedOperand" in base_names:
+                cls._parametrized_registry.append(new_class)
+            else:
+                try:
+                    instance = new_class()
+                    cls._registry[instance.name] = new_class
+                except Exception:
+                    pass
         return new_class
 
     @classmethod
     def get_operand(cls, name: str) -> Optional["Operand"]:
         # First try to resolve as a parametrized operand formula
-        for operand_cls in cls._parametrized_registry.values():
+        for operand_cls in cls._parametrized_registry:
             resolved = operand_cls.from_formula(name)
             if resolved is not None:
                 return resolved
         # Fall back to direct registry lookup
-        return cls._registry.get(name)
+        non_parametrized = cls._registry.get(name)
+        if non_parametrized is not None:
+            return non_parametrized()
+        return None
 
 
 class Operand(BaseModel, metaclass=OperandRegistry):
