@@ -10,7 +10,7 @@ from requests_mock.mocker import Mocker
 
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.features_enricher import FeaturesEnricher
+from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -1667,7 +1667,8 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher.X = X
     enricher.y = y
     enricher._search_task = search_task
-    enricher._FeaturesEnricher__cached_sampled_datasets = (X, y, X, dict(), search_keys)
+    datasets_hash = hash_input(X, y, (X, y))
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (X, y, X, dict(), search_keys)
 
     with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
