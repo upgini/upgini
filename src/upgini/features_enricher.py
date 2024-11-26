@@ -228,7 +228,7 @@ class FeaturesEnricher(TransformerMixin):
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
         self._api_key = api_key or os.environ.get(UPGINI_API_KEY)
-        if api_key is not None and not isinstance(api_key, str):
+        if self._api_key is not None and not isinstance(self._api_key, str):
             raise ValidationError(f"api_key should be `string`, but passed: `{api_key}`")
         self.rest_client = get_rest_client(endpoint, self._api_key, client_ip, client_visitorid)
         self.client_ip = client_ip
@@ -259,7 +259,9 @@ class FeaturesEnricher(TransformerMixin):
         self.eval_set: Optional[List[Tuple]] = None
         self.autodetected_search_keys: Dict[str, SearchKey] = {}
         self.imbalanced = False
-        self.__cached_sampled_datasets: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict, Dict]] = None
+        self.__cached_sampled_datasets: Dict[str, Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict, Dict]] = (
+            dict()
+        )
 
         validate_version(self.logger)
         self.search_keys = search_keys or {}
@@ -1583,9 +1585,11 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
     ) -> _SampledDataForMetrics:
-        if self.__cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
+        datasets_hash = hash_input(validated_X, validated_y, eval_set)
+        cached_sampled_datasets = self.__cached_sampled_datasets.get(datasets_hash)
+        if cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
             self.logger.info("Cached enriched dataset found - use it")
-            return self.__get_sampled_cached_enriched(exclude_features_sources)
+            return self.__get_sampled_cached_enriched(datasets_hash, exclude_features_sources)
         elif len(self.feature_importances_) == 0:
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
@@ -1615,9 +1619,11 @@ class FeaturesEnricher(TransformerMixin):
                 progress_callback,
             )
 
-    def __get_sampled_cached_enriched(self, exclude_features_sources: Optional[List[str]]) -> _SampledDataForMetrics:
+    def __get_sampled_cached_enriched(
+        self, datasets_hash: str, exclude_features_sources: Optional[List[str]]
+    ) -> _SampledDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming = (
-            self.__cached_sampled_datasets
+            self.__cached_sampled_datasets[datasets_hash]
         )
         if exclude_features_sources:
             enriched_X = enriched_X.drop(columns=exclude_features_sources, errors="ignore")
@@ -1692,7 +1698,9 @@ class FeaturesEnricher(TransformerMixin):
                 eval_y_sampled = eval_xy_sampled[TARGET].copy()
                 enriched_eval_X = eval_X_sampled
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
-        self.__cached_sampled_datasets = (
+
+        datasets_hash = hash_input(X_sampled, y_sampled, eval_set_sampled_dict)
+        self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
             enriched_X,
@@ -1770,7 +1778,8 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
-        self.__cached_sampled_datasets = (
+        datasets_hash = hash_input(self.X, self.y, self.eval_set)
+        self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
             enriched_X,
@@ -1895,7 +1904,8 @@ class FeaturesEnricher(TransformerMixin):
             y_sampled = enriched_Xy[TARGET].copy()
             enriched_X = enriched_Xy.drop(columns=TARGET)
 
-        self.__cached_sampled_datasets = (
+        datasets_hash = hash_input(X_sampled, y_sampled, eval_set_sampled_dict)
+        self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
             enriched_X,
@@ -2426,7 +2436,7 @@ class FeaturesEnricher(TransformerMixin):
     ):
         self.warning_counter.reset()
         self.df_with_original_index = None
-        self.__cached_sampled_datasets = None
+        self.__cached_sampled_datasets = dict()
         self.metrics = None
         self.fit_columns_renaming = None
         self.fit_dropped_features = set()
@@ -4196,6 +4206,8 @@ def hash_input(X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optiona
         if y is not None:
             hashed_objects.append(pd.util.hash_pandas_object(y, index=False).values)
         if eval_set is not None:
+            if isinstance(eval_set, tuple):
+                eval_set = [eval_set]
             for eval_X, eval_y in eval_set:
                 hashed_objects.append(pd.util.hash_pandas_object(eval_X, index=False).values)
                 hashed_objects.append(pd.util.hash_pandas_object(eval_y, index=False).values)

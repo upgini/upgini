@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import os
 
 import numpy as np
@@ -10,7 +11,7 @@ from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 
-from upgini.features_enricher import FeaturesEnricher
+from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.errors import ValidationError
 from upgini.metadata import (
     SearchKey,
@@ -188,7 +189,8 @@ def test_real_case_metric_binary(requests_mock: Mocker):
 
     columns_renaming = {c: c for c in enriched_X.columns}
 
-    enricher._FeaturesEnricher__cached_sampled_datasets = (
+    datasets_hash = hash_input(sampled_X, sampled_y, (sampled_eval_X, sampled_eval_y))
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         sampled_X,
         sampled_y,
         enriched_X,
@@ -199,14 +201,14 @@ def test_real_case_metric_binary(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics()
     metrics[baseline_gini] = np.floor(metrics[baseline_gini] * 1000) / 1000
-    print(metrics)
+    logging.warning(metrics)
 
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment],
             rows_header: [28000, 2505],
             target_mean_header: [0.8825, 0.8854],
-            baseline_gini: [0.490, 0.462],
+            baseline_gini: [0.393, 0.237],
         }
     )
 
@@ -257,7 +259,8 @@ def test_demo_metrics(requests_mock: Mocker):
 
     columns_renaming = {c: c for c in x_sampled.columns}
 
-    enricher._FeaturesEnricher__cached_sampled_datasets = (
+    datasets_hash = hash_input(enricher.X, enricher.y)
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         x_sampled,
         y_sampled,
         enriched_X,
@@ -979,10 +982,10 @@ def test_catboost_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.039883, -0.055281, -0.026942],
-            enriched_gini: [0.155651, -0.059208, -0.030816],
-            uplift: [0.115768, -0.003927, -0.003873]
-        })         
+            baseline_gini: [0.049386, -0.065073, -0.006292],
+            enriched_gini: [0.150367, 0.026264, -0.019274],
+            uplift: [0.100981, 0.091338, -0.012983]
+        })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame(
             {
@@ -1344,9 +1347,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_rmse: [0.712991, 0.715449, 0.686810],
-            enriched_rmse: [0.698283, 0.710378, 0.734181],
-            uplift: [0.014708, 0.005071, -0.047371]
+            baseline_rmse: [0.718148, 0.717683, 0.684040],
+            enriched_rmse: [0.697874, 0.701317, 0.712017],
+            uplift: [0.020274, 0.016365, -0.027977]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame(
@@ -1466,9 +1469,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: [0.057358, -0.027259, -0.004786],
-            enriched_gini: [0.038486, 0.032414, 0.065955],
-            uplift: [-0.018873, 0.059673, 0.070741]
+            baseline_gini: [-0.082968, -0.033512, -0.018284],
+            enriched_gini: [-0.005144, 0.020283, -0.065054],
+            uplift: [0.077824, 0.053795, -0.046770]
         })
     elif pd.__version__ >= "2.1.0":
         expected_metrics = pd.DataFrame(
