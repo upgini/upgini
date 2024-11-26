@@ -22,24 +22,21 @@ class GroupByThenAgg(
     def from_formula(cls, formula: str) -> Optional["GroupByThenAgg"]:
         if not formula.startswith("GroupByThen"):
             return None
-        return cls(agg=formula[len("GroupByThen") :].lower())
+        agg = formula[len("GroupByThen") :]
+        if agg.lower() in ["rank", "nunique", "freq"]:  # other implementation
+            return None
+        return cls(agg=agg)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
-        temp = left.groupby(right).agg(self.agg)
+        temp = left.groupby(right).agg(self.agg.lower())
         return self._loc(right, temp)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
         group_column, value_columns = self.validate_calculation(data.columns, **kwargs)
         d1 = data[value_columns]
         d2 = data[group_column]
-        temp = d1.groupby(d2).agg(self.agg)
+        temp = d1.groupby(d2).agg(self.agg.lower())
         return temp.merge(d2, how="right", on=[group_column])[value_columns]
-
-
-class GroupByThenMedian(GroupByThenAgg):
-    name: str = "GroupByThenMedian"
-    pandas_agg: str = "median"
-    is_distribution_dependent: bool = True
 
 
 class GroupByThenRank(PandasOperand, VectorizableMixin):

@@ -21,10 +21,10 @@ from upgini.autofe.date import (
     DatePercentile,
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
-from upgini.autofe.groupby import GroupByThenAgg
+from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq
 from upgini.autofe.operand import OperandRegistry
 from upgini.autofe.unary import Abs, Freq, Norm
-from upgini.autofe.vector import Lag, Roll
+from upgini.autofe.vector import Lag, Mean, Roll
 
 
 def test_date_diff():
@@ -580,6 +580,26 @@ def test_empty_distance():
     assert_series_equal(actual_values, expected_values)
 
 
+def test_to_formula():
+    assert Feature(Abs(), [Column("a")]).to_formula() == "abs(a)"
+    assert Feature(Divide(), [Column("a"), Column("b")]).to_formula() == "(a/b)"
+
+    assert Feature(Abs(), [Feature(Divide(), [Column("a"), Column("b")])]).to_formula() == "abs((a/b))"
+
+    assert Feature(GroupByThenAgg(agg="Min"), [Column("a"), Column("b")]).to_formula() == "GroupByThenMin(a,b)"
+
+    assert Feature(GroupByThenFreq(), [Column("a"), Column("b")]).to_formula() == "GroupByThenFreq(a,b)"
+
+    assert Feature(Mean(), [Column("a"), Column("b"), Column("c")]).to_formula() == "mean(a,b,c)"
+
+    assert Feature(DateDiff(), [Column("a"), Column("b")]).to_formula() == "date_diff(a,b)"
+
+    assert (
+        Feature(DatePercentile(), [Column("a"), Feature(DateDiff(), [Column("b"), Column("c")])]).to_formula()
+        == "date_per(a,date_diff(b,c))"
+    )
+
+
 def test_from_formula():
 
     def check_formula(formula):
@@ -587,6 +607,7 @@ def test_from_formula():
 
     check_formula("a")
     check_formula("(a/b)")
+    check_formula("abs((a/b))")
     check_formula("log(a)")
     check_formula("date_diff(a,b)")
     check_formula("date_per(a,date_diff(b,c))")
