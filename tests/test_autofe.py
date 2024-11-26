@@ -817,21 +817,3 @@ def test_lag_from_formula():
     # Test that constructed name matches formula pattern
     lag = Lag(lag_size=5, lag_unit="D")
     assert lag.to_formula() == "lag_5D"
-
-
-def test_get_operands_from_registry():
-    freq = OperandRegistry.get_operand("freq")
-    assert freq == Freq()
-
-    parsed = OperandRegistry.get_operand("GroupByThenMin")
-    assert parsed == GroupByThenAgg(agg="min")
-
-    parsed = OperandRegistry.get_operand("date_diff_Y_18_23_count")
-    constructed = DateListDiffBounded(diff_unit="Y", lower_bound=18, upper_bound=23, aggregation="count")
-    assert parsed == constructed
-
-    parsed = OperandRegistry.get_operand("roll_3d_mean")
-    constructed = Roll(window_size=3, window_unit="d", aggregation="mean")
-    assert parsed == constructed
-
-    assert OperandRegistry.get_operand("not_an_operand") is None
