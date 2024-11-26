@@ -21,6 +21,7 @@ from upgini.autofe.date import (
     DatePercentile,
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
+from upgini.autofe.groupby import GroupByThenAgg
 from upgini.autofe.operand import OperandRegistry
 from upgini.autofe.unary import Abs, Freq, Norm
 from upgini.autofe.vector import Lag, Roll
@@ -80,24 +81,30 @@ def test_date_diff_list():
         columns=["date1", "date2"],
     )
 
-    def check(aggregation, expected_name, expected_values):
+    def check(aggregation, expected_formula, expected_values):
         operand = DateListDiff(aggregation=aggregation)
-        assert operand.name == expected_name
+        assert operand.to_formula() == expected_formula
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check(
-        aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, -365.0, None, None])
+        aggregation="min",
+        expected_formula="date_diff_min",
+        expected_values=pd.Series([10530, 10531, -365.0, None, None]),
     )
     check(
-        aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, -365.0, None, None])
+        aggregation="max",
+        expected_formula="date_diff_max",
+        expected_values=pd.Series([10531, 10531, -365.0, None, None]),
     )
     check(
         aggregation="mean",
-        expected_name="date_diff_mean",
+        expected_formula="date_diff_mean",
         expected_values=pd.Series([10530.5, 10531, -365.0, None, None]),
     )
     check(
-        aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0])
+        aggregation="nunique",
+        expected_formula="date_diff_nunique",
+        expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0]),
     )
 
     operand = DateListDiff(aggregation="mean")
@@ -142,11 +149,11 @@ def test_date_diff_list_bounded():
         columns=["date1", "date2"],
     )
 
-    def check_num_by_years(lower_bound, upper_bound, expected_name, expected_values):
+    def check_num_by_years(lower_bound, upper_bound, expected_formula, expected_values):
         operand = DateListDiffBounded(
             diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound
         )
-        assert operand.name == expected_name
+        assert operand.to_formula() == expected_formula
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2.0, 1.0, 0.0, 0.0, None, 0.0]))
@@ -392,6 +399,10 @@ def test_get_display_name():
     assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_123"
     assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_type1_123"
 
+    feature8 = Feature.from_formula("lag_10D(date,f1,f2,value)").set_display_index("123")
+    assert feature8.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_value_autofe_lag_10d_123"
+    assert feature8.get_display_name(shorten=True) == "f_autofe_lag_10d_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
@@ -580,6 +591,7 @@ def test_from_formula():
     check_formula("date_diff(a,b)")
     check_formula("date_per(a,date_diff(b,c))")
     check_formula("mean(a,b,c,d,e)")
+    check_formula("roll_3D_mean(a,b)")
 
     with pytest.raises(ValueError):
         check_formula("unsupported(a,b)")
@@ -632,7 +644,7 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound == 18
     assert op.upper_bound == 23
     assert op.aggregation == "count"
-    assert op.name == "date_diff_Y_18_23_count"
+    assert op.to_formula() == "date_diff_Y_18_23_count"
 
     # Test with only lower bound
     op = DateListDiffBounded.from_formula("date_diff_D_60_plusinf_mean")
@@ -640,7 +652,7 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound == 60
     assert op.upper_bound is None
     assert op.aggregation == "mean"
-    assert op.name == "date_diff_D_60_plusinf_mean"
+    assert op.to_formula() == "date_diff_D_60_plusinf_mean"
 
     # Test with only upper bound
     op = DateListDiffBounded.from_formula("date_diff_Y_minusinf_18_nunique")
@@ -648,7 +660,7 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound is None
     assert op.upper_bound == 18
     assert op.aggregation == "nunique"
-    assert op.name == "date_diff_Y_minusinf_18_nunique"
+    assert op.to_formula() == "date_diff_Y_minusinf_18_nunique"
 
     # Test invalid formula returns None
     assert DateListDiffBounded.from_formula("invalid_formula") is None
@@ -665,7 +677,7 @@ def test_roll_date():
 
     def check_agg(agg: str, expected_values: List[float]):
         feature = Feature(op=Roll(window_size=2, aggregation=agg), children=[Column("date"), Column("value")])
-        assert feature.op.name == f"roll_2d_{agg}"
+        assert feature.op.to_formula() == f"roll_2D_{agg}"
         expected_res = pd.Series(expected_values, name="value")
         assert_series_equal(feature.calculate(df), expected_res)
 
@@ -719,13 +731,13 @@ def test_roll_from_formula():
     assert roll.window_size == 3
     assert roll.window_unit == "d"
     assert roll.aggregation == "mean"
-    assert roll.name == "roll_3d_mean"
+    assert roll.to_formula() == "roll_3d_mean"
 
     roll = Roll.from_formula("roll_10D_max")
     assert roll.window_size == 10
     assert roll.window_unit == "D"
     assert roll.aggregation == "max"
-    assert roll.name == "roll_10d_max"
+    assert roll.to_formula() == "roll_10D_max"
 
     # Test invalid formulas
     roll = Roll.from_formula("not_a_roll_formula")
@@ -739,7 +751,7 @@ def test_roll_from_formula():
 
     # Test that constructed name matches formula pattern
     roll = Roll(window_size=5, window_unit="D", aggregation="median")
-    assert roll.name == "roll_5d_median"
+    assert roll.to_formula() == "roll_5D_median"
 
 
 def test_lag_date():
@@ -788,12 +800,12 @@ def test_lag_from_formula():
     lag = Lag.from_formula("lag_3d")
     assert lag.lag_size == 3
     assert lag.lag_unit == "d"
-    assert lag.name == "lag_3d"
+    assert lag.to_formula() == "lag_3d"
 
     lag = Lag.from_formula("lag_10D")
     assert lag.lag_size == 10
     assert lag.lag_unit == "D"
-    assert lag.name == "lag_10d"
+    assert lag.to_formula() == "lag_10D"
 
     # Test invalid formulas
     lag = Lag.from_formula("not_a_lag_formula")
@@ -804,12 +816,15 @@ def test_lag_from_formula():
 
     # Test that constructed name matches formula pattern
     lag = Lag(lag_size=5, lag_unit="D")
-    assert lag.name == "lag_5d"
+    assert lag.to_formula() == "lag_5D"
 
 
 def test_get_operands_from_registry():
     freq = OperandRegistry.get_operand("freq")
     assert freq == Freq()
+
+    parsed = OperandRegistry.get_operand("GroupByThenMin")
+    assert parsed == GroupByThenAgg(agg="min")
 
     parsed = OperandRegistry.get_operand("date_diff_Y_18_23_count")
     constructed = DateListDiffBounded(diff_unit="Y", lower_bound=18, upper_bound=23, aggregation="count")

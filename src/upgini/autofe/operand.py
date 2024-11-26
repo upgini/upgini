@@ -47,7 +47,7 @@ class OperandRegistry(type(BaseModel)):
 
 
 class Operand(BaseModel, metaclass=OperandRegistry):
-    name: str
+    name: Optional[str] = None
     alias: Optional[str] = None
     is_unary: bool = False
     is_symmetrical: bool = False
@@ -71,9 +71,18 @@ class Operand(BaseModel, metaclass=OperandRegistry):
         res.update(self.params or {})
         return res
 
+    def to_formula(self) -> str:
+        return self.name
 
-class ParametrizedOperand(Operand):
+
+class ParametrizedOperand(Operand, abc.ABC):
+
+    @abc.abstractmethod
+    def to_formula(self) -> str:
+        pass
+
     @classmethod
+    @abc.abstractmethod
     def from_formula(cls, formula: str) -> Optional["Operand"]:
         pass
 

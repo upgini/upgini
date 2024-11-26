@@ -2,14 +2,27 @@ from typing import Optional
 
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
+from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
 
 
-class GroupByThenAgg(PandasOperand, VectorizableMixin):
+class GroupByThenAgg(
+    PandasOperand,
+    VectorizableMixin,
+    ParametrizedOperand,
+):
     agg: Optional[str]
     is_vectorizable: bool = True
     is_grouping: bool = True
     is_distribution_dependent: bool = True
+
+    def to_formula(self) -> str:
+        return f"GroupByThen{self.agg}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["GroupByThenAgg"]:
+        if not formula.startswith("GroupByThen"):
+            return None
+        return cls(agg=formula[len("GroupByThen") :].lower())
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         temp = left.groupby(right).agg(self.agg)

@@ -129,10 +129,8 @@ class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
         )
         return res
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            data["name"] = f"date_diff_{data.get('aggregation')}"
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        return f"date_diff_{self.aggregation}"
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["DateListDiff"]:
@@ -183,19 +181,10 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperand):
     lower_bound: Optional[int] = None
     upper_bound: Optional[int] = None
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            lower_bound = data.get("lower_bound")
-            upper_bound = data.get("upper_bound")
-            components = [
-                "date_diff",
-                data.get("diff_unit"),
-                str(lower_bound if lower_bound is not None else "minusinf"),
-                str(upper_bound if upper_bound is not None else "plusinf"),
-            ]
-            components.append(data.get("aggregation"))
-            data["name"] = "_".join(components)
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        lower_bound = "minusinf" if self.lower_bound is None else self.lower_bound
+        upper_bound = "plusinf" if self.upper_bound is None else self.upper_bound
+        return f"date_diff_{self.diff_unit}_{lower_bound}_{upper_bound}_{self.aggregation}"
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["DateListDiffBounded"]:

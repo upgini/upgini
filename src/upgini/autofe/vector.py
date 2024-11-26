@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from pydantic import validator
@@ -75,15 +75,8 @@ class Roll(TimeSeriesBase, ParametrizedOperand):
                 f"Invalid window_unit: {v}. Must be a valid pandas frequency string (e.g. 'D', 'H', 'T', etc)"
             )
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            components = [
-                "roll",
-                str(data.get("window_size") or 1) + str(data.get("window_unit") or "D"),
-                data.get("aggregation"),
-            ]
-            data["name"] = "_".join(components).lower()
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        return f"roll_{self.window_size}{self.window_unit}_{self.aggregation}"
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Roll"]:
@@ -122,14 +115,8 @@ class Lag(TimeSeriesBase, ParametrizedOperand):
     lag_size: int
     lag_unit: str = "D"
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            components = [
-                "lag",
-                str(data.get("lag_size") or 1) + str(data.get("lag_unit") or "D"),
-            ]
-            data["name"] = "_".join(components).lower()
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        return f"lag_{self.lag_size}{self.lag_unit}"
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Lag"]:
