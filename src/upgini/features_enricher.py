@@ -2543,7 +2543,11 @@ class FeaturesEnricher(TransformerMixin):
         # Checks that need validated date
         validate_dates_distribution(df, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
 
-        if is_numeric_dtype(df[self.TARGET_NAME]) and has_date:
+        if (
+            is_numeric_dtype(df[self.TARGET_NAME])
+            and self.model_task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
+            and has_date
+        ):
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
         normalizer = Normalizer(self.bundle, self.logger, self.warning_counter)
