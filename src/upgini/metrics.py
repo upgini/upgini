@@ -745,18 +745,23 @@ class OtherEstimatorWrapper(EstimatorWrapper):
 
 
 def validate_scoring_argument(scoring: Union[Callable, str, None]):
-    if isinstance(scoring, str) and scoring is not None:
+    if scoring is None:
+        return
+
+    if isinstance(scoring, str):
         _get_scorer_by_name(scoring)
-    elif isinstance(scoring, Callable):
-        spec = inspect.getfullargspec(scoring)
-        if len(spec.args) < 3:
-            raise ValidationError(
-                f"Invalid scoring function passed {scoring}. It should accept 3 input arguments: estimator, x, y"
-            )
-    elif scoring is not None:
+        return
+
+    if not isinstance(scoring, Callable):
         raise ValidationError(
             f"Invalid scoring argument passed {scoring}. It should be string with scoring name or function"
             " that accepts 3 input arguments: estimator, x, y"
+        )
+
+    spec = inspect.getfullargspec(scoring)
+    if len(spec.args) < 3:
+        raise ValidationError(
+            f"Invalid scoring function passed {scoring}. It should accept 3 input arguments: estimator, x, y"
         )
 
 

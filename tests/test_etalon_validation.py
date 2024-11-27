@@ -18,7 +18,6 @@ from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
-from upgini.utils.warning_counter import WarningCounter
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -233,10 +232,9 @@ def test_constant_and_empty_validation():
             "c": [0] * 995 + [1] * 5,
         }
     )
-    warnings_counter = WarningCounter()
-    features_to_drop = FeaturesValidator().validate(df, ["a", "b", "c"], None, warnings_counter)
+    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c"])
     assert features_to_drop == ["a", "b", "c"]
-    assert warnings_counter.has_warnings()
+    assert len(warnings) == 1
 
 
 def test_one_hot_encoding_validation():
@@ -251,9 +249,9 @@ def test_one_hot_encoding_validation():
     df = pd.get_dummies(df, columns=["a"])
     features_columns = df.columns.to_list()
     features_columns.remove("phone")
-    warnings_counter = WarningCounter()
-    features_to_drop = FeaturesValidator().validate(df, features_columns, ["text_feature"], warnings_counter)
+    features_to_drop, warnings = FeaturesValidator().validate(df, features_columns, ["text_feature"])
     assert features_to_drop == []
+    assert warnings == []
 
 
 def test_imbalanced_target():
@@ -293,7 +291,7 @@ def test_fail_on_small_class_observations():
             "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10,
         }
     )
-    dataset = Dataset("test123", df=df)  # type: ignore
+    dataset = Dataset("test123", df=df)
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
         "phone": FileColumnMeaningType.MSISDN,

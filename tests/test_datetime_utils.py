@@ -4,10 +4,9 @@ import pandas as pd
 from upgini.metadata import SearchKey
 from upgini.utils.datetime_utils import (
     is_blocked_time_series,
+    is_dates_distribution_valid,
     is_time_series,
-    validate_dates_distribution,
 )
-from upgini.utils.warning_counter import WarningCounter
 
 pd.set_option("mode.chained_assignment", "raise")
 
@@ -195,14 +194,12 @@ def test_multivariate_time_series():
 
 def test_validate_dates_distribution():
     df = pd.DataFrame({"date": ["2020-01-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40})
-    warning_counter = WarningCounter()
-    validate_dates_distribution(df, {}, warning_counter=warning_counter)
-    assert warning_counter.has_warnings()
+    is_valid = is_dates_distribution_valid(df, {})
+    assert not is_valid
 
     df = pd.DataFrame({"date": ["2020-05-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40})
-    warning_counter = WarningCounter()
-    validate_dates_distribution(df, {}, warning_counter=warning_counter)
-    assert not warning_counter.has_warnings()
+    is_valid = is_dates_distribution_valid(df, {})
+    assert is_valid
 
     df = pd.DataFrame(
         {
@@ -210,6 +207,5 @@ def test_validate_dates_distribution():
             "date1": ["2020-01-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40,
         }
     )
-    warning_counter = WarningCounter()
-    validate_dates_distribution(df, {"date1": SearchKey.DATE}, warning_counter=warning_counter)
-    assert warning_counter.has_warnings()
+    is_valid = is_dates_distribution_valid(df, {"date1": SearchKey.DATE})
+    assert not is_valid

@@ -26,7 +26,6 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils import find_numbers_with_decimal_comma
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyConverter
-from upgini.utils.warning_counter import WarningCounter
 
 
 class Normalizer:
@@ -37,16 +36,13 @@ class Normalizer:
         self,
         bundle: ResourceBundle = None,
         logger: Logger = None,
-        warnings_counter: WarningCounter = None,
-        silent_mode=False,
     ):
         self.bundle = bundle or get_custom_bundle()
         self.logger = logger or getLogger()
-        self.warnings_counter = warnings_counter or WarningCounter()
-        self.silent_mode = silent_mode
         self.columns_renaming = {}
         self.search_keys = {}
         self.generated_features = []
+        self.removed_features = []
 
     def normalize(
         self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], generated_features: List[str]
@@ -139,18 +135,10 @@ class Normalizer:
     def _remove_dates_from_features(self, df: pd.DataFrame):
         features = self._get_features(df)
 
-        removed_features = []
         for f in features:
             if is_datetime(df[f]) or isinstance(df[f].dtype, pd.PeriodDtype):
-                removed_features.append(f)
+                self.removed_features.append(f)
                 df.drop(columns=f, inplace=True)
-
-        if removed_features:
-            msg = self.bundle.get("dataset_date_features").format(removed_features)
-            self.logger.warning(msg)
-            if not self.silent_mode:
-                print(msg)
-            self.warnings_counter.increment()
 
         return df
 

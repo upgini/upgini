@@ -77,8 +77,8 @@ from upgini.utils.cv_utils import CVConfig, get_groups
 from upgini.utils.datetime_utils import (
     DateTimeSearchKeyConverter,
     is_blocked_time_series,
+    is_dates_distribution_valid,
     is_time_series,
-    validate_dates_distribution,
 )
 from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
@@ -263,7 +263,7 @@ class FeaturesEnricher(TransformerMixin):
             dict()
         )
 
-        validate_version(self.logger)
+        validate_version(self.logger, self.__log_warning)
         self.search_keys = search_keys or {}
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
@@ -723,7 +723,7 @@ class FeaturesEnricher(TransformerMixin):
 
             start_time = time.time()
             try:
-                result, _ = self.__inner_transform(
+                result, _, _ = self.__inner_transform(
                     trace_id,
                     X,
                     exclude_features_sources=exclude_features_sources,
@@ -951,9 +951,7 @@ class FeaturesEnricher(TransformerMixin):
                 gc.collect()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
-                    print(self.bundle.get("metrics_no_important_free_features"))
-                    self.logger.warning("No client or free relevant ADS features found to calculate metrics")
-                    self.warning_counter.increment()
+                    self.__log_warning(self.bundle.get("metrics_no_important_free_features"))
                     return None
 
                 print(self.bundle.get("metrics_start"))
@@ -1654,9 +1652,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
         generated_features = []
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(
-                date_column, self.date_format, self.logger, self.bundle, silent_mode=True
-            )
+            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
             df = converter.convert(df, keep_time=True)
             generated_features = converter.generated_features
 
@@ -1666,11 +1662,11 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        normalizer = Normalizer(self.bundle, self.logger, self.warning_counter)
+        normalizer = Normalizer(self.bundle, self.logger)
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
-        df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
+        df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
         num_samples = _num_samples(df)
         sample_threshold, sample_rows = (
@@ -1817,7 +1813,7 @@ class FeaturesEnricher(TransformerMixin):
                 eval_df_with_index[EVAL_SET_INDEX] = idx + 1
                 df = pd.concat([df, eval_df_with_index])
 
-            df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
+            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
             # downsample if need to eval_set threshold
             num_samples = _num_samples(df)
@@ -1830,7 +1826,7 @@ class FeaturesEnricher(TransformerMixin):
             tmp_target_name = "__target"
             df = df.rename(columns={TARGET: tmp_target_name})
 
-            enriched_df, columns_renaming = self.__inner_transform(
+            enriched_df, columns_renaming, generated_features = self.__inner_transform(
                 trace_id,
                 df,
                 exclude_features_sources=exclude_features_sources,
@@ -1847,7 +1843,7 @@ class FeaturesEnricher(TransformerMixin):
 
             x_columns = [
                 c
-                for c in (validated_X.columns.tolist() + self.fit_generated_features + [SYSTEM_RECORD_ID])
+                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
                 if c in enriched_df.columns
             ]
 
@@ -1869,7 +1865,7 @@ class FeaturesEnricher(TransformerMixin):
 
             df[TARGET] = validated_y
 
-            df = clean_full_duplicates(df, logger=self.logger, silent=True, bundle=self.bundle)
+            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
             num_samples = _num_samples(df)
             if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
@@ -1879,7 +1875,7 @@ class FeaturesEnricher(TransformerMixin):
             tmp_target_name = "__target"
             df = df.rename(columns={TARGET: tmp_target_name})
 
-            enriched_Xy, columns_renaming = self.__inner_transform(
+            enriched_Xy, columns_renaming, generated_features = self.__inner_transform(
                 trace_id,
                 df,
                 exclude_features_sources=exclude_features_sources,
@@ -1896,7 +1892,7 @@ class FeaturesEnricher(TransformerMixin):
 
             x_columns = [
                 c
-                for c in (validated_X.columns.tolist() + self.fit_generated_features + [SYSTEM_RECORD_ID])
+                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
                 if c in enriched_Xy.columns
             ]
 
@@ -1904,7 +1900,7 @@ class FeaturesEnricher(TransformerMixin):
             y_sampled = enriched_Xy[TARGET].copy()
             enriched_X = enriched_Xy.drop(columns=TARGET)
 
-        datasets_hash = hash_input(X_sampled, y_sampled, eval_set_sampled_dict)
+        datasets_hash = hash_input(validated_X, validated_y, eval_set)
         self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
@@ -2023,7 +2019,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         add_fit_system_record_id: bool = False,
-    ) -> Tuple[pd.DataFrame, Dict[str, str]]:
+    ) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
 
@@ -2036,24 +2032,25 @@ class FeaturesEnricher(TransformerMixin):
 
             if len(self.feature_names_) == 0:
                 self.logger.warning(self.bundle.get("no_important_features_for_transform"))
-                return X, {c: c for c in X.columns}
+                return X, {c: c for c in X.columns}, []
 
             if self._has_paid_features(exclude_features_sources):
                 msg = self.bundle.get("transform_with_paid_features")
                 self.logger.warning(msg)
                 self.__display_support_link(msg)
-                return None, {c: c for c in X.columns}
+                return None, {c: c for c in X.columns}, []
 
             if not metrics_calculation:
                 transform_usage = self.rest_client.get_current_transform_usage(trace_id)
                 self.logger.info(f"Current transform usage: {transform_usage}. Transforming {len(X)} rows")
                 if transform_usage.has_limit:
                     if len(X) > transform_usage.rest_rows:
-                        msg = self.bundle.get("transform_usage_warning").format(len(X), transform_usage.rest_rows)
+                        rest_rows = max(transform_usage.rest_rows, 0)
+                        msg = self.bundle.get("transform_usage_warning").format(len(X), rest_rows)
                         self.logger.warning(msg)
                         print(msg)
                         show_request_quote_button()
-                        return None, {c: c for c in X.columns}
+                        return None, {c: c for c in X.columns}, []
                     else:
                         msg = self.bundle.get("transform_usage_info").format(
                             transform_usage.limit, transform_usage.transformed_rows
@@ -2093,9 +2090,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = []
             date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if date_column is not None:
-                converter = DateTimeSearchKeyConverter(
-                    date_column, self.date_format, self.logger, bundle=self.bundle, silent_mode=silent_mode
-                )
+                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
                 df = converter.convert(df)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
@@ -2110,7 +2105,7 @@ class FeaturesEnricher(TransformerMixin):
                 df = generator.generate(df)
                 generated_features.extend(generator.generated_features)
 
-            normalizer = Normalizer(self.bundle, self.logger, self.warning_counter, silent_mode)
+            normalizer = Normalizer(self.bundle, self.logger)
             df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
             columns_renaming = normalizer.columns_renaming
 
@@ -2176,7 +2171,7 @@ class FeaturesEnricher(TransformerMixin):
                 converter = PostalCodeSearchKeyConverter(postal_code)
                 df = converter.convert(df)
 
-            generated_features = [f for f in generated_features if f in self.fit_generated_features]
+            # generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
             for col in features_for_transform:
@@ -2216,9 +2211,11 @@ class FeaturesEnricher(TransformerMixin):
 
             df_without_features = df.drop(columns=features_not_to_pass)
 
-            df_without_features = clean_full_duplicates(
-                df_without_features, self.logger, silent=silent_mode, bundle=self.bundle
+            df_without_features, full_duplicates_warning = clean_full_duplicates(
+                df_without_features, self.logger, bundle=self.bundle
             )
+            if not silent_mode and full_duplicates_warning:
+                self.__log_warning(full_duplicates_warning)
 
             del df
             gc.collect()
@@ -2337,7 +2334,7 @@ class FeaturesEnricher(TransformerMixin):
             if add_fit_system_record_id:
                 result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
 
-            return result, columns_renaming
+            return result, columns_renaming, generated_features
 
     def _get_excluded_features(self, max_features: Optional[int], importance_threshold: Optional[float]) -> List[str]:
         features_info = self._internal_features_info
@@ -2415,6 +2412,15 @@ class FeaturesEnricher(TransformerMixin):
     def __is_registered(self) -> bool:
         return self.api_key is not None and self.api_key != ""
 
+    def __log_warning(self, message: str, show_support_link: bool = False):
+        warning_num = self.warning_counter.increment()
+        formatted_message = f"WARNING #{warning_num}: {message}\n"
+        if show_support_link:
+            self.__display_support_link(formatted_message)
+        else:
+            print(formatted_message)
+        self.logger.warning(message)
+
     def __inner_fit(
         self,
         trace_id: str,
@@ -2461,9 +2467,7 @@ class FeaturesEnricher(TransformerMixin):
             checked_generate_features = []
             for gen_feature in self.generate_features:
                 if gen_feature not in x_columns:
-                    msg = self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
-                    print(msg)
-                    self.logger.warning(msg)
+                    self.__log_warning(self.bundle.get("missing_generate_feature").format(gen_feature, x_columns))
                 else:
                     checked_generate_features.append(gen_feature)
             self.generate_features = checked_generate_features
@@ -2524,9 +2528,10 @@ class FeaturesEnricher(TransformerMixin):
                 self.date_format,
                 self.logger,
                 bundle=self.bundle,
-                warnings_counter=self.warning_counter,
             )
             df = converter.convert(df, keep_time=True)
+            if converter.has_old_dates:
+                self.__log_warning(self.bundle.get("dataset_drop_old_dates"))
             self.logger.info(f"Date column after convertion: {df[maybe_date_column]}")
             self.fit_generated_features.extend(converter.generated_features)
         else:
@@ -2541,7 +2546,9 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(generator.generated_features)
 
         # Checks that need validated date
-        validate_dates_distribution(df, self.fit_search_keys, self.logger, self.bundle, self.warning_counter)
+
+        if not is_dates_distribution_valid(df, self.fit_search_keys):
+            self.__log_warning(bundle.get("x_unstable_by_date"))
 
         if (
             is_numeric_dtype(df[self.TARGET_NAME])
@@ -2550,18 +2557,25 @@ class FeaturesEnricher(TransformerMixin):
         ):
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
-        normalizer = Normalizer(self.bundle, self.logger, self.warning_counter)
+        normalizer = Normalizer(self.bundle, self.logger)
         df, self.fit_search_keys, self.fit_generated_features = normalizer.normalize(
             df, self.fit_search_keys, self.fit_generated_features
         )
         self.fit_columns_renaming = normalizer.columns_renaming
+        if normalizer.removed_features:
+            self.__log_warning(self.bundle.get("dataset_date_features").format(normalizer.removed_features))
 
         self.__adjust_cv(df)
 
-        df = remove_fintech_duplicates(
+        df, fintech_warnings = remove_fintech_duplicates(
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
         )
-        df = clean_full_duplicates(df, self.logger, bundle=self.bundle)
+        if fintech_warnings:
+            for fintech_warning in fintech_warnings:
+                self.__log_warning(fintech_warning)
+        df, full_duplicates_warning = clean_full_duplicates(df, self.logger, bundle=self.bundle)
+        if full_duplicates_warning:
+            self.__log_warning(full_duplicates_warning)
 
         # Explode multiple search keys
         df = self.__add_fit_system_record_id(df, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID)
@@ -2621,9 +2635,12 @@ class FeaturesEnricher(TransformerMixin):
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
-        features_to_drop = FeaturesValidator(self.logger).validate(
-            df, features_columns, self.generate_features, self.warning_counter, self.fit_columns_renaming
+        features_to_drop, feature_validator_warnings = FeaturesValidator(self.logger).validate(
+            df, features_columns, self.generate_features, self.fit_columns_renaming
         )
+        if feature_validator_warnings:
+            for warning in feature_validator_warnings:
+                self.__log_warning(warning)
         self.fit_dropped_features.update(features_to_drop)
         df = df.drop(columns=features_to_drop)
 
@@ -2739,9 +2756,7 @@ class FeaturesEnricher(TransformerMixin):
             zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
             if zero_hit_columns:
                 msg = self.bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
-                self.logger.warning(msg)
-                self.__display_support_link(msg)
-                self.warning_counter.increment()
+                self.__log_warning(msg, show_support_link=True)
 
         if (
             self._search_task.unused_features_for_generation is not None
@@ -2751,9 +2766,7 @@ class FeaturesEnricher(TransformerMixin):
                 dataset.columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
             ]
             msg = self.bundle.get("features_not_generated").format(unused_features_for_generation)
-            self.logger.warning(msg)
-            print(msg)
-            self.warning_counter.increment()
+            self.__log_warning(msg)
 
         self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
 
@@ -3154,7 +3167,7 @@ class FeaturesEnricher(TransformerMixin):
             maybe_date_col = SearchKey.find_key(self.search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format, silent_mode=True)
+                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format)
                 converted_X = date_converter.convert(X)
                 min_date = converted_X[maybe_date_col].min()
                 max_date = converted_X[maybe_date_col].max()
@@ -3196,7 +3209,7 @@ class FeaturesEnricher(TransformerMixin):
             logger.warning(msg)
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
-            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, silent_mode=True)
+            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE)
             df = converter.convert(df)
         return df
 
@@ -3768,15 +3781,15 @@ class FeaturesEnricher(TransformerMixin):
             if meaning_type == SearchKey.COUNTRY and self.country_code is not None:
                 msg = self.bundle.get("search_key_country_and_country_code")
                 self.logger.warning(msg)
-                print(msg)
+                if not silent_mode:
+                    self.__log_warning(msg)
                 self.country_code = None
 
             if not self.__is_registered and not is_demo_dataset and meaning_type in SearchKey.personal_keys():
                 msg = self.bundle.get("unregistered_with_personal_keys").format(meaning_type)
                 self.logger.warning(msg)
                 if not silent_mode:
-                    self.warning_counter.increment()
-                    print(msg)
+                    self.__log_warning(msg)
 
                 valid_search_keys[column_name] = SearchKey.CUSTOM_KEY
             else:
@@ -3810,27 +3823,22 @@ class FeaturesEnricher(TransformerMixin):
             and not silent_mode
         ):
             msg = self.bundle.get("date_only_search")
-            print(msg)
-            self.logger.warning(msg)
-            self.warning_counter.increment()
+            self.__log_warning(msg)
 
         maybe_date = [k for k, v in valid_search_keys.items() if v in [SearchKey.DATE, SearchKey.DATETIME]]
         if (self.cv is None or self.cv == CVType.k_fold) and len(maybe_date) > 0 and not silent_mode:
             date_column = next(iter(maybe_date))
             if x[date_column].nunique() > 0.9 * _num_samples(x):
                 msg = self.bundle.get("date_search_without_time_series")
-                print(msg)
-                self.logger.warning(msg)
-                self.warning_counter.increment()
+                self.__log_warning(msg)
 
         if len(valid_search_keys) == 1:
             key, value = list(valid_search_keys.items())[0]
             # Show warning for country only if country is the only key
             if x[key].nunique() == 1:
                 msg = self.bundle.get("single_constant_search_key").format(value, x[key].values[0])
-                print(msg)
-                self.logger.warning(msg)
-                self.warning_counter.increment()
+                if not silent_mode:
+                    self.__log_warning(msg)
                 # TODO maybe raise ValidationError
 
         self.logger.info(f"Prepared search keys: {valid_search_keys}")
@@ -3890,9 +3898,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
-                self.logger.warning(msg)
-                self.__display_support_link(msg)
-                self.warning_counter.increment()
+                self.__log_warning(msg, show_support_link=True)
         except (ImportError, NameError):
             print(msg)
             print(self._internal_features_info)
@@ -3994,8 +4000,7 @@ class FeaturesEnricher(TransformerMixin):
                         " But not used because not registered user"
                     )
                     if not silent_mode:
-                        print(self.bundle.get("email_detected_not_registered").format(maybe_keys))
-                    self.warning_counter.increment()
+                        self.__log_warning(self.bundle.get("email_detected_not_registered").format(maybe_keys))
 
         # if SearchKey.PHONE not in search_keys.values() and check_need_detect(SearchKey.PHONE):
         if check_need_detect(SearchKey.PHONE):
@@ -4014,8 +4019,7 @@ class FeaturesEnricher(TransformerMixin):
                         "But not used because not registered user"
                     )
                     if not silent_mode:
-                        print(self.bundle.get("phone_detected_not_registered"))
-                    self.warning_counter.increment()
+                        self.__log_warning(self.bundle.get("phone_detected_not_registered"))
 
         return search_keys
 
@@ -4039,19 +4043,13 @@ class FeaturesEnricher(TransformerMixin):
         part2 = train[half_train:]
         train_psi = calculate_psi(part1[self.TARGET_NAME], part2[self.TARGET_NAME])
         if train_psi > 0.2:
-            self.warning_counter.increment()
-            msg = self.bundle.get("train_unstable_target").format(train_psi)
-            print(msg)
-            self.logger.warning(msg)
+            self.__log_warning(self.bundle.get("train_unstable_target").format(train_psi))
 
         # 2. Check train-test PSI
         if eval1 is not None:
             train_test_psi = calculate_psi(train[self.TARGET_NAME], eval1[self.TARGET_NAME])
             if train_test_psi > 0.2:
-                self.warning_counter.increment()
-                msg = self.bundle.get("eval_unstable_target").format(train_test_psi)
-                print(msg)
-                self.logger.warning(msg)
+                self.__log_warning(self.bundle.get("eval_unstable_target").format(train_test_psi))
 
     def _dump_python_libs(self):
         try:
@@ -4073,8 +4071,8 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(f"Showing support link: {link_text}")
             display(
                 HTML(
-                    f"""<br/>{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
-                    here</a>"""
+                    f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    here</a><br/>"""
                 )
             )
         except (ImportError, NameError):

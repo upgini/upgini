@@ -11,7 +11,6 @@ from pandas.api.types import is_numeric_dtype
 from upgini.errors import ValidationError
 from upgini.metadata import EVAL_SET_INDEX, SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
-from upgini.utils.warning_counter import WarningCounter
 
 DATE_FORMATS = [
     "%Y-%m-%d",
@@ -42,8 +41,6 @@ class DateTimeSearchKeyConverter:
         date_format: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
         bundle: Optional[ResourceBundle] = None,
-        warnings_counter: Optional[WarningCounter] = None,
-        silent_mode=False,
     ):
         self.date_column = date_column
         self.date_format = date_format
@@ -54,8 +51,7 @@ class DateTimeSearchKeyConverter:
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
         self.bundle = bundle or get_custom_bundle()
-        self.warnings_counter = warnings_counter or WarningCounter()
-        self.silent_mode = silent_mode
+        self.has_old_dates = False
 
     @staticmethod
     def _int_to_opt(i: int) -> Optional[int]:
@@ -101,7 +97,6 @@ class DateTimeSearchKeyConverter:
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
             else:
                 msg = self.bundle.get("unsupported_date_type").format(self.date_column)
-                self.logger.warning(msg)
                 raise ValidationError(msg)
         else:
             df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
@@ -162,13 +157,9 @@ class DateTimeSearchKeyConverter:
         condition = df[self.date_column] <= self.MIN_SUPPORTED_DATE_TS
         old_subset = df[condition]
         if len(old_subset) > 0:
+            self.has_old_dates = True
             df.loc[condition, self.date_column] = None
             self.logger.info(f"Set to None: {len(old_subset)} of {len(df)} rows because they are before 2000-01-01")
-            msg = self.bundle.get("dataset_drop_old_dates")
-            self.logger.warning(msg)
-            if not self.silent_mode:
-                print(msg)
-            self.warnings_counter.increment()
         return df
 
 
@@ -256,13 +247,10 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
     return len(accumulated_changing_columns) <= 2
 
 
-def validate_dates_distribution(
+def is_dates_distribution_valid(
     df: pd.DataFrame,
     search_keys: Dict[str, SearchKey],
-    logger: Optional[logging.Logger] = None,
-    bundle: Optional[ResourceBundle] = None,
-    warning_counter: Optional[WarningCounter] = None,
-):
+) -> bool:
     maybe_date_col = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
 
     if EVAL_SET_INDEX in df.columns:
@@ -303,13 +291,4 @@ def validate_dates_distribution(
     date_counts_2 = date_counts[round(len(date_counts) / 2) :]
     ratio = date_counts_2.mean() / date_counts_1.mean()
 
-    if ratio > 1.2 or ratio < 0.8:
-        if warning_counter is not None:
-            warning_counter.increment()
-        if logger is None:
-            logger = logging.getLogger("muted_logger")
-            logger.setLevel("FATAL")
-        bundle = bundle or get_custom_bundle()
-        msg = bundle.get("x_unstable_by_date")
-        print(msg)
-        logger.warning(msg)
+    return ratio >= 0.8 and ratio <= 1.2
