@@ -614,8 +614,8 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
             baseline_gini: [0.008932, 0.064073, 0.049464],
-            enriched_gini: [0.007961, 0.045424, -0.014219],
-            uplift: [-0.000971, -0.018649, -0.063683],
+            enriched_gini: [0.007058, 0.042348, 0.005769],
+            uplift: [-0.001874, -0.021725, -0.043694],
         }
     )
     print("Expected metrics: ")
@@ -629,11 +629,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0063]
+    assert enricher.feature_importances_ == [0.0087]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0063
+    assert first_feature_info[shap_value_header] == 0.0087
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -1990,9 +1990,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [-0.019142, -0.004371, -0.008845],
-            enriched_gini: [-0.016884, 0.011914, -0.026308],
-            uplift: [0.002258, 0.016285, -0.017463],
+            baseline_gini: [-0.010605, 0.009320, -0.011826],
+            enriched_gini: [-0.010354, 0.012448, -0.017334],
+            uplift: [0.000251, 0.003128, -0.005508],
         }
     )
     print("Expected metrics: ")

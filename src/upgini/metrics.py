@@ -273,6 +273,9 @@ class EstimatorWrapper:
         else:
             x, y = self._remove_empty_target_rows(x, y)
 
+        # Make order of columns idempotent
+        x = x[sorted(x.columns)]
+
         self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
 
@@ -434,7 +437,8 @@ class EstimatorWrapper:
                                 f"Client cat_feature `{cat_feature}` not found in x columns: {x.columns.to_list()}"
                             )
                     estimator_copy.set_params(
-                        cat_features=[x.columns.get_loc(cat_feature) for cat_feature in cat_features]
+                        # cat_features=[x.columns.get_loc(cat_feature) for cat_feature in cat_features]
+                        cat_features=cat_features
                     )
                 estimator = CatBoostWrapper(**kwargs)
             else:

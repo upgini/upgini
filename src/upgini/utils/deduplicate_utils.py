@@ -24,7 +24,7 @@ def remove_fintech_duplicates(
     date_format: Optional[str] = None,
     logger: Optional[Logger] = None,
     bundle: ResourceBundle = None,
-) -> tuple[pd.DataFrame, Optional[List[str]]]:
+) -> Tuple[pd.DataFrame, Optional[List[str]]]:
     # Initial checks for target type and date column
     bundle = bundle or get_custom_bundle()
     if logger is None:
@@ -60,7 +60,7 @@ def remove_fintech_duplicates(
 
     warning_messages = []
 
-    def process_df(segment_df: pd.DataFrame, eval_index=0) -> tuple[pd.DataFrame, Optional[str]]:
+    def process_df(segment_df: pd.DataFrame, eval_index=0) -> Tuple[pd.DataFrame, Optional[str]]:
         """Process a subset of the dataset to remove duplicates based on personal keys."""
         # Fast check for duplicates based on personal keys
         if not segment_df[personal_cols].duplicated().any():
