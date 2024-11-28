@@ -3194,9 +3194,8 @@ class FeaturesEnricher(TransformerMixin):
 
         return df
 
-    @staticmethod
     def _add_current_date_as_key(
-        df: pd.DataFrame, search_keys: Dict[str, SearchKey], logger: logging.Logger, bundle: ResourceBundle
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], logger: logging.Logger, bundle: ResourceBundle
     ) -> pd.DataFrame:
         if (
             set(search_keys.values()) == {SearchKey.PHONE}
@@ -3204,9 +3203,7 @@ class FeaturesEnricher(TransformerMixin):
             or set(search_keys.values()) == {SearchKey.HEM}
             or set(search_keys.values()) == {SearchKey.COUNTRY, SearchKey.POSTAL_CODE}
         ):
-            msg = bundle.get("current_date_added")
-            print(msg)
-            logger.warning(msg)
+            self.__log_warning(bundle.get("current_date_added"))
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
             converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE)

@@ -70,6 +70,11 @@ packages = [
     "src/upgini"
 ]
 
+[tool.hatch.build]
+include = [
+  "/src/utils/Roboto-Regular.ttf",
+]
+
 [tool.hatch.envs.default]
 type = "virtual"
 python = "3.10"
