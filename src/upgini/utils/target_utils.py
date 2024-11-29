@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype, is_bool_dtype
 
 from upgini.errors import ValidationError
 from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
@@ -231,6 +231,9 @@ def balance_undersample(
 
 def calculate_psi(expected: pd.Series, actual: pd.Series) -> float:
     df = pd.concat([expected, actual])
+
+    if is_bool_dtype(df):
+        df = np.where(df, 1, 0)
 
     # Define the bins for the target variable
     df_min = df.min()
