@@ -2546,9 +2546,11 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(generator.generated_features)
 
         # Checks that need validated date
-
-        if not is_dates_distribution_valid(df, self.fit_search_keys):
-            self.__log_warning(bundle.get("x_unstable_by_date"))
+        try:
+            if not is_dates_distribution_valid(df, self.fit_search_keys):
+                self.__log_warning(bundle.get("x_unstable_by_date"))
+        except Exception:
+            self.logger.exception("Failed to check dates distribution validity")
 
         if (
             is_numeric_dtype(df[self.TARGET_NAME])
@@ -4038,15 +4040,19 @@ class FeaturesEnricher(TransformerMixin):
         half_train = round(len(train) / 2)
         part1 = train[:half_train]
         part2 = train[half_train:]
-        train_psi = calculate_psi(part1[self.TARGET_NAME], part2[self.TARGET_NAME])
-        if train_psi > 0.2:
-            self.__log_warning(self.bundle.get("train_unstable_target").format(train_psi))
+        train_psi_result = calculate_psi(part1[self.TARGET_NAME], part2[self.TARGET_NAME])
+        if isinstance(train_psi_result, Exception):
+            self.logger.exception("Failed to calculate train PSI", train_psi_result)
+        elif train_psi_result > 0.2:
+            self.__log_warning(self.bundle.get("train_unstable_target").format(train_psi_result))
 
         # 2. Check train-test PSI
         if eval1 is not None:
-            train_test_psi = calculate_psi(train[self.TARGET_NAME], eval1[self.TARGET_NAME])
-            if train_test_psi > 0.2:
-                self.__log_warning(self.bundle.get("eval_unstable_target").format(train_test_psi))
+            train_test_psi_result = calculate_psi(train[self.TARGET_NAME], eval1[self.TARGET_NAME])
+            if isinstance(train_test_psi_result, Exception):
+                self.logger.exception("Failed to calculate test PSI", train_test_psi_result)
+            elif train_test_psi_result > 0.2:
+                self.__log_warning(self.bundle.get("eval_unstable_target").format(train_test_psi_result))
 
     def _dump_python_libs(self):
         try:

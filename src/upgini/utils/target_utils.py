@@ -229,25 +229,25 @@ def balance_undersample(
     return resampled_data
 
 
-def calculate_psi(expected: pd.Series, actual: pd.Series) -> float:
-    df = pd.concat([expected, actual])
-
-    if is_bool_dtype(df):
-        df = np.where(df, 1, 0)
-
-    # Define the bins for the target variable
-    df_min = df.min()
-    df_max = df.max()
-    bins = [df_min, (df_min + df_max) / 2, df_max]
-
-    # Calculate the base distribution
-    train_distribution = expected.value_counts(bins=bins, normalize=True).sort_index().values
-
-    # Calculate the target distribution
-    test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
-
-    # Calculate the PSI
+def calculate_psi(expected: pd.Series, actual: pd.Series) -> Union[float, Exception]:
     try:
+        df = pd.concat([expected, actual])
+
+        if is_bool_dtype(df):
+            df = np.where(df, 1, 0)
+
+        # Define the bins for the target variable
+        df_min = df.min()
+        df_max = df.max()
+        bins = [df_min, (df_min + df_max) / 2, df_max]
+
+        # Calculate the base distribution
+        train_distribution = expected.value_counts(bins=bins, normalize=True).sort_index().values
+
+        # Calculate the target distribution
+        test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
+
+        # Calculate the PSI
         return np.sum((train_distribution - test_distribution) * np.log(train_distribution / test_distribution))
-    except Exception:
-        return np.nan
+    except Exception as e:
+        return e
