@@ -2026,7 +2026,10 @@ class FeaturesEnricher(TransformerMixin):
         start_time = time.time()
         with MDC(trace_id=trace_id):
             self.logger.info("Start transform")
-            self.__log_debug_information(X, exclude_features_sources=exclude_features_sources)
+
+            validated_X = self._validate_X(X, is_transform=True)
+
+            self.__log_debug_information(validated_X, exclude_features_sources=exclude_features_sources)
 
             self.__validate_search_keys(self.search_keys, self.search_id)
 
@@ -2057,8 +2060,6 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         self.logger.info(msg)
                         print(msg)
-
-            validated_X = self._validate_X(X, is_transform=True)
 
             is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
 
@@ -2476,9 +2477,9 @@ class FeaturesEnricher(TransformerMixin):
         validate_scoring_argument(scoring)
 
         self.__log_debug_information(
-            X,
-            y,
-            eval_set,
+            validated_X,
+            validated_y,
+            validated_eval_set,
             exclude_features_sources=exclude_features_sources,
             calculate_metrics=calculate_metrics,
             scoring=scoring,
@@ -3762,11 +3763,17 @@ class FeaturesEnricher(TransformerMixin):
         if len(passed_unsupported_search_keys) > 0:
             raise ValidationError(self.bundle.get("unsupported_search_key").format(passed_unsupported_search_keys))
 
+        x_columns = [
+            c
+            for c in x.columns
+            if c not in [TARGET, EVAL_SET_INDEX, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
+        ]
+
         for column_id, meaning_type in search_keys.items():
             column_name = None
             if isinstance(column_id, str):
                 if column_id not in x.columns:
-                    raise ValidationError(self.bundle.get("search_key_not_found").format(column_id, list(x.columns)))
+                    raise ValidationError(self.bundle.get("search_key_not_found").format(column_id, x_columns))
                 column_name = column_id
                 valid_search_keys[column_name] = meaning_type
             elif isinstance(column_id, int):
