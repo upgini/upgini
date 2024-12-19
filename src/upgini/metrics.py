@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import inspect
 import logging
 import re
@@ -210,6 +211,21 @@ SUPPORTED_CATBOOST_METRICS = {
 }
 
 
+@dataclass
+class _CrossValResults:
+    metric: Optional[float]
+    metric_std: Optional[float]
+    shap_values: Optional[Dict[str, float]]
+
+    def get_display_metric(self) -> Optional[str]:
+        if self.metric is None:
+            return None
+        elif self.metric_std is None:
+            return f"{self.metric:.3f}"
+        else:
+            return f"{self.metric:.3f} ± {self.metric_std:.3f}"
+
+
 class EstimatorWrapper:
     def __init__(
         self,
@@ -297,11 +313,11 @@ class EstimatorWrapper:
 
     def cross_val_predict(
         self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
-    ) -> Tuple[Optional[float], Optional[Dict[str, float]]]:
+    ) -> _CrossValResults:
         x, y, groups, fit_params = self._prepare_to_fit(x, y)
 
         if x.shape[1] == 0:
-            return None
+            return _CrossValResults(metric=None, metric_std=None, shap_values=None)
 
         scorer = check_scoring(self.estimator, scoring=self.scorer)
 
@@ -326,7 +342,7 @@ class EstimatorWrapper:
 
             self.check_fold_metrics(metrics_by_fold)
 
-            metric = np.mean(metrics_by_fold) * self.multiplier
+            metric, metric_std = self._calculate_metric_from_folds(metrics_by_fold)
 
             splits = self.cv.split(x, y, groups)
 
@@ -351,7 +367,7 @@ class EstimatorWrapper:
         else:
             average_shap_values = None
 
-        return self.post_process_metric(metric), average_shap_values
+        return _CrossValResults(metric=metric, metric_std=metric_std, shap_values=average_shap_values)
 
     def process_shap_values(self, shap_values: Dict[str, float]) -> Dict[str, float]:
         return shap_values
@@ -367,17 +383,25 @@ class EstimatorWrapper:
             metric = 2 * metric - 1
         return metric
 
-    def calculate_metric(self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None) -> float:
+    def calculate_metric(
+        self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
+    ) -> _CrossValResults:
         x, y, _ = self._prepare_to_calculate(x, y)
         if baseline_score_column is not None and self.metric_name == "GINI":
-            metric = roc_auc_score(y, x[baseline_score_column])
+            metric, metric_std = roc_auc_score(y, x[baseline_score_column]), None
         else:
             metrics = []
             for est in self.cv_estimators:
                 metrics.append(self.scorer(est, x, y))
 
-            metric = np.mean(metrics) * self.multiplier
-        return self.post_process_metric(metric)
+            metric, metric_std = self._calculate_metric_from_folds(metrics)
+        return _CrossValResults(metric=metric, metric_std=metric_std, shap_values=None)
+
+    def _calculate_metric_from_folds(self, metrics_by_fold: List[float]) -> Tuple[float, float]:
+        metrics_by_fold = [self.post_process_metric(m) for m in metrics_by_fold]
+        metric = np.mean(metrics_by_fold) * self.multiplier
+        metric_std = np.std(metrics_by_fold) * np.abs(self.multiplier)
+        return metric, metric_std
 
     @staticmethod
     def create(
@@ -591,7 +615,7 @@ class CatBoostWrapper(EstimatorWrapper):
 
     def cross_val_predict(
         self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
-    ) -> Tuple[Optional[float], Optional[Dict[str, float]]]:
+    ) -> _CrossValResults:
         try:
             return super().cross_val_predict(x, y, baseline_score_column)
         except Exception as e:

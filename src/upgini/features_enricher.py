@@ -999,9 +999,10 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        etalon_metric, _ = baseline_estimator.cross_val_predict(
+                        etalon_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
                         )
+                        etalon_metric = etalon_cv_result.get_display_metric()
                         if etalon_metric is None:
                             self.logger.info(
                                 f"Baseline {metric} on train client features is None (maybe all features was removed)"
@@ -1033,9 +1034,9 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        enriched_metric, enriched_shaps = enriched_estimator.cross_val_predict(
-                            fitting_enriched_X, enriched_y_sorted
-                        )
+                        enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        enriched_metric = enriched_cv_result.get_display_metric()
+                        enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
                             self._update_shap_values(enriched_shaps)
@@ -1048,7 +1049,7 @@ class FeaturesEnricher(TransformerMixin):
                         else:
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
                         if etalon_metric is not None and enriched_metric is not None:
-                            uplift = (enriched_metric - etalon_metric) * multiplier
+                            uplift = (enriched_cv_result.metric - etalon_cv_result.metric) * multiplier
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1091,9 +1092,10 @@ class FeaturesEnricher(TransformerMixin):
                                     f"Calculate baseline {metric} on eval set {idx + 1} "
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
-                                etalon_eval_metric = baseline_estimator.calculate_metric(
+                                etalon_eval_results = baseline_estimator.calculate_metric(
                                     eval_X_sorted, eval_y_sorted, self.baseline_score_column
                                 )
+                                etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
                                     f"Baseline {metric} on eval set {idx + 1} client features: {etalon_eval_metric}"
                                 )
@@ -1105,9 +1107,10 @@ class FeaturesEnricher(TransformerMixin):
                                     f"Calculate enriched {metric} on eval set {idx + 1} "
                                     f"on combined features: {enriched_eval_X_sorted.columns.to_list()}"
                                 )
-                                enriched_eval_metric = enriched_estimator.calculate_metric(
+                                enriched_eval_results = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_eval_y_sorted
                                 )
+                                enriched_eval_metric = enriched_eval_results.get_display_metric()
                                 self.logger.info(
                                     f"Enriched {metric} on eval set {idx + 1} combined features: {enriched_eval_metric}"
                                 )
@@ -1115,7 +1118,7 @@ class FeaturesEnricher(TransformerMixin):
                                 enriched_eval_metric = None
 
                             if etalon_eval_metric is not None and enriched_eval_metric is not None:
-                                eval_uplift = (enriched_eval_metric - etalon_eval_metric) * multiplier
+                                eval_uplift = (enriched_eval_results.metric - etalon_eval_results.metric) * multiplier
                             else:
                                 eval_uplift = None
 

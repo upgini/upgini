@@ -111,7 +111,7 @@ class DateTimeSearchKeyConverter:
 
         # Define function to apply sine and cosine transformations
         def add_cyclical_features(df, column, period):
-            period_suffix = f"_{period}" if column != 'day_in_quarter' else ""
+            period_suffix = f"_{period}" if column != "day_in_quarter" else ""
             sin_feature = f"datetime_{column}_sin{period_suffix}"
             cos_feature = f"datetime_{column}_cos{period_suffix}"
             df[sin_feature] = np.sin(2 * np.pi * df[column] / period)
@@ -138,7 +138,7 @@ class DateTimeSearchKeyConverter:
 
         end = pd.to_datetime({"year": quarter_end_year, "month": quarter_end_month, "day": 1})
 
-        df["days_in_quarter"] = (end - start).dt.days
+        df["days_in_quarter"] = (end.reset_index(drop=True) - start.reset_index(drop=True)).dt.days
 
         add_cyclical_features(df, "day_in_quarter", df["days_in_quarter"])  # Days in the quarter
 
