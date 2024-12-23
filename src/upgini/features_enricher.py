@@ -54,6 +54,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
+    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -95,6 +96,7 @@ from upgini.utils.email_utils import (
     EmailSearchKeyConverter,
     EmailSearchKeyDetector,
 )
+from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpSearchKeyConverter
@@ -224,6 +226,7 @@ class FeaturesEnricher(TransformerMixin):
         client_visitorid: Optional[str] = None,
         custom_bundle_config: Optional[str] = None,
         add_date_if_missing: bool = True,
+        select_features: bool = False,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -341,6 +344,7 @@ class FeaturesEnricher(TransformerMixin):
         self.features_info_display_handle = None
         self.data_sources_display_handle = None
         self.report_button_handle = None
+        self.select_features = select_features
 
     def _get_api_key(self):
         return self._api_key
@@ -1201,9 +1205,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _update_shap_values(self, new_shaps: Dict[str, float]):
         new_shaps = {
-            feature: self._round_shap_value(shap)
-            for feature, shap in new_shaps.items()
-            if feature in self.feature_names_
+            feature: _round_shap_value(shap) for feature, shap in new_shaps.items() if feature in self.feature_names_
         }
         features_importances = list(new_shaps.items())
         features_importances.sort(key=lambda m: (-m[1], m[0]))
@@ -3493,15 +3495,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return result_train, result_eval_sets
 
-    @staticmethod
-    def _round_shap_value(shap: float) -> float:
-        if shap > 0.0 and shap < 0.0001:
-            return 0.0001
-        else:
-            return round(shap, 4)
-
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
-        llm_source = "LLM with external data augmentation"
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
@@ -3517,111 +3511,30 @@ class FeaturesEnricher(TransformerMixin):
         features_info_without_links = []
         internal_features_info = []
 
-        def list_or_single(lst: List[str], single: str):
-            return lst or ([single] if single else [])
-
-        def to_anchor(link: str, value: str) -> str:
-            if not value:
-                return ""
-            elif not link:
-                return value
-            elif value == llm_source:
-                return value
-            else:
-                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
-
-        def make_links(names: List[str], links: List[str]):
-            all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
-            return ",".join(all_links)
-
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
-            # Use only enriched features
+            # Use only important features
             if (
-                feature_meta.name in x_columns
-                or feature_meta.name == COUNTRY
-                or feature_meta.shap_value == 0.0
-                or feature_meta.name in self.fit_generated_features
+                (feature_meta.shap_value == 0.0)
+                or (feature_meta.name in self.fit_generated_features)
+                or (feature_meta.name == COUNTRY)
             ):
                 continue
 
-            feature_sample = []
+            is_client_feature = feature_meta.name in x_columns
+            # In select_features mode we select also from etalon features and need to show them
+            if not self.select_features and is_client_feature:
+                continue
+
             self.feature_names_.append(feature_meta.name)
-            self.feature_importances_.append(self._round_shap_value(feature_meta.shap_value))
-            if feature_meta.name in features_df.columns:
-                feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
-                if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
-                    feature_sample = [round(f, 4) for f in feature_sample]
-                feature_sample = [str(f) for f in feature_sample]
-                feature_sample = ", ".join(feature_sample)
-                if len(feature_sample) > 30:
-                    feature_sample = feature_sample[:30] + "..."
+            self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
 
-            internal_provider = feature_meta.data_provider or "Upgini"
-            providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
-            provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
-            if providers:
-                provider = make_links(providers, provider_links)
-            else:
-                provider = to_anchor("https://upgini.com", "Upgini")
-
-            internal_source = feature_meta.data_source or (
-                llm_source
-                if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
-                else ""
-            )
-            sources = list_or_single(feature_meta.data_sources, feature_meta.data_source)
-            source_links = list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
-            if sources:
-                source = make_links(sources, source_links)
-            else:
-                source = internal_source
-
-            internal_feature_name = feature_meta.name
-            if feature_meta.doc_link:
-                feature_name = to_anchor(feature_meta.doc_link, feature_meta.name)
-            else:
-                feature_name = internal_feature_name
-
-            features_info.append(
-                {
-                    self.bundle.get("features_info_name"): feature_name,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): provider,
-                    self.bundle.get("features_info_source"): source,
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
-            features_info_without_links.append(
-                {
-                    self.bundle.get("features_info_name"): internal_feature_name,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): internal_provider,
-                    self.bundle.get("features_info_source"): internal_source,
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
-            internal_features_info.append(
-                {
-                    self.bundle.get("features_info_name"): internal_feature_name,
-                    "feature_link": feature_meta.doc_link,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): internal_provider,
-                    "provider_link": feature_meta.data_provider_link,
-                    self.bundle.get("features_info_source"): internal_source,
-                    "source_link": feature_meta.data_source_link,
-                    self.bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
+            feature_info = FeatureInfo.from_metadata(feature_meta, features_df, is_client_feature)
+            features_info.append(feature_info.to_row(self.bundle))
+            features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
+            internal_features_info.append(feature_info.to_internal_row(self.bundle))
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
