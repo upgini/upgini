@@ -280,6 +280,7 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
+        self.client_feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
         if search_id:
@@ -1442,7 +1443,8 @@ class FeaturesEnricher(TransformerMixin):
         client_features = [
             c
             for c in X_sampled.columns.to_list()
-            if c
+            if (not self.select_features or c in self.feature_names_)
+            and c
             not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
@@ -2068,7 +2070,9 @@ class FeaturesEnricher(TransformerMixin):
 
             is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
+            columns_to_drop = [
+                c for c in validated_X.columns if c in self.feature_names_ and c not in self.client_feature_names_
+            ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -3506,6 +3510,7 @@ class FeaturesEnricher(TransformerMixin):
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         self.feature_names_ = []
+        self.client_feature_names_ = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []

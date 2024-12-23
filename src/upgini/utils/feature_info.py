@@ -34,8 +34,8 @@ class FeatureInfo:
         return FeatureInfo(
             name=_get_name(feature_meta),
             internal_name=_get_internal_name(feature_meta),
-            rounded_shap=_round_shap_value(feature_meta.shap),
-            hitrate=feature_meta.hitrate,
+            rounded_shap=_round_shap_value(feature_meta.shap_value),
+            hitrate=feature_meta.hit_rate,
             value_preview=_get_feature_sample(feature_meta, data),
             provider=_get_provider(feature_meta, is_client_feature),
             internal_provider=_get_internal_provider(feature_meta, is_client_feature),
