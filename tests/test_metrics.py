@@ -208,7 +208,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment],
             rows_header: [28000, 2505],
             target_mean_header: [0.8825, 0.8854],
-            baseline_gini: ["0.391 ± 0.016", "0.234 ± 0.005"],
+            baseline_gini: ["0.391 ± 0.016", "0.232 ± 0.006"],
         }
     )
 

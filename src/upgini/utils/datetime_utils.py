@@ -137,8 +137,9 @@ class DateTimeSearchKeyConverter:
         quarter_end_month = np.where(quarter == 4, 1, month + 3)
 
         end = pd.to_datetime({"year": quarter_end_year, "month": quarter_end_month, "day": 1})
+        end.index = df.index
 
-        df["days_in_quarter"] = (end.reset_index(drop=True) - start.reset_index(drop=True)).dt.days
+        df["days_in_quarter"] = (end - start).dt.days
 
         add_cyclical_features(df, "day_in_quarter", df["days_in_quarter"])  # Days in the quarter
 
