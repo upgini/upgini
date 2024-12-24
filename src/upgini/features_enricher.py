@@ -54,7 +54,6 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
-    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -2339,7 +2338,9 @@ class FeaturesEnricher(TransformerMixin):
                 if c not in self.dropped_client_feature_names_
             ]
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
-            selecting_columns.extend(c for c in filtered_columns if c in result.columns and c not in validated_X.columns)
+            selecting_columns.extend(
+                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
+            )
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
@@ -3543,7 +3544,6 @@ class FeaturesEnricher(TransformerMixin):
                 or (not self.select_features and is_client_feature)
             ):
                 continue
-
 
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
