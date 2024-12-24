@@ -2,7 +2,6 @@ import dataclasses
 import datetime
 import gc
 import hashlib
-import itertools
 import logging
 import numbers
 import os
@@ -160,6 +159,10 @@ class FeaturesEnricher(TransformerMixin):
 
     shared_datasets: list of str, optional (default=None)
         List of private shared dataset ids for custom search
+
+    select_features: bool, optional (default=False)
+        If True, return only selected features both from input and data sources.
+        Otherwise, return all features from input and only selected features from data sources.
     """
 
     TARGET_NAME = "target"
@@ -283,6 +286,8 @@ class FeaturesEnricher(TransformerMixin):
         self.client_feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
+        self.select_features = select_features
+
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
 
@@ -345,7 +350,6 @@ class FeaturesEnricher(TransformerMixin):
         self.features_info_display_handle = None
         self.data_sources_display_handle = None
         self.report_button_handle = None
-        self.select_features = select_features
 
     def _get_api_key(self):
         return self._api_key
