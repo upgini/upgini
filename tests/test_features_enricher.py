@@ -2854,7 +2854,8 @@ def test_select_features(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 6)
+    assert enriched_train_features.shape == (10000, 5)
+    assert "client_feature" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()
 

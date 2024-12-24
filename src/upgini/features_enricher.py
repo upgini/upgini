@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import gc
 import hashlib
+import itertools
 import logging
 import numbers
 import os
@@ -283,7 +284,7 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
-        self.client_feature_names_ = []
+        self.dropped_client_feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
         self.select_features = select_features
@@ -2075,7 +2076,7 @@ class FeaturesEnricher(TransformerMixin):
             is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
 
             columns_to_drop = [
-                c for c in validated_X.columns if c in self.feature_names_ and c not in self.client_feature_names_
+                c for c in validated_X.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
             ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
@@ -2332,11 +2333,13 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 result = enrich()
 
-            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
-            existing_filtered_columns = [
-                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
+            selecting_columns = [
+                c
+                for c in itertools.chain(validated_X.columns.tolist(), generated_features)
+                if c not in self.dropped_client_feature_names_
             ]
-            selecting_columns = validated_X.columns.tolist() + generated_features + existing_filtered_columns
+            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
+            selecting_columns.extend(c for c in filtered_columns if c in result.columns and c not in validated_X.columns)
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
@@ -3514,7 +3517,7 @@ class FeaturesEnricher(TransformerMixin):
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         self.feature_names_ = []
-        self.client_feature_names_ = []
+        self.dropped_client_feature_names_ = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
@@ -3524,18 +3527,23 @@ class FeaturesEnricher(TransformerMixin):
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+
+            is_client_feature = feature_meta.name in x_columns
+
+            if feature_meta.shap_value == 0.0:
+                if self.select_features:
+                    self.dropped_client_feature_names_.append(feature_meta.name)
+                continue
+
             # Use only important features
             if (
-                (feature_meta.shap_value == 0.0)
-                or (feature_meta.name in self.fit_generated_features)
-                or (feature_meta.name == COUNTRY)
+                feature_meta.name in self.fit_generated_features
+                or feature_meta.name == COUNTRY
+                # In select_features mode we select also from etalon features and need to show them
+                or (not self.select_features and is_client_feature)
             ):
                 continue
 
-            is_client_feature = feature_meta.name in x_columns
-            # In select_features mode we select also from etalon features and need to show them
-            if not self.select_features and is_client_feature:
-                continue
 
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
