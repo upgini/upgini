@@ -114,10 +114,12 @@ class DateTimeSearchKeyConverter:
             period_suffix = f"_{period}" if column != "day_in_quarter" else ""
             sin_feature = f"datetime_{column}_sin{period_suffix}"
             cos_feature = f"datetime_{column}_cos{period_suffix}"
-            df[sin_feature] = np.sin(2 * np.pi * df[column] / period)
-            df[cos_feature] = np.cos(2 * np.pi * df[column] / period)
-            self.generated_features.append(sin_feature)
-            self.generated_features.append(cos_feature)
+            if sin_feature not in df.columns:
+                df[sin_feature] = np.sin(2 * np.pi * df[column] / period)
+                self.generated_features.append(sin_feature)
+            if cos_feature not in df.columns:
+                df[cos_feature] = np.cos(2 * np.pi * df[column] / period)
+                self.generated_features.append(cos_feature)
 
         df["quarter"] = df[self.date_column].dt.quarter
 
