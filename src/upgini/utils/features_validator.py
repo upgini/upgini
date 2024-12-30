@@ -2,6 +2,7 @@ import logging
 from logging import Logger
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
 
@@ -83,9 +84,20 @@ class FeaturesValidator:
         return [
             i
             for i in df
-            if (is_object_dtype(df[i]) or is_string_dtype(df[i]) or is_integer_dtype(df[i]))
+            if (is_object_dtype(df[i]) or is_string_dtype(df[i]) or FeaturesValidator.__is_integer(df[i]))
             and (df[i].nunique(dropna=False) / row_count >= 0.85)
         ]
+
+    @staticmethod
+    def __is_integer(series: pd.Series) -> bool:
+        return (
+            is_integer_dtype(series)
+            or series.dropna()
+            .apply(
+                lambda f: (float.is_integer(f) and abs(f) < np.iinfo(np.int64).max) if isinstance(f, float) else False
+            )
+            .all()
+        )
 
     @staticmethod
     def find_constant_features(df: pd.DataFrame) -> List[str]:
