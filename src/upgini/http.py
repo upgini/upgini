@@ -882,7 +882,7 @@ class _RestClient:
         if content_type:
             headers[_RestClient.CONTENT_TYPE_HEADER_NAME] = content_type
         if trace_id:
-            headers[_RestClient.TRACE_ID_HEADER_NAME] = trace_id
+            headers[_RestClient.TRACE_ID_HEADER_NAME] = str(trace_id)
         for header_key, header_value in additional_headers.items():
             headers[header_key] = header_value
         return headers

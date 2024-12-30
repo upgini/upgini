@@ -2171,7 +2171,7 @@ def test_imbalanced_dataset(requests_mock: Mocker):
 
         assert metrics.loc[0, "Rows"] == 8000
         assert metrics.loc[0, "Mean target"] == 0.125
-        assert metrics.loc[0, "Enriched GINI"] == "-0.013 ± 0.024"
+        assert metrics.loc[0, "Enriched GINI"] == "-0.018 ± 0.030"
     finally:
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 

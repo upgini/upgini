@@ -1668,7 +1668,10 @@ class FeaturesEnricher(TransformerMixin):
         generated_features = []
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
-            df = converter.convert(df, keep_time=True)
+            # Leave original date column values
+            df_with_date_features = converter.convert(df, keep_time=True)
+            df_with_date_features[date_column] = df[date_column]
+            df = df_with_date_features
             generated_features = converter.generated_features
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
@@ -1677,9 +1680,10 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        normalizer = Normalizer(self.bundle, self.logger)
-        df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
-        columns_renaming = normalizer.columns_renaming
+        # normalizer = Normalizer(self.bundle, self.logger)
+        # df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
+        # columns_renaming = normalizer.columns_renaming
+        columns_renaming = {c: c for c in df.columns}
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
@@ -2109,7 +2113,7 @@ class FeaturesEnricher(TransformerMixin):
             date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
-                df = converter.convert(df)
+                df = converter.convert(df, keep_time=True)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
             else:
@@ -2204,10 +2208,11 @@ class FeaturesEnricher(TransformerMixin):
 
             if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID)
-                if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-                    df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
+
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
 
             # search keys might be changed after explode
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
@@ -2227,7 +2232,7 @@ class FeaturesEnricher(TransformerMixin):
 
             combined_search_keys = combine_search_keys(search_keys.keys())
 
-            df_without_features = df.drop(columns=features_not_to_pass)
+            df_without_features = df.drop(columns=features_not_to_pass, errors="ignore")
 
             df_without_features, full_duplicates_warning = clean_full_duplicates(
                 df_without_features, self.logger, bundle=self.bundle

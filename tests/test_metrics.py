@@ -208,7 +208,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment],
             rows_header: [28000, 2505],
             target_mean_header: [0.8825, 0.8854],
-            baseline_gini: ["0.391 ± 0.016", "0.232 ± 0.006"],
+            baseline_gini: ["0.392 ± 0.017", "0.233 ± 0.006"],
         }
     )
 
@@ -983,9 +983,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.070 ± 0.168", "-0.044 ± 0.026", "-0.005 ± 0.054"],
-                enriched_gini: ["0.161 ± 0.083", "-0.126 ± 0.027", "0.031 ± 0.037"],
-                uplift: [0.091388, -0.082243, 0.035834],
+                baseline_gini: ["0.135 ± 0.093", "-0.045 ± 0.036", "-0.011 ± 0.024"],
+                enriched_gini: ["0.083 ± 0.102", "-0.020 ± 0.046", "0.039 ± 0.057"],
+                uplift: [-0.052006, 0.025140, 0.050656],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1350,9 +1350,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_rmse: ["0.705 ± 0.028", "0.726 ± 0.017", "0.678 ± 0.012"],
-                enriched_rmse: ["0.652 ± 0.032", "0.723 ± 0.016", "0.707 ± 0.018"],
-                uplift: [0.053248, 0.002744, -0.029326],
+                baseline_rmse: ["0.676 ± 0.032", "0.726 ± 0.014", "0.687 ± 0.010"],
+                enriched_rmse: ["0.713 ± 0.015", "0.725 ± 0.011", "0.688 ± 0.025"],
+                uplift: [-0.036602, 0.001041, -0.001347],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1474,9 +1474,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.043 ± 0.118", "-0.068 ± 0.051", "-0.048 ± 0.053"],
-                enriched_gini: ["-0.028 ± 0.093", "-0.053 ± 0.060", "0.012 ± 0.055"],
-                uplift: [-0.070182, 0.015619, 0.060062],
+                baseline_gini: ["-0.010 ± 0.061", "-0.044 ± 0.026", "-0.044 ± 0.073"],
+                enriched_gini: ["-0.029 ± 0.098", "-0.062 ± 0.017", "0.039 ± 0.072"],
+                uplift: [-0.018775, -0.017389, 0.083634],
             }
         )
     elif pd.__version__ >= "2.1.0":
