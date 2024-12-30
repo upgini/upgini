@@ -1447,7 +1447,11 @@ class FeaturesEnricher(TransformerMixin):
         client_features = [
             c
             for c in X_sampled.columns.to_list()
-            if (not self.select_features or c in self.feature_names_)
+            if (
+                not self.select_features
+                or c in self.feature_names_
+                or (self.fit_columns_renaming is not None and self.fit_columns_renaming.get(c) in self.feature_names_)
+            )
             and c
             not in (
                 excluding_search_keys
