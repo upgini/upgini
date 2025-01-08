@@ -38,8 +38,9 @@ class EmailDomainGenerator:
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         for email_col in self.email_columns:
             domain_feature = email_col + self.DOMAIN_SUFFIX
-            df[domain_feature] = df[email_col].apply(self._email_to_domain)
-            self.generated_features.append(domain_feature)
+            if domain_feature not in df.columns:
+                df[domain_feature] = df[email_col].apply(self._email_to_domain).astype("string")
+                self.generated_features.append(domain_feature)
         return df
 
     @staticmethod

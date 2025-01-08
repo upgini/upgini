@@ -176,7 +176,7 @@ def test_string_datetime_to_timestamp_convertion():
     df["date"] = pd.to_datetime(df.date)
     converter = DateTimeSearchKeyConverter("date")
     df = converter.convert(df)
-    assert df.shape == (1, 1)
+    assert df.shape == (1, 3)
     assert df["date"].dtype == "Int64"
     assert df.loc[0, "date"] == 1577836800000
 
@@ -377,118 +377,50 @@ def test_time_cutoff_from_str():
     converter = DateTimeSearchKeyConverter("date", "%Y-%m-%d %H:%M:%S")
     dataset = converter.convert(df)
 
-    assert dataset.loc[0, "date"] == 1577836800000
-    assert dataset.loc[1, "date"] == 946684800000
-    assert pd.isnull(dataset.loc[2, "date"])
-    assert pd.isnull(dataset.loc[3, "date"])
+    expected_data = pd.DataFrame(
+        {
+            "date": [1577836800000, 946684800000, None, None],
+            "datetime_day_in_quarter_sin": [0.068991, 0.068991, None, None],
+            "datetime_day_in_quarter_cos": [0.997617, 0.997617, None, None],
+            "datetime_second_sin_60": [0.0, 0.0, None, None],
+            "datetime_second_cos_60": [1.0, 1.0, None, None],
+            "datetime_minute_sin_60": [0.104528, 0.000000, None, None],
+            "datetime_minute_cos_60": [0.994522, 1.000000, None, None],
+            "datetime_minute_sin_30": [0.207912, 0.000000, None, None],
+            "datetime_minute_cos_30": [0.978148, 1.000000, None, None],
+            "datetime_hour_sin_24": [0.0, 0.0, None, None],
+            "datetime_hour_cos_24": [1.0, 1.0, None, None],
+        }
+    )
 
-    assert "datetime_time_sin_1" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_1"] == pytest.approx(np.sin(2 * np.pi / 24 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_1"] == 0.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_sin_1"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_1"])
-
-    assert "datetime_time_cos_1" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_1"] == pytest.approx(np.cos(2 * np.pi / 24 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_1"] == 1.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_cos_1"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_1"])
-
-    assert "datetime_time_sin_2" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_2"] == pytest.approx(np.sin(2 * np.pi / 12 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_2"] == 0.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_sin_2"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_2"])
-
-    assert "datetime_time_cos_2" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_2"] == pytest.approx(np.cos(2 * np.pi / 12 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_2"] == 1.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_cos_2"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_2"])
-
-    assert "datetime_time_sin_24" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_24"] == pytest.approx(np.sin(2 * np.pi / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_24"] == 0.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_sin_24"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_24"])
-
-    assert "datetime_time_cos_24" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_24"] == pytest.approx(np.cos(2 * np.pi / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_24"] == 1.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_cos_24"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_24"])
-
-    assert "datetime_time_sin_48" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_48"] == pytest.approx(np.sin(2 * np.pi / 30), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_48"] == 0.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_sin_48"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_48"])
-
-    assert "datetime_time_cos_48" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_48"] == pytest.approx(np.cos(2 * np.pi / 30), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_48"] == 1.0
-    assert pd.isnull(dataset.loc[2, "datetime_time_cos_48"])
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_48"])
+    expected_data["date"] = expected_data["date"].astype("Int64")
+    assert_frame_equal(dataset, expected_data)
 
 
 def test_time_cutoff_from_datetime():
     df = pd.DataFrame(
-        {"date": [datetime(2020, 1, 1, 0, 1, 0), datetime(2000, 1, 1, 0, 0, 0), datetime(1999, 12, 31, 2, 0, 0), None]}
+        {"date": [datetime(2020, 1, 1, 0, 1, 0), datetime(2000, 1, 1, 0, 0, 0), datetime(1999, 12, 31, 0, 0, 0), None]}
     )
     converter = DateTimeSearchKeyConverter("date")
     dataset = converter.convert(df)
-    assert dataset.loc[0, "date"] == 1577836800000
-    assert dataset.loc[1, "date"] == 946684800000
-    assert dataset.loc[2, "date"] == 946598400000
-    assert pd.isnull(dataset.loc[3, "date"])
+    expected_data = pd.DataFrame(
+        {
+            "date": [1577836800000, 946684800000, None, None],
+            "datetime_day_in_quarter_sin": [0.068991, 0.068991, None, None],
+            "datetime_day_in_quarter_cos": [0.997617, 0.997617, None, None],
+            "datetime_second_sin_60": [0.0, 0.0, None, None],
+            "datetime_second_cos_60": [1.0, 1.0, None, None],
+            "datetime_minute_sin_60": [0.104528, 0.000000, None, None],
+            "datetime_minute_cos_60": [0.994522, 1.000000, None, None],
+            "datetime_minute_sin_30": [0.207912, 0.000000, None, None],
+            "datetime_minute_cos_30": [0.978148, 1.000000, None, None],
+            "datetime_hour_sin_24": [0.0, 0.0, None, None],
+            "datetime_hour_cos_24": [1.0, 1.0, None, None],
+        }
+    )
 
-    assert "datetime_time_sin_1" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_1"] == pytest.approx(np.sin(2 * np.pi / 24 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_1"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_1"] == pytest.approx(np.sin(2 * np.pi / 12), abs=0.000001)
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_1"])
-
-    assert "datetime_time_cos_1" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_1"] == pytest.approx(np.cos(2 * np.pi / 24 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_1"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_1"] == pytest.approx(np.cos(2 * np.pi / 12), abs=0.000001)
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_1"])
-
-    assert "datetime_time_sin_2" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_2"] == pytest.approx(np.sin(2 * np.pi / 12 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_2"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_2"] == pytest.approx(np.sin(2 * np.pi / 6), abs=0.000001)
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_2"])
-
-    assert "datetime_time_cos_2" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_2"] == pytest.approx(np.cos(2 * np.pi / 12 / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_2"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_2"] == pytest.approx(np.cos(2 * np.pi / 6), abs=0.000001)
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_2"])
-
-    assert "datetime_time_sin_24" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_24"] == pytest.approx(np.sin(2 * np.pi / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_24"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_24"] == 0.0
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_24"])
-
-    assert "datetime_time_cos_24" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_24"] == pytest.approx(np.cos(2 * np.pi / 60), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_24"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_24"] == 1.0
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_24"])
-
-    assert "datetime_time_sin_48" in dataset.columns
-    assert dataset.loc[0, "datetime_time_sin_48"] == pytest.approx(np.sin(2 * np.pi / 30), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_sin_48"] == 0.0
-    assert dataset.loc[2, "datetime_time_sin_48"] == 0.0
-    assert pd.isnull(dataset.loc[3, "datetime_time_sin_48"])
-
-    assert "datetime_time_cos_48" in dataset.columns
-    assert dataset.loc[0, "datetime_time_cos_48"] == pytest.approx(np.cos(2 * np.pi / 30), abs=0.000001)
-    assert dataset.loc[1, "datetime_time_cos_48"] == 1.0
-    assert dataset.loc[2, "datetime_time_cos_48"] == 1.0
-    assert pd.isnull(dataset.loc[3, "datetime_time_cos_48"])
+    expected_data["date"] = expected_data["date"].astype("Int64")
+    assert_frame_equal(dataset, expected_data)
 
 
 def test_time_cutoff_from_period():
@@ -498,37 +430,45 @@ def test_time_cutoff_from_period():
     for i in range(24):
         assert dataset.loc[i, "date"] == 1577836800000
 
-    assert "datetime_time_sin_1" in dataset.columns
+    assert "datetime_day_in_quarter_sin" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_sin_1"] == pytest.approx(np.sin(i * 2 * np.pi / 24), abs=0.000001)
+        assert dataset.loc[i, "datetime_day_in_quarter_sin"] == 0.06899114440432493
 
-    assert "datetime_time_cos_1" in dataset.columns
+    assert "datetime_day_in_quarter_cos" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_cos_1"] == pytest.approx(np.cos(i * 2 * np.pi / 24), abs=0.000001)
+        assert dataset.loc[i, "datetime_day_in_quarter_cos"] == 0.9976172723012476
 
-    assert "datetime_time_sin_2" in dataset.columns
+    assert "datetime_second_sin_60" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_sin_2"] == pytest.approx(np.sin(i * 2 * np.pi / 12), abs=0.000001)
+        assert dataset.loc[i, "datetime_second_sin_60"] == 0.0
 
-    assert "datetime_time_cos_2" in dataset.columns
+    assert "datetime_second_cos_60" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_cos_2"] == pytest.approx(np.cos(i * 2 * np.pi / 12), abs=0.000001)
+        assert dataset.loc[i, "datetime_second_cos_60"] == 1
 
-    assert "datetime_time_sin_24" in dataset.columns
+    assert "datetime_minute_sin_60" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_sin_24"] == 0.0
+        assert dataset.loc[i, "datetime_minute_sin_60"] == 0.0
 
-    assert "datetime_time_cos_24" in dataset.columns
+    assert "datetime_minute_cos_60" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_cos_24"] == 1.0
+        assert dataset.loc[i, "datetime_minute_cos_60"] == 1.0
 
-    assert "datetime_time_sin_48" in dataset.columns
+    assert "datetime_minute_sin_30" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_sin_48"] == 0.0
+        assert dataset.loc[i, "datetime_minute_sin_30"] == 0.0
 
-    assert "datetime_time_cos_48" in dataset.columns
+    assert "datetime_minute_cos_30" in dataset.columns
     for i in range(24):
-        assert dataset.loc[i, "datetime_time_cos_48"] == 1.0
+        assert dataset.loc[i, "datetime_minute_cos_30"] == 1.0
+
+    assert "datetime_hour_sin_24" in dataset.columns
+    for i in range(24):
+        assert dataset.loc[i, "datetime_hour_sin_24"] == pytest.approx(np.sin(i * 2 * np.pi / 24), abs=0.000001)
+
+    assert "datetime_hour_cos_24" in dataset.columns
+    for i in range(24):
+        assert dataset.loc[i, "datetime_hour_cos_24"] == pytest.approx(np.cos(i * 2 * np.pi / 24), abs=0.000001)
 
 
 def test_time_cutoff_from_timestamp():
@@ -587,22 +527,22 @@ def test_date_in_diff_formats():
     df = pd.DataFrame({"date": ["12.01.23", "13.02.23", "31.03.23", "Date is not available"]})
     converter = DateTimeSearchKeyConverter("date")
     converted_df = converter.convert(df)
-    assert_frame_equal(converted_df, expected_df)
+    assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "03.31.23", "Date is not available"]})
     converter = DateTimeSearchKeyConverter("date")
     converted_df = converter.convert(df)
-    assert_frame_equal(converted_df, expected_df)
+    assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["2023-01-12", "2023-02-13", "2023-03-31", "Date is not available"]})
     converter = DateTimeSearchKeyConverter("date")
     converted_df = converter.convert(df)
-    assert_frame_equal(converted_df, expected_df)
+    assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.2023", "02.13.2023", "03.31.2023", "Date is not available"]})
     converter = DateTimeSearchKeyConverter("date")
     converted_df = converter.convert(df)
-    assert_frame_equal(converted_df, expected_df)
+    assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "13.13.23"]})
     converter = DateTimeSearchKeyConverter("date")
@@ -614,14 +554,16 @@ def test_datetime_with_ms():
     expected_df = pd.DataFrame(
         {
             "date": [1696636800000, 1695686400000, 1695600000000, 1695081600000],
-            "datetime_time_sin_1": [0.956496, 0.357553, -0.887949, -0.978178],
-            "datetime_time_cos_1": [-0.291746, -0.933893, 0.459942, 0.207769],
-            "datetime_time_sin_2": [-0.558107, -0.667833, -0.816809, -0.406471],
-            "datetime_time_cos_2": [-0.829769, 0.744312, -0.576908, -0.913664],
-            "datetime_time_sin_24": [0.732543, -0.604599, -0.889416, -0.952129],
-            "datetime_time_cos_24": [0.680721, -0.796530, 0.457098, 0.305695],
-            "datetime_time_sin_48": [0.997314, 0.963163, -0.813101, -0.582123],
-            "datetime_time_cos_48": [-0.073238, 0.268920, -0.582123, -0.813101],
+            "datetime_day_in_quarter_sin": [0.460065, -0.269797, -0.334880, -0.682553],
+            "datetime_day_in_quarter_cos": [0.887885, 0.962917, 0.942261, 0.730836],
+            "datetime_second_sin_60": [-0.809017, 0.951057, -0.207912, -0.207912],
+            "datetime_second_cos_60": [0.587785, 0.309017, -0.978148, 0.978148],
+            "datetime_minute_sin_60": [0.669131, -0.587785, -0.913545, -0.978148],
+            "datetime_minute_cos_60": [0.743145, -0.809017, 0.406737, 0.207912],
+            "datetime_minute_sin_30": [0.994522, 0.951057, -0.743145, -0.406737],
+            "datetime_minute_cos_30": [0.104528, 0.309017, -0.669131, -0.913545],
+            "datetime_hour_sin_24": [0.965926, 0.500000, -0.965926, -1.000000],
+            "datetime_hour_cos_24": [-0.258819, -0.866025, 0.258819, -1.836970e-16],
         }
     )
     expected_df.date = expected_df.date.astype("Int64")

@@ -54,6 +54,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
+    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -95,6 +96,7 @@ from upgini.utils.email_utils import (
     EmailSearchKeyConverter,
     EmailSearchKeyDetector,
 )
+from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpSearchKeyConverter
@@ -158,6 +160,10 @@ class FeaturesEnricher(TransformerMixin):
 
     shared_datasets: list of str, optional (default=None)
         List of private shared dataset ids for custom search
+
+    select_features: bool, optional (default=False)
+        If True, return only selected features both from input and data sources.
+        Otherwise, return all features from input and only selected features from data sources.
     """
 
     TARGET_NAME = "target"
@@ -224,6 +230,7 @@ class FeaturesEnricher(TransformerMixin):
         client_visitorid: Optional[str] = None,
         custom_bundle_config: Optional[str] = None,
         add_date_if_missing: bool = True,
+        select_features: bool = False,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -277,8 +284,11 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
+        self.dropped_client_feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
+        self.select_features = select_features
+
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
 
@@ -999,9 +1009,10 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        etalon_metric, _ = baseline_estimator.cross_val_predict(
+                        etalon_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
                         )
+                        etalon_metric = etalon_cv_result.get_display_metric()
                         if etalon_metric is None:
                             self.logger.info(
                                 f"Baseline {metric} on train client features is None (maybe all features was removed)"
@@ -1033,9 +1044,9 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=self.generate_features,
                             has_date=has_date,
                         )
-                        enriched_metric, enriched_shaps = enriched_estimator.cross_val_predict(
-                            fitting_enriched_X, enriched_y_sorted
-                        )
+                        enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        enriched_metric = enriched_cv_result.get_display_metric()
+                        enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
                             self._update_shap_values(enriched_shaps)
@@ -1048,7 +1059,7 @@ class FeaturesEnricher(TransformerMixin):
                         else:
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
                         if etalon_metric is not None and enriched_metric is not None:
-                            uplift = (enriched_metric - etalon_metric) * multiplier
+                            uplift = (enriched_cv_result.metric - etalon_cv_result.metric) * multiplier
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1091,9 +1102,10 @@ class FeaturesEnricher(TransformerMixin):
                                     f"Calculate baseline {metric} on eval set {idx + 1} "
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
-                                etalon_eval_metric = baseline_estimator.calculate_metric(
+                                etalon_eval_results = baseline_estimator.calculate_metric(
                                     eval_X_sorted, eval_y_sorted, self.baseline_score_column
                                 )
+                                etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
                                     f"Baseline {metric} on eval set {idx + 1} client features: {etalon_eval_metric}"
                                 )
@@ -1105,9 +1117,10 @@ class FeaturesEnricher(TransformerMixin):
                                     f"Calculate enriched {metric} on eval set {idx + 1} "
                                     f"on combined features: {enriched_eval_X_sorted.columns.to_list()}"
                                 )
-                                enriched_eval_metric = enriched_estimator.calculate_metric(
+                                enriched_eval_results = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_eval_y_sorted
                                 )
+                                enriched_eval_metric = enriched_eval_results.get_display_metric()
                                 self.logger.info(
                                     f"Enriched {metric} on eval set {idx + 1} combined features: {enriched_eval_metric}"
                                 )
@@ -1115,7 +1128,7 @@ class FeaturesEnricher(TransformerMixin):
                                 enriched_eval_metric = None
 
                             if etalon_eval_metric is not None and enriched_eval_metric is not None:
-                                eval_uplift = (enriched_eval_metric - etalon_eval_metric) * multiplier
+                                eval_uplift = (enriched_eval_results.metric - etalon_eval_results.metric) * multiplier
                             else:
                                 eval_uplift = None
 
@@ -1198,9 +1211,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _update_shap_values(self, new_shaps: Dict[str, float]):
         new_shaps = {
-            feature: self._round_shap_value(shap)
-            for feature, shap in new_shaps.items()
-            if feature in self.feature_names_
+            feature: _round_shap_value(shap) for feature, shap in new_shaps.items() if feature in self.feature_names_
         }
         features_importances = list(new_shaps.items())
         features_importances.sort(key=lambda m: (-m[1], m[0]))
@@ -1249,7 +1260,7 @@ class FeaturesEnricher(TransformerMixin):
                 display_html_dataframe(
                     self.relevant_data_sources,
                     self._relevant_data_sources_wo_links,
-                    self.bundle.get("relevant_features_header"),
+                    self.bundle.get("relevant_data_sources_header"),
                     display_handle=self.data_sources_display_handle,
                 )
             except (ImportError, NameError):
@@ -1437,7 +1448,12 @@ class FeaturesEnricher(TransformerMixin):
         client_features = [
             c
             for c in X_sampled.columns.to_list()
-            if c
+            if (
+                not self.select_features
+                or c in self.feature_names_
+                or (self.fit_columns_renaming is not None and self.fit_columns_renaming.get(c) in self.feature_names_)
+            )
+            and c
             not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
@@ -1653,7 +1669,10 @@ class FeaturesEnricher(TransformerMixin):
         generated_features = []
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
-            df = converter.convert(df, keep_time=True)
+            # Leave original date column values
+            df_with_date_features = converter.convert(df, keep_time=True)
+            df_with_date_features[date_column] = df[date_column]
+            df = df_with_date_features
             generated_features = converter.generated_features
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
@@ -1662,9 +1681,10 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        normalizer = Normalizer(self.bundle, self.logger)
-        df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
-        columns_renaming = normalizer.columns_renaming
+        # normalizer = Normalizer(self.bundle, self.logger)
+        # df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
+        # columns_renaming = normalizer.columns_renaming
+        columns_renaming = {c: c for c in df.columns}
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
@@ -1980,9 +2000,19 @@ class FeaturesEnricher(TransformerMixin):
         file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
         search_keys = file_metadata.search_types()
         if SearchKey.IPV6_ADDRESS in search_keys:
-            search_keys.remove(SearchKey.IPV6_ADDRESS)
+            # search_keys.remove(SearchKey.IPV6_ADDRESS)
+            search_keys.pop(SearchKey.IPV6_ADDRESS, None)
 
-        keys = "{" + ", ".join([f'"{key.name}": "{key_example(key)}"' for key in search_keys]) + "}"
+        keys = (
+            "{"
+            + ", ".join(
+                [
+                    f'"{key.name}": {{"name": "{name}", "value": "{key_example(key)}"}}'
+                    for key, name in search_keys.items()
+                ]
+            )
+            + "}"
+        )
         features_for_transform = self._search_task.get_features_for_transform()
         if features_for_transform:
             original_features_for_transform = [
@@ -2063,7 +2093,9 @@ class FeaturesEnricher(TransformerMixin):
 
             is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [c for c in validated_X.columns if c in self.feature_names_]
+            columns_to_drop = [
+                c for c in validated_X.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
+            ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -2092,7 +2124,7 @@ class FeaturesEnricher(TransformerMixin):
             date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
-                df = converter.convert(df)
+                df = converter.convert(df, keep_time=True)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
             else:
@@ -2187,10 +2219,11 @@ class FeaturesEnricher(TransformerMixin):
 
             if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID)
-                if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-                    df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
+
+            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+                df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
 
             # search keys might be changed after explode
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
@@ -2210,7 +2243,7 @@ class FeaturesEnricher(TransformerMixin):
 
             combined_search_keys = combine_search_keys(search_keys.keys())
 
-            df_without_features = df.drop(columns=features_not_to_pass)
+            df_without_features = df.drop(columns=features_not_to_pass, errors="ignore")
 
             df_without_features, full_duplicates_warning = clean_full_duplicates(
                 df_without_features, self.logger, bundle=self.bundle
@@ -2319,11 +2352,15 @@ class FeaturesEnricher(TransformerMixin):
             else:
                 result = enrich()
 
-            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
-            existing_filtered_columns = [
-                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
+            selecting_columns = [
+                c
+                for c in itertools.chain(validated_X.columns.tolist(), generated_features)
+                if c not in self.dropped_client_feature_names_
             ]
-            selecting_columns = validated_X.columns.tolist() + generated_features + existing_filtered_columns
+            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
+            selecting_columns.extend(
+                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
+            )
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
@@ -3490,15 +3527,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return result_train, result_eval_sets
 
-    @staticmethod
-    def _round_shap_value(shap: float) -> float:
-        if shap > 0.0 and shap < 0.0001:
-            return 0.0001
-        else:
-            return round(shap, 4)
-
     def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
-        llm_source = "LLM with external data augmentation"
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
@@ -3509,116 +3538,40 @@ class FeaturesEnricher(TransformerMixin):
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         self.feature_names_ = []
+        self.dropped_client_feature_names_ = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
         internal_features_info = []
 
-        def list_or_single(lst: List[str], single: str):
-            return lst or ([single] if single else [])
-
-        def to_anchor(link: str, value: str) -> str:
-            if not value:
-                return ""
-            elif not link:
-                return value
-            elif value == llm_source:
-                return value
-            else:
-                return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
-
-        def make_links(names: List[str], links: List[str]):
-            all_links = [to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
-            return ",".join(all_links)
-
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
-            # Use only enriched features
+
+            is_client_feature = feature_meta.name in x_columns
+
+            if feature_meta.shap_value == 0.0:
+                if self.select_features:
+                    self.dropped_client_feature_names_.append(feature_meta.name)
+                continue
+
+            # Use only important features
             if (
-                feature_meta.name in x_columns
+                feature_meta.name in self.fit_generated_features
                 or feature_meta.name == COUNTRY
-                or feature_meta.shap_value == 0.0
-                or feature_meta.name in self.fit_generated_features
+                # In select_features mode we select also from etalon features and need to show them
+                or (not self.select_features and is_client_feature)
             ):
                 continue
 
-            feature_sample = []
             self.feature_names_.append(feature_meta.name)
-            self.feature_importances_.append(self._round_shap_value(feature_meta.shap_value))
-            if feature_meta.name in features_df.columns:
-                feature_sample = np.random.choice(features_df[feature_meta.name].dropna().unique(), 3).tolist()
-                if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
-                    feature_sample = [round(f, 4) for f in feature_sample]
-                feature_sample = [str(f) for f in feature_sample]
-                feature_sample = ", ".join(feature_sample)
-                if len(feature_sample) > 30:
-                    feature_sample = feature_sample[:30] + "..."
+            self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
 
-            internal_provider = feature_meta.data_provider or "Upgini"
-            providers = list_or_single(feature_meta.data_providers, feature_meta.data_provider)
-            provider_links = list_or_single(feature_meta.data_provider_links, feature_meta.data_provider_link)
-            if providers:
-                provider = make_links(providers, provider_links)
-            else:
-                provider = to_anchor("https://upgini.com", "Upgini")
-
-            internal_source = feature_meta.data_source or (
-                llm_source
-                if not feature_meta.name.endswith("_country") and not feature_meta.name.endswith("_postal_code")
-                else ""
-            )
-            sources = list_or_single(feature_meta.data_sources, feature_meta.data_source)
-            source_links = list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
-            if sources:
-                source = make_links(sources, source_links)
-            else:
-                source = internal_source
-
-            internal_feature_name = feature_meta.name
-            if feature_meta.doc_link:
-                feature_name = to_anchor(feature_meta.doc_link, feature_meta.name)
-            else:
-                feature_name = internal_feature_name
-
-            features_info.append(
-                {
-                    self.bundle.get("features_info_name"): feature_name,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): provider,
-                    self.bundle.get("features_info_source"): source,
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
-            features_info_without_links.append(
-                {
-                    self.bundle.get("features_info_name"): internal_feature_name,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): internal_provider,
-                    self.bundle.get("features_info_source"): internal_source,
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
-            internal_features_info.append(
-                {
-                    self.bundle.get("features_info_name"): internal_feature_name,
-                    "feature_link": feature_meta.doc_link,
-                    self.bundle.get("features_info_shap"): self._round_shap_value(feature_meta.shap_value),
-                    self.bundle.get("features_info_hitrate"): feature_meta.hit_rate,
-                    self.bundle.get("features_info_value_preview"): feature_sample,
-                    self.bundle.get("features_info_provider"): internal_provider,
-                    "provider_link": feature_meta.data_provider_link,
-                    self.bundle.get("features_info_source"): internal_source,
-                    "source_link": feature_meta.data_source_link,
-                    self.bundle.get("features_info_commercial_schema"): feature_meta.commercial_schema or "",
-                    self.bundle.get("features_info_update_frequency"): feature_meta.update_frequency,
-                }
-            )
+            feature_info = FeatureInfo.from_metadata(feature_meta, features_df, is_client_feature)
+            features_info.append(feature_info.to_row(self.bundle))
+            features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
+            internal_features_info.append(feature_info.to_internal_row(self.bundle))
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
@@ -3643,7 +3596,22 @@ class FeaturesEnricher(TransformerMixin):
             autofe_meta = self._search_task.get_autofe_metadata()
             if autofe_meta is None:
                 return None
-            features_meta = self._search_task.get_all_features_metadata_v2()
+            if len(self._internal_features_info) != 0:
+
+                def to_feature_meta(row):
+                    fm = FeaturesMetadataV2(
+                        name=row[bundle.get("features_info_name")],
+                        type="",
+                        source="",
+                        hit_rate=bundle.get("features_info_hitrate"),
+                        shap_value=bundle.get("features_info_shap"),
+                        data_source=bundle.get("features_info_source"),
+                    )
+                    return fm
+
+                features_meta = self._internal_features_info.apply(to_feature_meta).to_list()
+            else:
+                features_meta = self._search_task.get_all_features_metadata_v2()
 
             def get_feature_by_name(name: str):
                 for m in features_meta:
