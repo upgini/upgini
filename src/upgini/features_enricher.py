@@ -54,6 +54,7 @@ from upgini.metadata import (
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
+    FeaturesMetadataV2,
     FileColumnMeaningType,
     ModelTaskType,
     RuntimeParameters,
@@ -1259,7 +1260,7 @@ class FeaturesEnricher(TransformerMixin):
                 display_html_dataframe(
                     self.relevant_data_sources,
                     self._relevant_data_sources_wo_links,
-                    self.bundle.get("relevant_features_header"),
+                    self.bundle.get("relevant_data_sources_header"),
                     display_handle=self.data_sources_display_handle,
                 )
             except (ImportError, NameError):
@@ -1999,9 +2000,19 @@ class FeaturesEnricher(TransformerMixin):
         file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
         search_keys = file_metadata.search_types()
         if SearchKey.IPV6_ADDRESS in search_keys:
-            search_keys.remove(SearchKey.IPV6_ADDRESS)
+            # search_keys.remove(SearchKey.IPV6_ADDRESS)
+            search_keys.pop(SearchKey.IPV6_ADDRESS, None)
 
-        keys = "{" + ", ".join([f'"{key.name}": "{key_example(key)}"' for key in search_keys]) + "}"
+        keys = (
+            "{"
+            + ", ".join(
+                [
+                    f'"{key.name}": {{"name": "{name}", "value": "{key_example(key)}"}}'
+                    for key, name in search_keys.items()
+                ]
+            )
+            + "}"
+        )
         features_for_transform = self._search_task.get_features_for_transform()
         if features_for_transform:
             original_features_for_transform = [
@@ -3585,7 +3596,22 @@ class FeaturesEnricher(TransformerMixin):
             autofe_meta = self._search_task.get_autofe_metadata()
             if autofe_meta is None:
                 return None
-            features_meta = self._search_task.get_all_features_metadata_v2()
+            if len(self._internal_features_info) != 0:
+
+                def to_feature_meta(row):
+                    fm = FeaturesMetadataV2(
+                        name=row[bundle.get("features_info_name")],
+                        type="",
+                        source="",
+                        hit_rate=bundle.get("features_info_hitrate"),
+                        shap_value=bundle.get("features_info_shap"),
+                        data_source=bundle.get("features_info_source"),
+                    )
+                    return fm
+
+                features_meta = self._internal_features_info.apply(to_feature_meta).to_list()
+            else:
+                features_meta = self._search_task.get_all_features_metadata_v2()
 
             def get_feature_by_name(name: str):
                 for m in features_meta:
