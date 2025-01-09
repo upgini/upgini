@@ -350,6 +350,7 @@ class FeaturesEnricher(TransformerMixin):
         self.add_date_if_missing = add_date_if_missing
         self.features_info_display_handle = None
         self.data_sources_display_handle = None
+        self.autofe_features_display_handle = None
         self.report_button_handle = None
 
     def _get_api_key(self):
@@ -1049,7 +1050,7 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
-                            self._update_shap_values(enriched_shaps)
+                            self._update_shap_values(trace_id, validated_X.columns.to_list(), enriched_shaps)
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1209,37 +1210,11 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
-    def _update_shap_values(self, new_shaps: Dict[str, float]):
+    def _update_shap_values(self, trace_id: str, x_columns: List[str], new_shaps: Dict[str, float]):
         new_shaps = {
             feature: _round_shap_value(shap) for feature, shap in new_shaps.items() if feature in self.feature_names_
         }
-        features_importances = list(new_shaps.items())
-        features_importances.sort(key=lambda m: (-m[1], m[0]))
-        self.feature_names_, self.feature_importances_ = zip(*features_importances)
-        self.feature_names_ = list(self.feature_names_)
-        self.feature_importances_ = list(self.feature_importances_)
-
-        feature_name_header = self.bundle.get("features_info_name")
-        shap_value_header = self.bundle.get("features_info_shap")
-
-        def update_shap(row):
-            return new_shaps.get(row[feature_name_header], row[shap_value_header])
-
-        self.features_info[shap_value_header] = self.features_info.apply(update_shap, axis=1)
-        self._internal_features_info[shap_value_header] = self._internal_features_info.apply(update_shap, axis=1)
-        self._features_info_without_links[shap_value_header] = self._features_info_without_links.apply(
-            update_shap, axis=1
-        )
-        self.logger.info(f"Recalculated SHAP values:\n{self._features_info_without_links}")
-
-        self.features_info.sort_values(by=shap_value_header, ascending=False, inplace=True)
-        self._internal_features_info.sort_values(by=shap_value_header, ascending=False, inplace=True)
-        self._features_info_without_links.sort_values(by=shap_value_header, ascending=False, inplace=True)
-
-        self.relevant_data_sources = self._group_relevant_data_sources(self.features_info, self.bundle)
-        self._relevant_data_sources_wo_links = self._group_relevant_data_sources(
-            self._features_info_without_links, self.bundle
-        )
+        self.__prepare_feature_importances(trace_id, x_columns, new_shaps, silent=True)
 
         if self.features_info_display_handle is not None:
             try:
@@ -1252,7 +1227,7 @@ class FeaturesEnricher(TransformerMixin):
                     display_handle=self.features_info_display_handle,
                 )
             except (ImportError, NameError):
-                print(self._internal_features_info)
+                pass
         if self.data_sources_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
@@ -1264,7 +1239,20 @@ class FeaturesEnricher(TransformerMixin):
                     display_handle=self.data_sources_display_handle,
                 )
             except (ImportError, NameError):
-                print(self._relevant_data_sources_wo_links)
+                pass
+        if self.autofe_features_display_handle is not None:
+            try:
+                _ = get_ipython()  # type: ignore
+                autofe_descriptions_df = self.get_autofe_features_description()
+                if autofe_descriptions_df is not None:
+                    display_html_dataframe(
+                        df=autofe_descriptions_df,
+                        internal_df=autofe_descriptions_df,
+                        header=self.bundle.get("autofe_descriptions_header"),
+                        display_handle=self.autofe_features_display_handle,
+                    )
+            except (ImportError, NameError):
+                pass
         if self.report_button_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
@@ -2815,7 +2803,12 @@ class FeaturesEnricher(TransformerMixin):
         autofe_description = self.get_autofe_features_description()
         if autofe_description is not None:
             self.logger.info(f"AutoFE descriptions: {autofe_description}")
-            display_html_dataframe(autofe_description, autofe_description, "*Description of AutoFE feature names")
+            self.autofe_features_display_handle = display_html_dataframe(
+                df=autofe_description,
+                internal_df=autofe_description,
+                header=self.bundle.get("autofe_descriptions_header"),
+                display_id="autofe_descriptions",
+            )
 
         if self._has_paid_features(exclude_features_sources):
             if calculate_metrics is not None and calculate_metrics:
@@ -3527,7 +3520,9 @@ class FeaturesEnricher(TransformerMixin):
 
         return result_train, result_eval_sets
 
-    def __prepare_feature_importances(self, trace_id: str, x_columns: List[str], silent=False):
+    def __prepare_feature_importances(
+            self, trace_id: str, x_columns: List[str], updated_shaps: Optional[Dict[str, float]] = None, silent=False
+    ):
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
         features_meta = self._search_task.get_all_features_metadata_v2()
@@ -3543,6 +3538,10 @@ class FeaturesEnricher(TransformerMixin):
         features_info = []
         features_info_without_links = []
         internal_features_info = []
+
+        if updated_shaps is not None:
+            for fm in features_meta:
+                fm.shap_value = updated_shaps.get(fm.name, 0.0)
 
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
@@ -3603,13 +3602,13 @@ class FeaturesEnricher(TransformerMixin):
                         name=row[bundle.get("features_info_name")],
                         type="",
                         source="",
-                        hit_rate=bundle.get("features_info_hitrate"),
-                        shap_value=bundle.get("features_info_shap"),
-                        data_source=bundle.get("features_info_source"),
+                        hit_rate=row[bundle.get("features_info_hitrate")],
+                        shap_value=row[bundle.get("features_info_shap")],
+                        data_source=row[bundle.get("features_info_source")],
                     )
                     return fm
 
-                features_meta = self._internal_features_info.apply(to_feature_meta).to_list()
+                features_meta = self._internal_features_info.apply(to_feature_meta, axis=1).to_list()
             else:
                 features_meta = self._search_task.get_all_features_metadata_v2()
 
@@ -3640,27 +3639,32 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
                 description["shap"] = feature_meta.shap_value
-                description["Sources"] = feature_meta.data_source.replace("AutoFE: features from ", "").replace(
-                    "AutoFE: feature from ", ""
-                )
-                description["Feature name"] = feature_meta.name
+                description[self.bundle.get("autofe_descriptions_sources")] = feature_meta.data_source.replace(
+                    "AutoFE: features from ", ""
+                ).replace("AutoFE: feature from ", "")
+                description[self.bundle.get("autofe_descriptions_feature_name")] = feature_meta.name
 
                 feature_idx = 1
                 for bc in m.base_columns:
-                    description[f"Feature {feature_idx}"] = bc.hashed_name
+                    description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = bc.hashed_name
                     feature_idx += 1
 
-                description["Function"] = ",".join(sorted(autofe_feature.get_all_operand_names()))
+                description[self.bundle.get("autofe_descriptions_function")] = ",".join(
+                    sorted(autofe_feature.get_all_operand_names())
+                )
 
                 descriptions.append(description)
 
             if len(descriptions) == 0:
                 return None
 
-            descriptions_df = pd.DataFrame(descriptions)
-            descriptions_df.fillna("", inplace=True)
-            descriptions_df.sort_values(by="shap", ascending=False, inplace=True)
-            descriptions_df.drop(columns="shap", inplace=True)
+            descriptions_df = (
+                pd.DataFrame(descriptions)
+                .fillna("")
+                .sort_values(by="shap", ascending=False)
+                .drop(columns="shap")
+                .reset_index(drop=True)
+            )
             return descriptions_df
 
         except Exception:
