@@ -7,7 +7,7 @@ name = "upgini"
 dynamic = ["version"]
 description = "Intelligent data search & enrichment for Machine Learning"
 readme = "README.md"
-requires-python = ">=3.8,<3.11"
+requires-python = ">=3.8,<3.12"
 authors = [
     { name = "Upgini Developers", email = "madewithlove@upgini.com" },
 ]
