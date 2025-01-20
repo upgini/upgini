@@ -36,14 +36,12 @@ from upgini.metadata import (
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.target_utils import balance_undersample
+from upgini.utils.target_utils import balance_undersample, balance_undersample_forced
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
-
-from upgini.utils.warning_counter import WarningCounter
 
 
 class Dataset:  # (pd.DataFrame):
@@ -64,6 +62,7 @@ class Dataset:  # (pd.DataFrame):
     MAX_FEATURES_COUNT = 3500
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
     MAX_STRING_FEATURE_LENGTH = 24573
+    FORCE_SAMPLE_SIZE = 7_000
 
     def __init__(
         self,
@@ -78,8 +77,8 @@ class Dataset:  # (pd.DataFrame):
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
-        warning_counter: Optional[WarningCounter] = None,
         bundle: Optional[ResourceBundle] = None,
+        warning_callback: Optional[Callable] = None,
         **kwargs,
     ):
         self.bundle = bundle or get_custom_bundle()
@@ -122,7 +121,7 @@ class Dataset:  # (pd.DataFrame):
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
-        self.warning_counter = warning_counter or WarningCounter()
+        self.warning_callback = warning_callback
 
     def __len__(self):
         return len(self.data) if self.data is not None else None
@@ -217,9 +216,23 @@ class Dataset:  # (pd.DataFrame):
                     self.logger.exception("Failed to cast target to float for timeseries task type")
                     raise ValidationError(self.bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
 
-    def __resample(self):
+    def __resample(self, force_downsampling=False):
         # self.logger.info("Resampling etalon")
         # Resample imbalanced target. Only train segment (without eval_set)
+        if force_downsampling:
+            target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
+            self.data = balance_undersample_forced(
+                df=self.data,
+                target_column=target_column,
+                task_type=self.task_type,
+                random_state=self.random_state,
+                sample_size=self.FORCE_SAMPLE_SIZE,
+                logger=self.logger,
+                bundle=self.bundle,
+                warning_callback=self.warning_callback,
+            )
+            return
+
         if EVAL_SET_INDEX in self.data.columns:
             train_segment = self.data[self.data[EVAL_SET_INDEX] == 0]
         else:
@@ -268,7 +281,7 @@ class Dataset:  # (pd.DataFrame):
                     multiclass_bootstrap_loops=self.MULTICLASS_BOOTSTRAP_LOOPS,
                     logger=self.logger,
                     bundle=self.bundle,
-                    warning_counter=self.warning_counter,
+                    warning_callback=self.warning_callback,
                 )
 
         # Resample over fit threshold
@@ -418,13 +431,13 @@ class Dataset:  # (pd.DataFrame):
         if len(self.data) == 0:
             raise ValidationError(self.bundle.get("all_search_keys_invalid"))
 
-    def validate(self, validate_target: bool = True, silent_mode: bool = False):
+    def validate(self, validate_target: bool = True, silent_mode: bool = False, force_downsampling: bool = False):
         self.__validate_dataset(validate_target, silent_mode)
 
         if validate_target:
             self.__validate_target()
 
-            self.__resample()
+            self.__resample(force_downsampling)
 
             self.__validate_min_rows_count()
 
@@ -573,9 +586,10 @@ class Dataset:  # (pd.DataFrame):
         max_features: Optional[int] = None,  # deprecated
         filter_features: Optional[dict] = None,  # deprecated
         runtime_parameters: Optional[RuntimeParameters] = None,
+        force_downsampling: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
-            self.validate()
+            self.validate(force_downsampling=force_downsampling)
         file_metrics = FileMetrics()
 
         runtime_parameters = self._rename_generate_features(runtime_parameters)

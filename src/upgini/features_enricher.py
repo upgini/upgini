@@ -231,6 +231,7 @@ class FeaturesEnricher(TransformerMixin):
         custom_bundle_config: Optional[str] = None,
         add_date_if_missing: bool = True,
         select_features: bool = False,
+        disable_force_downsampling: bool = False,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -288,6 +289,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         self.search_id = search_id
         self.select_features = select_features
+        self.disable_force_downsampling = disable_force_downsampling
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -2251,6 +2253,8 @@ class FeaturesEnricher(TransformerMixin):
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
+                bundle=self.bundle,
+                warning_callback=self.__log_warning,
             )
             dataset.columns_renaming = columns_renaming
 
@@ -2696,6 +2700,18 @@ class FeaturesEnricher(TransformerMixin):
 
         combined_search_keys = combine_search_keys(self.fit_search_keys.keys())
 
+        runtime_parameters = self._get_copy_of_runtime_parameters()
+
+        # Force downsampling to 7000 for API features generation
+        force_downsampling = (
+            not self.disable_force_downsampling
+            and self.generate_features is not None
+            and phone_column is not None
+            and self.fit_columns_renaming[phone_column] in self.generate_features
+        )
+        if force_downsampling and len(df) > Dataset.FORCE_SAMPLE_SIZE:
+            runtime_parameters.properties["fast_fit"] = True
+
         dataset = Dataset(
             "tds_" + str(uuid.uuid4()),
             df=df,
@@ -2707,6 +2723,8 @@ class FeaturesEnricher(TransformerMixin):
             random_state=self.random_state,
             rest_client=self.rest_client,
             logger=self.logger,
+            bundle=self.bundle,
+            warning_callback=self.__log_warning,
         )
         dataset.columns_renaming = self.fit_columns_renaming
 
@@ -2720,8 +2738,9 @@ class FeaturesEnricher(TransformerMixin):
             start_time=start_time,
             progress_callback=progress_callback,
             extract_features=True,
-            runtime_parameters=self._get_copy_of_runtime_parameters(),
+            runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
+            force_downsampling=force_downsampling,
         )
 
         if search_id_callback is not None:
@@ -3521,7 +3540,7 @@ class FeaturesEnricher(TransformerMixin):
         return result_train, result_eval_sets
 
     def __prepare_feature_importances(
-            self, trace_id: str, x_columns: List[str], updated_shaps: Optional[Dict[str, float]] = None, silent=False
+        self, trace_id: str, x_columns: List[str], updated_shaps: Optional[Dict[str, float]] = None, silent=False
     ):
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
