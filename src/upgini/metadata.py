@@ -255,6 +255,7 @@ class FeaturesMetadataV2(BaseModel):
     data_source_links: Optional[List[str]] = None
     doc_link: Optional[str] = None
     update_frequency: Optional[str] = None
+    from_online_api: Optional[bool] = None
 
 
 class HitRateMetrics(BaseModel):
