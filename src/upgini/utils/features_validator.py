@@ -1,12 +1,12 @@
 import logging
 from logging import Logger
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
 
 from upgini.resource_bundle import bundle
-from upgini.utils.warning_counter import WarningCounter
 
 
 class FeaturesValidator:
@@ -21,13 +21,13 @@ class FeaturesValidator:
         self,
         df: pd.DataFrame,
         features: List[str],
-        features_for_generate: Optional[List[str]],
-        warning_counter: WarningCounter,
+        features_for_generate: Optional[List[str]] = None,
         columns_renaming: Optional[Dict[str, str]] = None,
-    ) -> List[str]:
+    ) -> Tuple[List[str], List[str]]:
         # one_hot_encoded_features = []
         empty_or_constant_features = []
         high_cardinality_features = []
+        warnings = []
 
         for f in features:
             column = df[f]
@@ -52,9 +52,7 @@ class FeaturesValidator:
 
         # if one_hot_encoded_features:
         #     msg = bundle.get("one_hot_encoded_features").format(one_hot_encoded_features)
-        #     print(msg)
-        #     self.logger.warning(msg)
-        #     warning_counter.increment()
+        #     warnings.append(msg)
 
         columns_renaming = columns_renaming or {}
 
@@ -62,9 +60,7 @@ class FeaturesValidator:
             msg = bundle.get("empty_or_contant_features").format(
                 [columns_renaming.get(f, f) for f in empty_or_constant_features]
             )
-            print(msg)
-            self.logger.warning(msg)
-            warning_counter.increment()
+            warnings.append(msg)
 
         high_cardinality_features = self.find_high_cardinality(df[features])
         if features_for_generate:
@@ -75,11 +71,9 @@ class FeaturesValidator:
             msg = bundle.get("high_cardinality_features").format(
                 [columns_renaming.get(f, f) for f in high_cardinality_features]
             )
-            print(msg)
-            self.logger.warning(msg)
-            warning_counter.increment()
+            warnings.append(msg)
 
-        return empty_or_constant_features + high_cardinality_features
+        return (empty_or_constant_features + high_cardinality_features, warnings)
 
     @staticmethod
     def find_high_cardinality(df: pd.DataFrame) -> List[str]:
@@ -90,9 +84,20 @@ class FeaturesValidator:
         return [
             i
             for i in df
-            if (is_object_dtype(df[i]) or is_string_dtype(df[i]) or is_integer_dtype(df[i]))
+            if (is_object_dtype(df[i]) or is_string_dtype(df[i]) or FeaturesValidator.__is_integer(df[i]))
             and (df[i].nunique(dropna=False) / row_count >= 0.85)
         ]
+
+    @staticmethod
+    def __is_integer(series: pd.Series) -> bool:
+        return (
+            is_integer_dtype(series)
+            or series.dropna()
+            .apply(
+                lambda f: (float.is_integer(f) and abs(f) < np.iinfo(np.int64).max) if isinstance(f, float) else False
+            )
+            .all()
+        )
 
     @staticmethod
     def find_constant_features(df: pd.DataFrame) -> List[str]:

@@ -1,5 +1,6 @@
+import logging
 from logging import Logger
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
@@ -12,7 +13,7 @@ from upgini.metadata import (
     ModelTaskType,
     SearchKey,
 )
-from upgini.resource_bundle import ResourceBundle
+from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from upgini.utils.target_utils import define_task
 
@@ -22,16 +23,19 @@ def remove_fintech_duplicates(
     search_keys: Dict[str, SearchKey],
     date_format: Optional[str] = None,
     logger: Optional[Logger] = None,
-    silent=False,
     bundle: ResourceBundle = None,
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, Optional[List[str]]]:
     # Initial checks for target type and date column
+    bundle = bundle or get_custom_bundle()
+    if logger is None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.FATAL)
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
     if define_task(df[TARGET], date_col is not None, silent=True) != ModelTaskType.BINARY:
-        return df
+        return df, []
 
     if date_col is None:
-        return df
+        return df, []
 
     personal_cols = []
     phone_col = _get_column_by_key(search_keys, SearchKey.PHONE)
@@ -44,7 +48,7 @@ def remove_fintech_duplicates(
     if hem_col:
         personal_cols.append(hem_col)
     if len(personal_cols) == 0:
-        return df
+        return df, []
 
     # Splitting into train and eval_set parts
     if EVAL_SET_INDEX in df.columns:
@@ -54,11 +58,13 @@ def remove_fintech_duplicates(
         train_df = df
         eval_dfs = []
 
-    def process_df(segment_df: pd.DataFrame, eval_index=0) -> pd.DataFrame:
+    warning_messages = []
+
+    def process_df(segment_df: pd.DataFrame, eval_index=0) -> Tuple[pd.DataFrame, Optional[str]]:
         """Process a subset of the dataset to remove duplicates based on personal keys."""
         # Fast check for duplicates based on personal keys
         if not segment_df[personal_cols].duplicated().any():
-            return segment_df
+            return segment_df, None
 
         sub_df = segment_df[personal_cols + [date_col, TARGET]].copy()
 
@@ -70,18 +76,18 @@ def remove_fintech_duplicates(
         total = len(uniques)
         diff_dates = len(uniques[uniques > 1])
         if diff_dates / total >= 0.6:
-            return segment_df
+            return segment_df, None
 
         # Check for duplicate rows
         duplicates = sub_df.duplicated(personal_cols, keep=False)
         duplicate_rows = sub_df[duplicates]
         if len(duplicate_rows) == 0:
-            return segment_df
+            return segment_df, None
 
         # Check if there are different target values for the same personal keys
         nonunique_target_groups = grouped_by_personal_cols[TARGET].nunique() > 1
         if nonunique_target_groups.sum() == 0:
-            return segment_df
+            return segment_df, None
 
         # Helper function to check if there are different target values within 60 days
         def has_diff_target_within_60_days(rows: pd.DataFrame):
@@ -115,23 +121,23 @@ def remove_fintech_duplicates(
                 msg = bundle.get("dataset_eval_diff_target_duplicates_fintech").format(
                     perc, len(rows_to_remove), eval_index, rows_to_remove.index.to_list()
                 )
-            if not silent:
-                print(msg)
-            if logger:
-                logger.warning(msg)
-            return segment_df[~segment_df.index.isin(rows_to_remove.index)]
-        return segment_df
+            return segment_df[~segment_df.index.isin(rows_to_remove.index)], msg
+        return segment_df, None
 
     # Process the train part separately
     logger.info(f"Train dataset shape before clean fintech duplicates: {train_df.shape}")
-    train_df = process_df(train_df)
+    train_df, train_warning = process_df(train_df)
+    if train_warning:
+        warning_messages.append(train_warning)
     logger.info(f"Train dataset shape after clean fintech duplicates: {train_df.shape}")
 
     # Process each eval_set part separately
     new_eval_dfs = []
     for i, eval_df in enumerate(eval_dfs, 1):
         logger.info(f"Eval {i} dataset shape before clean fintech duplicates: {eval_df.shape}")
-        cleaned_eval_df = process_df(eval_df, i)
+        cleaned_eval_df, eval_warning = process_df(eval_df, i)
+        if eval_warning:
+            warning_messages.append(eval_warning)
         logger.info(f"Eval {i} dataset shape after clean fintech duplicates: {cleaned_eval_df.shape}")
         new_eval_dfs.append(cleaned_eval_df)
 
@@ -143,15 +149,21 @@ def remove_fintech_duplicates(
         df = train_df
     logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
 
-    return df
+    return df, warning_messages
 
 
 def clean_full_duplicates(
-    df: pd.DataFrame, logger: Optional[Logger] = None, silent=False, bundle: ResourceBundle = None
-) -> pd.DataFrame:
+    df: pd.DataFrame, logger: Optional[Logger] = None, bundle: Optional[ResourceBundle] = None
+) -> Tuple[pd.DataFrame, Optional[str]]:
+    if logger is None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.FATAL)
+    if bundle is None:
+        bundle = get_custom_bundle()
+
     nrows = len(df)
     if nrows == 0:
-        return df
+        return df, None
     # Remove full duplicates (exclude system_record_id, sort_id and eval_set_index)
     unique_columns = df.columns.tolist()
     if SYSTEM_RECORD_ID in unique_columns:
@@ -162,6 +174,7 @@ def clean_full_duplicates(
         unique_columns.remove(SORT_ID)
     if EVAL_SET_INDEX in unique_columns:
         unique_columns.remove(EVAL_SET_INDEX)
+
     logger.info(f"Dataset shape before clean duplicates: {df.shape}")
     # Train segment goes first so if duplicates are found in train and eval set
     # then we keep unique rows in train segment
@@ -170,11 +183,9 @@ def clean_full_duplicates(
     nrows_after_full_dedup = len(df)
     share_full_dedup = 100 * (1 - nrows_after_full_dedup / nrows)
     if share_full_dedup > 0:
-        msg = bundle.get("dataset_full_duplicates").format(share_full_dedup)
-        logger.warning(msg)
-        # if not silent_mode:
-        #     print(msg)
-        # self.warning_counter.increment()
+        logger.warning(bundle.get("dataset_full_duplicates").format(share_full_dedup))
+
+    msg = None
     if TARGET in df.columns:
         unique_columns.remove(TARGET)
         marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
@@ -185,13 +196,10 @@ def clean_full_duplicates(
             share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup
 
             msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
-            logger.warning(msg)
-            if not silent:
-                print(msg)
             df = df.drop_duplicates(subset=unique_columns, keep=False)
             logger.info(f"Dataset shape after clean invalid target duplicates: {df.shape}")
 
-    return df
+    return df, msg
 
 
 def _get_column_by_key(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> Optional[str]:

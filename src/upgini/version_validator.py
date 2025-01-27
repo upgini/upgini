@@ -1,5 +1,6 @@
 import json
 import threading
+from typing import Callable, Optional
 
 import requests
 
@@ -30,15 +31,18 @@ def get_version(package, url_pattern=URL_PATTERN):
     return version
 
 
-def validate_version(logger: logging.Logger):
+def validate_version(logger: logging.Logger, warning_function: Optional[Callable[[str], None]] = None):
     def task():
         try:
             current_version = parse(__version__)
             latest_version = get_version("upgini")
             if current_version < latest_version:
                 msg = bundle.get("version_warning").format(current_version, latest_version)
-                logger.warning(msg)
-                print(msg)
+                if warning_function:
+                    warning_function(msg)
+                else:
+                    logger.warning(msg)
+                    print(msg)
         except Exception:
             logger.warning("Failed to validate version", exc_info=True)
 

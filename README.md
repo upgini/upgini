@@ -68,7 +68,7 @@
   </tr>
 </table>   
 
-⭐️ [Simple Drag & Drop Search UI](https://upgini.com/upgini-widget):   
+⭐️ [Simple Drag & Drop Search UI](https://www.upgini.com/data-search-widget):   
 <a href="https://upgini.com/upgini-widget">
 <img width="710" alt="Drag & Drop Search UI" src="https://github.com/upgini/upgini/assets/95645411/36b6460c-51f3-400e-9f04-445b938bf45e">
 </a>

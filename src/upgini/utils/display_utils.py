@@ -4,7 +4,7 @@ import textwrap
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
-from io import BytesIO
+from io import StringIO
 from typing import Callable, List, Optional
 
 import pandas as pd
@@ -150,7 +150,7 @@ def make_html_report(
     search_id: str,
     email: Optional[str] = None,
     search_keys: Optional[List[str]] = None,
-):
+) -> str:
     # relevant_features_df = relevant_features_df.copy()
     # relevant_features_df["Feature name"] = relevant_features_df["Feature name"].apply(
     #     lambda x: "*" + x if x.contains("_autofe_") else x
@@ -161,9 +161,18 @@ def make_html_report(
         """<button type="button">Request a quote</button></a>"""
     )
     relevant_datasources_df.rename(columns={"action": "&nbsp;"}, inplace=True)
+
+    try:
+        from importlib.resources import files
+        font_path = files('upgini.utils').joinpath('Roboto-Regular.ttf')
+    except Exception:
+        from pkg_resources import resource_filename
+        font_path = resource_filename('upgini.utils', 'Roboto-Regular.ttf')
+
     return f"""<html>
         <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+            <meta charset="UTF-8">
             <style>
                 @page {{
                     size: a4 portrait;
@@ -184,12 +193,14 @@ def make_html_report(
                 }}
 
                 @font-face {{
-                    font-family: "Alice-Regular";
-                    src: url("/fonts/Alice-Regular.ttf") format("truetype");
+                    font-family: "Roboto";
+                    src: url("{font_path}") format("truetype");
                 }}
 
                 body {{
-                    font-family: "Alice-Regular", Arial, sans-serif;
+                    font-family: "Roboto", sans-serif;
+                    font-weight: 400;
+                    font-style: normal;
                 }}
 
                 #header_content {{
@@ -305,8 +316,13 @@ def show_button_download_pdf(
     from IPython.display import HTML, display
 
     file_name = f"upgini-report-{uuid.uuid4()}.pdf"
+
+    # from weasyprint import HTML
+
+    # html = HTML(string=source)
+    # html.write_pdf(file_name)
     with open(file_name, "wb") as output:
-        pisa.CreatePDF(src=BytesIO(source.encode("UTF-8")), dest=output)
+        pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
 
     with open(file_name, "rb") as f:
         b64 = base64.b64encode(f.read())

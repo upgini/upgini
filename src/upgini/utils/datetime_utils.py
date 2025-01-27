@@ -11,7 +11,6 @@ from pandas.api.types import is_numeric_dtype
 from upgini.errors import ValidationError
 from upgini.metadata import EVAL_SET_INDEX, SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
-from upgini.utils.warning_counter import WarningCounter
 
 DATE_FORMATS = [
     "%Y-%m-%d",
@@ -42,8 +41,6 @@ class DateTimeSearchKeyConverter:
         date_format: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
         bundle: Optional[ResourceBundle] = None,
-        warnings_counter: Optional[WarningCounter] = None,
-        silent_mode=False,
     ):
         self.date_column = date_column
         self.date_format = date_format
@@ -54,8 +51,7 @@ class DateTimeSearchKeyConverter:
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
         self.bundle = bundle or get_custom_bundle()
-        self.warnings_counter = warnings_counter or WarningCounter()
-        self.silent_mode = silent_mode
+        self.has_old_dates = False
 
     @staticmethod
     def _int_to_opt(i: int) -> Optional[int]:
@@ -101,7 +97,6 @@ class DateTimeSearchKeyConverter:
                 df[self.date_column] = pd.to_datetime(df[self.date_column], unit="s")
             else:
                 msg = self.bundle.get("unsupported_date_type").format(self.date_column)
-                self.logger.warning(msg)
                 raise ValidationError(msg)
         else:
             df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
@@ -114,20 +109,63 @@ class DateTimeSearchKeyConverter:
 
         df = self.clean_old_dates(df)
 
+        # Define function to apply sine and cosine transformations
+        def add_cyclical_features(df, column, period):
+            period_suffix = f"_{period}" if column != "day_in_quarter" else ""
+            sin_feature = f"datetime_{column}_sin{period_suffix}"
+            cos_feature = f"datetime_{column}_cos{period_suffix}"
+            if sin_feature not in df.columns:
+                df[sin_feature] = np.sin(2 * np.pi * df[column] / period)
+                self.generated_features.append(sin_feature)
+            if cos_feature not in df.columns:
+                df[cos_feature] = np.cos(2 * np.pi * df[column] / period)
+                self.generated_features.append(cos_feature)
+
+        df["quarter"] = df[self.date_column].dt.quarter
+
+        # Calculate the start date of the quarter for each timestamp
+        df["quarter_start"] = df[self.date_column].dt.to_period("Q").dt.start_time
+
+        # Calculate the day in the quarter
+        df["day_in_quarter"] = (df[self.date_column] - df["quarter_start"]).dt.days + 1
+
+        # Vectorized calculation of days_in_quarter
+        quarter = df["quarter"]
+        start = df["quarter_start"]
+        year = start.dt.year
+        month = start.dt.month
+
+        quarter_end_year = np.where(quarter == 4, year + 1, year)
+        quarter_end_month = np.where(quarter == 4, 1, month + 3)
+
+        end = pd.to_datetime({"year": quarter_end_year, "month": quarter_end_month, "day": 1})
+        end.index = df.index
+
+        df["days_in_quarter"] = (end - start).dt.days
+
+        add_cyclical_features(df, "day_in_quarter", df["days_in_quarter"])  # Days in the quarter
+
+        df.drop(columns=["quarter", "quarter_start", "day_in_quarter", "days_in_quarter"], inplace=True)
+
         df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
 
         seconds_without_na = df[seconds].dropna()
         if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
             self.logger.info("Time found in date search key. Add extra features based on time")
-            seconds_in_day = 60 * 60 * 24
-            orders = [1, 2, 24, 48]
-            for order in orders:
-                sin_feature = f"datetime_time_sin_{order}"
-                cos_feature = f"datetime_time_cos_{order}"
-                df[sin_feature] = np.round(np.sin(2 * np.pi * order * df[seconds] / seconds_in_day), 10)
-                df[cos_feature] = np.round(np.cos(2 * np.pi * order * df[seconds] / seconds_in_day), 10)
-                self.generated_features.append(sin_feature)
-                self.generated_features.append(cos_feature)
+
+            # Extract basic components
+            df["second"] = df[self.date_column].dt.second
+            df["minute"] = df[self.date_column].dt.minute
+            df["hour"] = df[self.date_column].dt.hour
+
+            # Apply cyclical transformations
+            add_cyclical_features(df, "second", 60)  # Seconds in a minute
+            add_cyclical_features(df, "minute", 60)  # Minutes in an hour
+            add_cyclical_features(df, "minute", 30)  # Minutes in half an hour
+            add_cyclical_features(df, "hour", 24)  # Hours in a day
+
+            # Drop intermediate columns if not needed
+            df.drop(columns=["second", "minute", "hour"], inplace=True)
 
         df.drop(columns=seconds, inplace=True)
 
@@ -162,13 +200,9 @@ class DateTimeSearchKeyConverter:
         condition = df[self.date_column] <= self.MIN_SUPPORTED_DATE_TS
         old_subset = df[condition]
         if len(old_subset) > 0:
+            self.has_old_dates = True
             df.loc[condition, self.date_column] = None
             self.logger.info(f"Set to None: {len(old_subset)} of {len(df)} rows because they are before 2000-01-01")
-            msg = self.bundle.get("dataset_drop_old_dates")
-            self.logger.warning(msg)
-            if not self.silent_mode:
-                print(msg)
-            self.warnings_counter.increment()
         return df
 
 
@@ -256,13 +290,10 @@ def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[st
     return len(accumulated_changing_columns) <= 2
 
 
-def validate_dates_distribution(
+def is_dates_distribution_valid(
     df: pd.DataFrame,
     search_keys: Dict[str, SearchKey],
-    logger: Optional[logging.Logger] = None,
-    bundle: Optional[ResourceBundle] = None,
-    warning_counter: Optional[WarningCounter] = None,
-):
+) -> bool:
     maybe_date_col = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
 
     if EVAL_SET_INDEX in df.columns:
@@ -303,13 +334,4 @@ def validate_dates_distribution(
     date_counts_2 = date_counts[round(len(date_counts) / 2) :]
     ratio = date_counts_2.mean() / date_counts_1.mean()
 
-    if ratio > 1.2 or ratio < 0.8:
-        if warning_counter is not None:
-            warning_counter.increment()
-        if logger is None:
-            logger = logging.getLogger("muted_logger")
-            logger.setLevel("FATAL")
-        bundle = bundle or get_custom_bundle()
-        msg = bundle.get("x_unstable_by_date")
-        print(msg)
-        logger.warning(msg)
+    return ratio >= 0.8 and ratio <= 1.2

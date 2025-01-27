@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel
 
@@ -228,13 +228,13 @@ class FileMetadata(BaseModel):
                 return c
         return None
 
-    def search_types(self) -> Set[SearchKey]:
-        search_keys = set()
+    def search_types(self) -> Dict[SearchKey, str]:
+        search_keys = dict()
         for keys_group in self.searchKeys:
             for key in keys_group:
                 column = self.column_by_name(key)
                 if column:
-                    search_keys.add(SearchKey.from_meaning_type(column.meaningType))
+                    search_keys[SearchKey.from_meaning_type(column.meaningType)] = column.name
         return search_keys
 
 
@@ -255,6 +255,7 @@ class FeaturesMetadataV2(BaseModel):
     data_source_links: Optional[List[str]] = None
     doc_link: Optional[str] = None
     update_frequency: Optional[str] = None
+    from_online_api: Optional[bool] = None
 
 
 class HitRateMetrics(BaseModel):

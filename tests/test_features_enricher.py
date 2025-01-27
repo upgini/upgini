@@ -10,7 +10,7 @@ from requests_mock.mocker import Mocker
 
 from upgini.dataset import Dataset
 from upgini.errors import ValidationError
-from upgini.features_enricher import FeaturesEnricher
+from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.http import _RestClient
 from upgini.metadata import (
     CVType,
@@ -133,7 +133,7 @@ def test_features_enricher(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
@@ -160,16 +160,7 @@ def test_features_enricher(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 3)
-
-    enriched_train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        calculate_metrics=False,
-        keep_input=True,
-    )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics()
 
@@ -178,7 +169,9 @@ def test_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.000991, -0.032656, -0.033951],
+            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
+            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
+            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
         }
     )
     print("Expected metrics: ")
@@ -192,11 +185,11 @@ def test_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0186]
+    assert enricher.feature_importances_ == [0.0078]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0186
+    assert first_feature_info[shap_value_header] == 0.0078
 
 
 def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
@@ -338,7 +331,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     df = df.drop_duplicates(subset="rep_date")
     df = df.set_index("rep_date")
     df["rep_date"] = df.index
@@ -363,7 +356,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             calculate_metrics=False,
             keep_input=True,
         )
-        assert enriched_train_features.shape == (6, 3)
+        assert enriched_train_features.shape == (6, 5)
 
         enriched_train_features = enricher.fit_transform(
             train_features,
@@ -371,7 +364,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             calculate_metrics=False,
             keep_input=False,
         )
-        assert enriched_train_features.shape == (6, 1)
+        assert enriched_train_features.shape == (6, 3)
     finally:
         Dataset.MIN_ROWS_COUNT = min_rows_count
 
@@ -439,7 +432,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"].copy()
@@ -464,7 +457,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
         train_features,
     )
     print(enriched_train_features)
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics(
         train_features,
@@ -476,7 +469,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.026128, -0.024432, -0.009413],
+            baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
+            enriched_gini: ["0.010 ± 0.019", "-0.010 ± 0.021", "-0.017 ± 0.023"],
+            uplift: [0.003129003609412328, -0.014280053316041673, -0.027921890762357758],
         }
     )
     print("Expected metrics: ")
@@ -490,11 +485,11 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0241]
+    assert enricher.feature_importances_ == [0.0052]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0241
+    assert first_feature_info[shap_value_header] == 0.0052
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -507,7 +502,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            enriched_gini: [0.0559],
+            baseline_gini: ["-0.014 ± 0.045"],
+            enriched_gini: ["0.005 ± 0.059"],
+            uplift: [0.018997790411857896],
         }
     )
     print("Expected metrics: ")
@@ -578,7 +575,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"].to_frame()
@@ -604,7 +601,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         keep_input=True,
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics()
 
@@ -613,9 +610,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [0.008932, 0.064073, 0.049464],
-            enriched_gini: [0.007961, 0.045424, -0.014219],
-            uplift: [-0.000971, -0.018649, -0.063683],
+            baseline_gini: ["0.020 ± 0.024", "0.018 ± 0.028", "0.027 ± 0.031"],
+            enriched_gini: ["0.008 ± 0.023", "0.018 ± 0.038", "-0.005 ± 0.032"],
+            uplift: [-0.011899, 0.000176, -0.031963],
         }
     )
     print("Expected metrics: ")
@@ -629,11 +626,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0063]
+    assert enricher.feature_importances_ == [0.0085]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0063
+    assert first_feature_info[shap_value_header] == 0.0085
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -724,7 +721,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000).reset_index(drop=True)
     train_features = train_df.drop(columns="target").values
     train_target = train_df["target"].values
@@ -751,7 +748,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics()
     expected_metrics = pd.DataFrame(
@@ -759,7 +756,9 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.000991, -0.032656, -0.033951],
+            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
+            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
+            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
         }
     )
     print("Expected metrics: ")
@@ -773,11 +772,11 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0186]
+    assert enricher.feature_importances_ == [0.0078]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0186
+    assert first_feature_info[shap_value_header] == 0.0078
 
     enricher.transform(train_features)
 
@@ -841,7 +840,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     df.index.name = "custom_index_name"
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
@@ -869,7 +868,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
     assert enriched_train_features.index.name == "custom_index_name"
 
     metrics = enricher.calculate_metrics()
@@ -878,7 +877,9 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.000991, -0.032656, -0.033951],
+            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
+            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
+            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
         }
     )
     print("Expected metrics: ")
@@ -892,11 +893,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0186]
+    assert enricher.feature_importances_ == [0.0078]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0186
+    assert first_feature_info[shap_value_header] == 0.0078
 
 
 def test_features_enricher_with_index_column(requests_mock: Mocker):
@@ -958,7 +959,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     df = df.reset_index()
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
@@ -986,7 +987,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
         calculate_metrics=False,
         keep_input=True,
     )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 5)
     assert "index" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()
@@ -995,7 +996,9 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: [0.000991, -0.032656, -0.033951],
+            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
+            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
+            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
         }
     )
     print("Expected metrics: ")
@@ -1009,11 +1012,11 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0186]
+    assert enricher.feature_importances_ == [0.0078]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0186
+    assert first_feature_info[shap_value_header] == 0.0078
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
@@ -1114,8 +1117,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [5319],
             target_mean_header: [0.6364],
-            baseline_gini: [0.006597],
-            enriched_gini: [0.005371],
+            baseline_gini: ["0.007 ± 0.038"],
+            enriched_gini: ["0.005 ± 0.036"],
             uplift: [-0.001226],
         }
     )
@@ -1317,7 +1320,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
 
-    assert transformed.shape == (10000, 4)
+    assert transformed.shape == (10000, 7)
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
@@ -1495,7 +1498,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000)
     print(train_df.head(10))
     train_features = train_df.drop(columns="target")
@@ -1519,9 +1522,18 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
 
-    metrics = enricher.calculate_metrics(importance_threshold=0.8)
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: ["Train", "Eval 1", "Eval 2"],
+            rows_header: [10000, 1000, 1000],
+            target_mean_header: [0.5044, 0.487, 0.486],
+            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+        }
+    )
 
-    assert metrics is None
+    metrics = enricher.calculate_metrics(importance_threshold=0.8)
+    assert metrics is not None
+    assert_frame_equal(metrics, expected_metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_progress(requests_mock, url, validation_search_task_id)
@@ -1543,11 +1555,11 @@ def test_filter_by_importance(requests_mock: Mocker):
         importance_threshold=0.8,
     )
 
-    assert train_features.shape == (10000, 2)
+    assert train_features.shape == (10000, 4)
 
     test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.8)
 
-    assert test_features.shape == (1000, 2)
+    assert test_features.shape == (1000, 4)
 
 
 def test_filter_by_max_features(requests_mock: Mocker):
@@ -1599,7 +1611,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
@@ -1624,7 +1636,15 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics(max_features=0)
 
-    assert metrics is None
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: ["Train", "Eval 1", "Eval 2"],
+            rows_header: [10000, 1000, 1000],
+            target_mean_header: [0.5044, 0.487, 0.486],
+            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+        }
+    )
+    assert_frame_equal(metrics, expected_metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_progress(requests_mock, url, validation_search_task_id)
@@ -1641,11 +1661,11 @@ def test_filter_by_max_features(requests_mock: Mocker):
         train_features, train_target, eval_set=eval_set, calculate_metrics=False, keep_input=True, max_features=0
     )
 
-    assert train_features.shape == (10000, 2)
+    assert train_features.shape == (10000, 4)
 
     test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
 
-    assert test_features.shape == (1000, 2)
+    assert test_features.shape == (1000, 4)
 
 
 def test_validation_metrics_calculation(requests_mock: Mocker):
@@ -1667,7 +1687,8 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher.X = X
     enricher.y = y
     enricher._search_task = search_task
-    enricher._FeaturesEnricher__cached_sampled_datasets = (X, y, X, dict(), search_keys)
+    datasets_hash = hash_input(X, y, (X, y))
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (X, y, X, dict(), search_keys)
 
     with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
@@ -1869,28 +1890,36 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             features=[
                 FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_1", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_day_in_quarter_sin",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_2", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_day_in_quarter_cos",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_24", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_second_sin_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_sin_48", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_second_cos_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_1", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_sin_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_2", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_cos_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_24", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_sin_30", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_time_cos_48", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_cos_30", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -1954,7 +1983,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 11)
+    assert enriched_train_features.shape == (10000, 13)
 
     print(enricher.features_info)
 
@@ -1989,9 +2018,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: [-0.019142, -0.004371, -0.008845],
-            enriched_gini: [-0.016884, 0.011914, -0.026308],
-            uplift: [0.002258, 0.016285, -0.017463],
+            baseline_gini: ["-0.007 ± 0.020", "-0.021 ± 0.025", "-0.008 ± 0.034"],
+            enriched_gini: ["-0.015 ± 0.029", "0.004 ± 0.017", "-0.021 ± 0.023"],
+            uplift: [-0.007509, 0.025167, -0.013255],
         }
     )
     print("Expected metrics: ")
@@ -2011,7 +2040,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
     df = df[df["phone_num"] >= 10_000_000]
 
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
@@ -2142,7 +2171,7 @@ def test_imbalanced_dataset(requests_mock: Mocker):
 
         assert metrics.loc[0, "Rows"] == 8000
         assert metrics.loc[0, "Mean target"] == 0.125
-        assert metrics.loc[0, "Enriched GINI"] == 0.0
+        assert metrics.loc[0, "Enriched GINI"] == "-0.018 ± 0.030"
     finally:
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
@@ -2700,6 +2729,151 @@ def test_multikey_metrics_without_external_features():
     # TODO test case when there is no external features found and we have datetime + email
     # that produce "client" features and multiple email produce multiple email_domain features
     pass
+
+
+def test_select_features(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature", type="NUMERIC", source="etalon", hit_rate=99.0, shap_value=0.0
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        calculate_metrics=False,
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 6)
+
+    metrics = enricher.calculate_metrics()
+
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: [train_segment, eval_1_segment, eval_2_segment],
+            rows_header: [10000, 1000, 1000],
+            target_mean_header: [0.5044, 0.487, 0.486],
+            baseline_gini: ["0.006 ± 0.022", "-0.030 ± 0.020", "-0.003 ± 0.010"],
+            enriched_gini: ["-0.007 ± 0.033", "-0.021 ± 0.031", "0.010 ± 0.019"],
+            uplift: [-0.012502, 0.008984, 0.012933],
+        }
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+        select_features=True,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        calculate_metrics=False,
+        keep_input=True,
+    )
+    assert enriched_train_features.shape == (10000, 5)
+    assert "client_feature" not in enriched_train_features.columns
+
+    metrics = enricher.calculate_metrics()
+
+    expected_metrics = pd.DataFrame(
+        {
+            segment_header: [train_segment, eval_1_segment, eval_2_segment],
+            rows_header: [10000, 1000, 1000],
+            target_mean_header: [0.5044, 0.487, 0.486],
+            enriched_gini: ["0.014 ± 0.027", "0.031 ± 0.020", "-0.003 ± 0.027"],
+        }
+    )
+    print("Expected metrics: ")
+    print(expected_metrics)
+    print("Actual metrics: ")
+    print(metrics)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
 class DataFrameWrapper:

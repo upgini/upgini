@@ -1,15 +1,14 @@
 import logging
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype, is_bool_dtype
 
 from upgini.errors import ValidationError
 from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
-from upgini.utils.warning_counter import WarningCounter
 
 
 def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, np.ndarray]:
@@ -121,7 +120,7 @@ def balance_undersample(
     multiclass_bootstrap_loops: int = 2,
     logger: Optional[logging.Logger] = None,
     bundle: Optional[ResourceBundle] = None,
-    warning_counter: Optional[WarningCounter] = None,
+    warning_callback: Optional[Callable] = None,
 ) -> pd.DataFrame:
     if logger is None:
         logger = logging.getLogger("muted_logger")
@@ -130,9 +129,7 @@ def balance_undersample(
     if SYSTEM_RECORD_ID not in df.columns:
         raise Exception("System record id must be presented for undersampling")
 
-    # count = len(df)
     target = df[target_column].copy()
-    # target_classes_count = target.nunique()
 
     vc = target.value_counts()
     max_class_value = vc.index[0]
@@ -141,9 +138,6 @@ def balance_undersample(
     min_class_count = vc[min_class_value]
     num_classes = len(vc)
 
-    # min_class_percent = imbalance_threshold / target_classes_count
-    # min_class_threshold = int(min_class_percent * count)
-
     resampled_data = df
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
     if task_type == ModelTaskType.MULTICLASS:
@@ -151,12 +145,10 @@ def balance_undersample(
             min_class_count * multiclass_bootstrap_loops
         ):
 
-            # msg = bundle.get("imbalance_multiclass").format(min_class_value, min_class_count)
             msg = bundle.get("imbalanced_target").format(min_class_value, min_class_count)
             logger.warning(msg)
-            print(msg)
-            if warning_counter:
-                warning_counter.increment()
+            if warning_callback is not None:
+                warning_callback(msg)
 
             sample_strategy = dict()
             for class_value in vc.index:
@@ -180,19 +172,14 @@ def balance_undersample(
 
             resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
     elif len(df) > binary_min_sample_threshold:
-        # msg = bundle.get("dataset_rarest_class_less_threshold").format(
-        #     min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
-        # )
         msg = bundle.get("imbalanced_target").format(min_class_value, min_class_count)
         logger.warning(msg)
-        print(msg)
-        if warning_counter:
-            warning_counter.increment()
+        if warning_callback is not None:
+            warning_callback(msg)
 
         # fill up to min_sample_threshold by majority class
         minority_class = df[df[target_column] == min_class_value]
         majority_class = df[df[target_column] != min_class_value]
-        # sample_size = min(len(majority_class), min_sample_threshold - min_class_count)
         sample_size = min(
             max_class_count,
             binary_bootstrap_loops * (min_class_count + max(binary_min_sample_threshold - 2 * min_class_count, 0)),
@@ -207,44 +194,95 @@ def balance_undersample(
             | (df[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))
         ]
 
-    # elif max_class_count > min_class_count * binary_bootstrap_loops:
-    #     msg = bundle.get("dataset_rarest_class_less_threshold").format(
-    #         min_class_value, min_class_count, min_class_threshold, min_class_percent * 100
-    #     )
-    #     logger.warning(msg)
-    #     print(msg)
-    #     if warning_counter:
-    #         warning_counter.increment()
-
-    #     sampler = RandomUnderSampler(
-    #         sampling_strategy={max_class_value: binary_bootstrap_loops * min_class_count}, random_state=random_state
-    #     )
-    #     X = df[SYSTEM_RECORD_ID]
-    #     X = X.to_frame(SYSTEM_RECORD_ID)
-    #     new_x, _ = sampler.fit_resample(X, target)  # type: ignore
-
-    #     resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
-
     logger.info(f"Shape after rebalance resampling: {resampled_data}")
     return resampled_data
 
 
-def calculate_psi(expected: pd.Series, actual: pd.Series) -> float:
-    df = pd.concat([expected, actual])
+def balance_undersample_forced(
+    df: pd.DataFrame,
+    target_column: str,
+    task_type: ModelTaskType,
+    random_state: int,
+    sample_size: int = 7000,
+    logger: Optional[logging.Logger] = None,
+    bundle: Optional[ResourceBundle] = None,
+    warning_callback: Optional[Callable] = None,
+):
+    if len(df) <= sample_size:
+        return df
 
-    # Define the bins for the target variable
-    df_min = df.min()
-    df_max = df.max()
-    bins = [df_min, (df_min + df_max) / 2, df_max]
+    if logger is None:
+        logger = logging.getLogger("muted_logger")
+        logger.setLevel("FATAL")
+    bundle = bundle or get_custom_bundle()
+    if SYSTEM_RECORD_ID not in df.columns:
+        raise Exception("System record id must be presented for undersampling")
 
-    # Calculate the base distribution
-    train_distribution = expected.value_counts(bins=bins, normalize=True).sort_index().values
+    msg = bundle.get("forced_balance_undersample")
+    logger.info(msg)
+    if warning_callback is not None:
+        warning_callback(msg)
 
-    # Calculate the target distribution
-    test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
+    target = df[target_column].copy()
 
-    # Calculate the PSI
+    vc = target.value_counts()
+    max_class_value = vc.index[0]
+    min_class_value = vc.index[len(vc) - 1]
+    max_class_count = vc[max_class_value]
+    min_class_count = vc[min_class_value]
+
+    resampled_data = df
+    df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
+    if task_type in [ModelTaskType.MULTICLASS, ModelTaskType.REGRESSION, ModelTaskType.TIMESERIES]:
+        logger.warning(f"Sampling dataset from {len(df)} to {sample_size}")
+        resampled_data = df.sample(n=sample_size, random_state=random_state)
+    else:
+        msg = bundle.get("imbalanced_target").format(min_class_value, min_class_count)
+        logger.warning(msg)
+
+        # fill up to min_sample_threshold by majority class
+        minority_class = df[df[target_column] == min_class_value]
+        majority_class = df[df[target_column] != min_class_value]
+        logger.info(
+            f"Min class count: {min_class_count}. Max class count: {max_class_count}."
+            f" Rebalance sample size: {sample_size}"
+        )
+        if len(minority_class) > (sample_size / 2):
+            sampled_minority_class = minority_class.sample(n=int(sample_size / 2), random_state=random_state)
+        else:
+            sampled_minority_class = minority_class
+
+        if len(majority_class) > (sample_size) / 2:
+            sampled_majority_class = majority_class.sample(n=int(sample_size / 2), random_state=random_state)
+
+        resampled_data = df[
+            (df[SYSTEM_RECORD_ID].isin(sampled_minority_class[SYSTEM_RECORD_ID]))
+            | (df[SYSTEM_RECORD_ID].isin(sampled_majority_class[SYSTEM_RECORD_ID]))
+        ]
+
+    logger.info(f"Shape after forced rebalance resampling: {resampled_data}")
+    return resampled_data
+
+
+def calculate_psi(expected: pd.Series, actual: pd.Series) -> Union[float, Exception]:
     try:
+        df = pd.concat([expected, actual])
+
+        if is_bool_dtype(df):
+            df = np.where(df, 1, 0)
+
+        # Define the bins for the target variable
+        df_min = df.min()
+        df_max = df.max()
+        bins = [df_min, (df_min + df_max) / 2, df_max]
+
+        # Calculate the base distribution
+        train_distribution = expected.value_counts(bins=bins, normalize=True).sort_index().values
+
+        # Calculate the target distribution
+        test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
+
+        # Calculate the PSI
         return np.sum((train_distribution - test_distribution) * np.log(train_distribution / test_distribution))
-    except Exception:
-        return np.nan
+    except Exception as e:
+        return e
