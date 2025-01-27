@@ -614,6 +614,9 @@ def test_from_formula():
     check_formula("mean(a,b,c,d,e)")
     check_formula("roll_3D_mean(a,b)")
 
+    assert DateListDiff.from_formula("date_diff_type2") is None
+    assert isinstance(Feature.from_formula("date_diff_type2(a,b)").op, DateDiffType2)
+
     with pytest.raises(ValueError):
         check_formula("unsupported(a,b)")
 

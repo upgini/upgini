@@ -134,7 +134,7 @@ class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["DateListDiff"]:
-        if not formula.startswith("date_diff_"):
+        if not formula.startswith("date_diff_") or formula.startswith("date_diff_type"):
             return None
         aggregation = formula.replace("date_diff_", "")
         if "_" in aggregation:
