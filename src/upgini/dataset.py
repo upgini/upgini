@@ -422,11 +422,11 @@ class Dataset:  # (pd.DataFrame):
                     + "".join("<tr>" + "".join(map(map_color, row[1:])) + "</tr>" for row in df_stats.itertuples())
                     + "</table>"
                 )
-                print()
                 display(HTML(html_stats))
-            except (ImportError, NameError):
                 print()
+            except (ImportError, NameError):
                 print(df_stats)
+                print()
 
         if len(self.data) == 0:
             raise ValidationError(self.bundle.get("all_search_keys_invalid"))
@@ -494,11 +494,17 @@ class Dataset:  # (pd.DataFrame):
             taskType=self.task_type,
         )
 
+    @staticmethod
+    def is_column_binary_type(column):
+        return column.apply(lambda x: x is None or isinstance(x, (bytes, bytearray))).all()
+
     def __get_data_type(self, pandas_data_type, column_name: str) -> DataType:
         if is_integer_dtype(pandas_data_type):
             return DataType.INT
         elif is_float_dtype(pandas_data_type):
             return DataType.DECIMAL
+        elif self.is_column_binary_type(self.data[column_name]):
+            return DataType.BYTES
         elif is_string_dtype(pandas_data_type) or is_object_dtype(pandas_data_type):
             return DataType.STRING
         else:
