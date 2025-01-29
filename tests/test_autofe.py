@@ -735,6 +735,7 @@ def test_roll_date_groups():
             "f2": [1, 2, 1, 1, 1, 2],
             "value": [1, 2, 3, 4, 4, 5],
         },
+        index=[9, 8, 7, 6, 5, 4],
     )
 
     def check_period(period: int, agg: str, expected_values: List[float]):
@@ -742,7 +743,7 @@ def test_roll_date_groups():
             op=Roll(window_size=period, aggregation=agg),
             children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
         )
-        expected_res = pd.Series(expected_values, name="value")
+        expected_res = pd.Series(expected_values, name="value", index=df.index)
         assert_series_equal(feature.calculate(df), expected_res)
 
     check_period(1, "mean", [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
@@ -806,6 +807,7 @@ def test_lag_date_groups():
             "f2": [1, 2, 1, 1, 1, 2],
             "value": [1, 2, 3, 4, 4, 5],
         },
+        index=[9, 8, 7, 6, 5, 4],
     )
 
     def check_lag(lag_size: int, expected_values: List[float]):
@@ -813,7 +815,7 @@ def test_lag_date_groups():
             op=Lag(lag_size=lag_size),
             children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
         )
-        expected_res = pd.Series(expected_values, name="value")
+        expected_res = pd.Series(expected_values, name="value", index=df.index)
         assert_series_equal(feature.calculate(df), expected_res)
 
     check_lag(1, [np.nan, np.nan, np.nan, 1.0, 1.0, np.nan])

@@ -49,6 +49,7 @@ class TimeSeriesBase(PandasOperand, abc.ABC):
         ts = ts.groupby([c.name for c in data[1:-1]]) if len(data) > 2 else ts
         ts = self._aggregate(ts)
         ts = ts.reindex(data[1:-1] + [date] if len(data) > 2 else date).reset_index()
+        ts.index = date.index
 
         return ts.iloc[:, -1]
 
