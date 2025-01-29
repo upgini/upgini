@@ -43,6 +43,9 @@ class FileColumnMeaningType(Enum):
     EVAL_SET_INDEX = "EVAL_SET_INDEX"
     ENTITY_SYSTEM_RECORD_ID = "ENTITY_SYSTEM_RECORD_ID"
     UNNEST_KEY = "UNNEST_KEY"
+    IP_BINARY = "IP_BINARY"
+    IP_RANGE_FROM_BINARY = "IP_RANGE_FROM_BINARY"
+    IP_RANGE_TO_BINARY = "IP_RANGE_TO_BINARY"
 
 
 class SearchKey(Enum):
@@ -60,6 +63,9 @@ class SearchKey(Enum):
     IPV6_ADDRESS = FileColumnMeaningType.IPV6_ADDRESS
     IPV6_RANGE_FROM = FileColumnMeaningType.IPV6_RANGE_FROM
     IPV6_RANGE_TO = FileColumnMeaningType.IPV6_RANGE_TO
+    IP_BINARY = FileColumnMeaningType.IP_BINARY
+    IP_RANGE_FROM_BINARY = FileColumnMeaningType.IP_RANGE_FROM_BINARY
+    IP_RANGE_TO_BINARY = FileColumnMeaningType.IP_RANGE_TO_BINARY
 
     # For data source registration. Don't use it for FeaturesEnricher
     EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
@@ -112,6 +118,12 @@ class SearchKey(Enum):
             return SearchKey.MSISDN_RANGE_FROM
         if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
             return SearchKey.MSISDN_RANGE_TO
+        if meaning_type == FileColumnMeaningType.IP_BINARY:
+            return SearchKey.IP_BINARY
+        if meaning_type == FileColumnMeaningType.IP_RANGE_FROM_BINARY:
+            return SearchKey.IP_RANGE_FROM_BINARY
+        if meaning_type == FileColumnMeaningType.IP_RANGE_TO_BINARY:
+            return SearchKey.IP_RANGE_TO_BINARY
 
     @staticmethod
     def find_key(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> Optional[SearchKey]:
@@ -136,6 +148,7 @@ class DataType(Enum):
     DATE_TIME = "DATE_TIME"
     STRING = "STRING"
     BOOLEAN = "BOOLEAN"
+    BYTES = "BYTES"
 
 
 class ModelTaskType(Enum):

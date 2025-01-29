@@ -43,6 +43,16 @@ class IpSearchKeyConverter:
             pass
 
     @staticmethod
+    def _ip_to_binary(ip: Optional[_BaseAddress]) -> Optional[bytes]:
+        try:
+            if isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None:
+                return ip.ipv4_mapped.packed
+            else:
+                return ip.packed
+        except Exception:
+            pass
+
+    @staticmethod
     def _ip_to_int_str(ip: Optional[_BaseAddress]) -> Optional[str]:
         try:
             if isinstance(ip, (IPv4Address, IPv6Address)):
@@ -100,11 +110,16 @@ class IpSearchKeyConverter:
             .astype("string")
             # .str.replace(".0", "", regex=False)
         )
+        ip_binary = self.ip_column + "_binary"
+        df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
+
         df = df.drop(columns=self.ip_column)
         del self.search_keys[self.ip_column]
         del self.columns_renaming[self.ip_column]
         self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
+        self.search_keys[ip_binary] = SearchKey.IP_BINARY
         self.columns_renaming[ipv6] = original_ip  # could be __unnest_ip...
+        self.columns_renaming[ip_binary] = original_ip
 
         return df
 
