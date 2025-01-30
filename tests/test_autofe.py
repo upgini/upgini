@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,10 @@ from upgini.autofe.date import (
     DatePercentile,
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
-from upgini.autofe.unary import Abs, Norm
+from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq
+from upgini.autofe.operand import OperandRegistry
+from upgini.autofe.unary import Abs, Freq, Norm
+from upgini.autofe.vector import Lag, Mean, Roll
 
 
 def test_date_diff():
@@ -78,24 +81,30 @@ def test_date_diff_list():
         columns=["date1", "date2"],
     )
 
-    def check(aggregation, expected_name, expected_values):
+    def check(aggregation, expected_formula, expected_values):
         operand = DateListDiff(aggregation=aggregation)
-        assert operand.name == expected_name
+        assert operand.to_formula() == expected_formula
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check(
-        aggregation="min", expected_name="date_diff_min", expected_values=pd.Series([10530, 10531, -365.0, None, None])
+        aggregation="min",
+        expected_formula="date_diff_min",
+        expected_values=pd.Series([10530, 10531, -365.0, None, None]),
     )
     check(
-        aggregation="max", expected_name="date_diff_max", expected_values=pd.Series([10531, 10531, -365.0, None, None])
+        aggregation="max",
+        expected_formula="date_diff_max",
+        expected_values=pd.Series([10531, 10531, -365.0, None, None]),
     )
     check(
         aggregation="mean",
-        expected_name="date_diff_mean",
+        expected_formula="date_diff_mean",
         expected_values=pd.Series([10530.5, 10531, -365.0, None, None]),
     )
     check(
-        aggregation="nunique", expected_name="date_diff_nunique", expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0])
+        aggregation="nunique",
+        expected_formula="date_diff_nunique",
+        expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0]),
     )
 
     operand = DateListDiff(aggregation="mean")
@@ -140,11 +149,11 @@ def test_date_diff_list_bounded():
         columns=["date1", "date2"],
     )
 
-    def check_num_by_years(lower_bound, upper_bound, expected_name, expected_values):
+    def check_num_by_years(lower_bound, upper_bound, expected_formula, expected_values):
         operand = DateListDiffBounded(
             diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound
         )
-        assert operand.name == expected_name
+        assert operand.to_formula() == expected_formula
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
 
     check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2.0, 1.0, 0.0, 0.0, None, 0.0]))
@@ -390,6 +399,10 @@ def test_get_display_name():
     assert feature7.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_123"
     assert feature7.get_display_name(shorten=True) == "f_autofe_date_diff_type1_123"
 
+    feature8 = Feature.from_formula("lag_10D(date,f1,f2,value)").set_display_index("123")
+    assert feature8.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_value_autofe_lag_10d_123"
+    assert feature8.get_display_name(shorten=True) == "f_autofe_lag_10d_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
@@ -556,10 +569,7 @@ def test_distance():
 
 
 def test_empty_distance():
-    data = pd.DataFrame({
-        "v1": [None],
-        "v2": [None]
-    })
+    data = pd.DataFrame({"v1": [None], "v2": [None]})
 
     op = Distance()
 
@@ -570,6 +580,26 @@ def test_empty_distance():
     assert_series_equal(actual_values, expected_values)
 
 
+def test_to_formula():
+    assert Feature(Abs(), [Column("a")]).to_formula() == "abs(a)"
+    assert Feature(Divide(), [Column("a"), Column("b")]).to_formula() == "(a/b)"
+
+    assert Feature(Abs(), [Feature(Divide(), [Column("a"), Column("b")])]).to_formula() == "abs((a/b))"
+
+    assert Feature(GroupByThenAgg(agg="Min"), [Column("a"), Column("b")]).to_formula() == "GroupByThenMin(a,b)"
+
+    assert Feature(GroupByThenFreq(), [Column("a"), Column("b")]).to_formula() == "GroupByThenFreq(a,b)"
+
+    assert Feature(Mean(), [Column("a"), Column("b"), Column("c")]).to_formula() == "mean(a,b,c)"
+
+    assert Feature(DateDiff(), [Column("a"), Column("b")]).to_formula() == "date_diff(a,b)"
+
+    assert (
+        Feature(DatePercentile(), [Column("a"), Feature(DateDiff(), [Column("b"), Column("c")])]).to_formula()
+        == "date_per(a,date_diff(b,c))"
+    )
+
+
 def test_from_formula():
 
     def check_formula(formula):
@@ -577,10 +607,15 @@ def test_from_formula():
 
     check_formula("a")
     check_formula("(a/b)")
+    check_formula("abs((a/b))")
     check_formula("log(a)")
     check_formula("date_diff(a,b)")
     check_formula("date_per(a,date_diff(b,c))")
     check_formula("mean(a,b,c,d,e)")
+    check_formula("roll_3D_mean(a,b)")
+
+    assert DateListDiff.from_formula("date_diff_type2") is None
+    assert isinstance(Feature.from_formula("date_diff_type2(a,b)").op, DateDiffType2)
 
     with pytest.raises(ValueError):
         check_formula("unsupported(a,b)")
@@ -624,3 +659,241 @@ def test_op_params():
     assert norm1.op.alias is None
     assert norm2.op.norm == 5
     assert norm2.op.alias is None
+
+
+def test_date_list_diff_bounded_from_formula():
+    # Test with both bounds specified
+    op = DateListDiffBounded.from_formula("date_diff_Y_18_23_count")
+    assert op.diff_unit == "Y"
+    assert op.lower_bound == 18
+    assert op.upper_bound == 23
+    assert op.aggregation == "count"
+    assert op.to_formula() == "date_diff_Y_18_23_count"
+
+    # Test with only lower bound
+    op = DateListDiffBounded.from_formula("date_diff_D_60_plusinf_mean")
+    assert op.diff_unit == "D"
+    assert op.lower_bound == 60
+    assert op.upper_bound is None
+    assert op.aggregation == "mean"
+    assert op.to_formula() == "date_diff_D_60_plusinf_mean"
+
+    # Test with only upper bound
+    op = DateListDiffBounded.from_formula("date_diff_Y_minusinf_18_nunique")
+    assert op.diff_unit == "Y"
+    assert op.lower_bound is None
+    assert op.upper_bound == 18
+    assert op.aggregation == "nunique"
+    assert op.to_formula() == "date_diff_Y_minusinf_18_nunique"
+
+    # Test invalid formula returns None
+    assert DateListDiffBounded.from_formula("invalid_formula") is None
+    assert DateListDiffBounded.from_formula("date_diff_invalid") is None
+
+
+def test_roll_date():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-09", "---", "2024-05-07", "2024-05-08", "2024-05-08", "2024-05-08"],
+            "value": [1, 2, 3, 4, 5, 5, 6],
+        }
+    )
+
+    def check_agg(agg: str, expected_values: List[float]):
+        feature = Feature(op=Roll(window_size=2, aggregation=agg), children=[Column("date"), Column("value")])
+        assert feature.op.to_formula() == f"roll_2D_{agg}"
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_agg("mean", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg("min", [np.nan, 2.0, np.nan, 1.0, 4.0, 4.0, 4.0])
+    check_agg("max", [np.nan, 5.0, np.nan, 4.0, 5.0, 5.0, 5.0])
+    check_agg(
+        "std",
+        [
+            np.nan,
+            2.1213203435596424,
+            np.nan,
+            2.1213203435596424,
+            0.7071067811865476,
+            0.7071067811865476,
+            0.7071067811865476,
+        ],
+    )
+    check_agg("median", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg(
+        "norm_mean",
+        [np.nan, 0.5714285714285714, np.nan, 1.6, 1.1111111111111112, 1.1111111111111112, 1.1111111111111112],
+    )
+
+
+def test_roll_date_groups():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-06", "---", "2024-05-07", "2024-05-07", "2024-05-07"],
+            "f1": ["a", "b", "a", "a", "a", "c"],
+            "f2": [1, 2, 1, 1, 1, 2],
+            "value": [1, 2, 3, 4, 4, 5],
+        },
+        index=[9, 8, 7, 6, 5, 4],
+    )
+
+    def check_period(period: int, agg: str, expected_values: List[float]):
+        feature = Feature(
+            op=Roll(window_size=period, aggregation=agg),
+            children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value", index=df.index)
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_period(1, "mean", [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
+    check_period(2, "mean", [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])
+    check_period(2, "norm_mean", [np.nan, np.nan, np.nan, 1.6, 1.6, np.nan])
+
+
+def test_roll_from_formula():
+    roll = Roll.from_formula("roll_3d_mean")
+    assert roll.window_size == 3
+    assert roll.window_unit == "d"
+    assert roll.aggregation == "mean"
+    assert roll.to_formula() == "roll_3d_mean"
+
+    roll = Roll.from_formula("roll_10D_max")
+    assert roll.window_size == 10
+    assert roll.window_unit == "D"
+    assert roll.aggregation == "max"
+    assert roll.to_formula() == "roll_10D_max"
+
+    # Test invalid formulas
+    roll = Roll.from_formula("not_a_roll_formula")
+    assert roll is None
+
+    roll = Roll.from_formula("roll_abc_mean")
+    assert roll is None
+
+    roll = Roll.from_formula("roll_3d")
+    assert roll is None
+
+    # Test that constructed name matches formula pattern
+    roll = Roll(window_size=5, window_unit="D", aggregation="median")
+    assert roll.to_formula() == "roll_5D_median"
+
+
+def test_lag_date():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-07", "2024-05-08", "2024-05-09"],
+            "value": [1, 2, 3, 4],
+        },
+    )
+
+    def check_lag(lag_size: int, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, [np.nan, 1.0, 2.0, 3.0])
+    check_lag(2, [np.nan, np.nan, 1.0, 2.0])
+
+
+def test_lag_date_groups():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-06", "---", "2024-05-07", "2024-05-07", "2024-05-07"],
+            "f1": ["a", "b", "a", "a", "a", "c"],
+            "f2": [1, 2, 1, 1, 1, 2],
+            "value": [1, 2, 3, 4, 4, 5],
+        },
+        index=[9, 8, 7, 6, 5, 4],
+    )
+
+    def check_lag(lag_size: int, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size),
+            children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value", index=df.index)
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, [np.nan, np.nan, np.nan, 1.0, 1.0, np.nan])
+    check_lag(2, [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+
+
+def test_lag_hours():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05 22:00",
+                "2024-05-06 23:00",
+                "2024-05-07 00:00",
+                "2024-05-08 01:00",
+                "2024-05-08 02:00",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_lag(lag_size: int, lag_unit: str, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size, lag_unit=lag_unit),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, "d", [np.nan, 1.0, 1.0, 2.0, 2.0])
+    check_lag(2, "d", [np.nan, np.nan, 1.0, 1.0, 1.0])
+    check_lag(1, "H", [np.nan, np.nan, 2.0, np.nan, 4.0])
+
+
+def test_roll_hours():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05 22:00",
+                "2024-05-06 23:00",
+                "2024-05-07 00:00",
+                "2024-05-08 01:00",
+                "2024-05-08 02:00",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_roll(window_size: int, window_unit: str, aggregation: str, expected_values: List[float]):
+        feature = Feature(
+            op=Roll(window_size=window_size, window_unit=window_unit, aggregation=aggregation),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_roll(1, "d", "mean", [1.0, 2.0, 2.5, 4.0, 4.5])
+    check_roll(2, "d", "median", [np.nan, 1.5, 2.0, 3.0, 3.5])
+    check_roll(2, "H", "norm_mean", [np.nan, np.nan, 1.2, np.nan, 1.111111])
+
+
+def test_lag_from_formula():
+    lag = Lag.from_formula("lag_3d")
+    assert lag.lag_size == 3
+    assert lag.lag_unit == "d"
+    assert lag.to_formula() == "lag_3d"
+
+    lag = Lag.from_formula("lag_10D")
+    assert lag.lag_size == 10
+    assert lag.lag_unit == "D"
+    assert lag.to_formula() == "lag_10D"
+
+    # Test invalid formulas
+    lag = Lag.from_formula("not_a_lag_formula")
+    assert lag is None
+
+    lag = Lag.from_formula("lag_abc")
+    assert lag is None
+
+    # Test that constructed name matches formula pattern
+    lag = Lag(lag_size=5, lag_unit="D")
+    assert lag.to_formula() == "lag_5D"

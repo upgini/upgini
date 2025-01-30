@@ -6,8 +6,48 @@ import pandas as pd
 from pydantic import BaseModel
 
 
-class Operand(BaseModel):
-    name: str
+class OperandRegistry(type(BaseModel)):
+    _registry = {}
+    _parametrized_registry = []
+
+    def __new__(cls, name, bases, attrs):
+        new_class = super().__new__(cls, name, bases, attrs)
+        # Only register if it's a concrete class that inherits from Operand
+        base_classes = [b for b in bases]
+        base_names = {b.__name__ for b in bases}
+        while base_classes:
+            base = base_classes.pop()
+            base_names.update(b.__name__ for b in base.__bases__)
+            base_classes.extend(base.__bases__)
+
+        if "Operand" in base_names:
+            # Track parametrized operands separately
+            if "ParametrizedOperand" in base_names:
+                cls._parametrized_registry.append(new_class)
+            else:
+                try:
+                    instance = new_class()
+                    cls._registry[instance.name] = new_class
+                except Exception:
+                    pass
+        return new_class
+
+    @classmethod
+    def get_operand(cls, name: str) -> Optional["Operand"]:
+        # First try to resolve as a parametrized operand formula
+        for operand_cls in cls._parametrized_registry:
+            resolved = operand_cls.from_formula(name)
+            if resolved is not None:
+                return resolved
+        # Fall back to direct registry lookup
+        non_parametrized = cls._registry.get(name)
+        if non_parametrized is not None:
+            return non_parametrized()
+        return None
+
+
+class Operand(BaseModel, metaclass=OperandRegistry):
+    name: Optional[str] = None
     alias: Optional[str] = None
     is_unary: bool = False
     is_symmetrical: bool = False
@@ -30,6 +70,21 @@ class Operand(BaseModel):
         res = {"alias": self.alias}
         res.update(self.params or {})
         return res
+
+    def to_formula(self) -> str:
+        return self.name
+
+
+class ParametrizedOperand(Operand, abc.ABC):
+
+    @abc.abstractmethod
+    def to_formula(self) -> str:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def from_formula(cls, formula: str) -> Optional["Operand"]:
+        pass
 
 
 MAIN_COLUMN = "main_column"

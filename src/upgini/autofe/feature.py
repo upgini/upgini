@@ -121,7 +121,7 @@ class Feature:
 
     def get_hash(self) -> str:
         return hashlib.sha256(
-            "_".join([self.op.name] + [ch.get_display_name() for ch in self.children]).encode("utf-8")
+            "_".join([self.op.to_formula()] + [ch.get_display_name() for ch in self.children]).encode("utf-8")
         ).hexdigest()[:8]
 
     def set_alias(self, alias: str) -> "Feature":
@@ -129,7 +129,7 @@ class Feature:
         return self
 
     def get_all_operand_names(self) -> Set[str]:
-        return {self.op.name}.union(
+        return {self.op.to_formula()}.union(
             {n for f in self.children if isinstance(f, Feature) for n in f.get_all_operand_names()}
         )
 
@@ -160,7 +160,7 @@ class Feature:
             child.delete_data()
 
     def get_op_display_name(self) -> str:
-        return self.op.alias or self.op.name.lower()
+        return (self.op.alias or self.op.to_formula()).lower()
 
     def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
         if self.cached_display_name is not None and cache:
@@ -239,9 +239,9 @@ class Feature:
         if self.op.name in ["+", "-", "*", "/"]:
             left = self.children[0].to_formula(**kwargs)
             right = self.children[1].to_formula(**kwargs)
-            return f"({left}{self.op.name}{right})"
+            return f"({left}{self.op.to_formula()}{right})"
         else:
-            result = [self.op.name, "("]
+            result = [self.op.to_formula(), "("]
             for i in range(len(self.children)):
                 string_i = self.children[i].to_formula(**kwargs)
                 result.append(string_i)
@@ -254,9 +254,9 @@ class Feature:
         if self.op.name in ["+", "-", "*", "/"]:
             left = self.children[0].to_pretty_formula()
             right = self.children[1].to_pretty_formula()
-            return f"{left} {self.op.name} {right}"
+            return f"{left} {self.op.to_formula()} {right}"
         else:
-            result = [self.op.name, "("]
+            result = [self.op.to_formula(), "("]
             for i in range(len(self.children)):
                 string_i = self.children[i].to_pretty_formula()
                 result.append(string_i)

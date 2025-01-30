@@ -7,11 +7,11 @@ import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
-from upgini.autofe.operand import PandasOperand
+from upgini.autofe.operand import PandasOperand, ParametrizedOperand
 
 
 def get_pydantic_version():
-    major_version = int(pydantic_version.split('.')[0])
+    major_version = int(pydantic_version.split(".")[0])
     return major_version
 
 
@@ -109,7 +109,7 @@ _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len,
 _count_aggregations = ["nunique", "count"]
 
 
-class DateListDiff(PandasOperand, DateDiffMixin):
+class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
     is_binary: bool = True
     has_symmetry_importance: bool = True
 
@@ -129,10 +129,17 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         )
         return res
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            data["name"] = f"date_diff_{data.get('aggregation')}"
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        return f"date_diff_{self.aggregation}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiff"]:
+        if not formula.startswith("date_diff_") or formula.startswith("date_diff_type"):
+            return None
+        aggregation = formula.replace("date_diff_", "")
+        if "_" in aggregation:
+            return None
+        return cls(aggregation=aggregation)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         left = self._convert_to_date(left, self.left_unit)
@@ -170,23 +177,31 @@ class DateListDiff(PandasOperand, DateDiffMixin):
         return method(x) if len(x) > 0 else default
 
 
-class DateListDiffBounded(DateListDiff):
+class DateListDiffBounded(DateListDiff, ParametrizedOperand):
     lower_bound: Optional[int] = None
     upper_bound: Optional[int] = None
 
-    def __init__(self, **data: Any) -> None:
-        if "name" not in data:
-            lower_bound = data.get("lower_bound")
-            upper_bound = data.get("upper_bound")
-            components = [
-                "date_diff",
-                data.get("diff_unit"),
-                str(lower_bound if lower_bound is not None else "minusinf"),
-                str(upper_bound if upper_bound is not None else "plusinf"),
-            ]
-            components.append(data.get("aggregation"))
-            data["name"] = "_".join(components)
-        super().__init__(**data)
+    def to_formula(self) -> str:
+        lower_bound = "minusinf" if self.lower_bound is None else self.lower_bound
+        upper_bound = "plusinf" if self.upper_bound is None else self.upper_bound
+        return f"date_diff_{self.diff_unit}_{lower_bound}_{upper_bound}_{self.aggregation}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiffBounded"]:
+        import re
+
+        pattern = r"^date_diff_([^_]+)_((minusinf|\d+))_((plusinf|\d+))_(\w+)$"
+        match = re.match(pattern, formula)
+
+        if not match:
+            return None
+
+        diff_unit = match.group(1)
+        lower_bound = None if match.group(2) == "minusinf" else int(match.group(2))
+        upper_bound = None if match.group(4) == "plusinf" else int(match.group(4))
+        aggregation = match.group(6)
+
+        return cls(diff_unit=diff_unit, lower_bound=lower_bound, upper_bound=upper_bound, aggregation=aggregation)
 
     def _agg(self, x):
         x = x[
@@ -257,16 +272,17 @@ class DatePercentile(DatePercentileBase):
         # Use @field_validator for Pydantic 2.x
         from pydantic import field_validator
 
-        @field_validator('zero_bounds', mode='before')
+        @field_validator("zero_bounds", mode="before")
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
                 return json.loads(value)
             return value
+
     else:
         # Use @validator for Pydantic 1.x
         from pydantic import validator
 
-        @validator('zero_bounds', pre=True)
+        @validator("zero_bounds", pre=True)
         def parse_zero_bounds(cls, value):
             if isinstance(value, str):
                 return json.loads(value)

@@ -31,6 +31,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.autofe.feature import Feature
+from upgini.autofe.vector import TimeSeriesBase
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import HttpError, ValidationError
@@ -3690,7 +3691,9 @@ class FeaturesEnricher(TransformerMixin):
                     .rename_columns(orig_to_hashed)
                 )
 
-                if autofe_feature.op.is_vector:
+                is_ts = isinstance(autofe_feature.op, TimeSeriesBase)
+
+                if autofe_feature.op.is_vector and not is_ts:
                     continue
 
                 description = {}
@@ -3707,8 +3710,9 @@ class FeaturesEnricher(TransformerMixin):
 
                 feature_idx = 1
                 for bc in m.base_columns:
-                    description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = bc.hashed_name
-                    feature_idx += 1
+                    if not is_ts or bc.original_name not in self.fit_search_keys:
+                        description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = bc.hashed_name
+                        feature_idx += 1
 
                 description[self.bundle.get("autofe_descriptions_function")] = ",".join(
                     sorted(autofe_feature.get_all_operand_names())
