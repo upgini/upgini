@@ -822,6 +822,60 @@ def test_lag_date_groups():
     check_lag(2, [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
 
 
+def test_lag_hours():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05 22:00",
+                "2024-05-06 23:00",
+                "2024-05-07 00:00",
+                "2024-05-08 01:00",
+                "2024-05-08 02:00",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_lag(lag_size: int, lag_unit: str, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size, lag_unit=lag_unit),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, "d", [np.nan, 1.0, 1.0, 2.0, 2.0])
+    check_lag(2, "d", [np.nan, np.nan, 1.0, 1.0, 1.0])
+    check_lag(1, "H", [np.nan, np.nan, 2.0, np.nan, 4.0])
+
+
+def test_roll_hours():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05 22:00",
+                "2024-05-06 23:00",
+                "2024-05-07 00:00",
+                "2024-05-08 01:00",
+                "2024-05-08 02:00",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_roll(window_size: int, window_unit: str, aggregation: str, expected_values: List[float]):
+        feature = Feature(
+            op=Roll(window_size=window_size, window_unit=window_unit, aggregation=aggregation),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_roll(1, "d", "mean", [1.0, 2.0, 2.5, 4.0, 4.5])
+    check_roll(2, "d", "median", [np.nan, 1.5, 2.0, 3.0, 3.5])
+    check_roll(2, "H", "norm_mean", [np.nan, np.nan, 1.2, np.nan, 1.111111])
+
+
 def test_lag_from_formula():
     lag = Lag.from_formula("lag_3d")
     assert lag.lag_size == 3
