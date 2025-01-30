@@ -1844,7 +1844,8 @@ class FeaturesEnricher(TransformerMixin):
                 not self.disable_force_downsampling
                 and self.generate_features is not None
                 and phone_column is not None
-                and self.fit_columns_renaming[phone_column] in self.generate_features
+                and self.fit_columns_renaming is not None
+                and self.fit_columns_renaming.get(phone_column) in self.generate_features
                 and num_samples > Dataset.FORCE_SAMPLE_SIZE
             )
             if force_downsampling:
