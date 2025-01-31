@@ -2869,7 +2869,7 @@ class FeaturesEnricher(TransformerMixin):
                 df=autofe_description,
                 internal_df=autofe_description,
                 header=self.bundle.get("autofe_descriptions_header"),
-                display_id="autofe_descriptions",
+                display_id=f"autofe_descriptions_{uuid.uuid4()}",
             )
 
         if self._has_paid_features(exclude_features_sources):
@@ -2910,10 +2910,10 @@ class FeaturesEnricher(TransformerMixin):
                         progress_callback,
                     )
                 except Exception:
-                    self.report_button_handle = self.__show_report_button(display_id="report_button")
+                    self.report_button_handle = self.__show_report_button(display_id=f"report_button_{uuid.uuid4()}")
                     raise
 
-        self.report_button_handle = self.__show_report_button(display_id="report_button")
+        self.report_button_handle = self.__show_report_button(display_id=f"report_button_{uuid.uuid4()}")
 
         if not self.warning_counter.has_warnings():
             self.__display_support_link(self.bundle.get("all_ok_community_invite"))
@@ -3930,14 +3930,14 @@ class FeaturesEnricher(TransformerMixin):
                     self.features_info,
                     self._features_info_without_links,
                     self.bundle.get("relevant_features_header"),
-                    display_id="features_info",
+                    display_id=f"features_info_{uuid.uuid4()}",
                 )
 
                 self.data_sources_display_handle = display_html_dataframe(
                     self.relevant_data_sources,
                     self._relevant_data_sources_wo_links,
                     self.bundle.get("relevant_data_sources_header"),
-                    display_id="data_sources",
+                    display_id=f"data_sources_{uuid.uuid4()}",
                 )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
