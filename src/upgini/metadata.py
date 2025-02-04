@@ -350,3 +350,6 @@ class CVType(Enum):
     time_series = "time_series"
     blocked_time_series = "blocked_time_series"
     not_set = "not_set"
+
+    def is_time_series(self) -> bool:
+        return self in [CVType.time_series, CVType.blocked_time_series]
