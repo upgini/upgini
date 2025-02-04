@@ -237,6 +237,7 @@ class FeaturesEnricher(TransformerMixin):
         add_date_if_missing: bool = True,
         select_features: bool = False,
         disable_force_downsampling: bool = False,
+        id_columns: Optional[List[str]] = None,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -277,9 +278,14 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         validate_version(self.logger, self.__log_warning)
+
         self.search_keys = search_keys or {}
+        self.id_columns = id_columns
+        if id_columns is not None:
+            self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
+
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None
