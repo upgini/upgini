@@ -2444,7 +2444,14 @@ class FeaturesEnricher(TransformerMixin):
         # Multiple search keys allowed only for PHONE, IP, POSTAL_CODE, EMAIL, HEM
         multi_keys = [key for key, count in Counter(key_types).items() if count > 1]
         for multi_key in multi_keys:
-            if multi_key not in [SearchKey.PHONE, SearchKey.IP, SearchKey.POSTAL_CODE, SearchKey.EMAIL, SearchKey.HEM]:
+            if multi_key not in [
+                SearchKey.PHONE,
+                SearchKey.IP,
+                SearchKey.POSTAL_CODE,
+                SearchKey.EMAIL,
+                SearchKey.HEM,
+                SearchKey.CUSTOM_KEY,
+            ]:
                 msg = self.bundle.get("unsupported_multi_key").format(multi_key)
                 self.logger.warning(msg)
                 raise ValidationError(msg)
@@ -3363,7 +3370,9 @@ class FeaturesEnricher(TransformerMixin):
         for key_name, key_type in search_keys.items():
             search_key_names_by_type[key_type] = search_key_names_by_type.get(key_type, []) + [key_name]
         search_key_names_by_type = {
-            key_type: key_names for key_type, key_names in search_key_names_by_type.items() if len(key_names) > 1
+            key_type: key_names
+            for key_type, key_names in search_key_names_by_type.items()
+            if len(key_names) > 1 and key_type != SearchKey.CUSTOM_KEY
         }
         if len(search_key_names_by_type) == 0:
             return df, {}
@@ -3853,11 +3862,6 @@ class FeaturesEnricher(TransformerMixin):
             msg = self.bundle.get("unregistered_only_personal_keys")
             self.logger.warning(msg + f" Provided search keys: {search_keys}")
             raise ValidationError(msg)
-
-        if SearchKey.CUSTOM_KEY in valid_search_keys.values():
-            custom_keys = [column for column, key in valid_search_keys.items() if key == SearchKey.CUSTOM_KEY]
-            for key in custom_keys:
-                del valid_search_keys[key]
 
         if (
             len(valid_search_keys.values()) == 1
