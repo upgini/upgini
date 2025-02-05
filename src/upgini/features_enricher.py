@@ -281,8 +281,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.search_keys = search_keys or {}
         self.id_columns = id_columns
-        if id_columns is not None:
-            self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
 
@@ -2656,6 +2654,9 @@ class FeaturesEnricher(TransformerMixin):
             self.__log_warning(self.bundle.get("dataset_date_features").format(normalizer.removed_features))
 
         self.__adjust_cv(df)
+
+        if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
+            self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
 
         df, fintech_warnings = remove_fintech_duplicates(
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
