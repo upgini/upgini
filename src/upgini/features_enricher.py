@@ -989,7 +989,7 @@ class FeaturesEnricher(TransformerMixin):
                 with Spinner():
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
-                    has_date = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME]) is not None
+                    has_date = self._get_date_column(search_keys) is not None
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
 
                     wrapper = EstimatorWrapper.create(
@@ -1191,7 +1191,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
 
                     uplift_col = self.bundle.get("quality_metrics_uplift_header")
-                    date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+                    date_column = self._get_date_column(search_keys)
                     if (
                         uplift_col in metrics_df.columns
                         and (metrics_df[uplift_col] < 0).any()
@@ -1360,7 +1360,7 @@ class FeaturesEnricher(TransformerMixin):
         groups = None
 
         if not isinstance(_cv, BaseCrossValidator):
-            date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+            date_column = self._get_date_column(search_keys)
             date_series = X[date_column] if date_column is not None else None
             _cv, groups = CVConfig(
                 _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold(), group_columns=group_columns
@@ -1673,7 +1673,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.search_keys.copy()
         search_keys = self.__prepare_search_keys(df, search_keys, is_demo_dataset, is_transform=True, silent_mode=True)
 
-        date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+        date_column = self._get_date_column(search_keys)
         generated_features = []
         if date_column is not None:
             converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
@@ -1747,7 +1747,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.fit_search_keys
 
         rows_to_drop = None
-        has_date = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME]) is not None
+        has_date = self._get_date_column(search_keys) is not None
         self.model_task_type = self.model_task_type or define_task(
             self.df_with_original_index[TARGET], has_date, self.logger, silent=True
         )
@@ -1859,7 +1859,10 @@ class FeaturesEnricher(TransformerMixin):
                 df = balance_undersample_forced(
                     df=df,
                     target_column=TARGET,
+                    id_columns=self.id_columns,
+                    date_column=self._get_date_column(self.search_keys),
                     task_type=self.model_task_type,
+                    cv_type=self.cv,
                     random_state=self.random_state,
                     sample_size=Dataset.FORCE_SAMPLE_SIZE,
                     logger=self.logger,
@@ -2159,7 +2162,7 @@ class FeaturesEnricher(TransformerMixin):
             df = self.__add_country_code(df, search_keys)
 
             generated_features = []
-            date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+            date_column = self._get_date_column(search_keys)
             if date_column is not None:
                 converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
                 df = converter.convert(df, keep_time=True)
@@ -2167,7 +2170,7 @@ class FeaturesEnricher(TransformerMixin):
                 generated_features.extend(converter.generated_features)
             else:
                 self.logger.info("Input dataset hasn't date column")
-                if self.add_date_if_missing:
+                if self.__should_add_date_column():
                     df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
 
             email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
@@ -2621,7 +2624,7 @@ class FeaturesEnricher(TransformerMixin):
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
-            if self.add_date_if_missing:
+            if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
@@ -2775,6 +2778,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys=combined_search_keys,
             unnest_search_keys=unnest_search_keys,
             model_task_type=self.model_task_type,
+            cv_type=self.cv,
             date_format=self.date_format,
             random_state=self.random_state,
             rest_client=self.rest_client,
@@ -2930,6 +2934,9 @@ class FeaturesEnricher(TransformerMixin):
 
         if not self.warning_counter.has_warnings():
             self.__display_support_link(self.bundle.get("all_ok_community_invite"))
+
+    def __should_add_date_column(self):
+        return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
 
     def __adjust_cv(self, df: pd.DataFrame):
         date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
@@ -3176,7 +3183,7 @@ class FeaturesEnricher(TransformerMixin):
             if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
                 date_column = DateTimeSearchKeyConverter.DATETIME_COL
             else:
-                date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+                date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             # Xy = pd.concat([X, y], axis=1)
@@ -3368,6 +3375,10 @@ class FeaturesEnricher(TransformerMixin):
             if t == SearchKey.POSTAL_CODE:
                 return col
 
+    @staticmethod
+    def _get_date_column(search_keys: Dict[str, SearchKey]) -> Optional[str]:
+        return SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+
     def _explode_multiple_search_keys(
         self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], columns_renaming: Dict[str, str]
     ) -> Tuple[pd.DataFrame, Dict[str, List[str]]]:
@@ -3431,9 +3442,9 @@ class FeaturesEnricher(TransformerMixin):
             ]
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 date_column = DateTimeSearchKeyConverter.DATETIME_COL
-                sort_exclude_columns.append(SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME]))
+                sort_exclude_columns.append(self._get_date_column(search_keys))
             else:
-                date_column = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+                date_column = self._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
 
             sorted_other_keys = sorted(search_keys, key=lambda x: str(search_keys.get(x)))

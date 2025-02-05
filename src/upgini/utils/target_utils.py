@@ -1,14 +1,17 @@
+import itertools
 import logging
-from typing import Callable, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype, is_bool_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
+from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
+
+TS_MIN_DIFFERENT_IDS_RATIO = 0.2
 
 
 def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, np.ndarray]:
@@ -201,7 +204,10 @@ def balance_undersample(
 def balance_undersample_forced(
     df: pd.DataFrame,
     target_column: str,
+    id_columns: List[str],
+    date_column: str,
     task_type: ModelTaskType,
+    cv_type: CVType | None,
     random_state: int,
     sample_size: int = 7000,
     logger: Optional[logging.Logger] = None,
@@ -233,7 +239,16 @@ def balance_undersample_forced(
 
     resampled_data = df
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
-    if task_type in [ModelTaskType.MULTICLASS, ModelTaskType.REGRESSION, ModelTaskType.TIMESERIES]:
+    if cv_type is not None and cv_type.is_time_series():
+        logger.warning(f"Sampling time series dataset from {len(df)} to {sample_size}")
+        resampled_data = balance_undersample_time_series(
+            df,
+            id_columns=id_columns,
+            date_column=date_column,
+            sample_size=sample_size,
+            logger=logger,
+        )
+    elif task_type in [ModelTaskType.MULTICLASS, ModelTaskType.REGRESSION]:
         logger.warning(f"Sampling dataset from {len(df)} to {sample_size}")
         resampled_data = df.sample(n=sample_size, random_state=random_state)
     else:
@@ -262,6 +277,54 @@ def balance_undersample_forced(
 
     logger.info(f"Shape after forced rebalance resampling: {resampled_data}")
     return resampled_data
+
+
+def balance_undersample_time_series(
+    df: pd.DataFrame,
+    id_columns: List[str],
+    date_column: str,
+    sample_size: int,
+    min_different_ids_ratio: float = TS_MIN_DIFFERENT_IDS_RATIO,
+    logger: Optional[logging.Logger] = None,
+):
+    def ensure_tuple(x):
+        return tuple([x]) if not isinstance(x, tuple) else x
+
+    ids_sort = df.groupby(id_columns)[date_column].aggregate(["max", "count"]).T.to_dict()
+    ids_sort = {ensure_tuple(k): (v["max"], v["count"]) for k, v in ids_sort.items()}
+    id_counts = df[id_columns].value_counts()
+    id_counts.index = [ensure_tuple(i) for i in id_counts.index]
+    id_counts = id_counts.sort_index(key=lambda x: [ids_sort[y] for y in x], ascending=False).cumsum()
+    id_counts = id_counts[id_counts <= sample_size]
+    min_different_ids = int(len(df[id_columns].drop_duplicates()) * min_different_ids_ratio)
+
+    def id_mask(sample_index: pd.Index) -> pd.Index:
+        if isinstance(sample_index, pd.MultiIndex):
+            return pd.MultiIndex.from_frame(df[id_columns]).isin(sample_index)
+        else:
+            return df[id_columns[0]].isin(sample_index)
+
+    if len(id_counts) < min_different_ids:
+        if logger is not None:
+            logger.info(
+                f"Different ids count {len(id_counts)} is less than min different ids {min_different_ids}, sampling time window"
+            )
+        date_counts = df.groupby(id_columns)[date_column].nunique().sort_values(ascending=False)
+        ids_to_sample = date_counts.index[:min_different_ids]
+        mask = id_mask(ids_to_sample)
+        df = df[mask]
+        sample_date_counts = df[date_column].value_counts().sort_index(ascending=False).cumsum()
+        sample_date_counts = sample_date_counts[sample_date_counts <= sample_size]
+        df = df[df[date_column].isin(sample_date_counts.index)]
+    else:
+        if len(id_columns) > 1:
+            id_counts.index = pd.MultiIndex.from_tuples(id_counts.index)
+        else:
+            id_counts.index = [i[0] for i in id_counts.index]
+        mask = id_mask(id_counts.index)
+        df = df[mask]
+
+    return df
 
 
 def calculate_psi(expected: pd.Series, actual: pd.Series) -> Union[float, Exception]:

@@ -22,6 +22,7 @@ from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
+    CVType,
     DataType,
     FeaturesFilter,
     FileColumnMeaningType,
@@ -32,11 +33,12 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
+    SearchKey,
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.target_utils import balance_undersample, balance_undersample_forced
+from upgini.utils.target_utils import balance_undersample, balance_undersample_forced, balance_undersample_time_series
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -74,6 +76,7 @@ class Dataset:  # (pd.DataFrame):
         search_keys: Optional[List[Tuple[str, ...]]] = None,
         unnest_search_keys: Optional[Dict[str, str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
+        cv_type: Optional[CVType] = None,
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
@@ -104,6 +107,7 @@ class Dataset:  # (pd.DataFrame):
 
         self.dataset_name = dataset_name
         self.task_type = model_task_type
+        self.cv_type = cv_type
         self.description = description
         self.meaning_types = meaning_types
         self.search_keys = search_keys
@@ -225,6 +229,7 @@ class Dataset:  # (pd.DataFrame):
                 df=self.data,
                 target_column=target_column,
                 task_type=self.task_type,
+                cv_type=self.cv_type,
                 random_state=self.random_state,
                 sample_size=self.FORCE_SAMPLE_SIZE,
                 logger=self.logger,
@@ -297,7 +302,20 @@ class Dataset:  # (pd.DataFrame):
                 f"Etalon has size {len(self.data)} more than threshold {sample_threshold} "
                 f"and will be downsampled to {sample_rows}"
             )
-            resampled_data = self.data.sample(n=sample_rows, random_state=self.random_state)
+            if self.cv_type is not None and self.cv_type.is_time_series():
+                resampled_data = balance_undersample_time_series(
+                    df=self.data,
+                    id_columns=[k for k, v in self.meaning_types.items() if v == FileColumnMeaningType.CUSTOM_KEY],
+                    date_column=next(
+                        k
+                        for k, v in self.meaning_types.items()
+                        if v in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
+                    ),
+                    sample_size=sample_rows,
+                    logger=self.logger,
+                )
+            else:
+                resampled_data = self.data.sample(n=sample_rows, random_state=self.random_state)
             self.data = resampled_data
             self.logger.info(f"Shape after threshold resampling: {self.data.shape}")
 
