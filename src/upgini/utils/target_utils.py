@@ -246,6 +246,7 @@ def balance_undersample_forced(
             id_columns=id_columns,
             date_column=date_column,
             sample_size=sample_size,
+            random_state=random_state,
             logger=logger,
         )
     elif task_type in [ModelTaskType.MULTICLASS, ModelTaskType.REGRESSION]:
@@ -284,14 +285,23 @@ def balance_undersample_time_series(
     id_columns: List[str],
     date_column: str,
     sample_size: int,
+    random_state: int = 42,
     min_different_ids_ratio: float = TS_MIN_DIFFERENT_IDS_RATIO,
+    prefer_recent_dates: bool = True,
     logger: Optional[logging.Logger] = None,
 ):
     def ensure_tuple(x):
         return tuple([x]) if not isinstance(x, tuple) else x
 
+    random_state = np.random.RandomState(random_state)
+
     ids_sort = df.groupby(id_columns)[date_column].aggregate(["max", "count"]).T.to_dict()
-    ids_sort = {ensure_tuple(k): (v["max"], v["count"]) for k, v in ids_sort.items()}
+    ids_sort = {
+        ensure_tuple(k): (
+            (v["max"], v["count"], random_state.rand()) if prefer_recent_dates else (v["count"], random_state.rand())
+        )
+        for k, v in ids_sort.items()
+    }
     id_counts = df[id_columns].value_counts()
     id_counts.index = [ensure_tuple(i) for i in id_counts.index]
     id_counts = id_counts.sort_index(key=lambda x: [ids_sort[y] for y in x], ascending=False).cumsum()

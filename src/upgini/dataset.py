@@ -312,6 +312,7 @@ class Dataset:  # (pd.DataFrame):
                         if v in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
                     ),
                     sample_size=sample_rows,
+                    random_state=self.random_state,
                     logger=self.logger,
                 )
             else:

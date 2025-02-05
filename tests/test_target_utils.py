@@ -129,7 +129,7 @@ def test_balance_undersaampling_multiclass():
     assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
 
 
-def test_balance_undersampling_time_series():
+def test_balance_undersampling_time_series_trim_ids():
     df = pd.DataFrame(
         {
             "id": [1, 1, 1, 2, 2, 2, 3, 3, 3],
@@ -154,7 +154,8 @@ def test_balance_undersampling_time_series():
     assert len(balanced_df) == 6
     assert balanced_df["id"].nunique() == 2
 
-    # Test when need to sample time window due to not enough different IDs
+
+def test_balance_undersampling_time_series_trim_dates():
     df = pd.DataFrame(
         {
             "id": [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
@@ -182,7 +183,8 @@ def test_balance_undersampling_time_series():
     assert balanced_df["id"].nunique() == 2
     assert len(balanced_df["date"].unique()) == 3
 
-    # Test with multiple ID columns
+
+def test_balance_undersampling_time_series_multiple_ids():
     df = pd.DataFrame(
         {
             "id1": [1, 1, 1, 2, 2, 2],
@@ -198,7 +200,8 @@ def test_balance_undersampling_time_series():
     assert balanced_df.groupby(["id1", "id2"]).ngroups == 2
     assert balanced_df.date.max() == "2020-01-03"
 
-    # Test when one set of dates is earlier than another
+
+def test_balance_undersampling_time_series_shifted_dates():
     df = pd.DataFrame(
         {
             "id": [1, 1, 1, 2, 2, 2, 3, 3, 3],
@@ -223,6 +226,81 @@ def test_balance_undersampling_time_series():
     assert balanced_df.groupby(["id"]).ngroups == 2
     assert balanced_df.date.max() == "2020-01-04"
     assert balanced_df.date.min() == "2020-01-02"
+
+
+def test_balance_undersampling_time_series_random_seed():
+    df = pd.DataFrame(
+        {
+            "id": [1, 1, 1, 2, 2, 2, 3, 3, 3],
+            "date": [
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+            ],
+        }
+    )
+
+    balanced_df_1 = balance_undersample_time_series(
+        df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3, random_state=42
+    )
+    balanced_df_2 = balance_undersample_time_series(
+        df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3, random_state=24
+    )
+
+    # Different seeds should give different results while maintaining constraints
+    assert not balanced_df_1.equals(balanced_df_2)
+    assert len(balanced_df_1) == len(balanced_df_2) == 6
+    assert balanced_df_1.groupby(["id"]).ngroups == balanced_df_2.groupby(["id"]).ngroups == 2
+    assert balanced_df_1.date.max() == balanced_df_2.date.max() == "2020-01-04"
+    assert balanced_df_1.date.min() == balanced_df_2.date.min() == "2020-01-02"
+
+
+def test_balance_undersampling_time_series_without_recent_dates():
+    df = pd.DataFrame(
+        {
+            "id": [1, 1, 1, 2, 2, 2, 3, 3, 3],
+            "date": [
+                "2020-01-01",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+            ],
+        }
+    )
+    balanced_df_1 = balance_undersample_time_series(
+        df=df,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=6,
+        min_different_ids_ratio=2 / 3,
+        random_state=42,
+        prefer_recent_dates=False,
+    )
+    balanced_df_2 = balance_undersample_time_series(
+        df=df,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=6,
+        min_different_ids_ratio=2 / 3,
+        random_state=24,
+        prefer_recent_dates=False,
+    )
+
+    # Different seeds should give different results while maintaining constraints
+    assert not balanced_df_1.equals(balanced_df_2)
+    assert len(balanced_df_1) == len(balanced_df_2) == 6
+    assert balanced_df_1.groupby(["id"]).ngroups == balanced_df_2.groupby(["id"]).ngroups == 2
 
 
 def test_binary_psi_calculation(requests_mock: Mocker):
