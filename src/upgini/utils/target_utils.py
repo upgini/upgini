@@ -295,6 +295,8 @@ def balance_undersample_time_series(
 
     random_state = np.random.RandomState(random_state)
 
+    if not id_columns:
+        id_columns = [date_column]
     ids_sort = df.groupby(id_columns)[date_column].aggregate(["max", "count"]).T.to_dict()
     ids_sort = {
         ensure_tuple(k): (

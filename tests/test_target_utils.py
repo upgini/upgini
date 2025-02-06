@@ -201,6 +201,30 @@ def test_balance_undersampling_time_series_multiple_ids():
     assert balanced_df.date.max() == "2020-01-03"
 
 
+def test_balance_undersampling_time_series_no_ids():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2020-01-01",
+                "2020-01-02",
+                "2020-01-03",
+                "2020-01-04",
+                "2020-01-05",
+                "2020-01-06",
+                "2020-01-07",
+                "2020-01-08",
+                "2020-01-09",
+            ],
+        }
+    )
+    balanced_df = balance_undersample_time_series(
+        df=df, id_columns=[], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3
+    )
+    assert len(balanced_df) == 6
+    assert balanced_df.date.max() == "2020-01-09"
+    assert balanced_df.date.min() == "2020-01-04"
+
+
 def test_balance_undersampling_time_series_shifted_dates():
     df = pd.DataFrame(
         {
