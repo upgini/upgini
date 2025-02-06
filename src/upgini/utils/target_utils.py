@@ -306,7 +306,7 @@ def balance_undersample_time_series(
     id_counts.index = [ensure_tuple(i) for i in id_counts.index]
     id_counts = id_counts.sort_index(key=lambda x: [ids_sort[y] for y in x], ascending=False).cumsum()
     id_counts = id_counts[id_counts <= sample_size]
-    min_different_ids = int(len(df[id_columns].drop_duplicates()) * min_different_ids_ratio)
+    min_different_ids = max(int(len(df[id_columns].drop_duplicates()) * min_different_ids_ratio), 1)
 
     def id_mask(sample_index: pd.Index) -> pd.Index:
         if isinstance(sample_index, pd.MultiIndex):
@@ -317,10 +317,10 @@ def balance_undersample_time_series(
     if len(id_counts) < min_different_ids:
         if logger is not None:
             logger.info(
-                f"Different ids count {len(id_counts)} is less than min different ids {min_different_ids}, sampling time window"
+                f"Different ids count {len(id_counts)} for sample size {sample_size} is less than min different ids {min_different_ids}, sampling time window"
             )
         date_counts = df.groupby(id_columns)[date_column].nunique().sort_values(ascending=False)
-        ids_to_sample = date_counts.index[:min_different_ids]
+        ids_to_sample = date_counts.index[:min_different_ids] if len(id_counts) > 0 else date_counts.index
         mask = id_mask(ids_to_sample)
         df = df[mask]
         sample_date_counts = df[date_column].value_counts().sort_index(ascending=False).cumsum()

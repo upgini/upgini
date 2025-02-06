@@ -177,11 +177,11 @@ def test_balance_undersampling_time_series_trim_dates():
     )
 
     balanced_df = balance_undersample_time_series(
-        df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=1.0
+        df=df, id_columns=["id"], date_column="date", sample_size=4, min_different_ids_ratio=1.0
     )
-    assert len(balanced_df) == 6
+    assert len(balanced_df) == 4
     assert balanced_df["id"].nunique() == 2
-    assert len(balanced_df["date"].unique()) == 3
+    assert len(balanced_df["date"].unique()) == 2
 
 
 def test_balance_undersampling_time_series_multiple_ids():
