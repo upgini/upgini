@@ -932,6 +932,7 @@ class FeaturesEnricher(TransformerMixin):
                 cat_features, search_keys_for_metrics = self._get_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
+                search_keys_for_metrics.extend([c for c in self.id_columns if c not in search_keys_for_metrics])
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
