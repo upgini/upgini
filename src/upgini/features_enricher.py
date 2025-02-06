@@ -2656,7 +2656,10 @@ class FeaturesEnricher(TransformerMixin):
         self.__adjust_cv(df)
 
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
-            self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
+            reverse_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
+            id_columns = [reverse_renaming[col] for col in self.id_columns if col in reverse_renaming]
+            self.fit_search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
+            self.runtime_parameters.properties["id_columns"] = ",".join(id_columns)
 
         df, fintech_warnings = remove_fintech_duplicates(
             df, self.fit_search_keys, date_format=self.date_format, logger=self.logger, bundle=self.bundle
