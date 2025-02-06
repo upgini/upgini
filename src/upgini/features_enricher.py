@@ -932,9 +932,8 @@ class FeaturesEnricher(TransformerMixin):
                 cat_features, search_keys_for_metrics = self._get_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
-                search_keys_for_metrics.extend(
-                    [c for c in self.__get_renamed_id_columns() or [] if c not in search_keys_for_metrics]
-                )
+                search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
+                self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
@@ -1455,6 +1454,8 @@ class FeaturesEnricher(TransformerMixin):
                 if columns_renaming.get(sk) in search_keys_for_metrics:
                     excluded.add(sk)
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in excluded]
+
+        self.logger.info(f"Excluding search keys: {excluding_search_keys}")
 
         client_features = [
             c
@@ -2147,6 +2148,9 @@ class FeaturesEnricher(TransformerMixin):
                 validated_X = validated_X.drop(columns=columns_to_drop)
 
             search_keys = self.search_keys.copy()
+            if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
+                self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
+                
             search_keys = self.__prepare_search_keys(
                 validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
             )
@@ -2304,7 +2308,7 @@ class FeaturesEnricher(TransformerMixin):
                 meaning_types=meaning_types,
                 search_keys=combined_search_keys,
                 unnest_search_keys=unnest_search_keys,
-                id_columns=self.__get_renamed_id_columns(),
+                id_columns=self.__get_renamed_id_columns(columns_renaming),
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
@@ -2665,6 +2669,7 @@ class FeaturesEnricher(TransformerMixin):
             id_columns = self.__get_renamed_id_columns()
             if id_columns:
                 self.fit_search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
+                self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
                 self.runtime_parameters.properties["id_columns"] = ",".join(id_columns)
 
         df, fintech_warnings = remove_fintech_duplicates(
@@ -2949,8 +2954,9 @@ class FeaturesEnricher(TransformerMixin):
     def __should_add_date_column(self):
         return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
 
-    def __get_renamed_id_columns(self):
-        reverse_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
+    def __get_renamed_id_columns(self, renaming: Optional[Dict[str, str]] = None):
+        renaming = renaming or self.fit_columns_renaming
+        reverse_renaming = {v: k for k, v in renaming.items()}
         return None if self.id_columns is None else [reverse_renaming.get(c) or c for c in self.id_columns]
 
     def __adjust_cv(self, df: pd.DataFrame):
