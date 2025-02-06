@@ -2300,7 +2300,7 @@ class FeaturesEnricher(TransformerMixin):
                 meaning_types=meaning_types,
                 search_keys=combined_search_keys,
                 unnest_search_keys=unnest_search_keys,
-                id_columns=self.id_columns,
+                id_columns=self.__get_renamed_id_columns(),
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
@@ -2658,8 +2658,7 @@ class FeaturesEnricher(TransformerMixin):
         self.__adjust_cv(df)
 
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
-            reverse_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
-            id_columns = [reverse_renaming[col] for col in self.id_columns if col in reverse_renaming]
+            id_columns = self.__get_renamed_id_columns()
             self.fit_search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
             self.runtime_parameters.properties["id_columns"] = ",".join(id_columns)
 
@@ -2785,7 +2784,7 @@ class FeaturesEnricher(TransformerMixin):
             unnest_search_keys=unnest_search_keys,
             model_task_type=self.model_task_type,
             cv_type=self.cv,
-            id_columns=self.id_columns,
+            id_columns=self.__get_renamed_id_columns(),
             date_format=self.date_format,
             random_state=self.random_state,
             rest_client=self.rest_client,
@@ -2944,6 +2943,10 @@ class FeaturesEnricher(TransformerMixin):
 
     def __should_add_date_column(self):
         return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
+
+    def __get_renamed_id_columns(self):
+        reverse_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
+        return [reverse_renaming.get(c) or c for c in self.id_columns]
 
     def __adjust_cv(self, df: pd.DataFrame):
         date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
