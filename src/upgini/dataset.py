@@ -77,6 +77,7 @@ class Dataset:  # (pd.DataFrame):
         unnest_search_keys: Optional[Dict[str, str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         cv_type: Optional[CVType] = None,
+        id_columns: Optional[List[str]] = None,
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
@@ -120,6 +121,7 @@ class Dataset:  # (pd.DataFrame):
         self.random_state = random_state
         self.columns_renaming: Dict[str, str] = {}
         self.imbalanced: bool = False
+        self.id_columns = id_columns
         if logger is not None:
             self.logger = logger
         else:
@@ -230,6 +232,7 @@ class Dataset:  # (pd.DataFrame):
                 target_column=target_column,
                 task_type=self.task_type,
                 cv_type=self.cv_type,
+                id_columns=self.id_columns,
                 random_state=self.random_state,
                 sample_size=self.FORCE_SAMPLE_SIZE,
                 logger=self.logger,
@@ -305,7 +308,7 @@ class Dataset:  # (pd.DataFrame):
             if self.cv_type is not None and self.cv_type.is_time_series():
                 resampled_data = balance_undersample_time_series(
                     df=self.data,
-                    id_columns=[k for k, v in self.meaning_types.items() if v == FileColumnMeaningType.CUSTOM_KEY],
+                    id_columns=self.id_columns,
                     date_column=next(
                         k
                         for k, v in self.meaning_types.items()

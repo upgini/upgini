@@ -932,7 +932,7 @@ class FeaturesEnricher(TransformerMixin):
                 cat_features, search_keys_for_metrics = self._get_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
-                search_keys_for_metrics.extend([c for c in self.id_columns if c not in search_keys_for_metrics])
+                search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
 
                 prepared_data = self._prepare_data_for_metrics(
                     trace_id=trace_id,
@@ -2300,6 +2300,7 @@ class FeaturesEnricher(TransformerMixin):
                 meaning_types=meaning_types,
                 search_keys=combined_search_keys,
                 unnest_search_keys=unnest_search_keys,
+                id_columns=self.id_columns,
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
@@ -2784,6 +2785,7 @@ class FeaturesEnricher(TransformerMixin):
             unnest_search_keys=unnest_search_keys,
             model_task_type=self.model_task_type,
             cv_type=self.cv,
+            id_columns=self.id_columns,
             date_format=self.date_format,
             random_state=self.random_state,
             rest_client=self.rest_client,
