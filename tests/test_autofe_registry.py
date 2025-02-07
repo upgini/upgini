@@ -11,7 +11,7 @@ def test_get_operands_from_registry():
     # Test parametrized group by operand
     parsed = OperandRegistry.get_operand("GroupByThenMin")
     assert parsed is not None
-    assert parsed.agg == "min"
+    assert parsed.agg == "Min"
     assert parsed.is_grouping is True
     assert parsed.__class__.__name__ == "GroupByThenAgg"
 

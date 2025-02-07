@@ -340,6 +340,7 @@ enricher = FeaturesEnricher(
 	date_format = "%Y-%d-%m"
 )
 ```
+
 ### 4. 🔍 Start your first feature search!
 The main abstraction you interact is `FeaturesEnricher`, a Scikit-learn compatible estimator.  You can easily add it into your existing ML pipelines. 
 Create instance of the `FeaturesEnricher` class and call:
@@ -370,7 +371,7 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y)
 ```
 
-That's all). We've fitted `FeaturesEnricher`. 
+That's all! We've fit `FeaturesEnricher`. 
 ### 5. 📈 Evaluate feature importances (SHAP values) from the search result
 
 `FeaturesEnricher` class has two properties for feature importances, which will be filled after fit - `feature_names_` and `feature_importances_`:  
@@ -422,7 +423,7 @@ enricher = FeaturesEnricher(
 ) 
 ```
 
-## 💻 How it works?
+## 💻 How does it work?
 
 ### 🧹 Search dataset validation
 We validate and clean search initialization dataset under the hood:  
@@ -462,6 +463,17 @@ from upgini.metadata import SearchKey, CVType
 enricher = FeaturesEnricher(
 	search_keys={"sales_date": SearchKey.DATE},
 	cv=CVType.time_series
+)
+```
+
+If you're working with multivariate time series, you should specify id columns of individual univariate series in `FeaturesEnricher`. For example, if you have a dataset predicting sales for different stores and products, you should specify store and product id columns as follows:
+```python
+enricher = FeaturesEnricher(
+    search_keys={
+        "sales_date": SearchKey.DATE,
+    },
+    id_columns=["store_id", "product_id"],
+    cv=CVType.time_series
 )
 ```
 ⚠️ **Pre-process search dataset** in case of time series prediction:  

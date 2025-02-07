@@ -77,6 +77,7 @@ class Dataset:  # (pd.DataFrame):
         unnest_search_keys: Optional[Dict[str, str]] = None,
         model_task_type: Optional[ModelTaskType] = None,
         cv_type: Optional[CVType] = None,
+        date_column: Optional[str] = None,
         id_columns: Optional[List[str]] = None,
         random_state: Optional[int] = None,
         rest_client: Optional[_RestClient] = None,
@@ -122,6 +123,7 @@ class Dataset:  # (pd.DataFrame):
         self.columns_renaming: Dict[str, str] = {}
         self.imbalanced: bool = False
         self.id_columns = id_columns
+        self.date_column = date_column
         if logger is not None:
             self.logger = logger
         else:
@@ -232,6 +234,7 @@ class Dataset:  # (pd.DataFrame):
                 target_column=target_column,
                 task_type=self.task_type,
                 cv_type=self.cv_type,
+                date_column=self.date_column,
                 id_columns=self.id_columns,
                 random_state=self.random_state,
                 sample_size=self.FORCE_SAMPLE_SIZE,
