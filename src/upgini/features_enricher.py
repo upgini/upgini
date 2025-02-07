@@ -2704,6 +2704,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.fit_search_keys,
                 self.fit_columns_renaming,
                 list(unnest_search_keys.keys()),
+                self.bundle,
                 self.logger,
             )
             df = converter.convert(df)
