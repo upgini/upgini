@@ -3971,7 +3971,7 @@ class FeaturesEnricher(TransformerMixin):
             display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
-        search_key_names = search_keys.keys()
+        search_key_names = [col for col, tpe in search_keys.items() if tpe != SearchKey.CUSTOM_KEY]
         if self.fit_columns_renaming:
             search_key_names = [self.fit_columns_renaming.get(col, col) for col in search_key_names]
         msg = self.bundle.get("features_info_header").format(len(self.feature_names_), search_key_names)
