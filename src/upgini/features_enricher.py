@@ -2152,7 +2152,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys = self.search_keys.copy()
             if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
                 self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
-                
+
             search_keys = self.__prepare_search_keys(
                 validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
             )
@@ -2311,6 +2311,7 @@ class FeaturesEnricher(TransformerMixin):
                 search_keys=combined_search_keys,
                 unnest_search_keys=unnest_search_keys,
                 id_columns=self.__get_renamed_id_columns(columns_renaming),
+                date_column=self._get_date_column(search_keys),
                 date_format=self.date_format,
                 rest_client=self.rest_client,
                 logger=self.logger,
@@ -2797,6 +2798,7 @@ class FeaturesEnricher(TransformerMixin):
             model_task_type=self.model_task_type,
             cv_type=self.cv,
             id_columns=self.__get_renamed_id_columns(),
+            date_column=self._get_date_column(self.fit_search_keys),
             date_format=self.date_format,
             random_state=self.random_state,
             rest_client=self.rest_client,
