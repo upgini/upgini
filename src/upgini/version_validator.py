@@ -39,7 +39,7 @@ def validate_version(logger: logging.Logger, warning_function: Optional[Callable
             if current_version < latest_version:
                 msg = bundle.get("version_warning").format(current_version, latest_version)
                 if warning_function:
-                    warning_function(msg)
+                    warning_function(msg, is_red=True)
                 else:
                     logger.warning(msg)
                     print(msg)

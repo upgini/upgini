@@ -2036,14 +2036,13 @@ class FeaturesEnricher(TransformerMixin):
         file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
         search_keys = file_metadata.search_types()
         if SearchKey.IPV6_ADDRESS in search_keys:
-            # search_keys.remove(SearchKey.IPV6_ADDRESS)
             search_keys.pop(SearchKey.IPV6_ADDRESS, None)
-
+        original_names = {c.name: c.originalName for c in file_metadata.columns}
         keys = (
             "{"
             + ", ".join(
                 [
-                    f'"{key.name}": {{"name": "{name}", "value": "{key_example(key)}"}}'
+                    f'"{key.name}": {{"name": "{original_names.get(name, name)}", "value": "{key_example(key)}"}}'
                     for key, name in search_keys.items()
                 ]
             )
@@ -2063,10 +2062,27 @@ class FeaturesEnricher(TransformerMixin):
             features_section = ""
 
         search_id = self._search_task.search_task_id
-        api_example = f"""curl 'https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}' \\
+        api_example = f"""
+{Format.BOLD}Shell{Format.END}:
+
+curl 'https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}' \\
     -H 'Authorization: {self.api_key}' \\
     -H 'Content-Type: application/json' \\
-    -d '{{"search_keys": {keys}{features_section}, "only_online_sources": {str(only_online_sources).lower()}}}'"""
+    -d '{{"search_keys": {keys}{features_section}, "only_online_sources": {str(only_online_sources).lower()}}}'
+
+{Format.BOLD}Python{Format.END}:
+
+import requests
+
+response = requests.post(
+    url='https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}',
+    headers={{'Authorization': '{self.api_key}'}},
+    json={{"search_keys": {keys}{features_section}, "only_online_sources": {only_online_sources}}}
+)
+if response.status_code == 200:
+    print(response.json())
+"""
+
         return api_example
 
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
@@ -2511,9 +2527,11 @@ class FeaturesEnricher(TransformerMixin):
     def __is_registered(self) -> bool:
         return self.api_key is not None and self.api_key != ""
 
-    def __log_warning(self, message: str, show_support_link: bool = False):
+    def __log_warning(self, message: str, show_support_link: bool = False, is_red=False):
         warning_num = self.warning_counter.increment()
         formatted_message = f"WARNING #{warning_num}: {message}\n"
+        if is_red:
+            formatted_message = Format.RED + formatted_message + Format.END
         if show_support_link:
             self.__display_support_link(formatted_message)
         else:
