@@ -110,16 +110,16 @@ class IpSearchKeyConverter:
             .astype("string")
             # .str.replace(".0", "", regex=False)
         )
-        ip_binary = self.ip_column + "_binary"
-        df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
+        # ip_binary = self.ip_column + "_binary"
+        # df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
 
         df = df.drop(columns=self.ip_column)
         del self.search_keys[self.ip_column]
         del self.columns_renaming[self.ip_column]
         self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
-        self.search_keys[ip_binary] = SearchKey.IP_BINARY
-        self.columns_renaming[ipv6] = original_ip  # could be __unnest_ip...
-        self.columns_renaming[ip_binary] = original_ip
+        # self.search_keys[ip_binary] = SearchKey.IP_BINARY
+        self.columns_renaming[ipv6] = original_ip
+        # self.columns_renaming[ip_binary] = original_ip
 
         return df
 
