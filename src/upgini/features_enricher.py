@@ -584,6 +584,7 @@ class FeaturesEnricher(TransformerMixin):
             Transformed dataframe, enriched with valuable features.
         """
 
+        self.warning_counter.reset()
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
@@ -720,7 +721,7 @@ class FeaturesEnricher(TransformerMixin):
         X_new: pandas.DataFrame of shape (n_samples, n_features_new)
             Transformed dataframe, enriched with valuable features.
         """
-
+        self.warning_counter.reset()
         search_progress = SearchProgress(0.0, ProgressStage.START_TRANSFORM)
         if progress_callback is not None:
             progress_callback(search_progress)
