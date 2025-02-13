@@ -1086,13 +1086,16 @@ class FeaturesEnricher(TransformerMixin):
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
                             "quality_metrics_train_segment"
                         ),
-                        self.bundle.get("quality_metrics_rows_header"): _num_samples(effective_X),
+                        # self.bundle.get("quality_metrics_rows_header"): _num_samples(effective_X),
+                        # Show actually used for metrics dataset size
+                        self.bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                         validated_y
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                            np.mean(validated_y), 4
+                            # np.mean(validated_y), 4
+                            np.mean(y_sorted), 4
                         )
                     if etalon_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -1153,13 +1156,14 @@ class FeaturesEnricher(TransformerMixin):
                             else:
                                 eval_uplift = None
 
-                            # effective_eval_set = eval_set if eval_set is not None else self.eval_set
                             eval_metrics = {
                                 self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
                                 self.bundle.get("quality_metrics_rows_header"): _num_samples(
-                                    effective_eval_set[idx][0]
+                                    # effective_eval_set[idx][0]
+                                    # Use actually used for metrics dataset
+                                    eval_X_sorted
                                 ),
                                 # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
@@ -1167,7 +1171,9 @@ class FeaturesEnricher(TransformerMixin):
                                 validated_eval_set[idx][1]
                             ):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                                    np.mean(validated_eval_set[idx][1]), 4
+                                    # np.mean(validated_eval_set[idx][1]), 4
+                                    # Use actually used for metrics dataset
+                                    np.mean(eval_y_sorted), 4
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
@@ -2584,7 +2590,12 @@ if response.status_code == 200:
             checked_generate_features = []
             for gen_feature in self.generate_features:
                 if gen_feature not in x_columns:
-                    self.__log_warning(self.bundle.get("missing_generate_feature").format(gen_feature, x_columns))
+                    if gen_feature == self._get_phone_column(self.search_keys):
+                        raise ValidationError(
+                            self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
+                        )
+                    else:
+                        self.__log_warning(self.bundle.get("missing_generate_feature").format(gen_feature, x_columns))
                 else:
                     checked_generate_features.append(gen_feature)
             self.generate_features = checked_generate_features
