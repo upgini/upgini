@@ -176,7 +176,7 @@ def test_string_datetime_to_timestamp_convertion():
     df["date"] = pd.to_datetime(df.date)
     converter = DateTimeSearchKeyConverter("date")
     df = converter.convert(df)
-    assert df.shape == (1, 3)
+    assert df.shape == (1, 1)
     assert df["date"].dtype == "Int64"
     assert df.loc[0, "date"] == 1577836800000
 
@@ -380,16 +380,10 @@ def test_time_cutoff_from_str():
     expected_data = pd.DataFrame(
         {
             "date": [1577836800000, 946684800000, None, None],
-            "datetime_day_in_quarter_sin": [0.068991, 0.068991, None, None],
-            "datetime_day_in_quarter_cos": [0.997617, 0.997617, None, None],
-            "datetime_second_sin_60": [0.0, 0.0, None, None],
-            "datetime_second_cos_60": [1.0, 1.0, None, None],
             "datetime_minute_sin_60": [0.104528, 0.000000, None, None],
             "datetime_minute_cos_60": [0.994522, 1.000000, None, None],
             "datetime_minute_sin_30": [0.207912, 0.000000, None, None],
             "datetime_minute_cos_30": [0.978148, 1.000000, None, None],
-            "datetime_hour_sin_24": [0.0, 0.0, None, None],
-            "datetime_hour_cos_24": [1.0, 1.0, None, None],
         }
     )
 
@@ -406,16 +400,10 @@ def test_time_cutoff_from_datetime():
     expected_data = pd.DataFrame(
         {
             "date": [1577836800000, 946684800000, None, None],
-            "datetime_day_in_quarter_sin": [0.068991, 0.068991, None, None],
-            "datetime_day_in_quarter_cos": [0.997617, 0.997617, None, None],
-            "datetime_second_sin_60": [0.0, 0.0, None, None],
-            "datetime_second_cos_60": [1.0, 1.0, None, None],
             "datetime_minute_sin_60": [0.104528, 0.000000, None, None],
             "datetime_minute_cos_60": [0.994522, 1.000000, None, None],
             "datetime_minute_sin_30": [0.207912, 0.000000, None, None],
             "datetime_minute_cos_30": [0.978148, 1.000000, None, None],
-            "datetime_hour_sin_24": [0.0, 0.0, None, None],
-            "datetime_hour_cos_24": [1.0, 1.0, None, None],
         }
     )
 
@@ -429,38 +417,6 @@ def test_time_cutoff_from_period():
     dataset = converter.convert(df)
     for i in range(24):
         assert dataset.loc[i, "date"] == 1577836800000
-
-    assert "datetime_day_in_quarter_sin" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_day_in_quarter_sin"] == 0.06899114440432493
-
-    assert "datetime_day_in_quarter_cos" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_day_in_quarter_cos"] == 0.9976172723012476
-
-    assert "datetime_second_sin_60" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_second_sin_60"] == 0.0
-
-    assert "datetime_second_cos_60" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_second_cos_60"] == 1
-
-    assert "datetime_minute_sin_60" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_minute_sin_60"] == 0.0
-
-    assert "datetime_minute_cos_60" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_minute_cos_60"] == 1.0
-
-    assert "datetime_minute_sin_30" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_minute_sin_30"] == 0.0
-
-    assert "datetime_minute_cos_30" in dataset.columns
-    for i in range(24):
-        assert dataset.loc[i, "datetime_minute_cos_30"] == 1.0
 
     assert "datetime_hour_sin_24" in dataset.columns
     for i in range(24):

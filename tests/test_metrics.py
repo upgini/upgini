@@ -983,9 +983,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.085 ± 0.086", "-0.055 ± 0.030", "-0.008 ± 0.054"],
-                enriched_gini: ["0.060 ± 0.105", "-0.006 ± 0.059", "0.028 ± 0.032"],
-                uplift: [-0.025110, 0.049635, 0.036181],
+                baseline_gini: ["0.038 ± 0.166", "-0.031 ± 0.033", "-0.044 ± 0.071"],
+                enriched_gini: ["0.097 ± 0.137", "-0.048 ± 0.030", "-0.088 ± 0.023"],
+                uplift: [0.058825, -0.017092, -0.043785],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1350,9 +1350,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_rmse: ["0.699 ± 0.035", "0.723 ± 0.004", "0.676 ± 0.010"],
-                enriched_rmse: ["0.718 ± 0.048", "0.705 ± 0.010", "0.714 ± 0.010"],
-                uplift: [-0.018977, 0.017985, -0.037415],
+                baseline_rmse: ["0.737 ± 0.039", "0.719 ± 0.015", "0.672 ± 0.019"],
+                enriched_rmse: ["0.688 ± 0.017", "0.721 ± 0.013", "0.718 ± 0.018"],
+                uplift: [0.048248, -0.001703, -0.046067],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1474,9 +1474,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["-0.032 ± 0.061", "-0.056 ± 0.078", "-0.031 ± 0.067"],
-                enriched_gini: ["-0.077 ± 0.107", "-0.007 ± 0.048", "0.008 ± 0.053"],
-                uplift: [-0.045209, 0.049312, 0.039745],
+                baseline_gini: ["0.035 ± 0.059", "-0.074 ± 0.037", "0.010 ± 0.057"],
+                enriched_gini: ["0.079 ± 0.115", "0.009 ± 0.030", "-0.056 ± 0.052"],
+                uplift: [0.043667, 0.083276, -0.066032],
             }
         )
     elif pd.__version__ >= "2.1.0":

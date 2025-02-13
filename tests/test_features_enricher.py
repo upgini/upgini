@@ -610,9 +610,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.020 ± 0.024", "0.018 ± 0.028", "0.027 ± 0.031"],
-            enriched_gini: ["0.008 ± 0.023", "0.018 ± 0.038", "-0.005 ± 0.032"],
-            uplift: [-0.011899, 0.000176, -0.031963],
+            baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
+            enriched_gini: ["0.002 ± 0.045", "0.021 ± 0.026", "0.014 ± 0.024"],
+            uplift: [-0.004858, 0.016415, 0.003231],
         }
     )
     print("Expected metrics: ")
@@ -626,11 +626,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0085]
+    assert enricher.feature_importances_ == [0.0033]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0085
+    assert first_feature_info[shap_value_header] == 0.0033
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -1983,7 +1983,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 13)
+    assert enriched_train_features.shape == (10000, 11)
 
     print(enricher.features_info)
 
@@ -1994,23 +1994,6 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
     assert len(first_feature_info["Value preview"]) > 0 and len(first_feature_info["Value preview"]) < 30
-    # Client features are no longer shown
-    # assert enricher.features_info.loc[1, feature_name_header] == "datetime_time_sin_1"
-    # assert enricher.features_info.loc[1, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[2, feature_name_header] == "datetime_time_sin_2"
-    # assert enricher.features_info.loc[2, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[3, feature_name_header] == "datetime_time_sin_24"
-    # assert enricher.features_info.loc[3, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[4, feature_name_header] == "datetime_time_sin_48"
-    # assert enricher.features_info.loc[4, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[5, feature_name_header] == "datetime_time_cos_1"
-    # assert enricher.features_info.loc[5, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[6, feature_name_header] == "datetime_time_cos_2"
-    # assert enricher.features_info.loc[6, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[7, feature_name_header] == "datetime_time_cos_24"
-    # assert enricher.features_info.loc[7, shap_value_header] == 0.001
-    # assert enricher.features_info.loc[8, feature_name_header] == "datetime_time_cos_48"
-    # assert enricher.features_info.loc[8, shap_value_header] == 0.001
 
     metrics = enricher.calculate_metrics()
     expected_metrics = pd.DataFrame(
