@@ -277,7 +277,7 @@ class FeaturesEnricher(TransformerMixin):
             dict()
         )
 
-        validate_version(self.logger, self.__log_warning)
+        validate_version(self.logger)
 
         self.search_keys = search_keys or {}
         self.id_columns = id_columns
@@ -2534,11 +2534,9 @@ if response.status_code == 200:
     def __is_registered(self) -> bool:
         return self.api_key is not None and self.api_key != ""
 
-    def __log_warning(self, message: str, show_support_link: bool = False, is_red=False):
+    def __log_warning(self, message: str, show_support_link: bool = False):
         warning_num = self.warning_counter.increment()
         formatted_message = f"WARNING #{warning_num}: {message}\n"
-        if is_red:
-            formatted_message = Format.RED + formatted_message + Format.END
         if show_support_link:
             self.__display_support_link(formatted_message)
         else:

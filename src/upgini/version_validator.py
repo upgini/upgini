@@ -1,8 +1,9 @@
 import json
 import threading
-from typing import Callable, Optional
 
 import requests
+
+from upgini.utils.format import Format
 
 try:
     from packaging.version import parse
@@ -31,18 +32,16 @@ def get_version(package, url_pattern=URL_PATTERN):
     return version
 
 
-def validate_version(logger: logging.Logger, warning_function: Optional[Callable[[str], None]] = None):
+def validate_version(logger: logging.Logger):
     def task():
         try:
             current_version = parse(__version__)
             latest_version = get_version("upgini")
             if current_version < latest_version:
                 msg = bundle.get("version_warning").format(current_version, latest_version)
-                if warning_function:
-                    warning_function(msg, is_red=True)
-                else:
-                    logger.warning(msg)
-                    print(msg)
+                formatted_message = Format.RED + msg + Format.END
+                logger.warning(msg)
+                print(formatted_message)
         except Exception:
             logger.warning("Failed to validate version", exc_info=True)
 
