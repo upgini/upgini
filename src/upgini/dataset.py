@@ -33,7 +33,6 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
-    SearchKey,
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
@@ -646,8 +645,9 @@ class Dataset:  # (pd.DataFrame):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
-                time_left = time.time() - start_time
-                search_progress = SearchProgress(2.0, ProgressStage.CREATING_FIT, time_left)
+                # If previous steps were too fast, time estimation could be calculated incorrectly
+                time_left = max(time.time() - start_time, 20)
+                search_progress = SearchProgress(1.0, ProgressStage.CREATING_FIT, time_left)
                 if progress_bar is not None:
                     progress_bar.progress = search_progress.to_progress_bar()
                 if progress_callback is not None:
@@ -699,7 +699,7 @@ class Dataset:  # (pd.DataFrame):
             runtime_parameters=runtime_parameters,
             metrics_calculation=metrics_calculation,
         )
-        seconds_left = time.time() - start_time
+        seconds_left = max(time.time() - start_time, 20)
         search_progress = SearchProgress(1.0, ProgressStage.CREATING_TRANSFORM, seconds_left)
         if progress_bar is not None:
             progress_bar.progress = search_progress.to_progress_bar()
