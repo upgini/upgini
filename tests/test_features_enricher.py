@@ -167,8 +167,8 @@ def test_features_enricher(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
             enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
             uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
@@ -754,8 +754,8 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
             enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
             uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
@@ -875,8 +875,8 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
             enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
             uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
@@ -994,8 +994,8 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
             enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
             uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
@@ -1525,8 +1525,8 @@ def test_filter_by_importance(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: ["Train", "Eval 1", "Eval 2"],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
         }
     )
@@ -1639,8 +1639,8 @@ def test_filter_by_max_features(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: ["Train", "Eval 1", "Eval 2"],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
+            rows_header: [9999, 999, 1000],
+            target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
         }
     )

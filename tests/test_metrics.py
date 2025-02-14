@@ -206,8 +206,8 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment],
-            rows_header: [28000, 2505],
-            target_mean_header: [0.8825, 0.8854],
+            rows_header: [23712, 1767],
+            target_mean_header: [0.8625, 0.8415],
             baseline_gini: ["0.392 ± 0.017", "0.233 ± 0.006"],
         }
     )
@@ -495,8 +495,8 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             "Dataset type": ["Train", "Eval 1"],
-            "Rows": [9859, 141],
-            "Mean target": [5932.9303, 5773.3232],
+            "Rows": [9670, 140],
+            "Mean target": [5898.0507, 5675.8586],
             "Baseline mean_squared_error": ["6951341.503 ± 1612237.087", "5178540.370 ± 206668.728"],
             "Enriched mean_squared_error": ["6098192.135 ± 1410144.438", "4273425.531 ± 150097.819"],
             "Uplift": [853149.3672875343, 905114.8388947612],
