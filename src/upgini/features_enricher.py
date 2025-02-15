@@ -268,6 +268,7 @@ class FeaturesEnricher(TransformerMixin):
         self.eval_set: Optional[List[Tuple]] = None
         self.autodetected_search_keys: Dict[str, SearchKey] = {}
         self.imbalanced = False
+        self.fit_select_features = False
         self.__cached_sampled_datasets: Dict[str, Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict, Dict]] = (
             dict()
         )
@@ -1106,7 +1107,8 @@ class FeaturesEnricher(TransformerMixin):
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                             # np.mean(validated_y), 4
-                            np.mean(y_sorted), 4
+                            np.mean(y_sorted),
+                            4,
                         )
                     if etalon_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -1184,7 +1186,8 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                                     # np.mean(validated_eval_set[idx][1]), 4
                                     # Use actually used for metrics dataset
-                                    np.mean(eval_y_sorted), 4
+                                    np.mean(eval_y_sorted),
+                                    4,
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
