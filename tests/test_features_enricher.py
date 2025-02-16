@@ -2827,7 +2827,6 @@ def test_select_features(requests_mock: Mocker):
         date_format="%Y-%m-%d",
         cv=CVType.time_series,
         logs_enabled=False,
-        select_features=True,
     )
 
     enriched_train_features = enricher.fit_transform(
@@ -2836,6 +2835,7 @@ def test_select_features(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=True,
     )
     assert enriched_train_features.shape == (10000, 5)
     assert "client_feature" not in enriched_train_features.columns

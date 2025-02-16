@@ -646,7 +646,7 @@ class Dataset:  # (pd.DataFrame):
                 parquet_file_path = self.prepare_uploading_file(tmp_dir)
                 time.sleep(1)  # this is neccesary to avoid requests rate limit restrictions
                 # If previous steps were too fast, time estimation could be calculated incorrectly
-                time_left = max(time.time() - start_time, 20)
+                time_left = max(time.time() - start_time, 20.0)
                 search_progress = SearchProgress(1.0, ProgressStage.CREATING_FIT, time_left)
                 if progress_bar is not None:
                     progress_bar.progress = search_progress.to_progress_bar()
@@ -699,7 +699,7 @@ class Dataset:  # (pd.DataFrame):
             runtime_parameters=runtime_parameters,
             metrics_calculation=metrics_calculation,
         )
-        seconds_left = max(time.time() - start_time, 20)
+        seconds_left = max(time.time() - start_time, 20.0)
         search_progress = SearchProgress(1.0, ProgressStage.CREATING_TRANSFORM, seconds_left)
         if progress_bar is not None:
             progress_bar.progress = search_progress.to_progress_bar()

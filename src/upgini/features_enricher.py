@@ -165,10 +165,6 @@ class FeaturesEnricher(TransformerMixin):
 
     shared_datasets: list of str, optional (default=None)
         List of private shared dataset ids for custom search
-
-    select_features: bool, optional (default=False)
-        If True, return only selected features both from input and data sources.
-        Otherwise, return all features from input and only selected features from data sources.
     """
 
     TARGET_NAME = "target"
@@ -235,7 +231,6 @@ class FeaturesEnricher(TransformerMixin):
         client_visitorid: Optional[str] = None,
         custom_bundle_config: Optional[str] = None,
         add_date_if_missing: bool = True,
-        select_features: bool = False,
         disable_force_downsampling: bool = False,
         id_columns: Optional[List[str]] = None,
         **kwargs,
@@ -273,6 +268,7 @@ class FeaturesEnricher(TransformerMixin):
         self.eval_set: Optional[List[Tuple]] = None
         self.autodetected_search_keys: Dict[str, SearchKey] = {}
         self.imbalanced = False
+        self.fit_select_features = False
         self.__cached_sampled_datasets: Dict[str, Tuple[pd.DataFrame, pd.DataFrame, pd.Series, Dict, Dict, Dict]] = (
             dict()
         )
@@ -297,7 +293,6 @@ class FeaturesEnricher(TransformerMixin):
         self.dropped_client_feature_names_ = []
         self.feature_importances_ = []
         self.search_id = search_id
-        self.select_features = select_features
         self.disable_force_downsampling = disable_force_downsampling
 
         if search_id:
@@ -405,6 +400,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
+        select_features: bool = False,
         **kwargs,
     ):
         """Fit to data.
@@ -440,6 +436,10 @@ class FeaturesEnricher(TransformerMixin):
 
         remove_outliers_calc_metrics, optional (default=True)
             If True then rows with target ouliers will be dropped on metrics calculation
+
+        select_features: bool, optional (default=False)
+            If True, return only selected features both from input and data sources.
+            Otherwise, return all features from input and only selected features from data sources.
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
@@ -474,6 +474,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.y = y
                 self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
                 self.dump_input(trace_id, X, y, self.eval_set)
+                self.__set_select_features(select_features)
                 self.__inner_fit(
                     trace_id,
                     X,
@@ -523,6 +524,10 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Fit elapsed time: {time.time() - start_time}")
 
+    def __set_select_features(self, select_features: bool):
+        self.fit_select_features = select_features
+        self.runtime_parameters.properties["select_features"] = select_features
+
     def fit_transform(
         self,
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
@@ -538,6 +543,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        select_features: bool = False,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -578,6 +584,10 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics, optional (default=True)
             If True then rows with target ouliers will be dropped on metrics calculation
 
+        select_features: bool, optional (default=False)
+            If True, return only selected features both from input and data sources.
+            Otherwise, return all features from input and only selected features from data sources.
+
         Returns
         -------
         X_new: pandas.DataFrame of shape (n_samples, n_features_new)
@@ -613,6 +623,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.X = X
                 self.y = y
                 self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
+                self.__set_select_features(select_features)
                 self.dump_input(trace_id, X, y, self.eval_set)
 
                 if _num_samples(drop_duplicates(X)) > Dataset.MAX_ROWS:
@@ -1096,7 +1107,8 @@ class FeaturesEnricher(TransformerMixin):
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                             # np.mean(validated_y), 4
-                            np.mean(y_sorted), 4
+                            np.mean(y_sorted),
+                            4,
                         )
                     if etalon_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
@@ -1174,7 +1186,8 @@ class FeaturesEnricher(TransformerMixin):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                                     # np.mean(validated_eval_set[idx][1]), 4
                                     # Use actually used for metrics dataset
-                                    np.mean(eval_y_sorted), 4
+                                    np.mean(eval_y_sorted),
+                                    4,
                                 )
                             if etalon_eval_metric is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
@@ -1238,8 +1251,11 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
     def _update_shap_values(self, trace_id: str, x_columns: List[str], new_shaps: Dict[str, float]):
+        renaming = self.fit_columns_renaming or {}
         new_shaps = {
-            feature: _round_shap_value(shap) for feature, shap in new_shaps.items() if feature in self.feature_names_
+            renaming.get(feature, feature): _round_shap_value(shap)
+            for feature, shap in new_shaps.items()
+            if feature in self.feature_names_ or renaming.get(feature, feature) in self.feature_names_
         }
         self.__prepare_feature_importances(trace_id, x_columns, new_shaps, silent=True)
 
@@ -1458,7 +1474,8 @@ class FeaturesEnricher(TransformerMixin):
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
             excluded = set()
             for sk in excluding_search_keys:
-                if columns_renaming.get(sk) in search_keys_for_metrics:
+                renamed_sk = columns_renaming.get(sk)
+                if renamed_sk in search_keys_for_metrics or renamed_sk in self.feature_names_:
                     excluded.add(sk)
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in excluded]
 
@@ -1468,7 +1485,7 @@ class FeaturesEnricher(TransformerMixin):
             c
             for c in X_sampled.columns.to_list()
             if (
-                not self.select_features
+                not self.fit_select_features
                 or c in self.feature_names_
                 or (self.fit_columns_renaming is not None and self.fit_columns_renaming.get(c) in self.feature_names_)
             )
@@ -3315,8 +3332,8 @@ if response.status_code == 200:
                 f"Client ip: {self.client_ip}\n"
                 f"Client visitorId: {self.client_visitorid}\n"
                 f"Add date if missing: {self.add_date_if_missing}\n"
-                f"Select features: {self.select_features}\n"
                 f"Disable force downsampling: {self.disable_force_downsampling}\n"
+                f"Id columns: {self.id_columns}\n"
             )
 
             def sample(df):
@@ -3703,7 +3720,7 @@ if response.status_code == 200:
             is_client_feature = feature_meta.name in x_columns
 
             if feature_meta.shap_value == 0.0:
-                if self.select_features:
+                if self.fit_select_features:
                     self.dropped_client_feature_names_.append(feature_meta.name)
                 continue
 
@@ -3712,7 +3729,7 @@ if response.status_code == 200:
                 feature_meta.name in self.fit_generated_features
                 or feature_meta.name == COUNTRY
                 # In select_features mode we select also from etalon features and need to show them
-                or (not self.select_features and is_client_feature)
+                or (not self.fit_select_features and is_client_feature)
             ):
                 continue
 
