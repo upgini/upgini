@@ -6,6 +6,9 @@ from upgini.dataset import Dataset, FileMetrics
 from upgini.ads import FileColumnMeaningType
 
 
+np.random.seed(42)
+
+
 @pytest.fixture
 def etalon():
     d = 1577836800000
