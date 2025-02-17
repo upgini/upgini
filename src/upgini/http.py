@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import jwt
-import pandas as pd
+# import pandas as pd
 import requests
 from pydantic import BaseModel
 from pythonjsonlogger import jsonlogger
@@ -422,6 +422,16 @@ class _RestClient:
                     lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
                 )
 
+    @staticmethod
+    def compute_file_digest(filepath: str, algorithm="sha256", chunk_size=4096) -> str:
+        hash_func = getattr(hashlib, algorithm)()
+
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(chunk_size), b""):
+                hash_func.update(chunk)
+
+        return hash_func.hexdigest()
+
     def initial_search_v2(
         self,
         trace_id: str,
@@ -442,9 +452,10 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(
-                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
-            ).hexdigest()
+            # digest_sha256 = hashlib.sha256(
+            #     pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
+            # ).hexdigest()
+            digest_sha256 = self.compute_file_digest(file_path)
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -530,9 +541,10 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = metadata.copy(update={"checksumMD5": digest})
 
-            digest_sha256 = hashlib.sha256(
-                pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
-            ).hexdigest()
+            # digest_sha256 = hashlib.sha256(
+            #     pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
+            # ).hexdigest()
+            digest_sha256 = self.compute_file_digest(file_path)
             metadata_with_md5 = metadata_with_md5.copy(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
