@@ -1486,8 +1486,8 @@ class FeaturesEnricher(TransformerMixin):
             for c in X_sampled.columns.to_list()
             if (
                 not self.fit_select_features
-                or c in self.feature_names_
-                or (self.fit_columns_renaming is not None and self.fit_columns_renaming.get(c) in self.feature_names_)
+                or c in set(self.feature_names_).union(self.id_columns)
+                or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns)
             )
             and c
             not in (
@@ -2191,7 +2191,9 @@ if response.status_code == 200:
 
             search_keys = self.search_keys.copy()
             if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
-                self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
+                self.search_keys.update(
+                    {col: SearchKey.CUSTOM_KEY for col in self.id_columns if col not in self.search_keys}
+                )
 
             search_keys = self.__prepare_search_keys(
                 validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
@@ -2716,8 +2718,12 @@ if response.status_code == 200:
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
             id_columns = self.__get_renamed_id_columns()
             if id_columns:
-                self.fit_search_keys.update({col: SearchKey.CUSTOM_KEY for col in id_columns})
-                self.search_keys.update({col: SearchKey.CUSTOM_KEY for col in self.id_columns})
+                self.fit_search_keys.update(
+                    {col: SearchKey.CUSTOM_KEY for col in id_columns if col not in self.fit_search_keys}
+                )
+                self.search_keys.update(
+                    {col: SearchKey.CUSTOM_KEY for col in self.id_columns if col not in self.search_keys}
+                )
                 self.runtime_parameters.properties["id_columns"] = ",".join(id_columns)
 
         df, fintech_warnings = remove_fintech_duplicates(
