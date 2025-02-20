@@ -400,7 +400,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
-        select_features: bool = False,
+        select_features: bool = True,
         **kwargs,
     ):
         """Fit to data.
@@ -543,7 +543,7 @@ class FeaturesEnricher(TransformerMixin):
         estimator: Optional[Any] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        select_features: bool = False,
+        select_features: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -1486,8 +1486,8 @@ class FeaturesEnricher(TransformerMixin):
             for c in X_sampled.columns.to_list()
             if (
                 not self.fit_select_features
-                or c in set(self.feature_names_).union(self.id_columns)
-                or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns)
+                or c in set(self.feature_names_).union(self.id_columns or [])
+                or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns or [])
             )
             and c
             not in (
@@ -3742,7 +3742,8 @@ if response.status_code == 200:
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
 
-            feature_info = FeatureInfo.from_metadata(feature_meta, features_df, is_client_feature)
+            df_for_sample = features_df if feature_meta.name in features_df.columns else self.X
+            feature_info = FeatureInfo.from_metadata(feature_meta, df_for_sample, is_client_feature)
             features_info.append(feature_info.to_row(self.bundle))
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
             internal_features_info.append(feature_info.to_internal_row(self.bundle))

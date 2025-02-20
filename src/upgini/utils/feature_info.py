@@ -1,13 +1,12 @@
-from dataclasses import dataclass
 import itertools
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
 from upgini.metadata import FeaturesMetadataV2
 from upgini.resource_bundle import ResourceBundle
-
 
 LLM_SOURCE = "LLM with external data augmentation"
 
@@ -30,7 +29,9 @@ class FeatureInfo:
     data_source_link: str
 
     @staticmethod
-    def from_metadata(feature_meta: FeaturesMetadataV2, data: pd.DataFrame, is_client_feature: bool) -> "FeatureInfo":
+    def from_metadata(
+        feature_meta: FeaturesMetadataV2, data: Optional[pd.DataFrame], is_client_feature: bool
+    ) -> "FeatureInfo":
         return FeatureInfo(
             name=_get_name(feature_meta),
             internal_name=_get_internal_name(feature_meta),
@@ -86,8 +87,8 @@ class FeatureInfo:
         }
 
 
-def _get_feature_sample(feature_meta: FeaturesMetadataV2, data: pd.DataFrame) -> str:
-    if feature_meta.name in data.columns:
+def _get_feature_sample(feature_meta: FeaturesMetadataV2, data: Optional[pd.DataFrame]) -> str:
+    if data is not None and feature_meta.name in data.columns:
         feature_sample = np.random.choice(data[feature_meta.name].dropna().unique(), 3).tolist()
         if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
             feature_sample = [round(f, 4) for f in feature_sample]

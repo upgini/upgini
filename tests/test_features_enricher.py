@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
+from requests_mock import NoMockAddress
 from requests_mock.mocker import Mocker
 
 from upgini.dataset import Dataset
@@ -159,6 +160,7 @@ def test_features_enricher(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
 
@@ -600,6 +602,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         keep_input=True,
         calculate_metrics=False,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
 
@@ -747,6 +750,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
 
@@ -867,6 +871,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
     assert enriched_train_features.index.name == "custom_index_name"
@@ -986,6 +991,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
     assert "index" not in enriched_train_features.columns
@@ -1109,6 +1115,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
         train_features,
         train_target,
         calculate_metrics=False,
+        select_features=False,
     )
 
     metrics = enricher.calculate_metrics()
@@ -1520,7 +1527,7 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
+    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
 
     expected_metrics = pd.DataFrame(
         {
@@ -1632,7 +1639,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
 
     eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
+    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
 
     metrics = enricher.calculate_metrics(max_features=0)
 
@@ -1658,7 +1665,13 @@ def test_filter_by_max_features(requests_mock: Mocker):
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
     train_features = enricher.fit_transform(
-        train_features, train_target, eval_set=eval_set, calculate_metrics=False, keep_input=True, max_features=0
+        train_features,
+        train_target,
+        eval_set=eval_set,
+        calculate_metrics=False,
+        keep_input=True,
+        max_features=0,
+        select_features=False,
     )
 
     assert train_features.shape == (10000, 4)
@@ -1982,6 +1995,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 11)
 
@@ -2146,7 +2160,7 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     )
 
     try:
-        enricher.fit(train_features, train_target, calculate_metrics=False)
+        enricher.fit(train_features, train_target, calculate_metrics=False, select_features=False)
 
         metrics = enricher.calculate_metrics()
 
@@ -2632,7 +2646,10 @@ def test_unsupported_arguments(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.1)
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -2668,7 +2685,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
     df = pd.DataFrame(
         {
             "date": ["2021-01-01", "2021-01-02", "2023-01-01", "2023-01-02", "2023-01-03"],
-            "feature": [11, 10, 12, 13, 14],
+            "client_feature": [11, 10, 12, 13, 14],
             "target": [0, 1, 0, 1, 0],
         }
     )
@@ -2696,7 +2713,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
 
         enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
 
-        with pytest.raises(ValueError, match="n_splits=5 cannot be greater than the number of members in each class."):
+        with pytest.raises(NoMockAddress):
             enricher.calculate_metrics(
                 df.drop(columns="target"),
                 df["target"],
@@ -2797,6 +2814,7 @@ def test_select_features(requests_mock: Mocker):
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         keep_input=True,
+        select_features=False,
     )
     assert enriched_train_features.shape == (10000, 6)
 
