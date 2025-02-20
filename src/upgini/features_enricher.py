@@ -1486,8 +1486,8 @@ class FeaturesEnricher(TransformerMixin):
             for c in X_sampled.columns.to_list()
             if (
                 not self.fit_select_features
-                or c in set(self.feature_names_).union(self.id_columns)
-                or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns)
+                or c in set(self.feature_names_).union(self.id_columns or [])
+                or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns or [])
             )
             and c
             not in (

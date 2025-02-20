@@ -21,6 +21,7 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
     SearchKey,
 )
+from upgini.metrics import CATBOOST_BINARY_PARAMS
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
@@ -482,7 +483,7 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False, select_features=False)
 
     assert len(enriched_X) == len(X)
 
@@ -950,7 +951,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
 
-    df = pd.read_csv(os.path.join(FIXTURE_DIR, "input.csv"))
+    df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input.parquet"))
     df_train = df[0:500]
     X = df_train[["phone", "feature1"]]
     y = df_train["target"]
@@ -972,15 +973,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
 
     assert len(enriched_X) == len(X)
 
-    estimator = CatBoostClassifier(
-        random_seed=42,
-        verbose=False,
-        thread_count=1,
-        task_type="CPU",
-        bootstrap_type='No',
-        iterations=100,
-        devices='0',
-    )
+    estimator = CatBoostClassifier(**CATBOOST_BINARY_PARAMS)
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
     assert metrics_df is not None
     print(metrics_df)
@@ -991,9 +984,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.124 ± 0.092", "-0.060 ± 0.008", "0.006 ± 0.018"],
-                enriched_gini: ["0.004 ± 0.139", "-0.037 ± 0.023", "-0.042 ± 0.041"],
-                uplift: [-0.120455, 0.022802, -0.047555],
+                baseline_gini: ["0.058 ± 0.087", "-0.089 ± 0.036", "0.011 ± 0.063"],
+                enriched_gini: ["0.087 ± 0.116", "-0.059 ± 0.037", "0.106 ± 0.058"],
+                uplift: [0.029765, 0.030050, 0.094943],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1052,6 +1045,13 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
                 FeaturesMetadataV2(
                     name="feature1",
                     type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+                FeaturesMetadataV2(
+                    name="country",
+                    type="categorical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
@@ -1358,9 +1358,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_rmse: ["0.702 ± 0.034", "0.729 ± 0.013", "0.682 ± 0.009"],
-                enriched_rmse: ["0.711 ± 0.018", "0.719 ± 0.009", "0.730 ± 0.010"],
-                uplift: [-0.00906, 0.009884, -0.048125],
+                baseline_rmse: ["0.711 ± 0.016", "0.713 ± 0.011", "0.685 ± 0.011"],
+                enriched_rmse: ["0.697 ± 0.042", "0.718 ± 0.009", "0.682 ± 0.008"],
+                uplift: [0.013844, -0.005052, 0.003460],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1482,9 +1482,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.053 ± 0.091", "-0.085 ± 0.041", "-0.024 ± 0.036"],
-                enriched_gini: ["0.076 ± 0.144", "-0.004 ± 0.050", "0.001 ± 0.027"],
-                uplift: [0.023016, 0.081158, 0.025347],
+                baseline_gini: ["-0.023 ± 0.085", "-0.030 ± 0.095", "-0.084 ± 0.033"],
+                enriched_gini: ["-0.039 ± 0.094", "-0.043 ± 0.032", "-0.014 ± 0.031"],
+                uplift: [-0.016225, -0.012415, 0.069339],
             }
         )
     elif pd.__version__ >= "2.1.0":
