@@ -2619,6 +2619,11 @@ if response.status_code == 200:
             self.generate_features = checked_generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(self.generate_features)
 
+        if self.id_columns is not None:
+            for id_column in self.id_columns:
+                if id_column not in validated_X.columns:
+                    raise ValidationError(self.bundle.get("missing_id_column").format(id_column))
+
         validate_scoring_argument(scoring)
 
         self.__log_debug_information(

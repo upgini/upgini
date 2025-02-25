@@ -2877,6 +2877,32 @@ def test_select_features(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
+def test_id_columns_validation(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+        id_columns=["unexistent_column"]
+    )
+
+    with pytest.raises(ValidationError, match="Id column unexistent_column not found in X"):
+        enricher.fit(
+            df.drop(columns="target"),
+            df.target,
+        )
+
+
 class DataFrameWrapper:
     def __init__(self):
         self.df: Optional[pd.DataFrame] = None

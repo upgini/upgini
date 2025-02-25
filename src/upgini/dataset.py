@@ -37,12 +37,18 @@ from upgini.metadata import (
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.target_utils import balance_undersample, balance_undersample_forced, balance_undersample_time_series
+from upgini.utils.target_utils import (
+    balance_undersample,
+    balance_undersample_forced,
+    balance_undersample_time_series,
+)
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
-    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+    from upgini.utils.fallback_progress_bar import (
+        CustomFallbackProgressBar as ProgressBar,
+    )
 
 
 class Dataset:  # (pd.DataFrame):
@@ -347,7 +353,8 @@ class Dataset:  # (pd.DataFrame):
             key
             for search_group in self.search_keys_checked
             for key in search_group
-            if not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
+            if key in self.columns_renaming
+            and not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
         }
         ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
