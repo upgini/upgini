@@ -33,9 +33,12 @@ class IpSearchKeyConverter:
         else:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
+        self.ip_prefix_column = None
 
     @staticmethod
     def _ip_to_int(ip: Optional[_BaseAddress]) -> Optional[int]:
+        if ip is None:
+            return None
         try:
             if isinstance(ip, (IPv4Address, IPv6Address)):
                 return int(ip)
@@ -44,11 +47,27 @@ class IpSearchKeyConverter:
 
     @staticmethod
     def _ip_to_binary(ip: Optional[_BaseAddress]) -> Optional[bytes]:
+        if ip is None:
+            return None
         try:
             if isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None:
                 return ip.ipv4_mapped.packed
             else:
                 return ip.packed
+        except Exception:
+            pass
+
+    @staticmethod
+    def _ip_to_prefix(ip: Optional[_BaseAddress]) -> Optional[str]:
+        if ip is None:
+            return None
+        try:
+            if isinstance(ip, IPv6Address):
+                if ip.ipv4_mapped is not None:
+                    return ".".join(ip.ipv4_mapped.exploded.split(".")[:2])
+                return ":".join(ip.exploded.split(":")[:2])  # TODO use 3 in future
+            else:
+                return ".".join(ip.exploded.split(".")[:2])
         except Exception:
             pass
 
@@ -102,24 +121,26 @@ class IpSearchKeyConverter:
         # self.search_keys[ipv4] = SearchKey.IP
         # self.columns_renaming[ipv4] = original_ip
 
-        ipv6 = self.ip_column + "_v6"
-        df[ipv6] = (
-            df[self.ip_column]
-            .apply(self._to_ipv6)
-            .apply(self._ip_to_int_str)
-            .astype("string")
-            # .str.replace(".0", "", regex=False)
-        )
-        # ip_binary = self.ip_column + "_binary"
-        # df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
+        # ipv6 = self.ip_column + "_v6"
+        # df[ipv6] = (
+        #     df[self.ip_column]
+        #     .apply(self._to_ipv6)
+        #     .apply(self._ip_to_int_str)
+        #     .astype("string")
+        #     # .str.replace(".0", "", regex=False)
+        # )
+        ip_binary = self.ip_column + "_binary"
+        df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
+        self.ip_prefix_column = self.ip_column + "_prefix"
+        df[self.ip_prefix_column] = df[self.ip_column].apply(self._ip_to_prefix)
 
         df = df.drop(columns=self.ip_column)
         del self.search_keys[self.ip_column]
         del self.columns_renaming[self.ip_column]
-        self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
-        # self.search_keys[ip_binary] = SearchKey.IP_BINARY
-        self.columns_renaming[ipv6] = original_ip
-        # self.columns_renaming[ip_binary] = original_ip
+        # self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
+        self.search_keys[ip_binary] = SearchKey.IP_BINARY
+        # self.columns_renaming[ipv6] = original_ip
+        self.columns_renaming[ip_binary] = original_ip
 
         return df
 

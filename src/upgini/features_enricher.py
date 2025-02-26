@@ -2270,6 +2270,7 @@ if response.status_code == 200:
                 df = converter.convert(df)
 
             ip_column = self._get_ip_column(search_keys)
+            ip_prefix_column = None
             if ip_column:
                 converter = IpSearchKeyConverter(
                     ip_column,
@@ -2280,6 +2281,7 @@ if response.status_code == 200:
                     self.logger,
                 )
                 df = converter.convert(df)
+                ip_prefix_column = converter.ip_prefix_column
 
             phone_column = self._get_phone_column(search_keys)
             country_column = self._get_country_column(search_keys)
@@ -2299,12 +2301,15 @@ if response.status_code == 200:
             # generated_features = [f for f in generated_features if f in self.fit_generated_features]
 
             meaning_types = {col: key.value for col, key in search_keys.items()}
+            if ip_prefix_column:
+                meaning_types[ip_prefix_column] = FileColumnMeaningType.IP_PREFIX
             for col in features_for_transform:
                 meaning_types[col] = FileColumnMeaningType.FEATURE
             features_not_to_pass = [
                 c
                 for c in df.columns
                 if c not in search_keys.keys()
+                and c != ip_prefix_column
                 and c not in features_for_transform
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
             ]
@@ -2766,6 +2771,7 @@ if response.status_code == 200:
             df = converter.convert(df)
 
         ip_column = self._get_ip_column(self.fit_search_keys)
+        ip_prefix_column = None
         if ip_column:
             converter = IpSearchKeyConverter(
                 ip_column,
@@ -2776,7 +2782,7 @@ if response.status_code == 200:
                 self.logger,
             )
             df = converter.convert(df)
-
+            ip_prefix_column = converter.ip_prefix_column
         phone_column = self._get_phone_column(self.fit_search_keys)
         country_column = self._get_country_column(self.fit_search_keys)
         if phone_column:
@@ -2792,9 +2798,13 @@ if response.status_code == 200:
             converter = PostalCodeSearchKeyConverter(postal_code)
             df = converter.convert(df)
 
-        non_feature_columns = [self.TARGET_NAME, EVAL_SET_INDEX, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST] + list(
-            self.fit_search_keys.keys()
-        )
+        non_feature_columns = [
+            self.TARGET_NAME,
+            EVAL_SET_INDEX,
+            ENTITY_SYSTEM_RECORD_ID,
+            SEARCH_KEY_UNNEST,
+            ip_prefix_column,
+        ] + list(self.fit_search_keys.keys())
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
@@ -2815,6 +2825,8 @@ if response.status_code == 200:
             **{col: key.value for col, key in self.fit_search_keys.items()},
             **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
         }
+        if ip_prefix_column:
+            meaning_types[ip_prefix_column] = FileColumnMeaningType.IP_PREFIX
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
         meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
         if SEARCH_KEY_UNNEST in df.columns:
