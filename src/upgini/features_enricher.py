@@ -222,6 +222,7 @@ class FeaturesEnricher(TransformerMixin):
         loss: Optional[str] = None,
         detect_missing_search_keys: bool = True,
         generate_features: Optional[List[str]] = None,
+        columns_for_online_api: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
@@ -345,6 +346,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.error(msg)
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
+        self.columns_for_online_api = columns_for_online_api
+        if columns_for_online_api is not None:
+            self.runtime_parameters.properties["columns_for_online_api"] = ",".join(columns_for_online_api)
         maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
         if maybe_downsampling_limit is not None:
             Dataset.FIT_SAMPLE_THRESHOLD = int(maybe_downsampling_limit)
@@ -2608,16 +2612,17 @@ if response.status_code == 200:
             checked_generate_features = []
             for gen_feature in self.generate_features:
                 if gen_feature not in x_columns:
-                    if gen_feature == self._get_phone_column(self.search_keys):
-                        raise ValidationError(
-                            self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
-                        )
-                    else:
-                        self.__log_warning(self.bundle.get("missing_generate_feature").format(gen_feature, x_columns))
+                    msg = self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
+                    self.__log_warning(msg)
                 else:
                     checked_generate_features.append(gen_feature)
             self.generate_features = checked_generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(self.generate_features)
+
+        if self.columns_for_online_api is not None and len(self.columns_for_online_api) > 0:
+            for column in self.columns_for_online_api:
+                if column not in validated_X.columns:
+                    raise ValidationError(self.bundle.get("missing_column_for_online_api").format(column))
 
         if self.id_columns is not None:
             for id_column in self.id_columns:

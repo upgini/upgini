@@ -2286,12 +2286,13 @@ def test_email_search_key(requests_mock: Mocker):
             "system_record_id",
             "entity_system_record_id",
             "target",
+            "email_822444",
             "email_822444_hem",
             "email_822444_one_domain",
             "email_domain",
             "current_date_b993c4",
         }
-        assert {"email_822444_hem", "email_822444_one_domain", "current_date_b993c4"} == {
+        assert {"email_822444", "email_822444_hem", "email_822444_one_domain", "current_date_b993c4"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         raise TestException
@@ -2452,6 +2453,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "phone_45569d",
             "date_0e8763",
             "target",
+            "eml_13033c",
             "eml_13033c_hem",
             "eml_13033c_one_domain",
             "eml_domain",
@@ -2459,6 +2461,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         assert {
             "postal_code_13534a",
             "phone_45569d",
+            "eml_13033c",
             "eml_13033c_hem",
             "eml_13033c_one_domain",
             "date_0e8763",
@@ -2504,6 +2507,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             # "country_aff64e",
             "postal_code_13534a",
             "phone_45569d",
+            "eml_13033c",
             "eml_13033c_hem",
             "eml_13033c_one_domain",
             "date_0e8763",

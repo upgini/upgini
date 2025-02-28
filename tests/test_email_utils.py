@@ -44,11 +44,13 @@ def test_convertion_to_hem():
     df = converter.convert(df)
 
     assert search_keys == {
+        "email": SearchKey.EMAIL,
         "email" + EmailSearchKeyConverter.HEM_SUFFIX: SearchKey.HEM,
         "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: SearchKey.EMAIL_ONE_DOMAIN,
     }
 
     assert columns_renaming == {
+        "email": "original_email",
         "email" + EmailSearchKeyConverter.HEM_SUFFIX: "original_email",
         "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: "original_email",
         # EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: "original_email",
@@ -56,6 +58,7 @@ def test_convertion_to_hem():
 
     expected_df = pd.DataFrame(
         {
+            "email": ["test@google.com", "", "@", None, 0.0, "asdf@oiouo@asdf"],
             "email" + EmailSearchKeyConverter.HEM_SUFFIX: [
                 "8b0080a904da73e6e500ada3d09a88037289b5c08e03d3a09546ffacc5b5fd57",
                 None,
@@ -88,6 +91,7 @@ def test_convertion_to_hem_with_existing_hem():
     df = converter.convert(df)
 
     assert search_keys == {
+        "email": SearchKey.EMAIL,
         "hem": SearchKey.HEM,
         "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: SearchKey.EMAIL_ONE_DOMAIN,
     }
