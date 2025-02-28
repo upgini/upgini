@@ -67,6 +67,7 @@ class SearchKey(Enum):
     IP_BINARY = FileColumnMeaningType.IP_BINARY
     IP_RANGE_FROM_BINARY = FileColumnMeaningType.IP_RANGE_FROM_BINARY
     IP_RANGE_TO_BINARY = FileColumnMeaningType.IP_RANGE_TO_BINARY
+    IP_PREFIX = FileColumnMeaningType.IP_PREFIX
 
     # For data source registration. Don't use it for FeaturesEnricher
     EMAIL_ONE_DOMAIN = FileColumnMeaningType.EMAIL_ONE_DOMAIN
