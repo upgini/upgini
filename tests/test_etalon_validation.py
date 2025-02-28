@@ -79,38 +79,51 @@ def test_unnest_email_to_hem_conversion():
     assert unnest_search_keys == ["upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX]
 
 
-def test_string_ip_to_int_conversion():
+def test_string_ip_to_bytes_conversion():
     df = pd.DataFrame(
         [
             {"ip": "192.168.1.1"},
+            {"ip": "1050:0:0:0:5:600:300c:326b"},
             {"ip": ""},
             {"ip": None},
         ]
     )
     columns_renaming = {"ip": "original_ip"}
-    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
-    converter.convert(df)
-    # assert df["ip_v4"].dtype == "Int64"
-    # assert df["ip_v4"].iloc[0] == 3232235777
-    # assert df["ip_v4"].isnull().sum() == 2
-    assert df["ip_v6"].dtype.name == "string"
-    assert df["ip_v6"].iloc[0] == "281473913979137"
-    assert df["ip_v6"].isnull().sum() == 2
+    search_keys = {"ip": SearchKey.IP}
+    converter = IpSearchKeyConverter("ip", search_keys, columns_renaming, [])
+    df = converter.convert(df)
+
+    assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
+    assert search_keys == {"ip_binary": SearchKey.IP_BINARY, "ip_prefix": SearchKey.IP_PREFIX}
+    assert columns_renaming == {"ip_binary": "original_ip", "ip_prefix": "original_ip"}
+    assert isinstance(df["ip_binary"].iloc[0], bytes)
+    assert isinstance(df["ip_prefix"].iloc[0], str)
+    assert df["ip_binary"].isnull().sum() == 2
+    assert df["ip_prefix"].isnull().sum() == 2
+    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
+    assert df["ip_prefix"].iloc[0] == "192.168"
+    assert df["ip_binary"].iloc[1] == b'\x10P\x00\x00\x00\x00\x00\x00\x00\x05\x06\x000\x0c2k'
+    assert df["ip_prefix"].iloc[1] == "1050:0000"
 
 
-def test_python_ip_to_int_conversion():
+def test_python_ip_to_bytes_conversion():
     df = pd.DataFrame(
         [
             {"ip": ipaddress.ip_address("192.168.1.1")},
         ]
     )
     columns_renaming = {"ip": "original_ip"}
-    converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
-    converter.convert(df)
-    # assert df["ip_v4"].dtype == "Int64"
-    # assert df["ip_v4"].iloc[0] == 3232235777
-    assert df["ip_v6"].dtype.name == "string"
-    assert df["ip_v6"].iloc[0] == "281473913979137"
+    search_keys = {"ip": SearchKey.IP}
+    converter = IpSearchKeyConverter("ip", search_keys, columns_renaming, [])
+    df = converter.convert(df)
+
+    assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
+    assert search_keys == {"ip_binary": SearchKey.IP_BINARY, "ip_prefix": SearchKey.IP_PREFIX}
+    assert columns_renaming == {"ip_binary": "original_ip", "ip_prefix": "original_ip"}
+    assert isinstance(df["ip_binary"].iloc[0], bytes)
+    assert isinstance(df["ip_prefix"].iloc[0], str)
+    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
+    assert df["ip_prefix"].iloc[0] == "192.168"
 
 
 def test_ip_v6_conversion():
@@ -127,28 +140,34 @@ def test_ip_v6_conversion():
     )
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
-    converter.convert(df)
-    # assert df["ip_v4"].dtype.name == "Int64"
-    # assert df["ip_v4"].isna().all()
-    assert df["ip_v6"].dtype.name == "string"
-    assert df["ip_v6"].iloc[0] == "892262568539"
-    assert df["ip_v6"].iloc[1] == "53200333237544187032231876373729151639"
-    assert df["ip_v6"].iloc[2] == "47858880780748872078732893423110750580"
-    assert df["ip_v6"].iloc[3] == "47900246818989331262222645018619415311"
-    assert df["ip_v6"].iloc[4] == "47865208883029157842893923520652305233"
+    df = converter.convert(df)
+
+    assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
+    assert isinstance(df["ip_binary"].iloc[0], bytes)
+    assert df["ip_binary"].iloc[0] == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR['
+    assert df["ip_binary"].iloc[1] == b'(\x06\x02\xf0\x92\xc0\xff\xa40\xebI\x82\x0bN\x8a\x97'
+    assert df["ip_binary"].iloc[2] == b'$\x01I\x00?\xc2,\xe6\x00\x00\x00\x00\x0c4\x81t'
+    assert df["ip_binary"].iloc[3] == b'$\t@\x81\x0e\x14\xcfu\x00\x00\x00\x00\xf4\n\x0b\x0f'
+    assert df["ip_binary"].iloc[4] == b'$\x02\x81\x00!\x02\xae-\x00\x00\x00\x00<\xe0\xe3Q'
+    assert df["ip_prefix"].iloc[0] == "0000:0000"
+    assert df["ip_prefix"].iloc[1] == "2806:02f0"
+    assert df["ip_prefix"].iloc[2] == "2401:4900"
+    assert df["ip_prefix"].iloc[3] == "2409:4081"
+    assert df["ip_prefix"].iloc[4] == "2402:8100"
 
 
-def test_int_ip_to_int_conversion():
+def test_int_ip_to_bytes_conversion():
     df = pd.DataFrame(
         {"ip": [3232235777, 892262568539]},
     )
     columns_renaming = {"ip": "original_ip"}
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
-    converter.convert(df)
-    # assert df["ip_v4"].iloc[0] == 3232235777
-    assert df["ip_v6"].iloc[0] == "281473913979137"
-    # assert df["ip_v4"].isnull().sum() == 1
-    assert df["ip_v6"].iloc[1] == "892262568539"
+    df = converter.convert(df)
+
+    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
+    assert df["ip_binary"].iloc[1] == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR['
+    assert df["ip_prefix"].iloc[0] == "192.168"
+    assert df["ip_prefix"].iloc[1] == "0000:0000"
 
 
 def test_string_date_to_timestamp_convertion():
