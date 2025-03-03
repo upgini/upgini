@@ -89,7 +89,7 @@ class SearchKey(Enum):
         if meaning_type == FileColumnMeaningType.EMAIL:
             return SearchKey.EMAIL
         if meaning_type == FileColumnMeaningType.HEM:
-            return SearchKey.HEM
+            return SearchKey.HEM  # TODO check that it wasn't EMAIL
         if meaning_type == FileColumnMeaningType.IP_ADDRESS:
             return SearchKey.IP
         if meaning_type == FileColumnMeaningType.MSISDN:
@@ -105,27 +105,27 @@ class SearchKey(Enum):
         if meaning_type == FileColumnMeaningType.POSTAL_CODE:
             return SearchKey.POSTAL_CODE
         if meaning_type == FileColumnMeaningType.IPV6_ADDRESS:
-            return SearchKey.IPV6_ADDRESS
-        if meaning_type == FileColumnMeaningType.IPV6_RANGE_FROM:
-            return SearchKey.IPV6_RANGE_FROM
-        if meaning_type == FileColumnMeaningType.IPV6_RANGE_TO:
-            return SearchKey.IPV6_RANGE_TO
-        if meaning_type == FileColumnMeaningType.EMAIL_ONE_DOMAIN:
-            return SearchKey.EMAIL_ONE_DOMAIN
-        if meaning_type == FileColumnMeaningType.IP_RANGE_FROM:
-            return SearchKey.IP_RANGE_FROM
-        if meaning_type == FileColumnMeaningType.IP_RANGE_TO:
-            return SearchKey.IP_RANGE_TO
-        if meaning_type == FileColumnMeaningType.MSISDN_RANGE_FROM:
-            return SearchKey.MSISDN_RANGE_FROM
-        if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
-            return SearchKey.MSISDN_RANGE_TO
+            return SearchKey.IP
+        # if meaning_type == FileColumnMeaningType.IPV6_RANGE_FROM:
+        #     return SearchKey.IPV6_RANGE_FROM
+        # if meaning_type == FileColumnMeaningType.IPV6_RANGE_TO:
+        #     return SearchKey.IPV6_RANGE_TO
+        # if meaning_type == FileColumnMeaningType.EMAIL_ONE_DOMAIN:
+        #     return SearchKey.EMAIL_ONE_DOMAIN
+        # if meaning_type == FileColumnMeaningType.IP_RANGE_FROM:
+        #     return SearchKey.IP_RANGE_FROM
+        # if meaning_type == FileColumnMeaningType.IP_RANGE_TO:
+        #     return SearchKey.IP_RANGE_TO
+        # if meaning_type == FileColumnMeaningType.MSISDN_RANGE_FROM:
+        #     return SearchKey.MSISDN_RANGE_FROM
+        # if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
+        #     return SearchKey.MSISDN_RANGE_TO
         if meaning_type == FileColumnMeaningType.IP_BINARY:
-            return SearchKey.IP_BINARY
-        if meaning_type == FileColumnMeaningType.IP_RANGE_FROM_BINARY:
-            return SearchKey.IP_RANGE_FROM_BINARY
-        if meaning_type == FileColumnMeaningType.IP_RANGE_TO_BINARY:
-            return SearchKey.IP_RANGE_TO_BINARY
+            return SearchKey.IP
+        # if meaning_type == FileColumnMeaningType.IP_RANGE_FROM_BINARY:
+        #     return SearchKey.IP_RANGE_FROM_BINARY
+        # if meaning_type == FileColumnMeaningType.IP_RANGE_TO_BINARY:
+        #     return SearchKey.IP_RANGE_TO_BINARY
 
     @staticmethod
     def find_key(search_keys: Dict[str, SearchKey], keys: Union[SearchKey, List[SearchKey]]) -> Optional[SearchKey]:
@@ -249,7 +249,9 @@ class FileMetadata(BaseModel):
             for key in keys_group:
                 column = self.column_by_name(key)
                 if column:
-                    search_keys[SearchKey.from_meaning_type(column.meaningType)] = column.name
+                    search_key = SearchKey.from_meaning_type(column.meaningType)
+                    if search_key is not None:
+                        search_keys[search_key] = column.name
         return search_keys
 
 
