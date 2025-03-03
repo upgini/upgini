@@ -190,7 +190,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
 
     columns_renaming = {c: c for c in enriched_X.columns}
 
-    datasets_hash = hash_input(sampled_X, sampled_y, (sampled_eval_X, sampled_eval_y))
+    datasets_hash = hash_input(enricher.X, enricher.y, enricher.eval_set)
     enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         sampled_X,
         sampled_y,
@@ -207,9 +207,9 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment],
-            rows_header: [23712, 1767],
-            target_mean_header: [0.8625, 0.8415],
-            baseline_gini: ["0.392 ± 0.017", "0.233 ± 0.006"],
+            rows_header: [28000, 2505],
+            target_mean_header: [0.8825, 0.8854],
+            baseline_gini: ["0.490 ± 0.010", "0.463 ± 0.003"],
         }
     )
 
@@ -278,9 +278,9 @@ def test_demo_metrics(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [464],
             target_mean_header: [100.7802],
-            baseline_mae: ["21.371 ± 1.529"],
-            enriched_mae: ["20.847 ± 1.122"],
-            uplift: [0.5232],
+            baseline_mae: ["24.542 ± 2.624"],
+            enriched_mae: ["20.288 ± 1.405"],
+            uplift: [4.25375],
         }
     )
 

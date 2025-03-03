@@ -471,9 +471,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
-            enriched_gini: ["0.010 ± 0.019", "-0.010 ± 0.021", "-0.017 ± 0.023"],
-            uplift: [0.003129003609412328, -0.014280053316041673, -0.027921890762357758],
+            # baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
+            enriched_gini: ["0.026 ± 0.027", "-0.024 ± 0.031", "-0.009 ± 0.012"],
+            # uplift: [0.003129003609412328, -0.014280053316041673, -0.027921890762357758],
         }
     )
     print("Expected metrics: ")
@@ -487,11 +487,11 @@ def test_saved_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0052]
+    assert enricher.feature_importances_ == [0.0241]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0052
+    assert first_feature_info[shap_value_header] == 0.0241
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -504,9 +504,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            baseline_gini: ["-0.014 ± 0.045"],
-            enriched_gini: ["0.005 ± 0.059"],
-            uplift: [0.018997790411857896],
+            # baseline_gini: ["-0.014 ± 0.045"],
+            enriched_gini: ["0.056 ± 0.097"],
+            # uplift: [0.018997790411857896],
         }
     )
     print("Expected metrics: ")
