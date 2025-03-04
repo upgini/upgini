@@ -2464,7 +2464,19 @@ if response.status_code == 200:
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
-            result = result[selecting_columns]
+            selecting_columns = list(set(selecting_columns))
+            # sorting: first columns from X, then generated features, then enriched features
+            sorted_selecting_columns = [c for c in validated_X.columns if c in selecting_columns]
+            for c in generated_features:
+                if c in selecting_columns and c not in sorted_selecting_columns:
+                    sorted_selecting_columns.append(c)
+            for c in result.columns:
+                if c in selecting_columns and c not in sorted_selecting_columns:
+                    sorted_selecting_columns.append(c)
+
+            self.logger.info(f"Transform sorted_selecting_columns: {sorted_selecting_columns}")
+
+            result = result[sorted_selecting_columns]
 
             if self.country_added:
                 result = result.drop(columns=COUNTRY, errors="ignore")
@@ -3726,6 +3738,8 @@ if response.status_code == 200:
         features_info_without_links = []
         internal_features_info = []
 
+        original_shaps = {fm.name: fm.shap_value for fm in features_meta}
+
         if updated_shaps is not None:
             for fm in features_meta:
                 fm.shap_value = updated_shaps.get(fm.name, 0.0)
@@ -3737,15 +3751,16 @@ if response.status_code == 200:
 
             is_client_feature = feature_meta.name in x_columns
 
-            if feature_meta.shap_value == 0.0:
+            # TODO make a decision about selected features based on special flag from mlb
+            if original_shaps.get(feature_meta.name, 0.0) == 0.0:
                 if self.fit_select_features:
                     self.dropped_client_feature_names_.append(feature_meta.name)
                 continue
 
             # Use only important features
             if (
-                feature_meta.name in self.fit_generated_features
-                or feature_meta.name == COUNTRY
+                # feature_meta.name in self.fit_generated_features or
+                feature_meta.name == COUNTRY
                 # In select_features mode we select also from etalon features and need to show them
                 or (not self.fit_select_features and is_client_feature)
             ):
