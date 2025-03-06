@@ -26,7 +26,7 @@ class Column:
         return dict()
 
     def rename_columns(self, mapping: Dict[str, str]) -> "Column":
-        self.name = self._unhash(mapping.get(self.name) or self.name)
+        self.name = mapping.get(self.name) or self.name
         return self
 
     def _unhash(self, feature_name: str) -> str:
