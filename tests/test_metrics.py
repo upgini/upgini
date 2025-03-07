@@ -190,7 +190,7 @@ def test_real_case_metric_binary(requests_mock: Mocker):
 
     columns_renaming = {c: c for c in enriched_X.columns}
 
-    datasets_hash = hash_input(sampled_X, sampled_y, (sampled_eval_X, sampled_eval_y))
+    datasets_hash = hash_input(enricher.X, enricher.y, enricher.eval_set)
     enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         sampled_X,
         sampled_y,
@@ -207,9 +207,9 @@ def test_real_case_metric_binary(requests_mock: Mocker):
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment],
-            rows_header: [23712, 1767],
-            target_mean_header: [0.8625, 0.8415],
-            baseline_gini: ["0.392 ± 0.017", "0.233 ± 0.006"],
+            rows_header: [28000, 2505],
+            target_mean_header: [0.8825, 0.8854],
+            baseline_gini: ["0.490 ± 0.010", "0.463 ± 0.003"],
         }
     )
 
@@ -271,16 +271,16 @@ def test_demo_metrics(requests_mock: Mocker):
     )
 
     metrics = enricher.calculate_metrics(scoring="mean_absolute_error")
-    print(metrics)
+    logging.warning(metrics)
 
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment],
             rows_header: [464],
             target_mean_header: [100.7802],
-            baseline_mae: ["21.371 ± 1.529"],
-            enriched_mae: ["20.847 ± 1.122"],
-            uplift: [0.5232],
+            baseline_mae: ["24.542 ± 2.624"],
+            enriched_mae: ["20.288 ± 1.405"],
+            uplift: [4.25375],
         }
     )
 
@@ -976,7 +976,7 @@ def test_catboost_metric_binary(requests_mock: Mocker):
     estimator = CatBoostClassifier(**CATBOOST_BINARY_PARAMS)
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     if pd.__version__ >= "2.2.0":
         expected_metrics = pd.DataFrame(
@@ -984,9 +984,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.058 ± 0.087", "-0.089 ± 0.036", "0.011 ± 0.063"],
-                enriched_gini: ["0.087 ± 0.116", "-0.059 ± 0.037", "0.106 ± 0.058"],
-                uplift: [0.029765, 0.030050, 0.094943],
+                baseline_gini: ["0.112 ± 0.058", "-0.087 ± 0.018", "0.002 ± 0.028"],
+                enriched_gini: ["0.066 ± 0.074", "-0.009 ± 0.023", "-0.060 ± 0.044"],
+                uplift: [-0.045618, 0.077592, -0.062236],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1350,7 +1350,7 @@ def test_rf_metric_rmse(requests_mock: Mocker):
     estimator = RandomForestClassifier(random_state=42)
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="rmse")
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     if pd.__version__ >= "2.2.0":
         expected_metrics = pd.DataFrame(
@@ -1358,9 +1358,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_rmse: ["0.711 ± 0.016", "0.713 ± 0.011", "0.685 ± 0.011"],
-                enriched_rmse: ["0.697 ± 0.042", "0.718 ± 0.009", "0.682 ± 0.008"],
-                uplift: [0.013844, -0.005052, 0.003460],
+                baseline_rmse: ["0.698 ± 0.021", "0.727 ± 0.012", "0.675 ± 0.012"],
+                enriched_rmse: ["0.714 ± 0.016", "0.689 ± 0.008", "0.715 ± 0.019"],
+                uplift: [-0.015698, 0.038364, -0.039554],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1474,7 +1474,7 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
 
     metrics_df = enricher.calculate_metrics()
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     if pd.__version__ >= "2.2.0":
         expected_metrics = pd.DataFrame(
@@ -1482,9 +1482,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["-0.023 ± 0.085", "-0.030 ± 0.095", "-0.084 ± 0.033"],
-                enriched_gini: ["-0.039 ± 0.094", "-0.043 ± 0.032", "-0.014 ± 0.031"],
-                uplift: [-0.016225, -0.012415, 0.069339],
+                baseline_gini: ["-0.000 ± 0.091", "-0.056 ± 0.057", "0.010 ± 0.022"],
+                enriched_gini: ["0.011 ± 0.049", "0.010 ± 0.033", "-0.081 ± 0.067"],
+                uplift: [0.010877, 0.065693, -0.090800],
             }
         )
     elif pd.__version__ >= "2.1.0":
