@@ -29,15 +29,6 @@ class Column:
         self.name = mapping.get(self.name) or self.name
         return self
 
-    def _unhash(self, feature_name: str) -> str:
-        last_component_idx = feature_name.rfind("_")
-        if not feature_name.startswith("f_"):
-            return feature_name  # etalon feature
-        elif last_component_idx == 1:
-            return feature_name[2:]  # fully hashed name, cannot unhash
-        else:
-            return feature_name[2:last_component_idx]
-
     def delete_data(self):
         self.data = None
 
