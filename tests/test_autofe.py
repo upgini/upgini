@@ -636,6 +636,7 @@ def test_from_formula():
     check_formula("date_per(a,date_diff(b,c))")
     check_formula("mean(a,b,c,d,e)")
     check_formula("roll_3D_mean(a,b)")
+    check_formula("roll_3D_mean_offset_1D(a,b)")
 
     assert DateListDiff.from_formula("date_diff_type2") is None
     assert isinstance(Feature.from_formula("date_diff_type2(a,b)").op, DateDiffType2)
@@ -728,9 +729,9 @@ def test_roll_date():
         expected_res = pd.Series(expected_values, name="value")
         assert_series_equal(feature.calculate(df), expected_res)
 
-    check_agg("mean", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
-    check_agg("min", [np.nan, 2.0, np.nan, 1.0, 4.0, 4.0, 4.0])
-    check_agg("max", [np.nan, 5.0, np.nan, 4.0, 5.0, 5.0, 5.0])
+    check_agg("mean", [1.0, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg("min", [1.0, 2.0, np.nan, 1.0, 4.0, 4.0, 4.0])
+    check_agg("max", [1.0, 5.0, np.nan, 4.0, 5.0, 5.0, 5.0])
     check_agg(
         "std",
         [
@@ -743,10 +744,10 @@ def test_roll_date():
             0.7071067811865476,
         ],
     )
-    check_agg("median", [np.nan, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
+    check_agg("median", [1.0, 3.5, np.nan, 2.5, 4.5, 4.5, 4.5])
     check_agg(
         "norm_mean",
-        [np.nan, 0.5714285714285714, np.nan, 1.6, 1.1111111111111112, 1.1111111111111112, 1.1111111111111112],
+        [1.0, 0.5714285714285714, np.nan, 1.6, 1.1111111111111112, 1.1111111111111112, 1.1111111111111112],
     )
 
 
@@ -770,8 +771,8 @@ def test_roll_date_groups():
         assert_series_equal(feature.calculate(df), expected_res)
 
     check_period(1, "mean", [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
-    check_period(2, "mean", [np.nan, np.nan, np.nan, 2.5, 2.5, np.nan])
-    check_period(2, "norm_mean", [np.nan, np.nan, np.nan, 1.6, 1.6, np.nan])
+    check_period(2, "mean", [1.0, 2.0, np.nan, 2.5, 2.5, 5.0])
+    check_period(2, "norm_mean", [1.0, 1.0, np.nan, 1.6, 1.6, 1.0])
 
 
 def test_roll_from_formula():
@@ -781,11 +782,13 @@ def test_roll_from_formula():
     assert roll.aggregation == "mean"
     assert roll.to_formula() == "roll_3d_mean"
 
-    roll = Roll.from_formula("roll_10D_max")
+    roll = Roll.from_formula("roll_10D_offset_1D_max")
     assert roll.window_size == 10
     assert roll.window_unit == "D"
+    assert roll.offset_size == 1
+    assert roll.offset_unit == "D"
     assert roll.aggregation == "max"
-    assert roll.to_formula() == "roll_10D_max"
+    assert roll.to_formula() == "roll_10D_offset_1D_max"
 
     # Test invalid formulas
     roll = Roll.from_formula("not_a_roll_formula")
@@ -872,6 +875,97 @@ def test_lag_hours():
     check_lag(1, "H", [np.nan, np.nan, 2.0, np.nan, 4.0])
 
 
+def test_lag_with_offset():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05",
+                "2024-05-06",
+                "2024-05-07",
+                "2024-05-08",
+                "2024-05-08",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_lag(lag_size: int, lag_unit: str, offset_size: int, expected_values: List[float]):
+        feature = Feature(
+            op=Lag(lag_size=lag_size, lag_unit=lag_unit, offset_size=offset_size),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_lag(1, "d", 0, [np.nan, 1.0, 2.0, 3.0, 3.0])
+    check_lag(1, "d", 1, [np.nan, np.nan, 1.0, 2.0, 2.0])
+    check_lag(2, "d", 1, [np.nan, np.nan, np.nan, 1.0, 1.0])
+
+
+def test_roll_with_offset():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05",
+                "2024-05-06",
+                "2024-05-07",
+                "2024-05-08",
+                "2024-05-08",
+            ],
+            "value": [1, 2, 3, 4, 5],
+        },
+    )
+
+    def check_roll(
+        window_size: int, window_unit: str, offset_size: int, aggregation: str, expected_values: List[float]
+    ):
+        feature = Feature(
+            op=Roll(window_size=window_size, window_unit=window_unit, offset_size=offset_size, aggregation=aggregation),
+            children=[Column("date"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_roll(2, "d", 0, "mean", [1.0, 1.5, 2.5, 3.5, 3.5])
+    check_roll(2, "d", 1, "mean", [np.nan, 1.0, 1.5, 2.5, 2.5])
+    check_roll(3, "d", 1, "median", [np.nan, 1.0, 1.5, 2.0, 2.0])
+
+
+def test_roll_with_offset_and_groups():
+    df = pd.DataFrame(
+        {
+            "date": [
+                "2024-05-05",
+                "2024-05-06",
+                "2024-05-07",
+                "2024-05-08",
+                "2024-05-08",
+                "2024-05-05",
+                "2024-05-06",
+                "2024-05-07",
+                "2024-05-08",
+                "2024-05-08",
+            ],
+            "group": ["A", "A", "A", "A", "A", "B", "B", "B", "B", "B"],
+            "value": [1, 2, 3, 4, 5, 10, 20, 30, 40, 50],
+        },
+    )
+
+    def check_roll_groups(
+        window_size: int, window_unit: str, offset_size: int, aggregation: str, expected_values: List[float]
+    ):
+        feature = Feature(
+            op=Roll(window_size=window_size, window_unit=window_unit, offset_size=offset_size, aggregation=aggregation),
+            children=[Column("date"), Column("group"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value")
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    check_roll_groups(2, "d", 0, "mean", [1.0, 1.5, 2.5, 3.5, 3.5, 10.0, 15.0, 25.0, 35.0, 35.0])
+    check_roll_groups(2, "d", 1, "mean", [np.nan, 1.0, 1.5, 2.5, 2.5, np.nan, 10.0, 15.0, 25.0, 25.0])
+    check_roll_groups(3, "d", 1, "median", [np.nan, 1.0, 1.5, 2.0, 2.0, np.nan, 10.0, 15.0, 20.0, 20.0])
+
+
 def test_roll_hours():
     df = pd.DataFrame(
         {
@@ -895,8 +989,8 @@ def test_roll_hours():
         assert_series_equal(feature.calculate(df), expected_res)
 
     check_roll(1, "d", "mean", [1.0, 2.0, 2.5, 4.0, 4.5])
-    check_roll(2, "d", "median", [np.nan, 1.5, 2.0, 3.0, 3.5])
-    check_roll(2, "H", "norm_mean", [np.nan, np.nan, 1.2, np.nan, 1.111111])
+    check_roll(2, "d", "median", [1.0, 1.5, 2.0, 3.0, 3.5])
+    check_roll(2, "H", "norm_mean", [1.0, 1.0, 1.2, 1.0, 1.111111])
 
 
 def test_lag_from_formula():
@@ -905,10 +999,12 @@ def test_lag_from_formula():
     assert lag.lag_unit == "d"
     assert lag.to_formula() == "lag_3d"
 
-    lag = Lag.from_formula("lag_10D")
+    lag = Lag.from_formula("lag_10D_offset_1D")
     assert lag.lag_size == 10
     assert lag.lag_unit == "D"
-    assert lag.to_formula() == "lag_10D"
+    assert lag.offset_size == 1
+    assert lag.offset_unit == "D"
+    assert lag.to_formula() == "lag_10D_offset_1D"
 
     # Test invalid formulas
     lag = Lag.from_formula("not_a_lag_formula")

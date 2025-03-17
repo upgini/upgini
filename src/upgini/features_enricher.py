@@ -3733,7 +3733,7 @@ if response.status_code == 200:
         features_info_without_links = []
         internal_features_info = []
 
-        original_shaps = {fm.name: fm.shap_value for fm in features_meta}
+        original_shaps = {original_names_dict.get(fm.name, fm.name): fm.shap_value for fm in features_meta}
 
         if updated_shaps is not None:
             for fm in features_meta:

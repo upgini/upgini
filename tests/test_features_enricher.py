@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import date
 from typing import List, Optional
@@ -404,7 +405,18 @@ def test_saved_features_enricher(requests_mock: Mocker):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -434,7 +446,7 @@ def test_saved_features_enricher(requests_mock: Mocker):
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
+    df.drop(columns=["SystemRecordId_473310000"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"].copy()
@@ -458,8 +470,8 @@ def test_saved_features_enricher(requests_mock: Mocker):
     enriched_train_features = enricher.transform(
         train_features,
     )
-    print(enriched_train_features)
-    assert enriched_train_features.shape == (10000, 5)
+    logging.warning(enriched_train_features)
+    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.calculate_metrics(
         train_features,
@@ -471,27 +483,27 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
-            enriched_gini: ["0.010 ± 0.019", "-0.010 ± 0.021", "-0.017 ± 0.023"],
-            uplift: [0.003129003609412328, -0.014280053316041673, -0.027921890762357758],
+            baseline_gini: ["-0.008 ± 0.026", "-0.019 ± 0.009", "-0.009 ± 0.017"],
+            enriched_gini: ["0.009 ± 0.012", "-0.046 ± 0.019", "-0.018 ± 0.023"],
+            uplift: [0.017889, -0.027142, -0.009426],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
+    logging.warning(enricher.features_info)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0052]
-    assert len(enricher.features_info) == 1
+    assert enricher.feature_names_ == ["client_feature", "feature"]
+    assert enricher.feature_importances_ == [0.0091, 0.0056]
+    assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0052
+    assert first_feature_info[feature_name_header] == "client_feature"
+    assert first_feature_info[shap_value_header] == 0.0091
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -504,15 +516,15 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            baseline_gini: ["-0.014 ± 0.045"],
-            enriched_gini: ["0.005 ± 0.059"],
-            uplift: [0.018997790411857896],
+            baseline_gini: ["0.010 ± 0.063"],
+            enriched_gini: ["0.002 ± 0.124"],
+            uplift: [-0.00883],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
@@ -2648,7 +2660,7 @@ def test_unsupported_arguments(requests_mock: Mocker):
         ProviderTaskMetadataV2(
             features=[
                 FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
-                FeaturesMetadataV2(name="feature", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.1)
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.1),
             ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
@@ -2893,7 +2905,7 @@ def test_id_columns_validation(requests_mock: Mocker):
         date_format="%Y-%m-%d",
         cv=CVType.time_series,
         logs_enabled=False,
-        id_columns=["unexistent_column"]
+        id_columns=["unexistent_column"],
     )
 
     with pytest.raises(ValidationError, match="Id column unexistent_column not found in X"):
