@@ -64,6 +64,9 @@ class DateDiff(PandasOperand, DateDiffMixin):
         return res
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        if left.isna().all() or right.isna().all():
+            return pd.Series([None] * len(left))
+
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
         diff = self._convert_diff_to_unit(left.dt.date - right.dt.date)
@@ -142,6 +145,9 @@ class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
         return cls(aggregation=aggregation)
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        if left.isna().all() or right.isna().all():
+            return pd.Series([None] * len(left), dtype=np.float64)
+
         left = self._convert_to_date(left, self.left_unit)
         right_mask = right.apply(lambda x: len(x) > 0)
         mask = left.notna() & right.notna() & right_mask
@@ -230,6 +236,8 @@ class DatePercentileBase(PandasOperand, abc.ABC):
         pass
 
     def _perc(self, f, bounds):
+        if f is None or np.isnan(f):
+            return np.nan
         hit = np.where(f >= np.array(bounds))[0]
         if hit.size > 0:
             return np.max(hit) + 1
