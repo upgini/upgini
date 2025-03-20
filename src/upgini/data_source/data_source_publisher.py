@@ -386,6 +386,7 @@ class DataSourcePublisher:
                 search_keys = [k.value.value for k in search_keys] if search_keys else None
                 request = {"bqTableId": bq_table_id, "searchKeys": search_keys}
                 task_id = self._rest_client.upload_online(request, trace_id)
+                print(f"Uploading online task created. task_id={task_id}")
                 with Spinner():
                     status_response = self._rest_client.poll_ads_management_task_status(task_id, trace_id)
                     while status_response["status"] not in self.FINAL_STATUSES:

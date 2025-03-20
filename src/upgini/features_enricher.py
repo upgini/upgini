@@ -222,6 +222,7 @@ class FeaturesEnricher(TransformerMixin):
         loss: Optional[str] = None,
         detect_missing_search_keys: bool = True,
         generate_features: Optional[List[str]] = None,
+        columns_for_online_api: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
@@ -345,6 +346,9 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.error(msg)
                     raise ValidationError(msg)
                 self.runtime_parameters.properties["round_embeddings"] = round_embeddings
+        self.columns_for_online_api = columns_for_online_api
+        if columns_for_online_api is not None:
+            self.runtime_parameters.properties["columns_for_online_api"] = ",".join(columns_for_online_api)
         maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
         if maybe_downsampling_limit is not None:
             Dataset.FIT_SAMPLE_THRESHOLD = int(maybe_downsampling_limit)
@@ -1873,13 +1877,9 @@ class FeaturesEnricher(TransformerMixin):
 
             # downsample if need to eval_set threshold
             num_samples = _num_samples(df)
-            phone_column = self._get_phone_column(self.search_keys)
             force_downsampling = (
                 not self.disable_force_downsampling
-                and self.generate_features is not None
-                and phone_column is not None
-                and self.fit_columns_renaming is not None
-                and self.fit_columns_renaming.get(phone_column) in self.generate_features
+                and self.columns_for_online_api is not None
                 and num_samples > Dataset.FORCE_SAMPLE_SIZE
             )
             if force_downsampling:
@@ -1948,7 +1948,27 @@ class FeaturesEnricher(TransformerMixin):
             df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
             num_samples = _num_samples(df)
-            if num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
+            force_downsampling = (
+                not self.disable_force_downsampling
+                and self.columns_for_online_api is not None
+                and num_samples > Dataset.FORCE_SAMPLE_SIZE
+            )
+            if force_downsampling:
+                self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
+                df = balance_undersample_forced(
+                    df=df,
+                    target_column=TARGET,
+                    id_columns=self.id_columns,
+                    date_column=self._get_date_column(self.search_keys),
+                    task_type=self.model_task_type,
+                    cv_type=self.cv,
+                    random_state=self.random_state,
+                    sample_size=Dataset.FORCE_SAMPLE_SIZE,
+                    logger=self.logger,
+                    bundle=self.bundle,
+                    warning_callback=self.__log_warning,
+                )
+            elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
                 self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
                 df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
 
@@ -2620,16 +2640,17 @@ if response.status_code == 200:
             checked_generate_features = []
             for gen_feature in self.generate_features:
                 if gen_feature not in x_columns:
-                    if gen_feature == self._get_phone_column(self.search_keys):
-                        raise ValidationError(
-                            self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
-                        )
-                    else:
-                        self.__log_warning(self.bundle.get("missing_generate_feature").format(gen_feature, x_columns))
+                    msg = self.bundle.get("missing_generate_feature").format(gen_feature, x_columns)
+                    self.__log_warning(msg)
                 else:
                     checked_generate_features.append(gen_feature)
             self.generate_features = checked_generate_features
             self.runtime_parameters.properties["generate_features"] = ",".join(self.generate_features)
+
+        if self.columns_for_online_api is not None and len(self.columns_for_online_api) > 0:
+            for column in self.columns_for_online_api:
+                if column not in validated_X.columns:
+                    raise ValidationError(self.bundle.get("missing_column_for_online_api").format(column))
 
         if self.id_columns is not None:
             for id_column in self.id_columns:
@@ -2852,9 +2873,7 @@ if response.status_code == 200:
         # Force downsampling to 7000 for API features generation
         force_downsampling = (
             not self.disable_force_downsampling
-            and self.generate_features is not None
-            and phone_column is not None
-            and self.fit_columns_renaming[phone_column] in self.generate_features
+            and self.columns_for_online_api is not None
             and len(df) > Dataset.FORCE_SAMPLE_SIZE
         )
         if force_downsampling:
