@@ -6,7 +6,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 
-class OperandRegistry(type(BaseModel)):
+class OperatorRegistry(type(BaseModel)):
     _registry = {}
     _parametrized_registry = []
 
@@ -46,7 +46,7 @@ class OperandRegistry(type(BaseModel)):
         return None
 
 
-class Operand(BaseModel, metaclass=OperandRegistry):
+class Operand(BaseModel, metaclass=OperatorRegistry):
     name: Optional[str] = None
     alias: Optional[str] = None
     is_unary: bool = False

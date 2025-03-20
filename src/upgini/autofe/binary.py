@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from jarowinkler import jarowinkler_similarity
 
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperand, VectorizableMixin
 
 
 class Min(PandasOperand):

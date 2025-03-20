@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
-from upgini.autofe.operand import PandasOperand, ParametrizedOperand
+from upgini.autofe.operator import PandasOperand, ParametrizedOperand
 
 
 def get_pydantic_version():

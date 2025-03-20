@@ -8,7 +8,7 @@ try:
 except ImportError:
     from pydantic import validator  # V1
 
-from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperand, ParametrizedOperand, VectorizableMixin
 
 
 class Mean(PandasOperand, VectorizableMixin):

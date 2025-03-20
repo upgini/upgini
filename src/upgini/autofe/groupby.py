@@ -2,7 +2,7 @@ from typing import Optional
 
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperand, ParametrizedOperand, VectorizableMixin
 
 
 class GroupByThenAgg(

@@ -7,7 +7,7 @@ import pandas as pd
 from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operands import find_op
-from upgini.autofe.operand import Operand, PandasOperand
+from upgini.autofe.operator import Operand, PandasOperand
 
 
 class Column:
