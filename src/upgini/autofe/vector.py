@@ -55,7 +55,7 @@ class TimeSeriesBase(PandasOperand, abc.ABC):
         ts.set_index(date.name, inplace=True)
         ts = ts[ts.index.notna()].sort_index()
         ts = (
-            ts.groupby([c.name for c in data[1:-1]])
+            ts.groupby([c.name for c in data[1:-1]], group_keys=True)
             .apply(self._shift)[data[-1].name]
             .to_frame()
             .reset_index()
