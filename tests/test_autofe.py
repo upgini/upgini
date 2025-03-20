@@ -23,7 +23,8 @@ from upgini.autofe.date import (
 from upgini.autofe.feature import Column, Feature, FeatureGroup
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq
 from upgini.autofe.unary import Abs, Norm
-from upgini.autofe.vector import Lag, Mean, Roll
+from upgini.autofe.vector import Mean
+from upgini.autofe.timeseries import Lag, Roll
 
 
 def test_date_diff():
@@ -928,6 +929,9 @@ def test_roll_with_offset():
     check_roll(2, "d", 0, "mean", [1.0, 1.5, 2.5, 3.5, 3.5])
     check_roll(2, "d", 1, "mean", [np.nan, 1.0, 1.5, 2.5, 2.5])
     check_roll(3, "d", 1, "median", [np.nan, 1.0, 1.5, 2.0, 2.0])
+    check_roll(2, "d", 0, "last", [1.0, 2.0, 3.0, 4.0, 4.0])
+    check_roll(2, "d", 1, "last", [np.nan, 1.0, 2.0, 3.0, 3.0])
+    check_roll(3, "d", 1, "last", [np.nan, 1.0, 2.0, 3.0, 3.0])
 
 
 def test_roll_with_offset_and_groups():

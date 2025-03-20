@@ -31,7 +31,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.autofe.feature import Feature
-from upgini.autofe.vector import TimeSeriesBase
+from upgini.autofe.timeseries import TimeSeriesBase
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import HttpError, ValidationError
