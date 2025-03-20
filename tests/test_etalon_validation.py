@@ -51,9 +51,10 @@ def test_email_to_hem_convertion():
     assert "email" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
     # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
     assert "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
-    assert "email" not in df.columns
+    assert "email" in df.columns
     assert converter.email_converted_to_hem
     assert columns_renaming == {
+        "email": "original_email",
         "email" + EmailSearchKeyConverter.HEM_SUFFIX: "original_email",
         # EmailSearchKeyConverter.DOMAIN_COLUMN_NAME: "original_email",
         "email" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX: "original_email",
@@ -74,9 +75,9 @@ def test_unnest_email_to_hem_conversion():
     assert "upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX in df.columns
     # assert EmailSearchKeyConverter.DOMAIN_COLUMN_NAME in df.columns
     assert "upgini_email_unnest" + EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX in df.columns
-    assert "upgini_email_unnest" not in df.columns
+    assert "upgini_email_unnest" in df.columns
     assert converter.email_converted_to_hem
-    assert unnest_search_keys == ["upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX]
+    assert unnest_search_keys == ["upgini_email_unnest", "upgini_email_unnest" + EmailSearchKeyConverter.HEM_SUFFIX]
 
 
 def test_string_ip_to_bytes_conversion():

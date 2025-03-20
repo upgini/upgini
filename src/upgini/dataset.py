@@ -587,15 +587,23 @@ class Dataset:  # (pd.DataFrame):
         if (
             runtime_parameters is not None
             and runtime_parameters.properties is not None
-            and "generate_features" in runtime_parameters.properties
         ):
-            generate_features = runtime_parameters.properties["generate_features"].split(",")
-            renamed_generate_features = []
-            for f in generate_features:
-                for new_column, orig_column in self.columns_renaming.items():
-                    if f == orig_column:
-                        renamed_generate_features.append(new_column)
-            runtime_parameters.properties["generate_features"] = ",".join(renamed_generate_features)
+            if "generate_features" in runtime_parameters.properties:
+                generate_features = runtime_parameters.properties["generate_features"].split(",")
+                renamed_generate_features = []
+                for f in generate_features:
+                    for new_column, orig_column in self.columns_renaming.items():
+                        if f == orig_column:
+                            renamed_generate_features.append(new_column)
+                runtime_parameters.properties["generate_features"] = ",".join(renamed_generate_features)
+            if "columns_for_online_api" in runtime_parameters.properties:
+                columns_for_online_api = runtime_parameters.properties["columns_for_online_api"].split(",")
+                renamed_columns_for_online_api = []
+                for f in columns_for_online_api:
+                    for new_column, orig_column in self.columns_renaming.items():
+                        if f == orig_column:
+                            renamed_columns_for_online_api.append(new_column)
+                runtime_parameters.properties["columns_for_online_api"] = ",".join(renamed_columns_for_online_api)
 
         return runtime_parameters
 

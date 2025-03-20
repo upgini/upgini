@@ -116,17 +116,17 @@ class EmailSearchKeyConverter:
         else:
             df[self.hem_column] = df[self.hem_column].astype("string").str.lower()
 
-        del self.search_keys[self.email_column]
-        if self.email_column in self.unnest_search_keys:
-            self.unnest_search_keys.remove(self.email_column)
+        # del self.search_keys[self.email_column]
+        # if self.email_column in self.unnest_search_keys:
+        #     self.unnest_search_keys.remove(self.email_column)
 
         one_domain_name = self.email_column + self.ONE_DOMAIN_SUFFIX
         df[one_domain_name] = df[self.email_column].apply(self._email_to_one_domain)
         self.columns_renaming[one_domain_name] = original_email_column
         self.search_keys[one_domain_name] = SearchKey.EMAIL_ONE_DOMAIN
 
-        if self.email_converted_to_hem:
-            df = df.drop(columns=self.email_column)
-            del self.columns_renaming[self.email_column]
+        # if self.email_converted_to_hem:
+        #     df = df.drop(columns=self.email_column)
+        #     del self.columns_renaming[self.email_column]
 
         return df
