@@ -1967,7 +1967,7 @@ class FeaturesEnricher(TransformerMixin):
                 and self.columns_for_online_api is not None
                 and num_samples > Dataset.FORCE_SAMPLE_SIZE
             )
-            # TODO: check that system_record_id was added before this step
+
             if force_downsampling:
                 self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
                 df = balance_undersample_forced(
