@@ -491,16 +491,16 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
 
     metrics_df = enricher.calculate_metrics()
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     expected_metrics = pd.DataFrame(
         {
             "Dataset type": ["Train", "Eval 1"],
             "Rows": [9670, 140],
-            "Mean target": [5898.0507, 5675.8586],
-            "Baseline mean_squared_error": ["6951341.503 ± 1612237.087", "5178540.370 ± 206668.728"],
-            "Enriched mean_squared_error": ["6098192.135 ± 1410144.438", "4273425.531 ± 150097.819"],
-            "Uplift": [853149.3672875343, 905114.8388947612],
+            "Mean target": [5905.9362, 5675.8586],
+            "Baseline mean_squared_error": ["7153566.918 ± 1906537.119", "5201871.898 ± 194881.789"],
+            "Enriched mean_squared_error": ["6246200.217 ± 1702793.819", "4268135.649 ± 169738.663"],
+            "Uplift": [907366.701214, 933736.249834],
         }
     )
 
@@ -857,28 +857,28 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
 
     metrics_df = enricher.calculate_metrics(scoring="RMSLE")
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     assert metrics_df.loc[0, segment_header] == train_segment
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
     assert metrics_df.loc[0, baseline_RMSLE] == "0.458 ± 0.043"
-    assert metrics_df.loc[0, enriched_RMSLE] == "0.430 ± 0.050"
-    assert metrics_df.loc[0, uplift] == approx(0.027718)
+    assert metrics_df.loc[0, enriched_RMSLE] == "0.466 ± 0.061"
+    assert metrics_df.loc[0, uplift] == approx(-0.008417)
 
     assert metrics_df.loc[1, segment_header] == eval_1_segment
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
     assert metrics_df.loc[1, baseline_RMSLE] == "0.502 ± 0.005"
-    assert metrics_df.loc[1, enriched_RMSLE] == "0.478 ± 0.012"
-    assert metrics_df.loc[1, uplift] == approx(0.024050)
+    assert metrics_df.loc[1, enriched_RMSLE] == "0.502 ± 0.004"
+    assert metrics_df.loc[1, uplift] == approx(-0.000771)
 
     assert metrics_df.loc[2, segment_header] == eval_2_segment
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
     assert metrics_df.loc[2, baseline_RMSLE] == "0.492 ± 0.005"
-    assert metrics_df.loc[2, enriched_RMSLE] == "0.490 ± 0.012"
-    assert metrics_df.loc[2, uplift] == approx(0.002481)
+    assert metrics_df.loc[2, enriched_RMSLE] == "0.499 ± 0.005"
+    assert metrics_df.loc[2, uplift] == approx(-0.006586)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):

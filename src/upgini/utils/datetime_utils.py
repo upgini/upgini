@@ -166,6 +166,8 @@ class DateTimeSearchKeyConverter:
 
             # Drop intermediate columns if not needed
             df.drop(columns=["second", "minute", "hour"], inplace=True)
+        else:
+            keep_time = False
 
         for generated_feature in self.generated_features[:]:
             if df[generated_feature].dropna().nunique() <= 1:

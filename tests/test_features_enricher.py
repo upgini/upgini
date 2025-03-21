@@ -173,14 +173,14 @@ def test_features_enricher(requests_mock: Mocker):
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
-            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
+            enriched_gini: ["0.008 ± 0.022", "-0.029 ± 0.024", "0.027 ± 0.023"],
+            uplift: [0.009149, -0.031530, 0.020648],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
@@ -188,11 +188,11 @@ def test_features_enricher(requests_mock: Mocker):
     print(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0078]
+    assert enricher.feature_importances_ == [0.0153]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0078
+    assert first_feature_info[shap_value_header] == 0.0153
 
 
 def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
@@ -626,26 +626,25 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
             baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
-            enriched_gini: ["0.002 ± 0.045", "0.021 ± 0.026", "0.014 ± 0.024"],
-            uplift: [-0.004858, 0.016415, 0.003231],
+            enriched_gini: ["0.016 ± 0.020", "0.007 ± 0.017", "0.001 ± 0.028"],
+            uplift: [0.008654, 0.002243, -0.009933],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
+    logging.warning(enricher.features_info)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
-
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0033]
+    assert enricher.feature_importances_ == [0.0108]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0033
+    assert first_feature_info[shap_value_header] == 0.0108
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -773,26 +772,26 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
-            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
+            enriched_gini: ["0.008 ± 0.022", "-0.029 ± 0.024", "0.027 ± 0.023"],
+            uplift: [0.009149, -0.031530, 0.020648],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
+    logging.warning(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0078]
+    assert enricher.feature_importances_ == [0.0153]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0078
+    assert first_feature_info[shap_value_header] == 0.0153
 
     enricher.transform(train_features)
 
@@ -895,26 +894,26 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
-            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
+            enriched_gini: ["0.008 ± 0.022", "-0.029 ± 0.024", "0.027 ± 0.023"],
+            uplift: [0.009149, -0.031530, 0.020648],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
+    logging.warning(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0078]
+    assert enricher.feature_importances_ == [0.0153]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0078
+    assert first_feature_info[shap_value_header] == 0.0153
 
 
 def test_features_enricher_with_index_column(requests_mock: Mocker):
@@ -1015,26 +1014,26 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
             baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.007 ± 0.037", "-0.044 ± 0.044", "-0.038 ± 0.013"],
-            uplift: [0.00855379495023283, -0.046191606776180685, -0.044711053465917375],
+            enriched_gini: ["0.008 ± 0.022", "-0.029 ± 0.024", "0.027 ± 0.023"],
+            uplift: [0.009149, -0.031530, 0.020648],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    print(enricher.features_info)
+    logging.warning(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0078]
+    assert enricher.feature_importances_ == [0.0153]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0078
+    assert first_feature_info[shap_value_header] == 0.0153
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
@@ -1137,27 +1136,27 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             rows_header: [5319],
             target_mean_header: [0.6364],
             baseline_gini: ["0.007 ± 0.038"],
-            enriched_gini: ["0.005 ± 0.036"],
-            uplift: [-0.001226],
+            enriched_gini: ["0.025 ± 0.032"],
+            uplift: [0.018143],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
-
-    assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     features_info = enricher.get_features_info()
-    print(features_info)
+    logging.warning(features_info)
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)    
 
     assert enricher.feature_names_ == ["f_feature123"]
-    assert enricher.feature_importances_ == [0.0136]
+    assert enricher.feature_importances_ == [0.0217]
     assert len(features_info) == 1
     first_feature_info = features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "f_feature123"
-    assert first_feature_info[shap_value_header] == 0.0136
+    assert first_feature_info[shap_value_header] == 0.0217
     assert first_feature_info[hitrate_header] == 99.0
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1546,7 +1545,7 @@ def test_filter_by_importance(requests_mock: Mocker):
             segment_header: ["Train", "Eval 1", "Eval 2"],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+            baseline_gini: ["-0.007 ± 0.010", "-0.003 ± 0.023", "0.007 ± 0.019"],
         }
     )
 
@@ -1660,7 +1659,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
             segment_header: ["Train", "Eval 1", "Eval 2"],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+            baseline_gini: ["-0.007 ± 0.010", "-0.003 ± 0.023", "0.007 ± 0.019"],
         }
     )
     assert_frame_equal(metrics, expected_metrics, atol=1e-6)
@@ -2011,7 +2010,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     )
     assert enriched_train_features.shape == (10000, 11)
 
-    print(enricher.features_info)
+    logging.warning(enricher.features_info)
 
     assert enricher.feature_names_ == ["feature"]
     assert enricher.feature_importances_ == [10.1]
@@ -2027,15 +2026,15 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.007 ± 0.020", "-0.021 ± 0.025", "-0.008 ± 0.034"],
-            enriched_gini: ["-0.015 ± 0.029", "0.004 ± 0.017", "-0.021 ± 0.023"],
-            uplift: [-0.007509, 0.025167, -0.013255],
+            baseline_gini: ["0.007 ± 0.019", "-0.014 ± 0.016", "0.005 ± 0.022"],
+            enriched_gini: ["0.003 ± 0.027", "0.008 ± 0.007", "0.009 ± 0.011"],
+            uplift: [-0.003687, 0.021816, 0.004476],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
@@ -2149,9 +2148,13 @@ def test_imbalanced_dataset(requests_mock: Mocker):
     )
 
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+
+    path_to_mock_features_validation = os.path.join(
+        base_dir, "test_data/binary/features_imbalanced_with_entity_system_record_id_validation.parquet"
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
     mock_validation_raw_features(
-        requests_mock, url, validation_search_task_id, path_to_mock_features, metrics_calculation=True
+        requests_mock, url, validation_search_task_id, path_to_mock_features_validation, metrics_calculation=True
     )
 
     train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
@@ -2176,11 +2179,13 @@ def test_imbalanced_dataset(requests_mock: Mocker):
 
         metrics = enricher.calculate_metrics()
 
-        print(metrics)
+        logging.warning(metrics)
 
         assert metrics.loc[0, "Rows"] == 8000
         assert metrics.loc[0, "Mean target"] == 0.125
-        assert metrics.loc[0, "Enriched GINI"] == "-0.018 ± 0.030"
+        assert metrics.loc[0, "Baseline GINI"] == "0.006 ± 0.015"
+        assert metrics.loc[0, "Enriched GINI"] == "0.030 ± 0.017"
+        assert metrics.loc[0, "Uplift"] == 0.023755785443209908
     finally:
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
@@ -2842,14 +2847,14 @@ def test_select_features(requests_mock: Mocker):
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
             baseline_gini: ["0.006 ± 0.022", "-0.030 ± 0.020", "-0.003 ± 0.010"],
-            enriched_gini: ["-0.007 ± 0.033", "-0.021 ± 0.031", "0.010 ± 0.019"],
-            uplift: [-0.012502, 0.008984, 0.012933],
+            enriched_gini: ["0.001 ± 0.025", "0.036 ± 0.034", "0.032 ± 0.029"],
+            uplift: [-0.004250, 0.065853, 0.035638],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
@@ -2881,13 +2886,13 @@ def test_select_features(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: ["0.014 ± 0.027", "0.031 ± 0.020", "-0.003 ± 0.027"],
+            enriched_gini: ["0.006 ± 0.019", "0.037 ± 0.026", "-0.021 ± 0.020"],
         }
     )
-    print("Expected metrics: ")
-    print(expected_metrics)
-    print("Actual metrics: ")
-    print(metrics)
+    logging.warning("Expected metrics: ")
+    logging.warning(expected_metrics)
+    logging.warning("Actual metrics: ")
+    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)

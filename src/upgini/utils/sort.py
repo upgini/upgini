@@ -1,44 +1,70 @@
-import functools
 import hashlib
-from typing import Any, Callable
-from joblib import Parallel, delayed
+from typing import Any, Dict, List, Union
+
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
+from joblib import Parallel, delayed
+from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from psutil import cpu_count
+from scipy.stats import skew, spearmanr
+
+from upgini.metadata import ModelTaskType, SearchKey
 from upgini.utils import mstats
 
 
-# def ...
+def sort_columns(
+    df: pd.DataFrame,
+    target_column: Union[str, pd.Series],
+    search_keys: Dict[str, SearchKey],
+    model_task_type: ModelTaskType,
+    exclude_columns: List[str],
+) -> List[str]:
+    df = df.copy()  # avoid side effects
+    sorted_keys = sorted(search_keys.keys(), key=lambda x: str(search_keys.get(x)))
+    sorted_keys = [k for k in sorted_keys if k in df.columns and k not in exclude_columns]
 
-
-def _sort_list(lst: list, dct: dict) -> list:
-    return sorted(lst, key=lambda e: dct[e], reverse=True)
-
-
-def sort_by_dict_desc(dct: dict) -> Callable | None:
-    if dct is None:
-        return None
-    return functools.partial(_sort_list, dct=dct)
+    other_columns = sorted(
+        [
+            c
+            for c in df.columns
+            if c not in sorted_keys
+            and c not in exclude_columns
+            and df[c].nunique() > 1
+        ]
+    )
+    target = target_column if isinstance(target_column, pd.Series) else df[target_column]
+    target = prepare_target(target, model_task_type)
+    sort_dict = get_sort_columns_dict(df[sorted_keys + other_columns], target, sorted_keys, omit_nan=True)
+    other_columns = [c for c in other_columns if c in sort_dict]
+    columns_for_sort = sorted_keys + sorted(other_columns, key=lambda e: sort_dict[e], reverse=True)
+    return columns_for_sort
 
 
 def get_sort_columns_dict(
     df: pd.DataFrame,
     target: pd.Series,
+    sorted_keys: List[str],
     omit_nan: bool,
     n_jobs: int | None = None,
 ) -> dict[str, Any]:
+    string_features = [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in sorted_keys]
+    columns_for_sort = [c for c in df.columns if c not in sorted_keys + string_features]
+    if len(string_features) > 0:
+        if len(df) > len(df.drop(columns=string_features).drop_duplicates()):
+            # factorize string features
+            for c in string_features:
+                df.loc[:, c] = df[c].factorize(sort=True)[0]
+            columns_for_sort.extend(string_features)
 
-    non_number_corrs = {col: (0.0, hash_series(df[col])) for col in df.select_dtypes(exclude=[np.number]).columns}
-    df = df.select_dtypes(include=[np.number])
+    if len(columns_for_sort) == 0:
+        return {}
 
-    columns = df.columns
-    hashes = [hash_series(df[col]) for col in columns]
+    df = df[columns_for_sort]
+    hashes = [hash_series(df[col]) for col in columns_for_sort]
     df = np.asarray(df, dtype=np.float32)
     correlations = get_sort_columns_correlations(df, target, omit_nan, n_jobs)
 
-    sort_dict = {col: (corr, h) for col, corr, h in zip(columns, correlations, hashes)}
-    sort_dict.update(non_number_corrs)
+    sort_dict = {col: (corr, h) for col, corr, h in zip(columns_for_sort, correlations, hashes)}
     return sort_dict
 
 
@@ -74,7 +100,7 @@ def calculate_spearman_corr_with_target(
         X = np.asarray(X, dtype=np.float32)
 
     if X.size == 0:
-        return np.array()
+        return np.ndarray(shape=(0,))
 
     all_correlations = np.zeros(X.shape[1])
     all_correlations.fill(np.nan)
@@ -117,3 +143,18 @@ def calculate_spearman(X: np.ndarray, y: pd.Series | None, nan_policy: str):
 
 def hash_series(series: pd.Series) -> int:
     return int(hashlib.sha256(pd.util.hash_pandas_object(series, index=True).values).hexdigest(), 16)
+
+
+def prepare_target(target: pd.Series, model_task_type: ModelTaskType) -> pd.Series:
+    target_name = target.name
+    if model_task_type != ModelTaskType.REGRESSION or (
+        not is_numeric_dtype(target) and not is_datetime64_any_dtype(target)
+    ):
+        target = target.astype(str).astype("category").cat.codes
+
+    elif model_task_type == ModelTaskType.REGRESSION:
+        skewness = round(abs(skew(target)), 2)
+        if (target.min() >= 0) and (skewness >= 0.9):
+            target = np.log1p(target)
+
+    return pd.Series(target, name=target_name)
