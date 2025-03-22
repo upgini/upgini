@@ -206,7 +206,7 @@ def balance_undersample_forced(
     id_columns: List[str],
     date_column: str,
     task_type: ModelTaskType,
-    cv_type: CVType | None,
+    cv_type: Optional[CVType],
     random_state: int,
     sample_size: int = 7000,
     logger: Optional[logging.Logger] = None,
