@@ -30,8 +30,8 @@ except ImportError:
 from sklearn.metrics._regression import (
     _check_reg_targets,
     check_consistent_length,
-    mean_squared_error,
 )
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
@@ -288,9 +288,6 @@ class EstimatorWrapper:
             x = x.drop(columns="__groups")
         else:
             x, y = self._remove_empty_target_rows(x, y)
-
-        # Make order of columns idempotent
-        x = x[sorted(x.columns)]
 
         self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
@@ -569,7 +566,7 @@ class CatBoostWrapper(EstimatorWrapper):
             if all([isinstance(c, int) for c in estimator_cat_features]):
                 cat_features_idx = {x.columns.get_loc(c) for c in self.cat_features}
                 cat_features_idx.update(estimator_cat_features)
-                self.cat_features = [x.columns[idx] for idx in sorted(cat_features_idx)]
+                self.cat_features = [x.columns[idx] for idx in cat_features_idx]
             elif all([isinstance(c, str) for c in estimator_cat_features]):
                 self.cat_features = list(set(self.cat_features + estimator_cat_features))
             else:
@@ -940,13 +937,13 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     if (y_true < 0).any():
         raise ValidationError(bundle.get("metrics_msle_negative_target"))
 
-    return mean_squared_error(
+    mse = mean_squared_error(
         log1p(y_true),
         log1p(y_pred.clip(0)),
         sample_weight=sample_weight,
         multioutput=multioutput,
-        squared=squared,
     )
+    return mse if squared else np.sqrt(mse)
 
 
 def fill_na_cat_features(df: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
