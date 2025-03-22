@@ -269,6 +269,7 @@ def test_demo_metrics(requests_mock: Mocker):
         search_keys,
         columns_renaming,
     )
+    enricher.fit_select_features = False
 
     metrics = enricher.calculate_metrics(scoring="mean_absolute_error")
     logging.warning(metrics)
@@ -278,9 +279,9 @@ def test_demo_metrics(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [464],
             target_mean_header: [100.7802],
-            baseline_mae: ["24.542 ± 2.624"],
-            enriched_mae: ["20.288 ± 1.405"],
-            uplift: [4.25375],
+            baseline_mae: ["21.052 ± 1.244"],
+            enriched_mae: ["20.821 ± 1.066"],
+            uplift: [0.231569],
         }
     )
 
@@ -497,10 +498,10 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
         {
             "Dataset type": ["Train", "Eval 1"],
             "Rows": [9670, 140],
-            "Mean target": [5905.9362, 5675.8586],
-            "Baseline mean_squared_error": ["7153566.918 ± 1906537.119", "5201871.898 ± 194881.789"],
-            "Enriched mean_squared_error": ["6246200.217 ± 1702793.819", "4268135.649 ± 169738.663"],
-            "Uplift": [907366.701214, 933736.249834],
+            "Mean target": [5916.0936, 5675.8586],
+            "Baseline mean_squared_error": ["7188362.906 ± 1743667.568", "5303236.292 ± 231218.409"],
+            "Enriched mean_squared_error": ["6250558.489 ± 1678975.306", "4294237.648 ± 199564.891"],
+            "Uplift": [9.378044e+05, 1.008999e+06],
         }
     )
 
@@ -863,22 +864,22 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker):
     assert metrics_df.loc[0, rows_header] == 500
     assert metrics_df.loc[0, target_mean_header] == 0.51
     assert metrics_df.loc[0, baseline_RMSLE] == "0.458 ± 0.043"
-    assert metrics_df.loc[0, enriched_RMSLE] == "0.466 ± 0.061"
-    assert metrics_df.loc[0, uplift] == approx(-0.008417)
+    assert metrics_df.loc[0, enriched_RMSLE] == "0.472 ± 0.054"
+    assert metrics_df.loc[0, uplift] == approx(-0.014368)
 
     assert metrics_df.loc[1, segment_header] == eval_1_segment
     assert metrics_df.loc[1, rows_header] == 250
     assert metrics_df.loc[1, target_mean_header] == 0.452
     assert metrics_df.loc[1, baseline_RMSLE] == "0.502 ± 0.005"
-    assert metrics_df.loc[1, enriched_RMSLE] == "0.502 ± 0.004"
-    assert metrics_df.loc[1, uplift] == approx(-0.000771)
+    assert metrics_df.loc[1, enriched_RMSLE] == "0.494 ± 0.006"
+    assert metrics_df.loc[1, uplift] == approx(0.007730)
 
     assert metrics_df.loc[2, segment_header] == eval_2_segment
     assert metrics_df.loc[2, rows_header] == 250
     assert metrics_df.loc[2, target_mean_header] == 0.536
     assert metrics_df.loc[2, baseline_RMSLE] == "0.492 ± 0.005"
-    assert metrics_df.loc[2, enriched_RMSLE] == "0.499 ± 0.005"
-    assert metrics_df.loc[2, uplift] == approx(-0.006586)
+    assert metrics_df.loc[2, enriched_RMSLE] == "0.497 ± 0.012"
+    assert metrics_df.loc[2, uplift] == approx(-0.004932)
 
 
 def test_catboost_metric_binary(requests_mock: Mocker):
@@ -984,9 +985,9 @@ def test_catboost_metric_binary(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["0.112 ± 0.058", "-0.087 ± 0.018", "0.002 ± 0.028"],
-                enriched_gini: ["0.066 ± 0.074", "-0.009 ± 0.023", "-0.060 ± 0.044"],
-                uplift: [-0.045618, 0.077592, -0.062236],
+                baseline_gini: ["0.155 ± 0.090", "-0.056 ± 0.022", "-0.004 ± 0.037"],
+                enriched_gini: ["0.062 ± 0.039", "-0.087 ± 0.063", "-0.015 ± 0.054"],
+                uplift: [-0.093271, -0.030541, -0.010924],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1116,23 +1117,23 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker):
     with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
 
-    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False, select_features=False)
 
     assert len(enriched_X) == len(X)
 
     estimator = CatBoostClassifier(random_seed=42, verbose=False, cat_features=[1, 3])
     metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
     assert metrics_df is not None
-    print(metrics_df)
+    logging.warning(metrics_df)
 
     expected_metrics = pd.DataFrame(
         {
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [500, 250, 250],
             target_mean_header: [0.51, 0.452, 0.536],
-            baseline_gini: ["0.086 ± 0.087", "-0.030 ± 0.056", "0.042 ± 0.030"],
-            enriched_gini: ["0.056 ± 0.105", "-0.056 ± 0.073", "0.005 ± 0.024"],
-            uplift: [-0.030300, -0.026135, -0.037571],
+            baseline_gini: ["0.075 ± 0.048", "-0.060 ± 0.059", "-0.021 ± 0.062"],
+            enriched_gini: ["0.162 ± 0.062", "0.025 ± 0.028", "0.003 ± 0.042"],
+            uplift: [0.086929, 0.085317, 0.023572],
         }
     )
 
@@ -1358,9 +1359,9 @@ def test_rf_metric_rmse(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_rmse: ["0.698 ± 0.021", "0.727 ± 0.012", "0.675 ± 0.012"],
-                enriched_rmse: ["0.714 ± 0.016", "0.689 ± 0.008", "0.715 ± 0.019"],
-                uplift: [-0.015698, 0.038364, -0.039554],
+                baseline_rmse: ["0.685 ± 0.019", "0.718 ± 0.012", "0.682 ± 0.010"],
+                enriched_rmse: ["0.680 ± 0.046", "0.731 ± 0.013", "0.712 ± 0.009"],
+                uplift: [0.005653, -0.013230, -0.029856],
             }
         )
     elif pd.__version__ >= "2.1.0":
@@ -1482,9 +1483,9 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker):
                 segment_header: [train_segment, eval_1_segment, eval_2_segment],
                 rows_header: [500, 250, 250],
                 target_mean_header: [0.51, 0.452, 0.536],
-                baseline_gini: ["-0.000 ± 0.091", "-0.056 ± 0.057", "0.010 ± 0.022"],
-                enriched_gini: ["0.011 ± 0.049", "0.010 ± 0.033", "-0.081 ± 0.067"],
-                uplift: [0.010877, 0.065693, -0.090800],
+                baseline_gini: ["0.012 ± 0.068", "-0.054 ± 0.058", "-0.001 ± 0.085"],
+                enriched_gini: ["0.022 ± 0.096", "-0.054 ± 0.061", "0.054 ± 0.023"],
+                uplift: [0.010629, -0.000129, 0.055314],
             }
         )
     elif pd.__version__ >= "2.1.0":

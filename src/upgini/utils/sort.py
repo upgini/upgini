@@ -1,5 +1,6 @@
 import hashlib
-from typing import Any, Dict, List, Union
+import logging
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -17,9 +18,23 @@ def sort_columns(
     target_column: Union[str, pd.Series],
     search_keys: Dict[str, SearchKey],
     model_task_type: ModelTaskType,
-    exclude_columns: List[str],
+    exclude_columns: Optional[List[str]] = None,
+    sort_all_columns: bool = False,
+    logger: Optional[logging.Logger] = None,
 ) -> List[str]:
+    if exclude_columns is None:
+        exclude_columns = []
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.FATAL)
     df = df.copy()  # avoid side effects
+
+    # Check multiple search keys
+    search_key_values = list(search_keys.values())
+    has_duplicate_search_keys = len(search_key_values) != len(set(search_key_values))
+    if has_duplicate_search_keys:
+        logging.warning(f"WARNING: Found duplicate SearchKey values in search_keys: {search_keys}")
+
     sorted_keys = sorted(search_keys.keys(), key=lambda x: str(search_keys.get(x)))
     sorted_keys = [k for k in sorted_keys if k in df.columns and k not in exclude_columns]
 
@@ -27,14 +42,14 @@ def sort_columns(
         [
             c
             for c in df.columns
-            if c not in sorted_keys
-            and c not in exclude_columns
-            and df[c].nunique() > 1
+            if c not in sorted_keys and c not in exclude_columns and (df[c].nunique() > 1 or sort_all_columns)
         ]
     )
     target = target_column if isinstance(target_column, pd.Series) else df[target_column]
     target = prepare_target(target, model_task_type)
-    sort_dict = get_sort_columns_dict(df[sorted_keys + other_columns], target, sorted_keys, omit_nan=True)
+    sort_dict = get_sort_columns_dict(
+        df[sorted_keys + other_columns], target, sorted_keys, omit_nan=True, sort_all_columns=sort_all_columns
+    )
     other_columns = [c for c in other_columns if c in sort_dict]
     columns_for_sort = sorted_keys + sorted(other_columns, key=lambda e: sort_dict[e], reverse=True)
     return columns_for_sort
@@ -46,14 +61,15 @@ def get_sort_columns_dict(
     sorted_keys: List[str],
     omit_nan: bool,
     n_jobs: int | None = None,
+    sort_all_columns: bool = False,
 ) -> dict[str, Any]:
     string_features = [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in sorted_keys]
     columns_for_sort = [c for c in df.columns if c not in sorted_keys + string_features]
     if len(string_features) > 0:
-        if len(df) > len(df.drop(columns=string_features).drop_duplicates()):
+        if len(df) > len(df.drop(columns=string_features).drop_duplicates()) or sort_all_columns:
             # factorize string features
             for c in string_features:
-                df.loc[:, c] = df[c].factorize(sort=True)[0]
+                df.loc[:, c] = pd.Series(df[c].factorize(sort=True)[0], index=df.index, dtype="int")
             columns_for_sort.extend(string_features)
 
     if len(columns_for_sort) == 0:
@@ -87,10 +103,6 @@ def get_target_correlations(
     target_correlations = np.trunc(target_correlations * 10**precision) / (10**precision)
 
     return target_correlations
-
-
-def corr_dict_from_sort_dict(sort_dict: dict[str, tuple[float, int]]) -> dict[str, float]:
-    return {k: v[0] for k, v in sort_dict.items()}
 
 
 def calculate_spearman_corr_with_target(

@@ -1570,12 +1570,19 @@ class FeaturesEnricher(TransformerMixin):
         fitting_eval_set_dict = {}
         fitting_x_columns = fitting_X.columns.to_list()
         # Idempotently sort columns
-        fitting_x_columns = sort_columns(fitting_X, y_sorted, search_keys, self.model_task_type, [])
+        fitting_x_columns = sort_columns(
+            fitting_X, y_sorted, search_keys, self.model_task_type, sort_all_columns=True, logger=self.logger
+        )
         fitting_X = fitting_X[fitting_x_columns]
         self.logger.info(f"Final sorted list of fitting X columns: {fitting_x_columns}")
         fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
         fitting_enriched_x_columns = sort_columns(
-            fitting_enriched_X, enriched_y_sorted, search_keys, self.model_task_type, []
+            fitting_enriched_X,
+            enriched_y_sorted,
+            search_keys,
+            self.model_task_type,
+            sort_all_columns=True,
+            logger=self.logger,
         )
         fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
         self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
@@ -3627,16 +3634,23 @@ if response.status_code == 200:
             else:
                 columns_to_hash = list(search_keys.keys()) + renamed_id_columns + [target_name]
                 columns_to_hash = sort_columns(
-                    df[columns_to_hash], target_name, search_keys, self.model_task_type, sort_exclude_columns
+                    df[columns_to_hash],
+                    target_name,
+                    search_keys,
+                    self.model_task_type,
+                    sort_exclude_columns,
+                    logger=self.logger,
                 )
         else:
-            columns_to_hash = sort_columns(df, target_name, search_keys, self.model_task_type, sort_exclude_columns)
+            columns_to_hash = sort_columns(
+                df, target_name, search_keys, self.model_task_type, sort_exclude_columns, logger=self.logger
+            )
         if do_sorting:
             search_keys_hash = "search_keys_hash"
             if len(columns_to_hash) > 0:
                 factorized_df = df.copy()
                 for col in columns_to_hash:
-                    if col not in search_keys and is_numeric_dtype(factorized_df[col]):
+                    if col not in search_keys and not is_numeric_dtype(factorized_df[col]):
                         factorized_df[col] = factorized_df[col].factorize(sort=True)[0]
                 df[search_keys_hash] = pd.util.hash_pandas_object(factorized_df[columns_to_hash], index=False)
                 columns_to_sort.append(search_keys_hash)
