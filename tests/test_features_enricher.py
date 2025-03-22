@@ -1162,7 +1162,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     logging.warning(features_info)
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)    
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["f_feature123"]
     assert enricher.feature_importances_ == [0.0109]

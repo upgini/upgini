@@ -22,8 +22,7 @@ from upgini.autofe.date import (
 )
 from upgini.autofe.feature import Column, Feature, FeatureGroup
 from upgini.autofe.groupby import GroupByThenAgg, GroupByThenFreq
-from upgini.autofe.operand import OperandRegistry
-from upgini.autofe.unary import Abs, Freq, Norm
+from upgini.autofe.unary import Abs, Norm
 from upgini.autofe.vector import Lag, Mean, Roll
 
 
