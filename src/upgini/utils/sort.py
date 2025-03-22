@@ -84,14 +84,14 @@ def get_sort_columns_dict(
     return sort_dict
 
 
-def get_sort_columns_correlations(df: np.ndarray, target: pd.Series, omit_nan: bool, n_jobs: int | None = None):
+def get_sort_columns_correlations(df: np.ndarray, target: pd.Series, omit_nan: bool, n_jobs: Optional[int] = None):
     target_correlations = get_target_correlations(df, target, omit_nan, n_jobs, precision=7)
 
     return np.max(target_correlations, axis=0)
 
 
 def get_target_correlations(
-    df: np.ndarray, target: pd.Series, omit_nan: bool, n_jobs: int | None = None, precision: int = 15
+    df: np.ndarray, target: pd.Series, omit_nan: bool, n_jobs: Optional[int] = None, precision: int = 15
 ):
     df = np.asarray(df, dtype=np.float32)
     target_correlations = np.zeros((2, df.shape[1]))
@@ -106,7 +106,7 @@ def get_target_correlations(
 
 
 def calculate_spearman_corr_with_target(
-    X: pd.DataFrame | np.ndarray, y: pd.Series, omit_nan: bool = False, n_jobs: int | None = None
+    X: Union[pd.DataFrame, np.ndarray], y: pd.Series, omit_nan: bool = False, n_jobs: Optional[int] = None
 ) -> np.ndarray:
     if isinstance(X, pd.DataFrame):
         X = np.asarray(X, dtype=np.float32)
@@ -142,7 +142,7 @@ def calculate_spearman_corr_with_target(
     return all_correlations
 
 
-def calculate_spearman(X: np.ndarray, y: pd.Series | None, nan_policy: str):
+def calculate_spearman(X: np.ndarray, y: Optional[pd.Series], nan_policy: str):
     features_num = X.shape[1]
     if y is not None:
         features_num += 1
