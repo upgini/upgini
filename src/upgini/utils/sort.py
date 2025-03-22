@@ -60,7 +60,7 @@ def get_sort_columns_dict(
     target: pd.Series,
     sorted_keys: List[str],
     omit_nan: bool,
-    n_jobs: int | None = None,
+    n_jobs: Optional[int] = None,
     sort_all_columns: bool = False,
 ) -> dict[str, Any]:
     string_features = [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in sorted_keys]
