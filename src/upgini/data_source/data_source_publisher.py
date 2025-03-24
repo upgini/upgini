@@ -63,6 +63,7 @@ class DataSourcePublisher:
         keep_features: Optional[List[str]] = None,
         date_features: Optional[List[str]] = None,
         date_vector_features: Optional[List[str]] = None,
+        date_features_format: Optional[str] = None,
         generate_runtime_embeddings: Optional[List[str]] = None,
         exclude_raw: Optional[List[str]] = None,
         _force_generation=False,
@@ -160,13 +161,17 @@ class DataSourcePublisher:
                 if keep_features is not None:
                     request["keepFeatures"] = keep_features
                 if date_features is not None:
-                    if date_format is None:
-                        raise ValidationError("date_format should be presented if you use date features")
+                    if date_features_format is None:
+                        raise ValidationError("date_features_format should be presented if you use date features")
                     request["dateFeatures"] = date_features
+                    request["dateFeaturesFormat"] = date_features_format
                 if date_vector_features is not None:
-                    if date_format is None:
-                        raise ValidationError("date_format should be presented if you use date vector features")
+                    if date_features_format is None:
+                        raise ValidationError(
+                            "date_features_format should be presented if you use date vector features"
+                        )
                     request["dateVectorFeatures"] = date_vector_features
+                    request["dateFeaturesFormat"] = date_features_format
                 if generate_runtime_embeddings is not None:
                     request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
                 if exclude_raw is not None:
