@@ -74,7 +74,7 @@ def test_lag_hours():
         assert_series_equal(feature.calculate(df), expected_res)
 
     check_lag(1, "d", [np.nan, 1.0, 1.0, 2.0, 2.0])
-    check_lag(2, "d", [np.nan, np.nan, 1.0, 1.0, 1.0])
+    check_lag(2, "d", [np.nan, np.nan, np.nan, 1.0, 1.0])
     check_lag(1, "H", [np.nan, np.nan, 2.0, np.nan, 4.0])
 
 
