@@ -65,7 +65,12 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         pass
 
 
-_roll_aggregations = {"norm_mean": lambda x: x[-1] / x.mean(), "last": lambda x: x[-1]}
+_roll_aggregations = {
+    "norm_mean": lambda x: x[-1] / x.mean(),
+    "q25": lambda x: x.quantile(0.25),
+    "q75": lambda x: x.quantile(0.75),
+    "iqr": lambda x: x.quantile(0.75) - x.quantile(0.25),
+}
 
 
 class Roll(TimeSeriesBase, ParametrizedOperator):
