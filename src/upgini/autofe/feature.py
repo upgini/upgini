@@ -7,7 +7,7 @@ import pandas as pd
 from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operands import find_op
-from upgini.autofe.operator import Operand, PandasOperand
+from upgini.autofe.operator import Operator, PandasOperator
 
 
 class Column:
@@ -65,7 +65,7 @@ class Column:
 class Feature:
     def __init__(
         self,
-        op: Operand,
+        op: Operator,
         children: List[Union[Column, "Feature"]],
         data: Optional[pd.DataFrame] = None,
         display_index: Optional[str] = None,
@@ -188,7 +188,7 @@ class Feature:
             return self.children[0].infer_type(data)
 
     def calculate(self, data: pd.DataFrame, is_root=False) -> Union[pd.Series, pd.DataFrame]:
-        if isinstance(self.op, PandasOperand):
+        if isinstance(self.op, PandasOperator):
             if self.op.is_vector:
                 ds = [child.calculate(data) for child in self.children]
                 new_data = self.op.calculate(data=ds)
@@ -324,7 +324,7 @@ class Feature:
 
 class FeatureGroup:
     def __init__(
-        self, op: Operand, main_column: Optional[Union[Column, Feature]], children: List[Union[Column, Feature]]
+        self, op: Operator, main_column: Optional[Union[Column, Feature]], children: List[Union[Column, Feature]]
     ):
         self.op = op
         self.main_column_node = main_column
@@ -345,7 +345,7 @@ class FeatureGroup:
         return names
 
     def calculate(self, data: pd.DataFrame, is_root=False) -> pd.DataFrame:
-        if isinstance(self.op, PandasOperand):
+        if isinstance(self.op, PandasOperator):
             main_column = None if self.main_column_node is None else self.main_column_node.get_display_name()
             lower_order_children = []
             if self.main_column_node is not None:
@@ -378,7 +378,7 @@ class FeatureGroup:
     def make_groups(candidates: List[Feature]) -> List[Union[Feature, "FeatureGroup"]]:
         grouped_features = []
 
-        def groupby_func(f: Feature) -> Tuple[Operand, Union[Column, Feature]]:
+        def groupby_func(f: Feature) -> Tuple[Operator, Union[Column, Feature]]:
             return (f.op, f.children[0 if not f.op.is_vectorizable else f.op.group_index])
 
         for op_child, features in itertools.groupby(candidates, groupby_func):

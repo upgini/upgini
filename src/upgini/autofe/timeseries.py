@@ -2,7 +2,7 @@ import abc
 from typing import Dict, List, Optional
 
 import pandas as pd
-from upgini.autofe.operator import PandasOperand, ParametrizedOperand
+from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 
 try:
     from pydantic import field_validator as validator  # V2
@@ -10,7 +10,7 @@ except ImportError:
     from pydantic import validator  # V1
 
 
-class TimeSeriesBase(PandasOperand, abc.ABC):
+class TimeSeriesBase(PandasOperator, abc.ABC):
     is_vector: bool = True
     date_unit: Optional[str] = None
     offset_size: int = 0
@@ -67,7 +67,7 @@ class TimeSeriesBase(PandasOperand, abc.ABC):
 _roll_aggregations = {"norm_mean": lambda x: x[-1] / x.mean(), "last": lambda x: x[-1]}
 
 
-class Roll(TimeSeriesBase, ParametrizedOperand):
+class Roll(TimeSeriesBase, ParametrizedOperator):
     aggregation: str
     window_size: int = 1
     window_unit: str = "D"
@@ -142,7 +142,7 @@ class Roll(TimeSeriesBase, ParametrizedOperand):
         )
 
 
-class Lag(TimeSeriesBase, ParametrizedOperand):
+class Lag(TimeSeriesBase, ParametrizedOperator):
     lag_size: int
     lag_unit: str = "D"
 

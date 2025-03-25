@@ -20,9 +20,9 @@ class OperatorRegistry(type(BaseModel)):
             base_names.update(b.__name__ for b in base.__bases__)
             base_classes.extend(base.__bases__)
 
-        if "Operand" in base_names:
+        if "Operator" in base_names:
             # Track parametrized operands separately
-            if "ParametrizedOperand" in base_names:
+            if "ParametrizedOperator" in base_names:
                 cls._parametrized_registry.append(new_class)
             else:
                 try:
@@ -33,7 +33,7 @@ class OperatorRegistry(type(BaseModel)):
         return new_class
 
     @classmethod
-    def get_operand(cls, name: str) -> Optional["Operand"]:
+    def get_operand(cls, name: str) -> Optional["Operator"]:
         # First try to resolve as a parametrized operand formula
         for operand_cls in cls._parametrized_registry:
             resolved = operand_cls.from_formula(name)
@@ -46,7 +46,7 @@ class OperatorRegistry(type(BaseModel)):
         return None
 
 
-class Operand(BaseModel, metaclass=OperatorRegistry):
+class Operator(BaseModel, metaclass=OperatorRegistry):
     name: Optional[str] = None
     alias: Optional[str] = None
     is_unary: bool = False
@@ -75,7 +75,7 @@ class Operand(BaseModel, metaclass=OperatorRegistry):
         return self.name
 
 
-class ParametrizedOperand(Operand, abc.ABC):
+class ParametrizedOperator(Operator, abc.ABC):
 
     @abc.abstractmethod
     def to_formula(self) -> str:
@@ -83,14 +83,14 @@ class ParametrizedOperand(Operand, abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def from_formula(cls, formula: str) -> Optional["Operand"]:
+    def from_formula(cls, formula: str) -> Optional["Operator"]:
         pass
 
 
 MAIN_COLUMN = "main_column"
 
 
-class PandasOperand(Operand, abc.ABC):
+class PandasOperator(Operator, abc.ABC):
     def calculate(self, **kwargs) -> pd.Series:
         if self.is_unary:
             return self.calculate_unary(kwargs["data"])
@@ -131,7 +131,7 @@ class PandasOperand(Operand, abc.ABC):
             return value
 
 
-class VectorizableMixin(Operand):
+class VectorizableMixin(Operator):
     group_index: int = 1
 
     def validate_calculation(self, input_columns: List[str], **kwargs) -> Tuple[str, List[str]]:

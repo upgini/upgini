@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 from jarowinkler import jarowinkler_similarity
 
-from upgini.autofe.operator import PandasOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperator, VectorizableMixin
 
 
-class Min(PandasOperand):
+class Min(PandasOperator):
     name: str = "min"
     is_binary: bool = True
     is_symmetrical: bool = True
@@ -18,7 +18,7 @@ class Min(PandasOperand):
         return np.minimum(left, right)
 
 
-class Max(PandasOperand):
+class Max(PandasOperator):
     name: str = "max"
     is_binary: bool = True
     is_symmetrical: bool = True
@@ -28,7 +28,7 @@ class Max(PandasOperand):
         return np.maximum(left, right)
 
 
-class Add(PandasOperand, VectorizableMixin):
+class Add(PandasOperator, VectorizableMixin):
     name: str = "+"
     alias: str = "add"
     is_binary: bool = True
@@ -47,7 +47,7 @@ class Add(PandasOperand, VectorizableMixin):
         return d1.add(d2, axis=0)
 
 
-class Subtract(PandasOperand, VectorizableMixin):
+class Subtract(PandasOperator, VectorizableMixin):
     name: str = "-"
     alias: str = "sub"
     is_binary: bool = True
@@ -66,7 +66,7 @@ class Subtract(PandasOperand, VectorizableMixin):
         return d1.sub(d2, axis=0)
 
 
-class Multiply(PandasOperand, VectorizableMixin):
+class Multiply(PandasOperator, VectorizableMixin):
     name: str = "*"
     alias: str = "mul"
     is_binary: bool = True
@@ -85,7 +85,7 @@ class Multiply(PandasOperand, VectorizableMixin):
         return d1.mul(d2, axis=0)
 
 
-class Divide(PandasOperand, VectorizableMixin):
+class Divide(PandasOperator, VectorizableMixin):
     name: str = "/"
     alias: str = "div"
     is_binary: bool = True
@@ -104,7 +104,7 @@ class Divide(PandasOperand, VectorizableMixin):
         return d1.div(d2.replace(0, np.nan), axis=0)
 
 
-class Combine(PandasOperand):
+class Combine(PandasOperator):
     name: str = "Combine"
     is_binary: bool = True
     has_symmetry_importance: bool = True
@@ -116,7 +116,7 @@ class Combine(PandasOperand):
         return pd.Series(temp, index=left.index)
 
 
-class CombineThenFreq(PandasOperand):
+class CombineThenFreq(PandasOperator):
     name: str = "CombineThenFreq"
     is_binary: bool = True
     is_symmetrical: bool = True
@@ -132,7 +132,7 @@ class CombineThenFreq(PandasOperand):
         self._loc(temp, value_counts)
 
 
-class Distance(PandasOperand):
+class Distance(PandasOperator):
     name: str = "dist"
     is_binary: bool = True
     output_type: Optional[str] = "float"
@@ -170,7 +170,7 @@ class Sim(Distance):
         return 1 - super().calculate_binary(left, right)
 
 
-class StringSim(PandasOperand, abc.ABC):
+class StringSim(PandasOperator, abc.ABC):
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         sims = []
         for i in left.index:
