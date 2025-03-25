@@ -8,23 +8,17 @@ def get_most_frequent_time_unit(df: pd.DataFrame, id_columns: List[str], date_co
     def closest_unit(diff):
         return pd.tseries.frequencies.to_offset(pd.Timedelta(diff, unit="s"))
 
-    # Calculate differences for each ID group
     all_diffs = []
     groups = df.groupby(id_columns) if id_columns else [(None, df)]
     for _, group in groups:
-        # Get sorted dates for this group
         group_dates = group[date_column].sort_values().unique()
         if len(group_dates) > 1:
-            # Calculate time differences between consecutive dates
             diff_series = pd.Series(group_dates[1:] - group_dates[:-1])
-            # Convert to nanoseconds
             diff_ns = diff_series.dt.total_seconds()
             all_diffs.extend(diff_ns)
 
-    # Convert to series for easier processing
     all_diffs = pd.Series(all_diffs)
 
-    # Get most common time unit across all groups
     most_frequent_unit = all_diffs.apply(closest_unit).mode().min()
 
     return most_frequent_unit if isinstance(most_frequent_unit, pd.DateOffset) else None
