@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,7 +10,12 @@ from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
-from upgini.utils.target_utils import balance_undersample, balance_undersample_time_series, define_task
+from upgini.utils.target_utils import (
+    balance_undersample,
+    balance_undersample_time_series,
+    balance_undersample_time_series_trunc,
+    define_task,
+)
 
 
 def test_invalid_target():
@@ -325,6 +331,125 @@ def test_balance_undersampling_time_series_without_recent_dates():
     assert not balanced_df_1.equals(balanced_df_2)
     assert len(balanced_df_1) == len(balanced_df_2) == 6
     assert balanced_df_1.groupby(["id"]).ngroups == balanced_df_2.groupby(["id"]).ngroups == 2
+
+
+def test_balance_undersampling_time_series_trunc():
+    def unique_dates(df: pd.DataFrame) -> List[str]:
+        return pd.to_datetime(df["date"], unit="ms").dt.date.astype(str).unique().tolist()
+
+    df = pd.DataFrame(
+        {
+            "id": [1, 1, 1, 2, 2, 2, 3, 3, 3],
+            "date": [
+                pd.to_datetime(d).timestamp() * 1000
+                for d in [
+                    "2020-01-01",
+                    "2020-01-02",
+                    "2020-01-03",
+                    "2020-01-01",
+                    "2020-01-02",
+                    "2020-01-03",
+                    "2020-01-01",
+                    "2020-01-02",
+                    "2020-01-03",
+                ]
+            ],
+        }
+    )
+
+    # Test high frequency truncation
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=6,
+        random_state=42,
+        highfreq_trunc_lengths=[pd.DateOffset(days=2), pd.DateOffset(days=1)],
+        lowfreq_trunc_lengths=[],
+    )
+    assert len(sampled_df) == 6
+    assert sampled_df["id"].nunique() == 3
+    assert unique_dates(sampled_df) == ["2020-01-02", "2020-01-03"]
+
+    # Test highfreq truncation with second choice
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=5,
+        random_state=42,
+        highfreq_trunc_lengths=[pd.DateOffset(days=2), pd.DateOffset(days=1)],
+        lowfreq_trunc_lengths=[],
+    )
+    assert len(sampled_df) == 3
+    assert sampled_df["id"].nunique() == 3
+    assert unique_dates(sampled_df) == ["2020-01-03"]
+
+    # Test highfreq id truncation
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=2,
+        random_state=42,
+        highfreq_trunc_lengths=[pd.DateOffset(days=2), pd.DateOffset(days=1)],
+        lowfreq_trunc_lengths=[],
+    )
+    assert len(sampled_df) == 2
+    assert sampled_df["id"].nunique() == 2
+    assert unique_dates(sampled_df) == ["2020-01-03"]
+
+    # Test low frequency truncation
+    df_lowfreq = pd.DataFrame(
+        {
+            "id": [1, 1, 1, 2, 2, 2],
+            "date": [
+                pd.to_datetime(d).timestamp() * 1000
+                for d in ["2020-01-01", "2020-03-01", "2020-07-01", "2020-01-01", "2020-03-01", "2020-07-01"]
+            ],
+        }
+    )
+
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df_lowfreq,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=4,
+        random_state=42,
+        highfreq_trunc_lengths=[],
+        lowfreq_trunc_lengths=[pd.DateOffset(months=5), pd.DateOffset(months=1)],
+    )
+    assert len(sampled_df) == 4
+    assert sampled_df["id"].nunique() == 2
+    assert unique_dates(sampled_df) == ["2020-03-01", "2020-07-01"]
+
+    # Test truncation with second choice
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df_lowfreq,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=2,
+        random_state=42,
+        highfreq_trunc_lengths=[],
+        lowfreq_trunc_lengths=[pd.DateOffset(months=5), pd.DateOffset(months=1)],
+    )
+    assert len(sampled_df) == 2
+    assert sampled_df["id"].nunique() == 2
+    assert unique_dates(sampled_df) == ["2020-07-01"]
+
+    # Test lowfreq id truncation
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df_lowfreq,
+        id_columns=["id"],
+        date_column="date",
+        sample_size=1,
+        random_state=42,
+        highfreq_trunc_lengths=[],
+        lowfreq_trunc_lengths=[pd.DateOffset(months=5), pd.DateOffset(months=1)],
+    )
+    assert len(sampled_df) == 1
+    assert sampled_df["id"].nunique() == 1
+    assert unique_dates(sampled_df) == ["2020-07-01"]
 
 
 def test_binary_psi_calculation(requests_mock: Mocker):

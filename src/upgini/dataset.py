@@ -40,7 +40,7 @@ from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.target_utils import (
     balance_undersample,
     balance_undersample_forced,
-    balance_undersample_time_series,
+    balance_undersample_time_series_trunc,
 )
 
 try:
@@ -58,6 +58,8 @@ class Dataset:  # (pd.DataFrame):
     FIT_SAMPLE_THRESHOLD = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_ROWS = 200_000
     FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
+    FIT_SAMPLE_THRESHOLD_TS = 54_000
+    FIT_SAMPLE_ROWS_TS = 54_000
     BINARY_MIN_SAMPLE_THRESHOLD = 5_000
     MULTICLASS_MIN_SAMPLE_THRESHOLD = 25_000
     IMBALANCE_THESHOLD = 0.6
@@ -301,7 +303,10 @@ class Dataset:  # (pd.DataFrame):
                 )
 
         # Resample over fit threshold
-        if not self.imbalanced and EVAL_SET_INDEX in self.data.columns:
+        if self.cv_type is not None and self.cv_type.is_time_series():
+            sample_threshold = self.FIT_SAMPLE_THRESHOLD_TS
+            sample_rows = self.FIT_SAMPLE_ROWS_TS
+        elif not self.imbalanced and EVAL_SET_INDEX in self.data.columns:
             sample_threshold = self.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
             sample_rows = self.FIT_SAMPLE_WITH_EVAL_SET_ROWS
         else:
@@ -314,7 +319,7 @@ class Dataset:  # (pd.DataFrame):
                 f"and will be downsampled to {sample_rows}"
             )
             if self.cv_type is not None and self.cv_type.is_time_series():
-                resampled_data = balance_undersample_time_series(
+                resampled_data = balance_undersample_time_series_trunc(
                     df=self.data,
                     id_columns=self.id_columns,
                     date_column=next(
@@ -584,10 +589,7 @@ class Dataset:  # (pd.DataFrame):
         return search_customization
 
     def _rename_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
-        if (
-            runtime_parameters is not None
-            and runtime_parameters.properties is not None
-        ):
+        if runtime_parameters is not None and runtime_parameters.properties is not None:
             if "generate_features" in runtime_parameters.properties:
                 generate_features = runtime_parameters.properties["generate_features"].split(",")
                 renamed_generate_features = []
@@ -605,6 +607,13 @@ class Dataset:  # (pd.DataFrame):
                             renamed_columns_for_online_api.append(new_column)
                 runtime_parameters.properties["columns_for_online_api"] = ",".join(renamed_columns_for_online_api)
 
+        return runtime_parameters
+
+    def _set_sample_size(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
+        if runtime_parameters is not None and runtime_parameters.properties is not None:
+            if self.cv_type is not None and self.cv_type.is_time_series():
+                runtime_parameters.properties["sample_size"] = self.FIT_SAMPLE_ROWS_TS
+                runtime_parameters.properties["iter0_sample_size"] = self.FIT_SAMPLE_ROWS_TS
         return runtime_parameters
 
     def _clean_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
@@ -638,6 +647,7 @@ class Dataset:  # (pd.DataFrame):
         file_metrics = FileMetrics()
 
         runtime_parameters = self._rename_generate_features(runtime_parameters)
+        runtime_parameters = self._set_sample_size(runtime_parameters)
 
         file_metadata = self.__construct_metadata(exclude_features_sources)
         search_customization = self.__construct_search_customization(
