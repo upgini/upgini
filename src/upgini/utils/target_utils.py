@@ -1,4 +1,3 @@
-import itertools
 import logging
 from typing import Callable, List, Optional, Union
 
@@ -208,7 +207,7 @@ def balance_undersample_forced(
     id_columns: List[str],
     date_column: str,
     task_type: ModelTaskType,
-    cv_type: CVType | None,
+    cv_type: Optional[CVType],
     random_state: int,
     sample_size: int = 7000,
     logger: Optional[logging.Logger] = None,
@@ -372,7 +371,8 @@ def balance_undersample_time_series(
     if len(id_counts) < min_different_ids:
         if logger is not None:
             logger.info(
-                f"Different ids count {len(id_counts)} for sample size {sample_size} is less than min different ids {min_different_ids}, sampling time window"
+                f"Different ids count {len(id_counts)} for sample size {sample_size}"
+                f" is less than min different ids {min_different_ids}, sampling time window"
             )
         date_counts = df.groupby(id_columns)[date_column].nunique().sort_values(ascending=False)
         ids_to_sample = date_counts.index[:min_different_ids] if len(id_counts) > 0 else date_counts.index

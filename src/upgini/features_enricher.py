@@ -112,6 +112,7 @@ try:
 except Exception:
     from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
 
+from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import (
     balance_undersample_forced,
     calculate_psi,
@@ -1261,7 +1262,7 @@ class FeaturesEnricher(TransformerMixin):
             for feature, shap in new_shaps.items()
             if feature in self.feature_names_ or renaming.get(feature, feature) in self.feature_names_
         }
-        self.__prepare_feature_importances(trace_id, x_columns, new_shaps, silent=True)
+        self.__prepare_feature_importances(trace_id, x_columns, new_shaps)
 
         if self.features_info_display_handle is not None:
             try:
@@ -1568,9 +1569,23 @@ class FeaturesEnricher(TransformerMixin):
 
         fitting_eval_set_dict = {}
         fitting_x_columns = fitting_X.columns.to_list()
-        self.logger.info(f"Final list of fitting X columns: {fitting_x_columns}")
+        # Idempotently sort columns
+        fitting_x_columns = sort_columns(
+            fitting_X, y_sorted, search_keys, self.model_task_type, sort_all_columns=True, logger=self.logger
+        )
+        fitting_X = fitting_X[fitting_x_columns]
+        self.logger.info(f"Final sorted list of fitting X columns: {fitting_x_columns}")
         fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
-        self.logger.info(f"Final list of fitting enriched X columns: {fitting_enriched_x_columns}")
+        fitting_enriched_x_columns = sort_columns(
+            fitting_enriched_X,
+            enriched_y_sorted,
+            search_keys,
+            self.model_task_type,
+            sort_all_columns=True,
+            logger=self.logger,
+        )
+        fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
+        self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
             eval_X_sorted, eval_y_sorted = self._sort_by_system_record_id(eval_X_sampled, eval_y_sampled, self.cv)
@@ -1734,11 +1749,15 @@ class FeaturesEnricher(TransformerMixin):
             if eval_set is not None
             else (Dataset.FIT_SAMPLE_THRESHOLD, Dataset.FIT_SAMPLE_ROWS)
         )
+
+        df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID, TARGET, columns_renaming, silent=True)
+        # Sample after sorting by system_record_id for idempotency
+        df.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
+
         if num_samples > sample_threshold:
             self.logger.info(f"Downsampling from {num_samples} to {sample_rows}")
             df = df.sample(n=sample_rows, random_state=self.random_state)
 
-        df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID)
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
 
@@ -1882,6 +1901,7 @@ class FeaturesEnricher(TransformerMixin):
                 and self.columns_for_online_api is not None
                 and num_samples > Dataset.FORCE_SAMPLE_SIZE
             )
+            # TODO: check that system_record_id was added before this step
             if force_downsampling:
                 self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
                 df = balance_undersample_forced(
@@ -1915,6 +1935,7 @@ class FeaturesEnricher(TransformerMixin):
                 progress_bar=progress_bar,
                 progress_callback=progress_callback,
                 add_fit_system_record_id=True,
+                target_name=tmp_target_name,
             )
             if enriched_df is None:
                 return None
@@ -1953,6 +1974,7 @@ class FeaturesEnricher(TransformerMixin):
                 and self.columns_for_online_api is not None
                 and num_samples > Dataset.FORCE_SAMPLE_SIZE
             )
+
             if force_downsampling:
                 self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
                 df = balance_undersample_forced(
@@ -1984,6 +2006,7 @@ class FeaturesEnricher(TransformerMixin):
                 progress_bar=progress_bar,
                 progress_callback=progress_callback,
                 add_fit_system_record_id=True,
+                target_name=tmp_target_name,
             )
             if enriched_Xy is None:
                 return None
@@ -2145,6 +2168,7 @@ if response.status_code == 200:
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         add_fit_system_record_id: bool = False,
+        target_name: Optional[str] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -2329,8 +2353,16 @@ if response.status_code == 200:
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
             ]
 
-            if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID)
+            if add_fit_system_record_id and target_name is not None:
+                reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
+                df = self.__add_fit_system_record_id(
+                    df,
+                    search_keys,
+                    SYSTEM_RECORD_ID,
+                    reversed_columns_renaming.get(target_name, target_name),
+                    columns_renaming,
+                    silent=True,
+                )
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
 
@@ -2775,7 +2807,9 @@ if response.status_code == 200:
             self.__log_warning(full_duplicates_warning)
 
         # Explode multiple search keys
-        df = self.__add_fit_system_record_id(df, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID)
+        df = self.__add_fit_system_record_id(
+            df, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID, TARGET, self.fit_columns_renaming
+        )
 
         # TODO check that this is correct for enrichment
         self.df_with_original_index = df.copy()
@@ -2857,7 +2891,9 @@ if response.status_code == 200:
         if eval_set is not None and len(eval_set) > 0:
             meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
 
-        df = self.__add_fit_system_record_id(df, self.fit_search_keys, SYSTEM_RECORD_ID)
+        df = self.__add_fit_system_record_id(
+            df, self.fit_search_keys, SYSTEM_RECORD_ID, TARGET, self.fit_columns_renaming, silent=True
+        )
 
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -3544,56 +3580,82 @@ if response.status_code == 200:
     def __add_fit_system_record_id(
         self,
         df: pd.DataFrame,
-        # meaning_types: Dict[str, FileColumnMeaningType],
         search_keys: Dict[str, SearchKey],
         id_name: str,
+        target_name: str,
+        columns_renaming: Dict[str, str],
+        silent: bool = False,
     ) -> pd.DataFrame:
-        # save original order or rows
         original_index_name = df.index.name
         index_name = df.index.name or DEFAULT_INDEX
         original_order_name = "original_order"
+        # Save original index
         df = df.reset_index().rename(columns={index_name: ORIGINAL_INDEX})
+        # Save original order
         df = df.reset_index().rename(columns={DEFAULT_INDEX: original_order_name})
 
-        # order by date and idempotent order by other keys
-        if self.cv not in [CVType.time_series, CVType.blocked_time_series]:
-            sort_exclude_columns = [
-                original_order_name,
-                ORIGINAL_INDEX,
-                EVAL_SET_INDEX,
-                TARGET,
-                "__target",
-                ENTITY_SYSTEM_RECORD_ID,
-            ]
-            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-                date_column = DateTimeSearchKeyConverter.DATETIME_COL
-                sort_exclude_columns.append(self._get_date_column(search_keys))
+        # order by date and idempotent order by other keys and features
+
+        sort_exclude_columns = [
+            original_order_name,
+            ORIGINAL_INDEX,
+            EVAL_SET_INDEX,
+            TARGET,
+            "__target",
+            ENTITY_SYSTEM_RECORD_ID,
+        ]
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            sort_exclude_columns.append(FeaturesEnricher._get_date_column(search_keys))
+        else:
+            date_column = FeaturesEnricher._get_date_column(search_keys)
+        sort_exclude_columns.append(date_column)
+        columns_to_sort = [date_column] if date_column is not None else []
+
+        do_sorting = True
+        if self.id_columns and self.cv in [CVType.time_series, CVType.blocked_time_series]:
+            # Check duplicates by date and id_columns
+            reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
+            renamed_id_columns = [reversed_columns_renaming.get(c, c) for c in self.id_columns]
+            duplicate_check_columns = [c for c in renamed_id_columns if c in df.columns]
+            if date_column is not None:
+                duplicate_check_columns.append(date_column)
+
+            duplicates = df.duplicated(subset=duplicate_check_columns, keep=False)
+            if duplicates.any():
+                if not silent:
+                    self.__log_warning(self.bundle.get("date_and_id_columns_duplicates").format(duplicates.sum()))
+                else:
+                    self.logger.warning(
+                        f"Found {duplicates.sum()} duplicate rows by date and ID columns: {duplicate_check_columns}."
+                        " Will not sort dataset"
+                    )
+                do_sorting = False
             else:
-                date_column = self._get_date_column(search_keys)
-            sort_columns = [date_column] if date_column is not None else []
-
-            sorted_other_keys = sorted(search_keys, key=lambda x: str(search_keys.get(x)))
-            sorted_other_keys = [k for k in sorted_other_keys if k not in sort_exclude_columns]
-
-            other_columns = sorted(
-                [
-                    c
-                    for c in df.columns
-                    if c not in sort_columns
-                    and c not in sorted_other_keys
-                    and c not in sort_exclude_columns
-                    and df[c].nunique() > 1
-                ]
+                columns_to_hash = list(search_keys.keys()) + renamed_id_columns + [target_name]
+                columns_to_hash = sort_columns(
+                    df[columns_to_hash],
+                    target_name,
+                    search_keys,
+                    self.model_task_type,
+                    sort_exclude_columns,
+                    logger=self.logger,
+                )
+        else:
+            columns_to_hash = sort_columns(
+                df, target_name, search_keys, self.model_task_type, sort_exclude_columns, logger=self.logger
             )
-
-            all_other_columns = sorted_other_keys + other_columns
-
+        if do_sorting:
             search_keys_hash = "search_keys_hash"
-            if len(all_other_columns) > 0:
-                sort_columns.append(search_keys_hash)
-                df[search_keys_hash] = pd.util.hash_pandas_object(df[all_other_columns], index=False)
+            if len(columns_to_hash) > 0:
+                factorized_df = df.copy()
+                for col in columns_to_hash:
+                    if col not in search_keys and not is_numeric_dtype(factorized_df[col]):
+                        factorized_df[col] = factorized_df[col].factorize(sort=True)[0]
+                df[search_keys_hash] = pd.util.hash_pandas_object(factorized_df[columns_to_hash], index=False)
+                columns_to_sort.append(search_keys_hash)
 
-            df = df.sort_values(by=sort_columns)
+            df = df.sort_values(by=columns_to_sort)
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
