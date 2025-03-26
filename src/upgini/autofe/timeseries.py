@@ -248,3 +248,16 @@ class Delta(TimeSeriesBase, ParametrizedOperator):
         lag0 = Lag(lag_size=0, lag_unit=self.delta_unit)
         lag = Lag(lag_size=self.delta_size, lag_unit=self.delta_unit)
         return lag0._aggregate(ts) - lag._aggregate(ts)
+
+
+class TrendCoefficient(TimeSeriesBase):
+    name: str = "trend_coef"
+
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        return ts.apply(self._trend_coef).fillna(0)
+
+    def _trend_coef(self, x: pd.DataFrame) -> pd.Series:
+        idx = np.arange(len(x))
+        x = pd.DataFrame(x)
+        coeffs = np.polyfit(idx, x.iloc[:, -1].fillna(method="ffill").fillna(method="bfill"), 1)
+        return pd.Series([coeffs[0]] * len(x), index=x.index, name=x.columns[-1])
