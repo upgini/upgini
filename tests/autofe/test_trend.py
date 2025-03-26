@@ -42,7 +42,7 @@ def test_trend_coef_groups():
 def test_trend_coef_missing():
     df = pd.DataFrame(
         {
-            "date": ["2024-05-06", "2024-05-06", "2024-05-07", "2024-05-07", "2024-05-08"],
+            "date": ["2024-05-06", "2024-05-06", "2024-05-07", "2024-05-07", "2024-05-09"],
             "group": ["A", "B", "A", "B", "A"],
             "value": [1, 10, np.nan, 20, 3],
         },
@@ -52,5 +52,5 @@ def test_trend_coef_missing():
         op=TrendCoefficient(),
         children=[Column("date"), Column("group"), Column("value")],
     )
-    expected_res = pd.Series([1.0, 10.0, 1.0, 10.0, 1.0], name="value")
+    expected_res = pd.Series([0.6, 10.0, 0.6, 10.0, 0.6], name="value")
     assert_series_equal(feature.calculate(df), expected_res)

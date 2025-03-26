@@ -257,7 +257,8 @@ class TrendCoefficient(TimeSeriesBase):
         return ts.apply(self._trend_coef).fillna(0)
 
     def _trend_coef(self, x: pd.DataFrame) -> pd.Series:
-        idx = np.arange(len(x))
         x = pd.DataFrame(x)
-        coeffs = np.polyfit(idx, x.iloc[:, -1].fillna(method="ffill").fillna(method="bfill"), 1)
+        resampled = x.iloc[:, -1].resample(self.date_unit or "D").fillna(method="ffill").fillna(method="bfill")
+        idx = np.arange(len(resampled))
+        coeffs = np.polyfit(idx, resampled, 1)
         return pd.Series([coeffs[0]] * len(x), index=x.index, name=x.columns[-1])
