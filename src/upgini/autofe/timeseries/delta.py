@@ -42,3 +42,44 @@ class Delta(TimeSeriesBase, ParametrizedOperator):
         lag0 = Lag(lag_size=0, lag_unit=self.delta_unit)
         lag = Lag(lag_size=self.delta_size, lag_unit=self.delta_unit)
         return lag0._aggregate(ts) - lag._aggregate(ts)
+
+
+class Delta2(TimeSeriesBase, ParametrizedOperator):
+    delta_size: int
+    delta_unit: str = "D"
+
+    def to_formula(self) -> str:
+        return f"delta2_{self.delta_size}{self.delta_unit}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["Delta2"]:
+        import re
+
+        pattern = r"^delta2_(\d+)([a-zA-Z])$"
+        match = re.match(pattern, formula)
+
+        if not match:
+            return None
+
+        delta_size = int(match.group(1))
+        delta_unit = match.group(2)
+
+        return cls(delta_size=delta_size, delta_unit=delta_unit)
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "delta_size": self.delta_size,
+                "delta_unit": self.delta_unit,
+            }
+        )
+        return res
+
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        # Calculate first delta
+        delta1 = Delta(delta_size=self.delta_size, delta_unit=self.delta_unit)
+        first_delta = delta1._aggregate(ts)
+
+        # Calculate delta of delta (second derivative)
+        return delta1._aggregate(first_delta)
