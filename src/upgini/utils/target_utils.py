@@ -9,6 +9,7 @@ from upgini.errors import ValidationError
 from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
+from upgini.utils.ts_utils import get_most_frequent_time_unit, trunc_datetime
 
 TS_MIN_DIFFERENT_IDS_RATIO = 0.2
 
@@ -240,7 +241,7 @@ def balance_undersample_forced(
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
     if cv_type is not None and cv_type.is_time_series():
         logger.warning(f"Sampling time series dataset from {len(df)} to {sample_size}")
-        resampled_data = balance_undersample_time_series(
+        resampled_data = balance_undersample_time_series_trunc(
             df,
             id_columns=id_columns,
             date_column=date_column,
@@ -277,6 +278,58 @@ def balance_undersample_forced(
 
     logger.info(f"Shape after forced rebalance resampling: {resampled_data}")
     return resampled_data
+
+
+DEFAULT_HIGH_FREQ_TRUNC_LENGTHS = [pd.DateOffset(years=2, months=6), pd.DateOffset(years=2, days=7)]
+DEFAULT_LOW_FREQ_TRUNC_LENGTHS = [pd.DateOffset(years=7), pd.DateOffset(years=5)]
+DEFAULT_TIME_UNIT_THRESHOLD = pd.Timedelta(weeks=4)
+
+
+def balance_undersample_time_series_trunc(
+    df: pd.DataFrame,
+    id_columns: List[str],
+    date_column: str,
+    sample_size: int,
+    random_state: int = 42,
+    logger: Optional[logging.Logger] = None,
+    highfreq_trunc_lengths: List[pd.DateOffset] = DEFAULT_HIGH_FREQ_TRUNC_LENGTHS,
+    lowfreq_trunc_lengths: List[pd.DateOffset] = DEFAULT_LOW_FREQ_TRUNC_LENGTHS,
+    time_unit_threshold: pd.Timedelta = DEFAULT_TIME_UNIT_THRESHOLD,
+    **kwargs,
+):
+    # Convert date column to datetime
+    dates_df = df[id_columns + [date_column]].copy()
+    dates_df[date_column] = pd.to_datetime(dates_df[date_column], unit="ms")
+
+    time_unit = get_most_frequent_time_unit(dates_df, id_columns, date_column)
+    if logger is not None:
+        logger.info(f"Time unit: {time_unit}")
+
+    if time_unit is None:
+        if logger is not None:
+            logger.info("Cannot detect time unit, returning original dataset")
+        return df
+
+    if time_unit < time_unit_threshold:
+        for trunc_length in highfreq_trunc_lengths:
+            sampled_df = trunc_datetime(dates_df, id_columns, date_column, trunc_length, logger=logger)
+            if len(sampled_df) <= sample_size:
+                break
+        if len(sampled_df) > sample_size:
+            sampled_df = balance_undersample_time_series(
+                sampled_df, id_columns, date_column, sample_size, random_state, logger=logger, **kwargs
+            )
+    else:
+        for trunc_length in lowfreq_trunc_lengths:
+            sampled_df = trunc_datetime(dates_df, id_columns, date_column, trunc_length, logger=logger)
+            if len(sampled_df) <= sample_size:
+                break
+        if len(sampled_df) > sample_size:
+            sampled_df = balance_undersample_time_series(
+                sampled_df, id_columns, date_column, sample_size, random_state, logger=logger, **kwargs
+            )
+
+    return df.loc[sampled_df.index]
 
 
 def balance_undersample_time_series(
