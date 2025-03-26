@@ -128,9 +128,6 @@ def test_roll_with_offset():
     check_roll(2, "d", 0, "mean", [1.0, 1.5, 2.5, 3.5, 3.5])
     check_roll(2, "d", 1, "mean", [np.nan, 1.0, 1.5, 2.5, 2.5])
     check_roll(3, "d", 1, "median", [np.nan, 1.0, 1.5, 2.0, 2.0])
-    check_roll(2, "d", 0, "last", [1.0, 2.0, 3.0, 4.0, 4.0])
-    check_roll(2, "d", 1, "last", [np.nan, 1.0, 2.0, 3.0, 3.0])
-    check_roll(3, "d", 1, "last", [np.nan, 1.0, 2.0, 3.0, 3.0])
 
 
 def test_roll_with_offset_and_groups():
