@@ -3,7 +3,6 @@ from collections import namedtuple
 
 import numpy as np
 import numpy.ma as ma
-import scipy
 from joblib import Parallel, delayed
 from numpy import ndarray
 from psutil import cpu_count
@@ -116,6 +115,22 @@ def spearmanr(
     if nan_policy == "omit":
         x = mask_fn(x)
 
+    # - dof: degrees of freedom
+    # - t_stat: t-statistic
+    # - alternative: 'two-sided', 'greater', 'less'
+    def compute_t_pvalue(t_stat, dof, alternative='two-sided'):
+        from scipy.stats import t
+
+        if alternative == "two-sided":
+            prob = 2 * t.sf(abs(t_stat), dof)
+        elif alternative == "greater":
+            prob = t.sf(t_stat, dof)
+        elif alternative == "less":
+            prob = t.cdf(t_stat, dof)
+        else:
+            raise ValueError(f"Unknown alternative: {alternative}")
+        return t_stat, prob
+
     def _spearmanr_2cols(x):
         # Mask the same observations for all variables, and then drop those
         # observations (can't leave them masked, rankdata is weird).
@@ -142,7 +157,7 @@ def spearmanr(
             # errors before taking the square root
             t = rs * np.sqrt((dof / ((rs + 1.0) * (1.0 - rs))).clip(0))
 
-        t, prob = scipy.stats._mstats_basic._ttest_finish(dof, t, alternative)
+        t, prob = compute_t_pvalue(dof, t, alternative)
 
         # For backwards compatibility, return scalars when comparing 2 columns
         if rs.shape == (2, 2):
