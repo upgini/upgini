@@ -28,12 +28,13 @@ def sort_columns(
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.FATAL)
     df = df.copy()  # avoid side effects
+    search_keys = {k: v for k, v in search_keys.items() if v != SearchKey.CUSTOM_KEY}
 
     # Check multiple search keys
     search_key_values = list(search_keys.values())
     has_duplicate_search_keys = len(search_key_values) != len(set(search_key_values))
     if has_duplicate_search_keys:
-        logging.warning(f"WARNING: Found duplicate SearchKey values in search_keys: {search_keys}")
+        logger.warning(f"WARNING: Found duplicate SearchKey values in search_keys: {search_keys}")
 
     sorted_keys = sorted(search_keys.keys(), key=lambda x: str(search_keys.get(x)))
     sorted_keys = [k for k in sorted_keys if k in df.columns and k not in exclude_columns]
@@ -68,8 +69,9 @@ def get_sort_columns_dict(
     if len(string_features) > 0:
         if len(df) > len(df.drop(columns=string_features).drop_duplicates()) or sort_all_columns:
             # factorize string features
+            df = df.copy()
             for c in string_features:
-                df.loc[:, c] = pd.Series(df[c].factorize(sort=True)[0], index=df.index, dtype="int")
+                df = df.assign(**{c: pd.factorize(df[c], sort=True)[0].astype(int)})
             columns_for_sort.extend(string_features)
 
     if len(columns_for_sort) == 0:

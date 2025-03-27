@@ -3632,7 +3632,7 @@ if response.status_code == 200:
                     )
                 do_sorting = False
             else:
-                columns_to_hash = list(search_keys.keys()) + renamed_id_columns + [target_name]
+                columns_to_hash = list(set(list(search_keys.keys()) + renamed_id_columns + [target_name]))
                 columns_to_hash = sort_columns(
                     df[columns_to_hash],
                     target_name,
