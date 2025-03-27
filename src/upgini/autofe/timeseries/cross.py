@@ -3,6 +3,11 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+try:
+    from pydantic import field_validator as validator  # V2
+except ImportError:
+    from pydantic import validator  # V1
+
 from upgini.autofe.all_operands import find_op
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
@@ -14,6 +19,29 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
     descriptor_indices: List[int] = []
     left_descriptor: List[str] = []
     right_descriptor: List[str] = []
+
+    @validator("descriptor_indices")
+    @classmethod
+    def validate_descriptor_indices(cls, v):
+        if not v:
+            raise ValueError("descriptor_indices cannot be empty for CrossSeriesInteraction")
+        return v
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        indices = self.descriptor_indices
+        left = self.left_descriptor
+        right = self.right_descriptor
+
+        if len(left) != len(indices):
+            raise ValueError(
+                f"left_descriptor length ({len(left)}) " f"must match descriptor_indices length ({len(indices)})"
+            )
+
+        if len(right) != len(indices):
+            raise ValueError(
+                f"right_descriptor length ({len(right)}) " f"must match descriptor_indices length ({len(indices)})"
+            )
 
     def to_formula(self) -> str:
         base_formula = f"{self.base_name}_{self._get_interaction_op_name()}"
@@ -42,7 +70,13 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         if op is None or not op.is_binary:
             return None
 
-        params = {"op": op}
+        # Include default values to pass validation
+        params = {
+            "interaction_op": op,
+            "descriptor_indices": [0],  # Default index
+            "left_descriptor": ["default"],  # Default left descriptor
+            "right_descriptor": ["default"],  # Default right descriptor
+        }
 
         if offset_params:
             params.update(offset_params)

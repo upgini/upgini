@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
@@ -27,7 +28,9 @@ def test_cross_series_basic():
 
     def check_op(op, expected_values):
         feature = Feature(
-            op=CrossSeriesInteraction(op=op, descriptor_indices=[1], left_descriptor=["A"], right_descriptor=["B"]),
+            op=CrossSeriesInteraction(
+                interaction_op=op, descriptor_indices=[1], left_descriptor=["A"], right_descriptor=["B"]
+            ),
             children=[Column("date"), Column("category"), Column("value")],
         )
         result = feature.calculate(df)
@@ -49,20 +52,35 @@ def test_cross_series_basic():
 
 def test_cross_series_formula():
     # Test formula generation
-    cross_add = CrossSeriesInteraction(op=Add())
+    cross_add = CrossSeriesInteraction(
+        interaction_op=Add(), descriptor_indices=[0], left_descriptor=["A"], right_descriptor=["B"]
+    )
     assert cross_add.to_formula() == "cross_add"
 
-    cross_sub = CrossSeriesInteraction(op=Subtract())
+    cross_sub = CrossSeriesInteraction(
+        interaction_op=Subtract(), descriptor_indices=[0], left_descriptor=["A"], right_descriptor=["B"]
+    )
     assert cross_sub.to_formula() == "cross_sub"
 
-    cross_mul = CrossSeriesInteraction(op=Multiply())
+    cross_mul = CrossSeriesInteraction(
+        interaction_op=Multiply(), descriptor_indices=[0], left_descriptor=["A"], right_descriptor=["B"]
+    )
     assert cross_mul.to_formula() == "cross_mul"
 
-    cross_div = CrossSeriesInteraction(op=Divide())
+    cross_div = CrossSeriesInteraction(
+        interaction_op=Divide(), descriptor_indices=[0], left_descriptor=["A"], right_descriptor=["B"]
+    )
     assert cross_div.to_formula() == "cross_div"
 
     # Test with offset
-    cross_add_offset = CrossSeriesInteraction(op=Add(), offset_size=2, offset_unit="D")
+    cross_add_offset = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[0],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+        offset_size=2,
+        offset_unit="D",
+    )
     assert cross_add_offset.to_formula() == "cross_add_offset_2D"
 
     # Test formula parsing
@@ -109,7 +127,9 @@ def test_cross_series_with_missing_data():
     )
 
     feature = Feature(
-        op=CrossSeriesInteraction(op=Add(), descriptor_indices=[1], left_descriptor=["A"], right_descriptor=["B"]),
+        op=CrossSeriesInteraction(
+            interaction_op=Add(), descriptor_indices=[1], left_descriptor=["A"], right_descriptor=["B"]
+        ),
         children=[Column("date"), Column("category"), Column("value")],
     )
 
@@ -139,7 +159,7 @@ def test_cross_series_with_offset():
 
     feature = Feature(
         op=CrossSeriesInteraction(
-            op=Add(),
+            interaction_op=Add(),
             descriptor_indices=[1],
             left_descriptor=["A"],
             right_descriptor=["B"],
@@ -204,7 +224,7 @@ def test_cross_series_complex_descriptor():
     # Interaction between East/X and West/Y product lines
     feature = Feature(
         op=CrossSeriesInteraction(
-            op=Divide(),
+            interaction_op=Divide(),
             descriptor_indices=[1, 2],
             left_descriptor=["East", "X"],  # East region, product X
             right_descriptor=["West", "Y"],  # West region, product Y
@@ -238,3 +258,44 @@ def test_cross_series_complex_descriptor():
     ]
     expected_res = pd.Series(expected_values, name="value")
     assert_series_equal(result, expected_res)
+
+
+def test_cross_series_validator_empty_indices():
+
+    # Test that empty descriptor_indices raises a ValueError
+    with pytest.raises(ValueError) as excinfo:
+        CrossSeriesInteraction(
+            interaction_op=Add(),
+            descriptor_indices=[],  # Empty - should raise error
+            left_descriptor=["A"],
+            right_descriptor=["B"],
+        )
+
+    assert "descriptor_indices cannot be empty" in str(excinfo.value)
+
+
+def test_cross_series_validator_mismatched_lengths():
+
+    # Test that left_descriptor with incorrect length raises a ValueError
+    with pytest.raises(ValueError) as excinfo:
+        CrossSeriesInteraction(
+            interaction_op=Add(),
+            descriptor_indices=[1, 2],  # Two indices
+            left_descriptor=["A"],  # Only one value - should raise error
+            right_descriptor=["B", "C"],  # Correct length
+        )
+
+    assert "left_descriptor length" in str(excinfo.value)
+    assert "must match descriptor_indices length" in str(excinfo.value)
+
+    # Test that right_descriptor with incorrect length raises a ValueError
+    with pytest.raises(ValueError) as excinfo:
+        CrossSeriesInteraction(
+            interaction_op=Add(),
+            descriptor_indices=[1, 2, 3],  # Three indices
+            left_descriptor=["A", "B", "C"],  # Correct length
+            right_descriptor=["X", "Y"],  # Only two values - should raise error
+        )
+
+    assert "right_descriptor length" in str(excinfo.value)
+    assert "must match descriptor_indices length" in str(excinfo.value)
