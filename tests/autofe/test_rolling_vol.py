@@ -181,8 +181,6 @@ def test_rolling_volatility_with_offset():
     result_with_offset = feature_with_offset.calculate(df)
 
     # The offset should shift the result by one day
-    # So the result at position i with offset 1 should be similar to the result at position i-1 without offset
-    # We skip the first position as it would be NaN in both cases
     assert_series_equal(
         result_with_offset.iloc[2:].reset_index(drop=True),
         result_no_offset.iloc[1:-1].reset_index(drop=True),

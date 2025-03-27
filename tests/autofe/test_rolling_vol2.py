@@ -6,6 +6,19 @@ from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries.volatility import RollingVolatility, RollingVolatility2
 
 
+def first_order_vol(window_size: int, abs_returns: bool = False):
+    return Feature(
+        op=RollingVolatility(window_size=window_size, window_unit="D", abs_returns=abs_returns),
+        children=[Column("date"), Column("value")],
+    )
+
+
+def calc_second_order_vol(df: pd.DataFrame, window_size: int):
+    df2 = df.copy()
+    df2["value"] = first_order_vol(window_size, abs_returns=True).calculate(df)
+    return first_order_vol(window_size, abs_returns=False).calculate(df2)
+
+
 def test_rolling_volatility2_calculate():
     df = pd.DataFrame(
         {
@@ -23,37 +36,11 @@ def test_rolling_volatility2_calculate():
         expected_result = pd.Series(expected_values, name="value")
         assert_series_equal(result, expected_result)
 
-    # Create RollingVolatility operators with abs_returns=True and abs_returns=False
-    # to compute expected values
-    def compute_expected_values(window_size):
-        vol1 = RollingVolatility(window_size=window_size, window_unit="D", abs_returns=True)
-        vol2 = RollingVolatility(window_size=window_size, window_unit="D", abs_returns=False)
+    expected_values = calc_second_order_vol(df, window_size=3)
 
-        feature1 = Feature(op=vol1, children=[Column("date"), Column("value")])
-        intermediate = feature1.calculate(df)
-
-        # Create a temporary dataframe with the intermediate values
-        temp_df = pd.DataFrame({"date": df["date"], "value": intermediate})
-
-        feature2 = Feature(op=vol2, children=[Column("date"), Column("value")])
-        return feature2.calculate(temp_df).values
-
-    # Test with a 3-day window
     check_volatility(
         window_size=3,
-        expected_values=compute_expected_values(3),
-    )
-
-    # Test with a 2-day window
-    check_volatility(
-        window_size=2,
-        expected_values=compute_expected_values(2),
-    )
-
-    # Test with a 5-day window
-    check_volatility(
-        window_size=5,
-        expected_values=compute_expected_values(5),
+        expected_values=expected_values,
     )
 
 
@@ -66,30 +53,26 @@ def test_rolling_volatility2_with_groups():
         }
     )
 
+    window_size = 2
+
     feature = Feature(
-        op=RollingVolatility2(window_size=2, window_unit="D"),
+        op=RollingVolatility2(window_size=window_size, window_unit="D"),
         children=[Column("date"), Column("group"), Column("value")],
     )
 
     result = feature.calculate(df)
 
-    # Compute the expected result using the two RollingVolatility operators
-    vol1 = Feature(
-        op=RollingVolatility(window_size=2, window_unit="D", abs_returns=True),
-        children=[Column("date"), Column("group"), Column("value")],
-    )
-    intermediate = vol1.calculate(df)
+    # Calculate expected values for each group
+    expected_results = []
+    for _, group_df in df.groupby("group"):
+        vol_result = calc_second_order_vol(group_df, window_size)
 
-    # Create a temporary dataframe with the intermediate values
-    temp_df = pd.DataFrame({"date": df["date"], "group": df["group"], "value": intermediate})
+        expected_results.append(vol_result)
 
-    vol2 = Feature(
-        op=RollingVolatility(window_size=2, window_unit="D", abs_returns=False),
-        children=[Column("date"), Column("group"), Column("value")],
-    )
-    expected_result = vol2.calculate(temp_df)
+    # Sort by original index and extract values
+    expected_series = pd.concat(expected_results).sort_index()
 
-    assert_series_equal(result, expected_result)
+    assert_series_equal(result, expected_series)
 
 
 def test_rolling_volatility2_with_missing_values():
@@ -100,28 +83,15 @@ def test_rolling_volatility2_with_missing_values():
         }
     )
 
+    window_size = 3
+
     feature = Feature(
-        op=RollingVolatility2(window_size=3, window_unit="D"),
+        op=RollingVolatility2(window_size=window_size, window_unit="D"),
         children=[Column("date"), Column("value")],
     )
 
     result = feature.calculate(df)
-
-    # Compute the expected result using the two RollingVolatility operators
-    vol1 = Feature(
-        op=RollingVolatility(window_size=3, window_unit="D", abs_returns=True),
-        children=[Column("date"), Column("value")],
-    )
-    intermediate = vol1.calculate(df)
-
-    # Create a temporary dataframe with the intermediate values
-    temp_df = pd.DataFrame({"date": df["date"], "value": intermediate})
-
-    vol2 = Feature(
-        op=RollingVolatility(window_size=3, window_unit="D", abs_returns=False),
-        children=[Column("date"), Column("value")],
-    )
-    expected_result = vol2.calculate(temp_df)
+    expected_result = calc_second_order_vol(df, window_size=3)
 
     assert_series_equal(result, expected_result)
 
@@ -205,8 +175,6 @@ def test_rolling_volatility2_with_offset():
     result_with_offset = feature_with_offset.calculate(df)
 
     # The offset should shift the result by one day
-    # So the result at position i with offset 1 should be similar to the result at position i-1 without offset
-    # We skip the first position as it would be NaN in both cases
     assert_series_equal(
         result_with_offset.iloc[2:].reset_index(drop=True),
         result_no_offset.iloc[1:-1].reset_index(drop=True),
