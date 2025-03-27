@@ -7,4 +7,4 @@ from upgini.autofe.vector import *  # noqa
 
 
 def find_op(name):
-    return OperatorRegistry.get_operand(name)
+    return OperatorRegistry.get_operator(name)

@@ -6,6 +6,7 @@ from upgini.autofe.timeseries.lag import Lag
 from upgini.autofe.timeseries.delta import Delta, Delta2
 from upgini.autofe.timeseries.trend import TrendCoefficient
 from upgini.autofe.timeseries.volatility import EWMAVolatility, RollingVolatility, RollingVolatility2, VolatilityRatio
+from upgini.autofe.timeseries.cross import CrossSeriesInteraction
 
 __all__ = [
     "TimeSeriesBase",
@@ -18,4 +19,5 @@ __all__ = [
     "RollingVolatility",
     "RollingVolatility2",
     "VolatilityRatio",
+    "CrossSeriesInteraction",
 ]

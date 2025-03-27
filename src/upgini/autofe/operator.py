@@ -28,15 +28,17 @@ class OperatorRegistry(type(BaseModel)):
                 try:
                     instance = new_class()
                     cls._registry[instance.name] = new_class
+                    if instance.alias:
+                        cls._registry[instance.alias] = new_class
                 except Exception:
                     pass
         return new_class
 
     @classmethod
-    def get_operand(cls, name: str) -> Optional["Operator"]:
+    def get_operator(cls, name: str) -> Optional["Operator"]:
         # First try to resolve as a parametrized operand formula
-        for operand_cls in cls._parametrized_registry:
-            resolved = operand_cls.from_formula(name)
+        for operator_cls in cls._parametrized_registry:
+            resolved = operator_cls.from_formula(name)
             if resolved is not None:
                 return resolved
         # Fall back to direct registry lookup
