@@ -11,35 +11,24 @@ class Lag(TimeSeriesBase, ParametrizedOperator):
     lag_unit: str = "D"
 
     def to_formula(self) -> str:
-        lag_component = f"lag_{self.lag_size}{self.lag_unit}"
-        if self.offset_size > 0:
-            lag_component += f"_offset_{self.offset_size}{self.offset_unit}"
-        return lag_component
+        base_formula = f"lag_{self.lag_size}{self.lag_unit}"
+        return self._add_offset_to_formula(base_formula)
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Lag"]:
+        # Base regex for Lag class
+        base_regex = r"lag_(\d+)([a-zA-Z])"
+
+        # Parse offset first
+        offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
+
+        if remaining_formula is None:
+            return None
+
+        # Now parse the lag part
         import re
 
-        # Try matching pattern with offset first
-        pattern_with_offset = r"^lag_(\d+)([a-zA-Z])_offset_(\d+)([a-zA-Z])$"
-        match_with_offset = re.match(pattern_with_offset, formula)
-
-        if match_with_offset:
-            lag_size = int(match_with_offset.group(1))
-            lag_unit = match_with_offset.group(2)
-            offset_size = int(match_with_offset.group(3))
-            offset_unit = match_with_offset.group(4)
-
-            return cls(
-                lag_size=lag_size,
-                lag_unit=lag_unit,
-                offset_size=offset_size,
-                offset_unit=offset_unit,
-            )
-
-        # If no offset pattern found, try basic pattern
-        pattern = r"^lag_(\d+)([a-zA-Z])$"
-        match = re.match(pattern, formula)
+        match = re.match(f"^{base_regex}$", remaining_formula)
 
         if not match:
             return None
@@ -47,7 +36,16 @@ class Lag(TimeSeriesBase, ParametrizedOperator):
         lag_size = int(match.group(1))
         lag_unit = match.group(2)
 
-        return cls(lag_size=lag_size, lag_unit=lag_unit)
+        # Create instance with appropriate parameters
+        params = {
+            "lag_size": lag_size,
+            "lag_unit": lag_unit,
+        }
+
+        if offset_params:
+            params.update(offset_params)
+
+        return cls(**params)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()

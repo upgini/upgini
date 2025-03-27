@@ -35,37 +35,26 @@ class Roll(TimeSeriesBase, ParametrizedOperator):
             )
 
     def to_formula(self) -> str:
-        roll_component = f"roll_{self.window_size}{self.window_unit}"
-        if self.offset_size > 0:
-            roll_component += f"_offset_{self.offset_size}{self.offset_unit}"
-        return f"{roll_component}_{self.aggregation}"
+        # First add window size and unit, then add aggregation, then add offset
+        base_formula = f"roll_{self.window_size}{self.window_unit}"
+        formula_with_agg = f"{base_formula}_{self.aggregation}"
+        return self._add_offset_to_formula(formula_with_agg)
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Roll"]:
         import re
 
-        # Try matching pattern with offset first
-        pattern_with_offset = r"^roll_(\d+)([a-zA-Z])_offset_(\d+)([a-zA-Z])_(\w+)$"
-        match_with_offset = re.match(pattern_with_offset, formula)
+        # Base regex for Roll class (with aggregation)
+        base_regex = r"roll_(\d+)([a-zA-Z])_(\w+)"
 
-        if match_with_offset:
-            window_size = int(match_with_offset.group(1))
-            window_unit = match_with_offset.group(2)
-            offset_size = int(match_with_offset.group(3))
-            offset_unit = match_with_offset.group(4)
-            aggregation = match_with_offset.group(5)
+        # Parse offset first - this removes the offset part if present
+        offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
 
-            return cls(
-                window_size=window_size,
-                window_unit=window_unit,
-                offset_size=offset_size,
-                offset_unit=offset_unit,
-                aggregation=aggregation,
-            )
+        if remaining_formula is None:
+            return None
 
-        # If no offset pattern found, try basic pattern
-        pattern = r"^roll_(\d+)([a-zA-Z])_(\w+)$"
-        match = re.match(pattern, formula)
+        # Parse the window part and aggregation
+        match = re.match(f"^{base_regex}$", remaining_formula)
 
         if not match:
             return None
@@ -74,7 +63,17 @@ class Roll(TimeSeriesBase, ParametrizedOperator):
         window_unit = match.group(2)
         aggregation = match.group(3)
 
-        return cls(window_size=window_size, window_unit=window_unit, aggregation=aggregation)
+        # Create instance with appropriate parameters
+        params = {
+            "window_size": window_size,
+            "window_unit": window_unit,
+            "aggregation": aggregation,
+        }
+
+        if offset_params:
+            params.update(offset_params)
+
+        return cls(**params)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()

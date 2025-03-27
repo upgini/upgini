@@ -1,7 +1,6 @@
 import abc
 from typing import Dict, List, Optional
 
-import numpy as np  # Used in derived classes
 import pandas as pd
 from upgini.autofe.operator import PandasOperator
 
@@ -42,7 +41,7 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
             .to_frame()
             .reset_index()
             .set_index(date.name)
-            .groupby([c.name for c in data[1:-1]])
+            .groupby([c.name for c in data[1:-1]], group_keys=True)
             if len(data) > 2
             else self._shift(ts)
         )
@@ -64,3 +63,43 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
     @abc.abstractmethod
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
         pass
+
+    def _add_offset_to_formula(self, base_formula: str) -> str:
+        if self.offset_size > 0:
+            return f"{base_formula}_offset_{self.offset_size}{self.offset_unit}"
+        return base_formula
+
+    @classmethod
+    def _parse_offset_from_formula(cls, formula: str, base_regex: str) -> tuple[Optional[dict], Optional[str]]:
+        """
+        Parse the offset component from a formula.
+
+        Args:
+            formula: The formula to parse
+            base_regex: The regex pattern for the base formula (without offset)
+
+        Returns:
+            A tuple with:
+            - Dictionary with offset parameters if found, None otherwise
+            - Remaining part of the formula after removing offset component (for further parsing)
+        """
+        import re
+
+        offset_regex = f"{base_regex}_offset_(\\d+)([a-zA-Z])"
+        match = re.match(offset_regex, formula)
+
+        if match:
+            # Get groups from the offset part
+            offset_size = int(match.group(match.lastindex - 1))
+            offset_unit = match.group(match.lastindex)
+
+            # Return the parameters and the base formula for further parsing if needed
+            # Extract the base formula by using the match object
+            base_formula = formula[: match.start(match.lastindex - 1) - len("_offset_")]
+            return {"offset_size": offset_size, "offset_unit": offset_unit}, base_formula
+
+        # Check if it matches the base regex (no offset)
+        if re.match(f"^{base_regex}$", formula) or re.match(f"^{base_regex}_", formula):
+            return None, formula
+
+        return None, None

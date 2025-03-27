@@ -78,13 +78,13 @@ def test_roll_from_formula():
     assert roll.aggregation == "mean"
     assert roll.to_formula() == "roll_3d_mean"
 
-    roll = Roll.from_formula("roll_10D_offset_1D_max")
+    roll = Roll.from_formula("roll_10D_max_offset_1D")
     assert roll.window_size == 10
     assert roll.window_unit == "D"
     assert roll.offset_size == 1
     assert roll.offset_unit == "D"
     assert roll.aggregation == "max"
-    assert roll.to_formula() == "roll_10D_offset_1D_max"
+    assert roll.to_formula() == "roll_10D_max_offset_1D"
 
     # Test invalid formulas
     roll = Roll.from_formula("not_a_roll_formula")

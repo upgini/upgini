@@ -11,14 +11,24 @@ class Delta(TimeSeriesBase, ParametrizedOperator):
     delta_unit: str = "D"
 
     def to_formula(self) -> str:
-        return f"delta_{self.delta_size}{self.delta_unit}"
+        base_formula = f"delta_{self.delta_size}{self.delta_unit}"
+        return self._add_offset_to_formula(base_formula)
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Delta"]:
+        # Base regex for Delta class
+        base_regex = r"delta_(\d+)([a-zA-Z])"
+
+        # Parse offset first
+        offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
+
+        if remaining_formula is None:
+            return None
+
+        # Now parse the delta part
         import re
 
-        pattern = r"^delta_(\d+)([a-zA-Z])$"
-        match = re.match(pattern, formula)
+        match = re.match(f"^{base_regex}$", remaining_formula)
 
         if not match:
             return None
@@ -26,7 +36,16 @@ class Delta(TimeSeriesBase, ParametrizedOperator):
         delta_size = int(match.group(1))
         delta_unit = match.group(2)
 
-        return cls(delta_size=delta_size, delta_unit=delta_unit)
+        # Create instance with appropriate parameters
+        params = {
+            "delta_size": delta_size,
+            "delta_unit": delta_unit,
+        }
+
+        if offset_params:
+            params.update(offset_params)
+
+        return cls(**params)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
@@ -34,6 +53,8 @@ class Delta(TimeSeriesBase, ParametrizedOperator):
             {
                 "delta_size": self.delta_size,
                 "delta_unit": self.delta_unit,
+                "offset_size": self.offset_size,
+                "offset_unit": self.offset_unit,
             }
         )
         return res
@@ -49,14 +70,24 @@ class Delta2(TimeSeriesBase, ParametrizedOperator):
     delta_unit: str = "D"
 
     def to_formula(self) -> str:
-        return f"delta2_{self.delta_size}{self.delta_unit}"
+        base_formula = f"delta2_{self.delta_size}{self.delta_unit}"
+        return self._add_offset_to_formula(base_formula)
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["Delta2"]:
+        # Base regex for Delta2 class
+        base_regex = r"delta2_(\d+)([a-zA-Z])"
+
+        # Parse offset first
+        offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
+
+        if remaining_formula is None:
+            return None
+
+        # Now parse the delta part
         import re
 
-        pattern = r"^delta2_(\d+)([a-zA-Z])$"
-        match = re.match(pattern, formula)
+        match = re.match(f"^{base_regex}$", remaining_formula)
 
         if not match:
             return None
@@ -64,7 +95,16 @@ class Delta2(TimeSeriesBase, ParametrizedOperator):
         delta_size = int(match.group(1))
         delta_unit = match.group(2)
 
-        return cls(delta_size=delta_size, delta_unit=delta_unit)
+        # Create instance with appropriate parameters
+        params = {
+            "delta_size": delta_size,
+            "delta_unit": delta_unit,
+        }
+
+        if offset_params:
+            params.update(offset_params)
+
+        return cls(**params)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
