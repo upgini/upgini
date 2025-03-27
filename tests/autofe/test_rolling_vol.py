@@ -183,8 +183,8 @@ def test_rolling_volatility_with_offset():
     # The offset should shift the result by one day
     # So the result at position i with offset 1 should be similar to the result at position i-1 without offset
     # We skip the first position as it would be NaN in both cases
-    for i in range(2, len(df)):
-        # Allow for small floating-point differences
-        assert abs(result_with_offset.iloc[i] - result_no_offset.iloc[i - 1]) < 1e-10 or (
-            pd.isna(result_with_offset.iloc[i]) and pd.isna(result_no_offset.iloc[i - 1])
-        )
+    assert_series_equal(
+        result_with_offset.iloc[2:].reset_index(drop=True),
+        result_no_offset.iloc[1:-1].reset_index(drop=True),
+        check_names=False,
+    )

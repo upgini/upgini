@@ -229,7 +229,8 @@ def test_delta_with_offset():
     # The offset should shift the result by one day
     # So the result at position i with offset 1 should be similar to the result at position i-1 without offset
     # We skip the first positions as they might be NaN
-    for i in range(2, len(df)):
-        assert result_with_offset.iloc[i] == result_no_offset.iloc[i - 1] or (
-            pd.isna(result_with_offset.iloc[i]) and pd.isna(result_no_offset.iloc[i - 1])
-        )
+    assert_series_equal(
+        result_with_offset.iloc[2:].reset_index(drop=True),
+        result_no_offset.iloc[1:-1].reset_index(drop=True),
+        check_names=False,
+    )

@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from upgini.autofe.operator import ParametrizedOperator
@@ -22,16 +22,13 @@ class EWMAVolatility(VolatilityBase, ParametrizedOperator):
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["EWMAVolatility"]:
-        # Base regex for EWMAVolatility class
         base_regex = r"ewma_vol_(\d+)"
 
-        # Parse offset first
         offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
 
         if remaining_formula is None:
             return None
 
-        # Now parse the window part
         import re
 
         match = re.match(f"^{base_regex}$", remaining_formula)
@@ -41,7 +38,6 @@ class EWMAVolatility(VolatilityBase, ParametrizedOperator):
 
         window_size = int(match.group(1))
 
-        # Create instance with appropriate parameters
         params = {
             "window_size": window_size,
         }
@@ -76,6 +72,7 @@ class RollingVolatility(VolatilityBase, ParametrizedOperator):
     step_unit: str = "D"
     window_size: int
     window_unit: str = "D"
+    abs_returns: bool = False
 
     def to_formula(self) -> str:
         base_formula = f"roll_vol_{self.window_size}{self.window_unit}"
@@ -83,16 +80,13 @@ class RollingVolatility(VolatilityBase, ParametrizedOperator):
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["RollingVolatility"]:
-        # Base regex for RollingVolatility class
         base_regex = r"roll_vol_(\d+)([a-zA-Z])"
 
-        # Parse offset first
         offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
 
         if remaining_formula is None:
             return None
 
-        # Now parse the window part
         import re
 
         match = re.match(f"^{base_regex}$", remaining_formula)
@@ -103,7 +97,69 @@ class RollingVolatility(VolatilityBase, ParametrizedOperator):
         window_size = int(match.group(1))
         window_unit = match.group(2)
 
-        # Create instance with appropriate parameters
+        params = {
+            "window_size": window_size,
+            "window_unit": window_unit,
+        }
+
+        if offset_params:
+            params.update(offset_params)
+
+        return cls(**params)
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "step_size": self.step_size,
+                "step_unit": self.step_unit,
+                "window_size": self.window_size,
+                "window_unit": self.window_unit,
+                "abs_returns": self.abs_returns,
+            }
+        )
+        return res
+
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        return ts.apply(self._rolling_vol)
+
+    def _rolling_vol(self, x):
+        x = pd.DataFrame(x).iloc[:, -1]
+        returns = self._get_returns(x, f"{self.step_size}{self.step_unit}")
+        if self.abs_returns:
+            returns = returns.abs()
+        return returns.rolling(f"{self.window_size}{self.window_unit}", min_periods=1).std()
+
+
+class RollingVolatility2(TimeSeriesBase, ParametrizedOperator):
+    step_size: int = 1
+    step_unit: str = "D"
+    window_size: int
+    window_unit: str = "D"
+
+    def to_formula(self) -> str:
+        base_formula = f"roll_vol2_{self.window_size}{self.window_unit}"
+        return self._add_offset_to_formula(base_formula)
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["RollingVolatility2"]:
+        base_regex = r"roll_vol2_(\d+)([a-zA-Z])"
+
+        offset_params, remaining_formula = cls._parse_offset_from_formula(formula, base_regex)
+
+        if remaining_formula is None:
+            return None
+
+        import re
+
+        match = re.match(f"^{base_regex}$", remaining_formula)
+
+        if not match:
+            return None
+
+        window_size = int(match.group(1))
+        window_unit = match.group(2)
+
         params = {
             "window_size": window_size,
             "window_unit": window_unit,
@@ -126,10 +182,28 @@ class RollingVolatility(VolatilityBase, ParametrizedOperator):
         )
         return res
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._rolling_vol)
+    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+        vol1 = RollingVolatility(
+            step_size=self.step_size,
+            step_unit=self.step_unit,
+            window_size=self.window_size,
+            window_unit=self.window_unit,
+            abs_returns=True,
+            offset_size=self.offset_size,
+            offset_unit=self.offset_unit,
+        )
+        vol1_res = vol1.calculate_vector(data)
 
-    def _rolling_vol(self, x):
-        x = pd.DataFrame(x).iloc[:, -1]
-        returns = self._get_returns(x, f"{self.step_size}{self.step_unit}")
-        return returns.rolling(f"{self.window_size}{self.window_unit}", min_periods=1).std()
+        vol2 = RollingVolatility(
+            step_size=self.step_size,
+            step_unit=self.step_unit,
+            window_size=self.window_size,
+            window_unit=self.window_unit,
+            abs_returns=False,
+        )
+        vol2_res = vol2.calculate_vector(data[:-1] + [vol1_res])
+
+        return vol2_res
+
+    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+        raise NotImplementedError()
