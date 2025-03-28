@@ -234,3 +234,34 @@ def test_delta_with_offset():
         result_no_offset.iloc[1:-1].reset_index(drop=True),
         check_names=False,
     )
+
+
+def test_delta2_groups():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-06", "---", "2024-05-07", "2024-05-08", "2024-05-09"],
+            "f1": ["a", "b", "a", "a", "a", "b"],
+            "f2": [1, 2, 1, 1, 1, 2],
+            "value": [1, 1, 3, 4, 7, 5],
+        },
+        index=[9, 8, 7, 6, 5, 4],
+    )
+
+    def check_delta2(delta_size: int, delta_unit: str, expected_values: list[float]):
+        feature = Feature(
+            op=Delta2(delta_size=delta_size, delta_unit=delta_unit),
+            children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+        )
+        expected_res = pd.Series(expected_values, name="value", index=df.index)
+        assert_series_equal(feature.calculate(df), expected_res)
+
+    # Group (a,1): [1.0, np.nan, np.nan, 4.0, 7.0, np.nan]
+    # First delta for group (a,1): [np.nan, np.nan, np.nan, 3.0, 3.0, np.nan]
+    # Second delta for group (a,1): [np.nan, np.nan, np.nan, np.nan, 0.0, np.nan]
+    # Group (b,2): [np.nan, 1.0, np.nan, np.nan, np.nan, 5.0]
+    # First delta for group (b,2): [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+    # Second delta for group (b,2): [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+    check_delta2(1, "d", [np.nan, np.nan, np.nan, np.nan, 0.0, np.nan])
+
+    # With 2-day delta, we don't have enough consecutive days for any group to calculate second delta
+    check_delta2(2, "d", [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
