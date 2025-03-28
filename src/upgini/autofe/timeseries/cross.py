@@ -95,6 +95,15 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         )
         return res
 
+    def get_hash_component(self) -> str:
+        inner_components = [
+            self.to_formula(),
+            "_".join(str(i) for i in self.descriptor_indices),
+            "_".join(self.left_descriptor),
+            "_".join(self.right_descriptor),
+        ]
+        return "_".join(inner_components)
+
     def _get_interaction_op_name(self) -> str:
         return self.interaction_op.alias or self.interaction_op.to_formula()
 

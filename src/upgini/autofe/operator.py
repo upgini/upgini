@@ -76,6 +76,9 @@ class Operator(BaseModel, metaclass=OperatorRegistry):
     def to_formula(self) -> str:
         return self.name
 
+    def get_hash_component(self) -> str:
+        return self.to_formula()
+
 
 class ParametrizedOperator(Operator, abc.ABC):
 

@@ -299,3 +299,30 @@ def test_cross_series_validator_mismatched_lengths():
 
     assert "right_descriptor length" in str(excinfo.value)
     assert "must match descriptor_indices length" in str(excinfo.value)
+
+
+def test_cross_series_hash_component():
+    op1 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1, 2],
+        left_descriptor=["A", "B"],
+        right_descriptor=["C", "D"],
+    )
+    assert op1.get_hash_component() == "cross_add_1_2_A_B_C_D"
+
+    op2 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1, 2],
+        left_descriptor=["A", "C"],
+        right_descriptor=["B", "D"],
+    )
+    assert op2.get_hash_component() == "cross_add_1_2_A_C_B_D"
+
+    feature1 = Feature(op1, [Column("date"), Column("category1"), Column("category2"), Column("value")])
+    feature1.set_display_index(feature1.get_hash())
+
+    feature2 = Feature(op2, [Column("date"), Column("category1"), Column("category2"), Column("value")])
+    feature2.set_display_index(feature2.get_hash())
+
+    assert feature1.get_hash() != feature2.get_hash()
+    assert feature1.get_display_name() != feature2.get_display_name()
