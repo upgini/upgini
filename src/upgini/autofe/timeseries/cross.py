@@ -8,7 +8,7 @@ try:
 except ImportError:
     from pydantic import validator  # V1
 
-from upgini.autofe.all_operands import find_op
+from upgini.autofe.all_operators import find_op
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 

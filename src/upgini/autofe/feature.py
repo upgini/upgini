@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas._typing import DtypeObj
 
-from upgini.autofe.all_operands import find_op
+from upgini.autofe.all_operators import find_op
 from upgini.autofe.operator import Operator, PandasOperator
 
 
