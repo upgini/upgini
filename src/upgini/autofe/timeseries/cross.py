@@ -122,7 +122,7 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         return res
 
     def _get_mask(self, data: List[pd.Series], descriptor: List[str]) -> pd.Series:
-        mask = np.logical_and.reduce([data[i] == v for i, v in zip(self.descriptor_indices, descriptor)])
+        mask = np.logical_and.reduce([data[i].astype(str) == v for i, v in zip(self.descriptor_indices, descriptor)])
         return mask
 
     def _extract_series(self, data: List[pd.Series], mask: pd.Series) -> pd.Series:

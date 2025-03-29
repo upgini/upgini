@@ -152,7 +152,7 @@ def test_cross_series_with_offset():
                 "2024-05-08",
                 "2024-05-09",
             ],
-            "category": ["A", "A", "A", "A", "B", "B", "B", "B"],
+            "category": [1, 1, 1, 1, 2, 2, 2, 2],
             "value": [10, 20, 30, 40, 5, 15, 25, 35],
         },
     )
@@ -161,8 +161,8 @@ def test_cross_series_with_offset():
         op=CrossSeriesInteraction(
             interaction_op=Add(),
             descriptor_indices=[1],
-            left_descriptor=["A"],
-            right_descriptor=["B"],
+            left_descriptor=["1"],
+            right_descriptor=["2"],
             offset_size=1,
             offset_unit="D",
         ),
