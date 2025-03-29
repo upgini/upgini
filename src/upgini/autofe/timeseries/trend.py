@@ -56,6 +56,9 @@ class TrendCoefficient(TimeSeriesBase):
             x.iloc[:, -1].resample(f"{self.step_size}{self.step_unit}").fillna(method="ffill").fillna(method="bfill")
         )
         idx = np.arange(len(resampled))
-        coeffs = np.polyfit(idx, resampled, 1)
-        x.iloc[:, -1] = coeffs[0]
+        try:
+            coeffs = np.polyfit(idx, resampled, 1)
+            x.iloc[:, -1] = coeffs[0]
+        except np.linalg.LinAlgError:
+            x.iloc[:, -1] = 0
         return x.iloc[:, -1] if return_series else x

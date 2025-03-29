@@ -117,3 +117,39 @@ def test_trend_coef_missing():
     )
     expected_res = pd.Series([0.6, 10.0, 0.6, 10.0, 0.6], name="value")
     assert_series_equal(feature.calculate(df), expected_res)
+
+
+def test_trend_coef_polyfit_fails():
+    # Create a dataframe with only one value which will cause np.polyfit to fail
+    # as it can't fit a line to a single point
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06"],
+            "value": [5.0],
+        },
+    )
+
+    feature = Feature(
+        op=TrendCoefficient(),
+        children=[Column("date"), Column("value")],
+    )
+
+    # When polyfit fails, the method should return 0
+    expected_res = pd.Series([0.0], name="value")
+    assert_series_equal(feature.calculate(df), expected_res)
+
+    # Alternative test case with constant values
+    df_constant = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-07", "2024-05-08"],
+            "value": [5, 5, 5],  # Constant values can also cause LinAlgError
+        },
+    )
+
+    feature_constant = Feature(
+        op=TrendCoefficient(),
+        children=[Column("date"), Column("value")],
+    )
+
+    expected_res_constant = pd.Series([0.0, 0.0, 0.0], name="value")
+    assert_series_equal(feature_constant.calculate(df_constant), expected_res_constant)
