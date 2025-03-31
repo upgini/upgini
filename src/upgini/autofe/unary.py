@@ -2,10 +2,10 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperator, VectorizableMixin
 
 
-class Abs(PandasOperand, VectorizableMixin):
+class Abs(PandasOperator, VectorizableMixin):
     name: str = "abs"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -20,7 +20,7 @@ class Abs(PandasOperand, VectorizableMixin):
         # return data.abs()
 
 
-class Log(PandasOperand, VectorizableMixin):
+class Log(PandasOperator, VectorizableMixin):
     name: str = "log"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -34,7 +34,7 @@ class Log(PandasOperand, VectorizableMixin):
         return self._round_value(np.log(data.replace(0, np.nan).abs()), 10)
 
 
-class Sqrt(PandasOperand, VectorizableMixin):
+class Sqrt(PandasOperator, VectorizableMixin):
     name: str = "sqrt"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -48,7 +48,7 @@ class Sqrt(PandasOperand, VectorizableMixin):
         return self._round_value(np.sqrt(data.abs()))
 
 
-class Square(PandasOperand, VectorizableMixin):
+class Square(PandasOperator, VectorizableMixin):
     name: str = "square"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -61,7 +61,7 @@ class Square(PandasOperand, VectorizableMixin):
         return np.square(data)
 
 
-class Sigmoid(PandasOperand, VectorizableMixin):
+class Sigmoid(PandasOperator, VectorizableMixin):
     name: str = "sigmoid"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -75,7 +75,7 @@ class Sigmoid(PandasOperand, VectorizableMixin):
         return self._round_value(1 / (1 + np.exp(-data)))
 
 
-class Floor(PandasOperand, VectorizableMixin):
+class Floor(PandasOperator, VectorizableMixin):
     name: str = "floor"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -90,7 +90,7 @@ class Floor(PandasOperand, VectorizableMixin):
         return np.floor(data)
 
 
-class Residual(PandasOperand, VectorizableMixin):
+class Residual(PandasOperator, VectorizableMixin):
     name: str = "residual"
     is_unary: bool = True
     is_vectorizable: bool = True
@@ -104,7 +104,7 @@ class Residual(PandasOperand, VectorizableMixin):
         return data - np.floor(data)
 
 
-class Freq(PandasOperand):
+class Freq(PandasOperator):
     name: str = "freq"
     is_unary: bool = True
     output_type: Optional[str] = "float"
@@ -116,7 +116,7 @@ class Freq(PandasOperand):
         return self._loc(data, value_counts)
 
 
-class Norm(PandasOperand):
+class Norm(PandasOperator):
     name: str = "norm"
     is_unary: bool = True
     output_type: Optional[str] = "float"
@@ -148,7 +148,7 @@ class Norm(PandasOperand):
         return res
 
 
-class Embeddings(PandasOperand):
+class Embeddings(PandasOperator):
     name: str = "emb"
     is_unary: bool = True
     input_type: Optional[str] = "string"

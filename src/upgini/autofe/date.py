@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
-from upgini.autofe.operand import PandasOperand, ParametrizedOperand
+from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 
 
 def get_pydantic_version():
@@ -43,7 +43,7 @@ class DateDiffMixin(BaseModel):
             raise Exception(f"Unsupported difference unit: {self.diff_unit}")
 
 
-class DateDiff(PandasOperand, DateDiffMixin):
+class DateDiff(PandasOperator, DateDiffMixin):
     name: str = "date_diff"
     alias: Optional[str] = "date_diff_type1"
     is_binary: bool = True
@@ -78,7 +78,7 @@ class DateDiff(PandasOperand, DateDiffMixin):
         return x
 
 
-class DateDiffType2(PandasOperand, DateDiffMixin):
+class DateDiffType2(PandasOperator, DateDiffMixin):
     name: str = "date_diff_type2"
     is_binary: bool = True
     has_symmetry_importance: bool = True
@@ -112,7 +112,7 @@ _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len,
 _count_aggregations = ["nunique", "count"]
 
 
-class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
+class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
     is_binary: bool = True
     has_symmetry_importance: bool = True
 
@@ -183,7 +183,7 @@ class DateListDiff(PandasOperand, DateDiffMixin, ParametrizedOperand):
         return method(x) if len(x) > 0 else default
 
 
-class DateListDiffBounded(DateListDiff, ParametrizedOperand):
+class DateListDiffBounded(DateListDiff, ParametrizedOperator):
     lower_bound: Optional[int] = None
     upper_bound: Optional[int] = None
 
@@ -217,7 +217,7 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperand):
         return super()._agg(x)
 
 
-class DatePercentileBase(PandasOperand, abc.ABC):
+class DatePercentileBase(PandasOperator, abc.ABC):
     is_binary: bool = True
     output_type: Optional[str] = "float"
 

@@ -2,13 +2,13 @@ from typing import Optional
 
 import pandas as pd
 
-from upgini.autofe.operand import PandasOperand, ParametrizedOperand, VectorizableMixin
+from upgini.autofe.operator import PandasOperator, ParametrizedOperator, VectorizableMixin
 
 
 class GroupByThenAgg(
-    PandasOperand,
+    PandasOperator,
     VectorizableMixin,
-    ParametrizedOperand,
+    ParametrizedOperator,
 ):
     agg: Optional[str]
     is_vectorizable: bool = True
@@ -39,7 +39,7 @@ class GroupByThenAgg(
         return temp.merge(d2, how="right", on=[group_column])[value_columns]
 
 
-class GroupByThenRank(PandasOperand, VectorizableMixin):
+class GroupByThenRank(PandasOperator, VectorizableMixin):
     name: str = "GroupByThenRank"
     is_vectorizable: bool = True
     is_grouping: bool = True
@@ -58,7 +58,7 @@ class GroupByThenRank(PandasOperand, VectorizableMixin):
         return temp.merge(d2.reset_index(), how="right", on=["index"])[value_columns]
 
 
-class GroupByThenNUnique(PandasOperand, VectorizableMixin):
+class GroupByThenNUnique(PandasOperator, VectorizableMixin):
     name: str = "GroupByThenNUnique"
     is_vectorizable: bool = True
     is_grouping: bool = True
@@ -78,7 +78,7 @@ class GroupByThenNUnique(PandasOperand, VectorizableMixin):
         return nunique.merge(d2, how="right", on=[group_column])[value_columns]
 
 
-class GroupByThenFreq(PandasOperand):
+class GroupByThenFreq(PandasOperator):
     name: str = "GroupByThenFreq"
     is_grouping: bool = True
     output_type: Optional[str] = "float"
