@@ -2235,7 +2235,7 @@ if response.status_code == 200:
 
             search_keys = self.search_keys.copy()
             if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
-                self.search_keys.update(
+                search_keys.update(
                     {col: SearchKey.CUSTOM_KEY for col in self.id_columns if col not in self.search_keys}
                 )
 
