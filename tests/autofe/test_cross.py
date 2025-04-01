@@ -326,3 +326,70 @@ def test_cross_series_hash_component():
 
     assert feature1.get_hash() != feature2.get_hash()
     assert feature1.get_display_name() != feature2.get_display_name()
+
+
+def test_roll_on_different_cross_features():
+    # Create two different cross series features
+    cross_op1 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    cross_op2 = CrossSeriesInteraction(
+        interaction_op=Multiply(),  # Different operation
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    # Create features with these operators
+    cross_feature1 = Feature(op=cross_op1, children=[Column("date"), Column("category"), Column("value")])
+
+    cross_feature2 = Feature(op=cross_op2, children=[Column("date"), Column("category"), Column("value")])
+
+    # Create Roll features that use these cross features as input
+    # The same Roll operation is applied to both
+    from upgini.autofe.timeseries import Roll
+
+    roll_op = Roll(window_size=7, window_unit="D", aggregation="mean")
+
+    # Create Roll features using the cross features as input
+    roll_feature1 = Feature(op=roll_op, children=[cross_feature1])
+    roll_feature1.set_display_index(roll_feature1.get_hash())
+
+    roll_feature2 = Feature(op=roll_op, children=[cross_feature2])
+    roll_feature2.set_display_index(roll_feature2.get_hash())
+
+    # Verify that the display names are different
+    assert roll_feature1.get_hash() != roll_feature2.get_hash()
+    assert roll_feature1.get_display_name() != roll_feature2.get_display_name()
+
+    # Now test with same operation but different descriptors
+    cross_op3 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    cross_op4 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["C"],  # Different descriptor
+        right_descriptor=["D"],  # Different descriptor
+    )
+
+    cross_feature3 = Feature(op=cross_op3, children=[Column("date"), Column("category"), Column("value")])
+
+    cross_feature4 = Feature(op=cross_op4, children=[Column("date"), Column("category"), Column("value")])
+
+    roll_feature3 = Feature(op=roll_op, children=[cross_feature3])
+    roll_feature3.set_display_index(roll_feature3.get_hash())
+
+    roll_feature4 = Feature(op=roll_op, children=[cross_feature4])
+    roll_feature4.set_display_index(roll_feature4.get_hash())
+
+    assert roll_feature3.get_hash() != roll_feature4.get_hash()
+    assert roll_feature3.get_display_name() != roll_feature4.get_display_name()
