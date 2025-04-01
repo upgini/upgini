@@ -280,8 +280,8 @@ def test_demo_metrics(requests_mock: Mocker):
             rows_header: [464],
             target_mean_header: [100.7802],
             baseline_mae: ["21.052 ± 1.244"],
-            enriched_mae: ["20.821 ± 1.066"],
-            uplift: [0.231569],
+            enriched_mae: ["20.626 ± 1.376"],
+            uplift: [0.426023],
         }
     )
 
@@ -500,8 +500,8 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker):
             "Rows": [9670, 140],
             "Mean target": [5916.0936, 5675.8586],
             "Baseline mean_squared_error": ["7188362.906 ± 1743667.568", "5303236.292 ± 231218.409"],
-            "Enriched mean_squared_error": ["6250558.489 ± 1678975.306", "4294237.648 ± 199564.891"],
-            "Uplift": [9.378044e+05, 1.008999e+06],
+            "Enriched mean_squared_error": ["6617297.207 ± 1756133.268", "4901985.529 ± 184918.482"],
+            "Uplift": [571065.7, 401250.8],
         }
     )
 

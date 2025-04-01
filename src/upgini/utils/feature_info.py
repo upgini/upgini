@@ -123,7 +123,11 @@ def _get_provider(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> 
 
 
 def _get_internal_provider(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> str:
-    return "" if is_client_feature else (feature_meta.data_provider or "Upgini")
+    providers = _list_or_single(feature_meta.data_providers, feature_meta.data_provider)
+    if providers:
+        return ", ".join(providers)
+    else:
+        return "" if is_client_feature else (feature_meta.data_provider or "Upgini")
 
 
 def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> str:
@@ -137,13 +141,17 @@ def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> st
 
 
 def _get_internal_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> str:
-    return feature_meta.data_source or (
-        LLM_SOURCE
-        if not feature_meta.name.endswith("_country")
-        and not feature_meta.name.endswith("_postal_code")
-        and not is_client_feature
-        else ""
-    )
+    sources = _list_or_single(feature_meta.data_sources, feature_meta.data_source)
+    if sources:
+        return ", ".join(sources)
+    else:
+        return feature_meta.data_source or (
+            LLM_SOURCE
+            if not feature_meta.name.endswith("_country")
+            and not feature_meta.name.endswith("_postal_code")
+            and not is_client_feature
+            else ""
+            )
 
 
 def _list_or_single(lst: List[str], single: str):
@@ -161,7 +169,7 @@ def _to_anchor(link: str, value: str) -> str:
         return f"<a href='{link}' target='_blank' rel='noopener noreferrer'>{value}</a>"
 
 
-def _make_links(names: List[str], links: List[str]):
+def _make_links(names: List[str], links: List[str]) -> str:
     all_links = [_to_anchor(link, name) for name, link in itertools.zip_longest(names, links)]
     return ",".join(all_links)
 
