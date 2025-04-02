@@ -1681,7 +1681,6 @@ class FeaturesEnricher(TransformerMixin):
                 validated_X,
                 validated_y,
                 eval_set,
-                is_demo_dataset,
                 exclude_features_sources,
                 trace_id,
                 progress_bar,
@@ -1872,158 +1871,147 @@ class FeaturesEnricher(TransformerMixin):
         validated_X: pd.DataFrame,
         validated_y: pd.Series,
         eval_set: Optional[List[tuple]],
-        is_demo_dataset: bool,
         exclude_features_sources: Optional[List[str]],
         trace_id: str,
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
     ) -> _SampledDataForMetrics:
-        eval_set_sampled_dict = {}
-        if eval_set is not None:
-            self.logger.info("Transform with eval_set")
-            # concatenate X and eval_set with eval_set_index
-            df = validated_X.copy()
-            df[TARGET] = validated_y
-            df[EVAL_SET_INDEX] = 0
-            for idx, eval_pair in enumerate(eval_set):
-                eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
-                eval_df_with_index = eval_x.copy()
-                eval_df_with_index[TARGET] = eval_y
-                eval_df_with_index[EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df_with_index])
+        has_eval_set = eval_set is not None
 
-            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
+        self.logger.info(f"Transform {'with' if has_eval_set else 'without'} eval_set")
 
-            # downsample if need to eval_set threshold
-            num_samples = _num_samples(df)
-            force_downsampling = (
-                not self.disable_force_downsampling
-                and self.columns_for_online_api is not None
-                and num_samples > Dataset.FORCE_SAMPLE_SIZE
+        # Prepare
+        df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set)
+        df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
+        df = self.__downsample_for_metrics(df)
+
+        # Transform
+
+        enriched_df, _, _ = self.__inner_transform(
+            trace_id,
+            X=df.drop(columns=[TARGET]),
+            y=df[TARGET],
+            exclude_features_sources=exclude_features_sources,
+            silent_mode=True,
+            metrics_calculation=True,
+            progress_bar=progress_bar,
+            progress_callback=progress_callback,
+            add_fit_system_record_id=True,
+        )
+        if enriched_df is None:
+            return None
+
+        x_columns = [
+            c
+            for c in (validated_X.columns.tolist() + self.fit_generated_features + [SYSTEM_RECORD_ID])
+            if c in enriched_df.columns
+        ]
+
+        X_sampled, y_sampled, enriched_X = self.__extract_train_data(enriched_df, x_columns)
+        eval_set_sampled_dict = self.__extract_eval_data(
+            enriched_df, x_columns, enriched_X.columns.tolist(), len(eval_set) if has_eval_set else 0
+        )
+
+        # Cache and return results
+        return self.__cache_and_return_results(
+            validated_X, validated_y, eval_set, X_sampled, y_sampled, enriched_X, eval_set_sampled_dict
+        )
+
+    def __combine_train_and_eval_sets(
+        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]]
+    ) -> pd.DataFrame:
+        df = validated_X.copy()
+        df[TARGET] = validated_y
+        if eval_set is None:
+            return df
+
+        df[EVAL_SET_INDEX] = 0
+
+        for idx, eval_pair in enumerate(eval_set):
+            eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+            eval_df_with_index = eval_x.copy()
+            eval_df_with_index[TARGET] = eval_y
+            eval_df_with_index[EVAL_SET_INDEX] = idx + 1
+            df = pd.concat([df, eval_df_with_index])
+
+        return df
+
+    def __downsample_for_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        num_samples = _num_samples(df)
+        force_downsampling = (
+            not self.disable_force_downsampling
+            and self.columns_for_online_api is not None
+            and num_samples > Dataset.FORCE_SAMPLE_SIZE
+        )
+
+        if force_downsampling:
+            self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
+            return balance_undersample_forced(
+                df=df,
+                target_column=TARGET,
+                id_columns=self.id_columns,
+                date_column=self._get_date_column(self.search_keys),
+                task_type=self.model_task_type,
+                cv_type=self.cv,
+                random_state=self.random_state,
+                sample_size=Dataset.FORCE_SAMPLE_SIZE,
+                logger=self.logger,
+                bundle=self.bundle,
+                warning_callback=self.__log_warning,
             )
-            # TODO: check that system_record_id was added before this step
-            if force_downsampling:
-                self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
-                df = balance_undersample_forced(
-                    df=df,
-                    target_column=TARGET,
-                    id_columns=self.id_columns,
-                    date_column=self._get_date_column(self.search_keys),
-                    task_type=self.model_task_type,
-                    cv_type=self.cv,
-                    random_state=self.random_state,
-                    sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                    logger=self.logger,
-                    bundle=self.bundle,
-                    warning_callback=self.__log_warning,
-                )
-            elif num_samples > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
-                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
-                df = df.sample(n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state)
+        elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
+            if EVAL_SET_INDEX in df.columns:
+                threshold = Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
+                sample_size = Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS
+            else:
+                threshold = Dataset.FIT_SAMPLE_THRESHOLD
+                sample_size = Dataset.FIT_SAMPLE_ROWS
 
-            eval_set_sampled_dict = {}
+            if num_samples > threshold:
+                self.logger.info(f"Downsampling from {num_samples} to {sample_size}")
+                return df.sample(n=sample_size, random_state=self.random_state)
 
-            tmp_target_name = "__target"
-            df = df.rename(columns={TARGET: tmp_target_name})
+        return df
 
-            enriched_df, columns_renaming, generated_features = self.__inner_transform(
-                trace_id,
-                df,
-                exclude_features_sources=exclude_features_sources,
-                silent_mode=True,
-                metrics_calculation=True,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-                add_fit_system_record_id=True,
-                target_name=tmp_target_name,
-            )
-            if enriched_df is None:
-                return None
-
-            enriched_df = enriched_df.rename(columns={tmp_target_name: TARGET})
-
-            x_columns = [
-                c
-                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
-                if c in enriched_df.columns
-            ]
-
+    def __extract_train_data(
+        self, enriched_df: pd.DataFrame, x_columns: List[str]
+    ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+        if EVAL_SET_INDEX in enriched_df.columns:
             enriched_Xy = enriched_df.query(f"{EVAL_SET_INDEX} == 0")
-            X_sampled = enriched_Xy[x_columns].copy()
-            y_sampled = enriched_Xy[TARGET].copy()
-            enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX])
-            enriched_X_columns = enriched_X.columns.tolist()
-
-            for idx in range(len(eval_set)):
-                enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
-                eval_x_sampled = enriched_eval_xy[x_columns].copy()
-                eval_y_sampled = enriched_eval_xy[TARGET].copy()
-                enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
-                eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
         else:
-            self.logger.info("Transform without eval_set")
-            df = validated_X.copy()
+            enriched_Xy = enriched_df
+        X_sampled = enriched_Xy[x_columns].copy()
+        y_sampled = enriched_Xy[TARGET].copy()
+        enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
+        return X_sampled, y_sampled, enriched_X
 
-            df[TARGET] = validated_y
+    def __extract_eval_data(
+        self, enriched_df: pd.DataFrame, x_columns: List[str], enriched_X_columns: List[str], eval_set_len: int
+    ) -> Dict[int, Tuple]:
+        eval_set_sampled_dict = {}
 
-            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
+        for idx in range(eval_set_len):
+            enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
+            eval_x_sampled = enriched_eval_xy[x_columns].copy()
+            eval_y_sampled = enriched_eval_xy[TARGET].copy()
+            enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
+            eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
 
-            num_samples = _num_samples(df)
-            force_downsampling = (
-                not self.disable_force_downsampling
-                and self.columns_for_online_api is not None
-                and num_samples > Dataset.FORCE_SAMPLE_SIZE
-            )
+        return eval_set_sampled_dict
 
-            if force_downsampling:
-                self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
-                df = balance_undersample_forced(
-                    df=df,
-                    target_column=TARGET,
-                    id_columns=self.id_columns,
-                    date_column=self._get_date_column(self.search_keys),
-                    task_type=self.model_task_type,
-                    cv_type=self.cv,
-                    random_state=self.random_state,
-                    sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                    logger=self.logger,
-                    bundle=self.bundle,
-                    warning_callback=self.__log_warning,
-                )
-            elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
-                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
-                df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
-
-            tmp_target_name = "__target"
-            df = df.rename(columns={TARGET: tmp_target_name})
-
-            enriched_Xy, columns_renaming, generated_features = self.__inner_transform(
-                trace_id,
-                df,
-                exclude_features_sources=exclude_features_sources,
-                silent_mode=True,
-                metrics_calculation=True,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-                add_fit_system_record_id=True,
-                target_name=tmp_target_name,
-            )
-            if enriched_Xy is None:
-                return None
-
-            enriched_Xy = enriched_Xy.rename(columns={tmp_target_name: TARGET})
-
-            x_columns = [
-                c
-                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
-                if c in enriched_Xy.columns
-            ]
-
-            X_sampled = enriched_Xy[x_columns].copy()
-            y_sampled = enriched_Xy[TARGET].copy()
-            enriched_X = enriched_Xy.drop(columns=TARGET)
-
+    def __cache_and_return_results(
+        self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series,
+        eval_set: Optional[List[tuple]],
+        X_sampled: pd.DataFrame,
+        y_sampled: pd.Series,
+        enriched_X: pd.DataFrame,
+        eval_set_sampled_dict: Dict[int, Tuple],
+    ) -> _SampledDataForMetrics:
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
+        columns_renaming = getattr(self, "fit_columns_renaming", {})
+
         self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
@@ -2160,6 +2148,7 @@ if response.status_code == 200:
         trace_id: str,
         X: pd.DataFrame,
         *,
+        y: Optional[pd.Series] = None,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -2178,8 +2167,14 @@ if response.status_code == 200:
             self.logger.info("Start transform")
 
             validated_X = self._validate_X(X, is_transform=True)
+            if y is not None:
+                validated_y = self._validate_y(validated_X, y)
+                df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set=None)
+            else:
+                validated_y = None
+                df = validated_X
 
-            self.__log_debug_information(validated_X, exclude_features_sources=exclude_features_sources)
+            self.__log_debug_information(validated_X, validated_y, exclude_features_sources=exclude_features_sources)
 
             self.__validate_search_keys(self.search_keys, self.search_id)
 
@@ -2222,16 +2217,16 @@ if response.status_code == 200:
                         self.logger.info(msg)
                         print(msg)
 
-            is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
+            is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
             columns_to_drop = [
-                c for c in validated_X.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
+                c for c in df.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
             ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
                 print(msg)
-                validated_X = validated_X.drop(columns=columns_to_drop)
+                df = df.drop(columns=columns_to_drop)
 
             search_keys = self.search_keys.copy()
             if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
@@ -2240,10 +2235,8 @@ if response.status_code == 200:
                 )
 
             search_keys = self.__prepare_search_keys(
-                validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
+                df, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
             )
-
-            df = validated_X.copy()
 
             df = self.__handle_index_search_keys(df, search_keys)
 
@@ -2340,11 +2333,10 @@ if response.status_code == 200:
                 converter = PostalCodeSearchKeyConverter(postal_code)
                 df = converter.convert(df)
 
-            # generated_features = [f for f in generated_features if f in self.fit_generated_features]
+            meaning_types = {}
+            meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
+            meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-            meaning_types = {col: key.value for col, key in search_keys.items()}
-            for col in features_for_transform:
-                meaning_types[col] = FileColumnMeaningType.FEATURE
             features_not_to_pass = [
                 c
                 for c in df.columns
@@ -2353,13 +2345,12 @@ if response.status_code == 200:
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
             ]
 
-            if add_fit_system_record_id and target_name is not None:
-                reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
+            if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(
                     df,
                     search_keys,
                     SYSTEM_RECORD_ID,
-                    reversed_columns_renaming.get(target_name, target_name),
+                    TARGET,
                     columns_renaming,
                     silent=True,
                 )
