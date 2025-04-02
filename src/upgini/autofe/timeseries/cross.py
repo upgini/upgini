@@ -19,8 +19,8 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
 
     @pydantic_validator("descriptor_indices")
     def validate_descriptor_indices(cls, v):
-        if not v:
-            raise ValueError("descriptor_indices cannot be empty for CrossSeriesInteraction")
+        if isinstance(v, str):
+            return json.loads(v)
         return v
 
     @pydantic_validator("left_descriptor", "right_descriptor", mode="before")
@@ -96,9 +96,9 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         res.update(
             {
                 "interaction_op": self._get_interaction_op_name(),
-                "descriptor_indices": self.descriptor_indices,
-                "left_descriptor": self.left_descriptor,
-                "right_descriptor": self.right_descriptor,
+                "descriptor_indices": json.dumps(self.descriptor_indices),
+                "left_descriptor": json.dumps(self.left_descriptor),
+                "right_descriptor": json.dumps(self.right_descriptor),
             }
         )
         return res

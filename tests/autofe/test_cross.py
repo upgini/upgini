@@ -401,16 +401,45 @@ def test_cross_series_interaction_parse_obj():
     assert add_op is not None
 
     cross = CrossSeriesInteraction(
-        interaction_op=add_op, descriptor_indices=[0], left_descriptor=["temperature"], right_descriptor=["humidity"]
+        interaction_op=add_op,
+        descriptor_indices=[0, 1],
+        left_descriptor=["temperature", "humidity"],
+        right_descriptor=["pressure", "wind"],
     )
 
     cross_dict = cross.get_params()
     parsed_cross = CrossSeriesInteraction.parse_obj(cross_dict)
 
     assert parsed_cross.interaction_op.name == add_op.name
-    assert parsed_cross.descriptor_indices == [0]
-    assert parsed_cross.left_descriptor == ["temperature"]
-    assert parsed_cross.right_descriptor == ["humidity"]
+    assert parsed_cross.descriptor_indices == [0, 1]
+    assert parsed_cross.left_descriptor == ["temperature", "humidity"]
+    assert parsed_cross.right_descriptor == ["pressure", "wind"]
 
     assert cross.to_formula() == parsed_cross.to_formula()
     assert cross.get_hash_component() == parsed_cross.get_hash_component()
+
+
+def test_cross_series_interaction_formula_roundtrip():
+    # Create a cross_mul operator with 4 children (2 descriptors)
+    mul_op = find_op("*")
+    assert mul_op is not None
+
+    cross = CrossSeriesInteraction(
+        interaction_op=mul_op,
+        descriptor_indices=[0, 1],
+        left_descriptor=["temperature", "humidity"],
+        right_descriptor=["pressure", "wind"],
+        offset_size=30,
+    )
+
+    # Test Feature with CrossSeriesInteraction operator
+    feature = Feature(op=cross, children=[Column("date"), Column("category1"), Column("category2"), Column("value")])
+
+    feature_formula = feature.to_formula()
+    recreated_feature = Feature.from_formula(feature_formula)
+
+    # Verify the feature was correctly recreated
+    assert recreated_feature is not None
+    assert recreated_feature.to_formula() == feature_formula
+    assert isinstance(recreated_feature.op, CrossSeriesInteraction)
+    assert recreated_feature.op.interaction_op.name == mul_op.name

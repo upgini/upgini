@@ -85,7 +85,7 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         """
         import re
 
-        offset_regex = f"{base_regex}_offset_(\\d+)([a-zA-Z])"
+        offset_regex = f"{base_regex}_offset_(\\d+)([a-zA-Z])$"
         match = re.match(offset_regex, formula)
 
         if match:
