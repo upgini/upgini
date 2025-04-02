@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import catboost
 import numpy as np
 import pandas as pd
-from catboost import CatBoost, CatBoostClassifier, CatBoostRegressor, Pool
+# from catboost import CatBoost, CatBoostClassifier, CatBoostRegressor, Pool
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
@@ -431,17 +431,20 @@ class EstimatorWrapper:
             # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
             #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
-                params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
-                params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                # params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
-                params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                # params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
-                params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
+                # params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
@@ -451,6 +454,7 @@ class EstimatorWrapper:
                 estimator_copy = deepcopy(estimator)
             kwargs["estimator"] = estimator_copy
             if isinstance(estimator, (CatBoostClassifier, CatBoostRegressor)):
+                
                 if cat_features is not None:
                     for cat_feature in cat_features:
                         if cat_feature not in x.columns:
