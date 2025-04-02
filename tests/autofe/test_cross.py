@@ -6,6 +6,7 @@ from pandas.testing import assert_series_equal
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import CrossSeriesInteraction
 from upgini.autofe.binary import Add, Subtract, Multiply, Divide
+from upgini.autofe.all_operators import find_op
 
 
 def test_cross_series_basic():
@@ -393,3 +394,23 @@ def test_roll_on_different_cross_features():
 
     assert roll_feature3.get_hash() != roll_feature4.get_hash()
     assert roll_feature3.get_display_name() != roll_feature4.get_display_name()
+
+
+def test_cross_series_interaction_parse_obj():
+    add_op = find_op("+")
+    assert add_op is not None
+
+    cross = CrossSeriesInteraction(
+        interaction_op=add_op, descriptor_indices=[0], left_descriptor=["temperature"], right_descriptor=["humidity"]
+    )
+
+    cross_dict = cross.get_params()
+    parsed_cross = CrossSeriesInteraction.parse_obj(cross_dict)
+
+    assert parsed_cross.interaction_op.name == add_op.name
+    assert parsed_cross.descriptor_indices == [0]
+    assert parsed_cross.left_descriptor == ["temperature"]
+    assert parsed_cross.right_descriptor == ["humidity"]
+
+    assert cross.to_formula() == parsed_cross.to_formula()
+    assert cross.get_hash_component() == parsed_cross.get_hash_component()

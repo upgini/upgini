@@ -153,3 +153,14 @@ def test_trend_coef_polyfit_fails():
 
     expected_res_constant = pd.Series([0.0, 0.0, 0.0], name="value")
     assert_series_equal(feature_constant.calculate(df_constant), expected_res_constant)
+
+
+def test_trend_coefficient_parse_obj():
+    trend_coef = TrendCoefficient(offset_size=2, offset_unit="D")
+
+    trend_dict = trend_coef.get_params()
+    parsed_trend = TrendCoefficient.parse_obj(trend_dict)
+
+    assert parsed_trend.offset_size == 2
+    assert parsed_trend.offset_unit == "D"
+    assert parsed_trend.to_formula() == "trend_coef_offset_2D"

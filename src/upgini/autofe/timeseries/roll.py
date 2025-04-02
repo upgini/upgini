@@ -3,6 +3,7 @@ from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
+from upgini.autofe.utils import pydantic_validator
 
 # Roll aggregation functions
 roll_aggregations = {
@@ -12,19 +13,13 @@ roll_aggregations = {
     "iqr": lambda x: x.quantile(0.75) - x.quantile(0.25),
 }
 
-try:
-    from pydantic import field_validator as validator  # V2
-except ImportError:
-    from pydantic import validator  # V1
-
 
 class Roll(TimeSeriesBase, ParametrizedOperator):
     aggregation: str
     window_size: int = 1
     window_unit: str = "D"
 
-    @validator("window_unit")
-    @classmethod
+    @pydantic_validator("window_unit")
     def validate_window_unit(cls, v: str) -> str:
         try:
             pd.tseries.frequencies.to_offset(v)
