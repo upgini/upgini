@@ -701,6 +701,7 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
+        y: Optional[pd.Series] = None,
         *args,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
@@ -765,6 +766,7 @@ class FeaturesEnricher(TransformerMixin):
                 result, _, _ = self.__inner_transform(
                     trace_id,
                     X,
+                    y=y,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
@@ -2276,8 +2278,11 @@ if response.status_code == 200:
             features_for_transform = self._search_task.get_features_for_transform() or []
             if len(features_for_transform) > 0:
                 missing_features_for_transform = [
-                    columns_renaming.get(f) for f in features_for_transform if f not in df.columns
+                    columns_renaming.get(f) or f for f in features_for_transform if f not in df.columns
                 ]
+                if TARGET in missing_features_for_transform:
+                    raise ValidationError(self.bundle.get("missing_target_for_transform"))
+
                 if len(missing_features_for_transform) > 0:
                     raise ValidationError(
                         self.bundle.get("missing_features_for_transform").format(missing_features_for_transform)
