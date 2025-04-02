@@ -49,7 +49,7 @@ def sort_columns(
     target = target_column if isinstance(target_column, pd.Series) else df[target_column]
     target = prepare_target(target, model_task_type)
     sort_dict = get_sort_columns_dict(
-        df[sorted_keys + other_columns], target, sorted_keys, omit_nan=True, sort_all_columns=sort_all_columns
+        df[sorted_keys + other_columns], target, sorted_keys, sort_all_columns=sort_all_columns
     )
     other_columns = [c for c in other_columns if c in sort_dict]
     columns_for_sort = sorted_keys + sorted(other_columns, key=lambda e: sort_dict[e], reverse=True)
@@ -60,7 +60,6 @@ def get_sort_columns_dict(
     df: pd.DataFrame,
     target: pd.Series,
     sorted_keys: List[str],
-    omit_nan: bool,
     n_jobs: Optional[int] = None,
     sort_all_columns: bool = False,
 ) -> Dict[str, Any]:
@@ -78,6 +77,13 @@ def get_sort_columns_dict(
         return {}
 
     df = df[columns_for_sort]
+    df_with_target = pd.concat([df, target], axis=1)
+    # Drop rows where target is NaN
+    df_with_target = df_with_target.loc[~target.isna()]
+    df = df_with_target.iloc[:, :-1]
+    target = df_with_target.iloc[:, -1]
+    df = df.fillna(df.mean())
+    omit_nan = False
     hashes = [hash_series(df[col]) for col in columns_for_sort]
     df = np.asarray(df, dtype=np.float32)
     correlations = get_sort_columns_correlations(df, target, omit_nan, n_jobs)

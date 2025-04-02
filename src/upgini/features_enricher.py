@@ -308,7 +308,8 @@ class FeaturesEnricher(TransformerMixin):
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
-                    self.__prepare_feature_importances(trace_id, x_columns, silent=True)
+                    df = pd.DataFrame(columns=x_columns)
+                    self.__prepare_feature_importances(trace_id, df, silent=True)
                     # TODO validate search_keys with search_keys from file_metadata
                     print(self.bundle.get("search_by_task_id_finish"))
                     self.logger.debug(f"Successfully initialized with search_id: {search_id}")
@@ -1089,7 +1090,7 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, validated_X.columns.to_list(), enriched_shaps)
+                            self._update_shap_values(trace_id, fitting_X, enriched_shaps)
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1257,14 +1258,14 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
-    def _update_shap_values(self, trace_id: str, x_columns: List[str], new_shaps: Dict[str, float]):
+    def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float]):
         renaming = self.fit_columns_renaming or {}
         new_shaps = {
             renaming.get(feature, feature): _round_shap_value(shap)
             for feature, shap in new_shaps.items()
             if feature in self.feature_names_ or renaming.get(feature, feature) in self.feature_names_
         }
-        self.__prepare_feature_importances(trace_id, x_columns, new_shaps)
+        self.__prepare_feature_importances(trace_id, df, new_shaps)
 
         if self.features_info_display_handle is not None:
             try:
@@ -3017,7 +3018,7 @@ if response.status_code == 200:
             msg = self.bundle.get("features_not_generated").format(unused_features_for_generation)
             self.__log_warning(msg)
 
-        self.__prepare_feature_importances(trace_id, validated_X.columns.to_list() + self.fit_generated_features)
+        self.__prepare_feature_importances(trace_id, df)
 
         self.__show_selected_features(self.fit_search_keys)
 
@@ -3792,7 +3793,7 @@ if response.status_code == 200:
         return result_train, result_eval_sets
 
     def __prepare_feature_importances(
-        self, trace_id: str, x_columns: List[str], updated_shaps: Optional[Dict[str, float]] = None, silent=False
+        self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
     ):
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -3802,6 +3803,8 @@ if response.status_code == 200:
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
+
+        df = df.rename(columns=original_names_dict)
 
         self.feature_names_ = []
         self.dropped_client_feature_names_ = []
@@ -3821,7 +3824,7 @@ if response.status_code == 200:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
 
-            is_client_feature = feature_meta.name in x_columns
+            is_client_feature = feature_meta.name in df.columns
 
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
@@ -3841,7 +3844,7 @@ if response.status_code == 200:
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
 
-            df_for_sample = features_df if feature_meta.name in features_df.columns else self.X
+            df_for_sample = features_df if feature_meta.name in features_df.columns else df
             feature_info = FeatureInfo.from_metadata(feature_meta, df_for_sample, is_client_feature)
             features_info.append(feature_info.to_row(self.bundle))
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
