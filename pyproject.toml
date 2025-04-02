@@ -35,10 +35,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-    "catboost>=1.0.3",
+    "lightgbm>=4.6.0",
+    "shap>=0.44.0",
     "fastparquet>=0.8.1",
     "ipywidgets>=8.1.0",
-    "numpy>=1.19.0,<=1.26.4",
+    "numpy>=1.19.0,<3.0.0",
     "pandas>=1.1.0,<3.0.0",
     "pydantic>1.0.0,<3.0.0",
     "pyjwt>=2.8.0",

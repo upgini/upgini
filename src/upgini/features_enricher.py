@@ -4070,7 +4070,10 @@ if response.status_code == 200:
             )
 
         if all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
-            msg = self.bundle.get("unregistered_only_personal_keys")
+            if self.__is_registered:
+                msg = self.bundle.get("only_custom_keys")
+            else:
+                msg = self.bundle.get("unregistered_only_personal_keys")
             self.logger.warning(msg + f" Provided search keys: {search_keys}")
             raise ValidationError(msg)
 

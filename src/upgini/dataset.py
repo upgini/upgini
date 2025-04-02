@@ -388,7 +388,7 @@ class Dataset:  # (pd.DataFrame):
         for col in columns_to_validate:
             self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
             if validate_target and target is not None and col == target:
-                self.data.loc[self.data[target] == np.Inf, f"{col}_is_valid"] = False
+                self.data.loc[self.data[target] == np.inf, f"{col}_is_valid"] = False
 
             if col in mandatory_columns:
                 self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]

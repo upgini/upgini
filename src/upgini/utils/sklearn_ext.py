@@ -9,7 +9,6 @@ from traceback import format_exc
 
 import numpy as np
 import scipy.sparse as sp
-from catboost import CatBoostClassifier, CatBoostRegressor
 from joblib import Parallel, logger
 from scipy.sparse import issparse
 from sklearn import config_context, get_config
@@ -342,6 +341,14 @@ def cross_validate(
         raise e
 
 
+def is_catboost_estimator(estimator):
+    try:
+        from catboost import CatBoostClassifier, CatBoostRegressor
+        return isinstance(estimator, (CatBoostClassifier, CatBoostRegressor))
+    except ImportError:
+        return False
+
+
 def _fit_and_score(
     estimator,
     X,
@@ -497,7 +504,7 @@ def _fit_and_score(
         if y_train is None:
             estimator.fit(X_train, **fit_params)
         else:
-            if isinstance(estimator, (CatBoostClassifier, CatBoostRegressor)):
+            if is_catboost_estimator(estimator):
                 fit_params = fit_params.copy()
                 fit_params["eval_set"] = [(X_test, y_test)]
             estimator.fit(X_train, y_train, **fit_params)

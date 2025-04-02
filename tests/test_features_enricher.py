@@ -172,9 +172,9 @@ def test_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.004 ± 0.024", "-0.012 ± 0.014", "0.011 ± 0.003"],
-            enriched_gini: ["0.010 ± 0.024", "0.002 ± 0.025", "-0.014 ± 0.038"],
-            uplift: [0.013940, 0.014468, -0.025542],
+            baseline_gini: ["-0.002 ± 0.013", "-0.019 ± 0.015", "0.012 ± 0.009"],
+            enriched_gini: ["-0.007 ± 0.022", "0.002 ± 0.032", "-0.021 ± 0.022"],
+            uplift: [-0.005298, 0.020670, -0.033168],
         }
     )
     logging.warning("Expected metrics: ")
@@ -187,11 +187,11 @@ def test_features_enricher(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0048]
+    assert enricher.feature_importances_ == [0.1457]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0048
+    assert first_feature_info[shap_value_header] == 0.1457
 
     # Check that renaming of columns doesn't change the metrics
     train_features.rename(columns={"client_feature": "клиентская фича"}, inplace=True)
@@ -499,9 +499,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.008 ± 0.026", "-0.019 ± 0.009", "-0.009 ± 0.017"],
-            enriched_gini: ["0.009 ± 0.012", "-0.046 ± 0.019", "-0.018 ± 0.023"],
-            uplift: [0.017889, -0.027142, -0.009426],
+            baseline_gini: ["-0.005 ± 0.031", "-0.025 ± 0.002", "-0.037 ± 0.010"],
+            enriched_gini: ["-0.009 ± 0.021", "-0.013 ± 0.032", "-0.023 ± 0.019"],
+            uplift: [-0.003745, 0.011556, 0.014339],
         }
     )
     logging.warning("Expected metrics: ")
@@ -514,12 +514,12 @@ def test_saved_features_enricher(requests_mock: Mocker):
 
     logging.warning(enricher.features_info)
 
-    assert enricher.feature_names_ == ["client_feature", "feature"]
-    assert enricher.feature_importances_ == [0.0091, 0.0056]
+    assert enricher.feature_names_ == ["feature", "client_feature"]
+    assert enricher.feature_importances_ == [0.1053, 0.0908]
     assert len(enricher.features_info) == 2
-    first_feature_info = enricher.features_info.iloc[0]
+    first_feature_info = enricher.features_info.iloc[1]
     assert first_feature_info[feature_name_header] == "client_feature"
-    assert first_feature_info[shap_value_header] == 0.0091
+    assert first_feature_info[shap_value_header] == 0.0908
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -532,9 +532,9 @@ def test_saved_features_enricher(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [10000],
             target_mean_header: [0.049],
-            baseline_gini: ["0.010 ± 0.063"],
-            enriched_gini: ["0.002 ± 0.124"],
-            uplift: [-0.00883],
+            baseline_gini: ["0.006 ± 0.056"],
+            enriched_gini: ["0.024 ± 0.102"],
+            uplift: [0.017833],
         }
     )
     logging.warning("Expected metrics: ")
@@ -641,9 +641,9 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.007 ± 0.016", "0.004 ± 0.006", "0.011 ± 0.017"],
-            enriched_gini: ["0.016 ± 0.029", "0.022 ± 0.010", "-0.030 ± 0.011"],
-            uplift: [0.009464, 0.017783, -0.041145],
+            baseline_gini: ["0.001 ± 0.018", "-0.011 ± 0.012", "0.005 ± 0.011"],
+            enriched_gini: ["0.012 ± 0.035", "-0.020 ± 0.018", "-0.026 ± 0.006"],
+            uplift: [0.0111281, -0.009076, -0.030793],
         }
     )
     logging.warning("Expected metrics: ")
@@ -656,11 +656,11 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0151]
+    assert enricher.feature_importances_ == [0.1445]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0151
+    assert first_feature_info[shap_value_header] == 0.1445
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -787,9 +787,9 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.010 ± 0.020", "0.012 ± 0.013", "-0.038 ± 0.016"],
-            uplift: [0.011260, 0.009444, -0.044067],
+            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
+            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
+            uplift: [0.017388, -0.015919, -0.027105],
         }
     )
     logging.warning("Expected metrics: ")
@@ -802,11 +802,11 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0098]
+    assert enricher.feature_importances_ == [0.1446]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0098
+    assert first_feature_info[shap_value_header] == 0.1446
 
     enricher.transform(train_features)
 
@@ -908,9 +908,9 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.010 ± 0.020", "0.012 ± 0.013", "-0.038 ± 0.016"],
-            uplift: [0.011260, 0.009444, -0.044067],
+            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
+            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
+            uplift: [0.017388, -0.015919, -0.027105],
         }
     )
     logging.warning("Expected metrics: ")
@@ -923,11 +923,11 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0098]
+    assert enricher.feature_importances_ == [0.1446]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0098
+    assert first_feature_info[shap_value_header] == 0.1446
 
 
 def test_features_enricher_with_index_column(requests_mock: Mocker):
@@ -1027,9 +1027,9 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.001 ± 0.019", "0.002 ± 0.006", "0.006 ± 0.013"],
-            enriched_gini: ["0.010 ± 0.020", "0.012 ± 0.013", "-0.038 ± 0.016"],
-            uplift: [0.011260, 0.009444, -0.044067],
+            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
+            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
+            uplift: [0.017388, -0.015919, -0.027105],
         }
     )
     logging.warning("Expected metrics: ")
@@ -1042,11 +1042,11 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.0098]
+    assert enricher.feature_importances_ == [0.1446]
     assert len(enricher.features_info) == 1
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.0098
+    assert first_feature_info[shap_value_header] == 0.1446
 
 
 def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
@@ -1148,9 +1148,9 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
             segment_header: [train_segment],
             rows_header: [5319],
             target_mean_header: [0.6364],
-            baseline_gini: ["0.007 ± 0.038"],
-            enriched_gini: ["0.004 ± 0.033"],
-            uplift: [-0.002467],
+            baseline_gini: ["0.012 ± 0.019"],
+            enriched_gini: ["0.004 ± 0.045"],
+            uplift: [-0.008026],
         }
     )
     logging.warning("Expected metrics: ")
@@ -1165,11 +1165,11 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     assert enricher.feature_names_ == ["f_feature123"]
-    assert enricher.feature_importances_ == [0.0109]
+    assert enricher.feature_importances_ == [0.1966]
     assert len(features_info) == 1
     first_feature_info = features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "f_feature123"
-    assert first_feature_info[shap_value_header] == 0.0109
+    assert first_feature_info[shap_value_header] == 0.1966
     assert first_feature_info[hitrate_header] == 99.0
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1558,7 +1558,7 @@ def test_filter_by_importance(requests_mock: Mocker):
             segment_header: ["Train", "Eval 1", "Eval 2"],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+            baseline_gini: ["-0.015 ± 0.016", "-0.022 ± 0.009", "0.013 ± 0.025"],
         }
     )
 
@@ -1676,7 +1676,7 @@ def test_filter_by_max_features(requests_mock: Mocker):
             segment_header: ["Train", "Eval 1", "Eval 2"],
             rows_header: [9999, 999, 1000],
             target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.006 ± 0.011", "0.009 ± 0.026"],
+            baseline_gini: ["-0.015 ± 0.016", "-0.022 ± 0.009", "0.013 ± 0.025"],
         }
     )
     assert metrics is not None
@@ -2048,9 +2048,9 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.007 ± 0.019", "-0.014 ± 0.016", "0.005 ± 0.022"],
-            enriched_gini: ["0.004 ± 0.017", "0.014 ± 0.028", "-0.001 ± 0.017"],
-            uplift: [-0.002607, 0.027826, -0.005757],
+            baseline_gini: ["-0.009 ± 0.031", "0.005 ± 0.015", "-0.043 ± 0.020"],
+            enriched_gini: ["-0.011 ± 0.032", "-0.011 ± 0.025", "-0.056 ± 0.042"],
+            uplift: [-0.001343, -0.01575, -0.012459],
         }
     )
     logging.warning("Expected metrics: ")
@@ -2205,9 +2205,9 @@ def test_imbalanced_dataset(requests_mock: Mocker):
 
         assert metrics.loc[0, "Rows"] == 8000
         assert metrics.loc[0, "Mean target"] == 0.125
-        assert metrics.loc[0, "Baseline GINI"] == "-0.002 ± 0.009"
-        assert metrics.loc[0, "Enriched GINI"] == "0.036 ± 0.027"
-        assert metrics.loc[0, "Uplift"] == 0.038466220741400735
+        assert metrics.loc[0, "Baseline GINI"] == "-0.026 ± 0.019"
+        assert metrics.loc[0, "Enriched GINI"] == "0.017 ± 0.027"
+        assert metrics.loc[0, "Uplift"] == 0.04281814180325569
     finally:
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
@@ -2868,9 +2868,9 @@ def test_select_features(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.004 ± 0.024", "-0.012 ± 0.014", "0.011 ± 0.003"],
-            enriched_gini: ["0.010 ± 0.024", "0.002 ± 0.025", "-0.014 ± 0.038"],
-            uplift: [0.013940, 0.014468, -0.025542],
+            baseline_gini: ["-0.002 ± 0.013", "-0.019 ± 0.015", "0.012 ± 0.009"],
+            enriched_gini: ["-0.007 ± 0.022", "0.002 ± 0.032", "-0.021 ± 0.022"],
+            uplift: [-0.005298, 0.02067, -0.033168],
         }
     )
     logging.warning("Expected metrics: ")
@@ -2908,7 +2908,7 @@ def test_select_features(requests_mock: Mocker):
             segment_header: [train_segment, eval_1_segment, eval_2_segment],
             rows_header: [10000, 1000, 1000],
             target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: ["0.006 ± 0.019", "0.037 ± 0.026", "-0.021 ± 0.020"],
+            enriched_gini: ["-0.022 ± 0.011", "-0.003 ± 0.025", "-0.057 ± 0.023"],
         }
     )
     logging.warning("Expected metrics: ")
