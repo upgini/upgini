@@ -164,3 +164,17 @@ def test_trend_coefficient_parse_obj():
     assert parsed_trend.offset_size == 2
     assert parsed_trend.offset_unit == "D"
     assert parsed_trend.to_formula() == "trend_coef_offset_2D"
+
+
+def test_trend_coefficient_formula_roundtrip():
+    # Test that a TrendCoefficient operator can be serialized to a formula and parsed back
+    original_trend = TrendCoefficient(offset_size=3, offset_unit="W")
+
+    # Create a feature using this operator
+    feature = Feature(op=original_trend, children=[Column("date"), Column("group"), Column("value")])
+
+    formula = feature.to_formula()
+    restored_feature = Feature.from_formula(formula)
+    assert restored_feature.op.to_formula() == original_trend.to_formula()
+    assert restored_feature.op.offset_size == original_trend.offset_size
+    assert restored_feature.op.offset_unit == original_trend.offset_unit
