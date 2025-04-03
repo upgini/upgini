@@ -1826,12 +1826,32 @@ class FeaturesEnricher(TransformerMixin):
         # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
         # can differs from it
         fit_features = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
-        enriched_Xy, enriched_eval_sets = self.__enrich(
+
+        # Pre-process features if we need to drop outliers
+        if rows_to_drop is not None:
+            self.logger.info(f"Before dropping target outliers size: {len(fit_features)}")
+            fit_features = fit_features[
+                ~fit_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
+            ]
+            self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
+
+        enriched_eval_sets = {}
+        enriched_Xy = self.__enrich(
             self.df_with_original_index,
             fit_features,
-            rows_to_drop=rows_to_drop,
             drop_system_record_id=False,
         )
+
+        # Handle eval sets extraction based on EVAL_SET_INDEX
+        if EVAL_SET_INDEX in enriched_Xy.columns:
+            eval_set_indices = list(enriched_Xy[EVAL_SET_INDEX].unique())
+            if 0 in eval_set_indices:
+                eval_set_indices.remove(0)
+            for eval_set_index in eval_set_indices:
+                enriched_eval_sets[eval_set_index] = enriched_Xy.loc[
+                    enriched_Xy[EVAL_SET_INDEX] == eval_set_index
+                ].copy()
+            enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
         x_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
         X_sampled = enriched_Xy[x_columns].copy()
@@ -2160,7 +2180,6 @@ if response.status_code == 200:
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         add_fit_system_record_id: bool = False,
-        target_name: Optional[str] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -2481,21 +2500,15 @@ if response.status_code == 200:
             if progress_callback is not None:
                 progress_callback(progress)
 
-            def enrich():
-                res, _ = self.__enrich(
-                    df_with_original_index,
-                    validation_task.get_all_validation_raw_features(trace_id, metrics_calculation),
-                    validated_X,
-                    is_transform=True,
-                )
-                return res
-
             if not silent_mode:
                 print(self.bundle.get("transform_start"))
-                # with Spinner():
-                result = enrich()
-            else:
-                result = enrich()
+
+            result = self.__enrich(
+                df_with_original_index,
+                validation_task.get_all_validation_raw_features(trace_id, metrics_calculation),
+                validated_X,
+                is_transform=True,
+            )
 
             selecting_columns = [
                 c
@@ -3712,15 +3725,14 @@ if response.status_code == 200:
         result_features: Optional[pd.DataFrame],
         X: Optional[pd.DataFrame] = None,
         is_transform=False,
-        rows_to_drop: Optional[pd.DataFrame] = None,
         drop_system_record_id=True,
-    ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
+    ) -> pd.DataFrame:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError(self.bundle.get("features_wasnt_returned"))
         result_features = (
             result_features.drop(columns=EVAL_SET_INDEX)
-            if EVAL_SET_INDEX in result_features.columns
+            if EVAL_SET_INDEX in result_features.columns and is_transform
             else result_features
         )
 
@@ -3747,26 +3759,7 @@ if response.status_code == 200:
         result_features = result_features.set_index(original_index_name or DEFAULT_INDEX)
         result_features.index.name = original_index_name
 
-        if rows_to_drop is not None:
-            self.logger.info(f"Before dropping target outliers size: {len(result_features)}")
-            result_features = result_features[
-                ~result_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
-            ]
-            self.logger.info(f"After dropping target outliers size: {len(result_features)}")
-
-        result_eval_sets = {}
-        if not is_transform and EVAL_SET_INDEX in result_features.columns:
-            result_train_features = result_features.loc[result_features[EVAL_SET_INDEX] == 0].copy()
-            eval_set_indices = list(result_features[EVAL_SET_INDEX].unique())
-            if 0 in eval_set_indices:
-                eval_set_indices.remove(0)
-            for eval_set_index in eval_set_indices:
-                result_eval_sets[eval_set_index] = result_features.loc[
-                    result_features[EVAL_SET_INDEX] == eval_set_index
-                ].copy()
-            result_train_features = result_train_features.drop(columns=EVAL_SET_INDEX)
-        else:
-            result_train_features = result_features
+        result_train = result_features
 
         if is_transform:
             index_name = X.index.name
@@ -3774,23 +3767,17 @@ if response.status_code == 200:
             if index_name in X.columns:
                 renamed_column = f"{index_name}_renamed"
                 X = X.rename(columns={index_name: renamed_column})
-            result_train = pd.concat([X.reset_index(), result_train_features.reset_index(drop=True)], axis=1).set_index(
+            result_train = pd.concat([X.reset_index(), result_features.reset_index(drop=True)], axis=1).set_index(
                 index_name or DEFAULT_INDEX
             )
             result_train.index.name = index_name
             if renamed_column is not None:
                 result_train = result_train.rename(columns={renamed_column: index_name})
-        else:
-            result_train = result_train_features
 
         if drop_system_record_id:
             result_train = result_train.drop(columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore")
-            for eval_set_index in result_eval_sets.keys():
-                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(
-                    columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore"
-                )
 
-        return result_train, result_eval_sets
+        return result_train
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
