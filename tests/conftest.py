@@ -9,6 +9,20 @@ from upgini.ads import FileColumnMeaningType
 np.random.seed(42)
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-metrics",
+        action="store_true",
+        default=False,
+        help="Force update metrics",
+    )
+
+
+@pytest.fixture
+def update_metrics_flag(request):
+    return request.config.getoption("--update-metrics") or False
+
+
 @pytest.fixture
 def etalon():
     d = 1577836800000

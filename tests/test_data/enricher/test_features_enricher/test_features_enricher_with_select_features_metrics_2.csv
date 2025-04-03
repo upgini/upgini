@@ -1,0 +1,4 @@
+Dataset type,Rows,Mean target,Enriched GINI
+Train,10000,0.5044,-0.016 ± 0.017
+Eval 1,1000,0.487,-0.017 ± 0.025
+Eval 2,1000,0.486,-0.051 ± 0.016

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import inspect
 import logging
 import re
 from collections import defaultdict
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -26,11 +26,8 @@ except ImportError:
     from sklearn.metrics._scorer import SCORERS
 
     available_scorers = SCORERS
-from sklearn.metrics._regression import (
-    _check_reg_targets,
-    check_consistent_length,
-)
 from sklearn.metrics import mean_squared_error
+from sklearn.metrics._regression import _check_reg_targets, check_consistent_length
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
@@ -102,37 +99,43 @@ LIGHTGBM_PARAMS = {
 }
 
 LIGHTGBM_REGRESSION_PARAMS = {
-  "random_state": DEFAULT_RANDOM_STATE,
-  "n_estimators": 275,
-  "max_depth": 5,
-  "max_cat_threshold": 80,
-  "min_data_per_group": 25,
-  "cat_l2": 10,
-  "cat_smooth": 12,
-  "learning_rate": 0.05,
-  "feature_fraction": 1.0,
-  "min_sum_hessian_in_leaf": 0.01,
-  "objective": "huber",
-  "verbosity": 0,
+    "random_state": DEFAULT_RANDOM_STATE,
+    "deterministic": True,
+    "min_gain_to_split": 0.001,
+    "n_estimators": 275,
+    "max_depth": 5,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 25,
+    "cat_l2": 10,
+    "cat_smooth": 12,
+    "learning_rate": 0.05,
+    "feature_fraction": 1.0,
+    "min_sum_hessian_in_leaf": 0.01,
+    "objective": "huber",
+    "verbosity": -1,
 }
 
 LIGHTGBM_MULTICLASS_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
+    "deterministic": True,
+    "min_gain_to_split": 0.001,
     "n_estimators": 275,
     "max_depth": 3,
     "max_cat_threshold": 80,
     "min_data_per_group": 25,
     "cat_l2": 10,
     "cat_smooth": 12,
-    "learning_rate": 0.25,              # CatBoost 0.25
+    "learning_rate": 0.25,  # CatBoost 0.25
     "min_sum_hessian_in_leaf": 0.01,
-    "objective": "multiclass",
-    "class_weight": "balanced",
-    "verbosity": 0,
+    "objective": "softmax",
+    "class_weight": "balanced",  # TODO pass dict with weights for each class
+    "verbosity": -1,
 }
 
 LIGHTGBM_BINARY_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
+    "deterministic": True,
+    "min_gain_to_split": 0.001,
     "n_estimators": 275,
     "max_depth": 5,
     "max_cat_threshold": 80,
@@ -143,8 +146,8 @@ LIGHTGBM_BINARY_PARAMS = {
     "feature_fraction": 1.0,
     "min_sum_hessian_in_leaf": 0.01,
     "objective": "binary",
-    "class_weight": "balanced",
-    "verbosity": 0,
+    "class_weight": "balanced",  # TODO pass dict with weights for each class
+    "verbosity": -1,
 }
 
 N_FOLDS = 5
@@ -266,6 +269,7 @@ SUPPORTED_CATBOOST_METRICS = {
 def is_catboost_estimator(estimator):
     try:
         from catboost import CatBoostClassifier, CatBoostRegressor
+
         return isinstance(estimator, (CatBoostClassifier, CatBoostRegressor))
     except ImportError:
         return False
@@ -487,26 +491,15 @@ class EstimatorWrapper:
         }
         if estimator is None:
             params = {}
-            # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
-            #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
-                # params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
-                # params = _get_add_params(params, add_params)
-                # estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
                 params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                # params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
-                # params = _get_add_params(params, add_params)
-                # estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
                 params = _get_add_params(params, LIGHTGBM_BINARY_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                # params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
-                # params = _get_add_params(params, add_params)
-                # estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
                 params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
@@ -519,20 +512,19 @@ class EstimatorWrapper:
                 estimator_copy = deepcopy(estimator)
             kwargs["estimator"] = estimator_copy
             if is_catboost_estimator(estimator):
-                params["has_time"] = has_date
                 if cat_features is not None:
                     for cat_feature in cat_features:
                         if cat_feature not in x.columns:
                             logger.error(
                                 f"Client cat_feature `{cat_feature}` not found in x columns: {x.columns.to_list()}"
                             )
-                    estimator_copy.set_params(
-                        cat_features=cat_features
-                    )
+                    estimator_copy.set_params(cat_features=cat_features, has_time=has_date)
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
                     estimator = LightGBMWrapper(**kwargs)
+                elif is_catboost_estimator(estimator):
+                    estimator = CatBoostWrapper(**kwargs)
                 else:
                     logger.warning(
                         f"Unexpected estimator is used for metrics: {estimator}. "
@@ -576,8 +568,9 @@ class CatBoostWrapper(EstimatorWrapper):
         x, y, groups, params = super()._prepare_to_fit(x, y)
 
         # Find embeddings
-        from catboost import CatBoostClassifier
         import catboost
+        from catboost import CatBoostClassifier
+
         if hasattr(CatBoostClassifier, "get_embedding_feature_indices"):
             emb_pattern = r"(.+)_emb\d+"
             self.emb_features = [c for c in x.columns if re.match(emb_pattern, c) and is_numeric_dtype(x[c])]
@@ -701,6 +694,7 @@ class CatBoostWrapper(EstimatorWrapper):
     def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
         try:
             from catboost import Pool
+
             # Create Pool for fold data, if need (for example, when categorical features are present)
             fold_pool = Pool(
                 x,
@@ -757,14 +751,12 @@ class LightGBMWrapper(EstimatorWrapper):
         self.cat_features = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
-        x, y, groups, params = super()._prepare_to_fit(x, y)
-        if self.target_type == ModelTaskType.MULTICLASS:
-            params["num_class"] = y.nunique()
+        x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
         self.cat_features = _get_cat_features(x)
         x = fill_na_cat_features(x, self.cat_features)
         for feature in self.cat_features:
             x[feature] = x[feature].astype("category").cat.codes
-        if not is_numeric_dtype(y):
+        if not is_numeric_dtype(y_numpy):
             y = correct_string_target(y)
 
         return x, y, groups, params
@@ -781,8 +773,8 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
         try:
-            import shap
             import lightgbm as lgb
+            import shap
 
             if not isinstance(estimator, (lgb.LGBMRegressor, lgb.LGBMClassifier)):
                 return None

@@ -64,6 +64,10 @@ SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0
 pd.set_option("mode.chained_assignment", "raise")
 pd.set_option("display.max_columns", 1000)
+FIXTURE_DIR = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    "test_data/enricher/",
+)
 
 
 def test_search_keys_validation(requests_mock: Mocker):
@@ -83,7 +87,7 @@ def test_search_keys_validation(requests_mock: Mocker):
         FeaturesEnricher(search_keys={"postal_code": SearchKey.POSTAL_CODE}, endpoint=url, logs_enabled=False)
 
 
-def test_features_enricher(requests_mock: Mocker):
+def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -167,31 +171,29 @@ def test_features_enricher(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics()
 
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.002 ± 0.013", "-0.019 ± 0.015", "0.012 ± 0.009"],
-            enriched_gini: ["-0.007 ± 0.022", "0.002 ± 0.032", "-0.021 ± 0.022"],
-            uplift: [-0.005298, 0.020670, -0.033168],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-    logging.warning(enricher.features_info)
+    if update_metrics_flag:
+        metrics.to_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher.csv"), index=False)
+
+    expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher.csv"))
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.1457]
-    assert len(enricher.features_info) == 1
-    first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.1457
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv"), index=False
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
     # Check that renaming of columns doesn't change the metrics
     train_features.rename(columns={"client_feature": "клиентская фича"}, inplace=True)
@@ -388,7 +390,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
         Dataset.MIN_ROWS_COUNT = min_rows_count
 
 
-def test_saved_features_enricher(requests_mock: Mocker):
+def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     if pd.__version__ >= "2.2.0":
@@ -494,32 +496,31 @@ def test_saved_features_enricher(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
     )
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.005 ± 0.031", "-0.025 ± 0.002", "-0.037 ± 0.010"],
-            enriched_gini: ["-0.009 ± 0.021", "-0.013 ± 0.032", "-0.023 ± 0.019"],
-            uplift: [-0.003745, 0.011556, 0.014339],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"), index=False
+        )
+
+    expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"))
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    logging.warning(enricher.features_info)
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv"),
+            index=False,
+        )
 
-    assert enricher.feature_names_ == ["feature", "client_feature"]
-    assert enricher.feature_importances_ == [0.1053, 0.0908]
-    assert len(enricher.features_info) == 2
-    first_feature_info = enricher.features_info.iloc[1]
-    assert first_feature_info[feature_name_header] == "client_feature"
-    assert first_feature_info[shap_value_header] == 0.0908
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
     # Check imbalanced target metrics
     random = np.random.RandomState(42)
@@ -527,26 +528,22 @@ def test_saved_features_enricher(requests_mock: Mocker):
     train_target.loc[train_random_indices] = 0
 
     metrics = enricher.calculate_metrics(train_features, train_target)
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment],
-            rows_header: [10000],
-            target_mean_header: [0.049],
-            baseline_gini: ["0.006 ± 0.056"],
-            enriched_gini: ["0.024 ± 0.102"],
-            uplift: [0.017833],
-        }
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_imbalanced_target.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_imbalanced_target.csv")
     )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
-def test_features_enricher_with_demo_key(requests_mock: Mocker):
+def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -636,31 +633,34 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker):
 
     metrics = enricher.calculate_metrics()
 
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["0.001 ± 0.018", "-0.011 ± 0.012", "0.005 ± 0.011"],
-            enriched_gini: ["0.012 ± 0.035", "-0.020 ± 0.018", "-0.026 ± 0.006"],
-            uplift: [0.0111281, -0.009076, -0.030793],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-    logging.warning(enricher.features_info)
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_metrics.csv"),
+            index=False,
+        )
 
-    assert metrics is not None
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.1445]
-    assert len(enricher.features_info) == 1
-    first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.1445
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv"),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
 
 def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
@@ -692,7 +692,7 @@ def test_features_enricher_with_diff_size_xy(requests_mock: Mocker):
         enricher.fit(train_features, train_target, [(eval1_features, eval1_target.head(500))])
 
 
-def test_features_enricher_with_numpy(requests_mock: Mocker):
+def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -782,36 +782,41 @@ def test_features_enricher_with_numpy(requests_mock: Mocker):
     assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics()
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [9999, 999, 1000],
-            target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
-            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
-            uplift: [0.017388, -0.015919, -0.027105],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-    logging.warning(enricher.features_info)
-
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_metrics.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.1446]
-    assert len(enricher.features_info) == 1
-    first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.1446
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv"),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
     enricher.transform(train_features)
 
 
-def test_features_enricher_with_named_index(requests_mock: Mocker):
+def test_features_enricher_with_named_index(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -903,34 +908,42 @@ def test_features_enricher_with_named_index(requests_mock: Mocker):
     assert enriched_train_features.index.name == "custom_index_name"
 
     metrics = enricher.calculate_metrics()
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [9999, 999, 1000],
-            target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
-            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
-            uplift: [0.017388, -0.015919, -0.027105],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-    logging.warning(enricher.features_info)
 
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_metrics.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.1446]
-    assert len(enricher.features_info) == 1
-    first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.1446
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv"
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
 
-def test_features_enricher_with_index_column(requests_mock: Mocker):
+def test_features_enricher_with_index_column(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -1022,34 +1035,41 @@ def test_features_enricher_with_index_column(requests_mock: Mocker):
     assert "index" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [9999, 999, 1000],
-            target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["0.001 ± 0.018", "-0.010 ± 0.012", "0.005 ± 0.011"],
-            enriched_gini: ["0.018 ± 0.024", "-0.026 ± 0.007", "-0.022 ± 0.011"],
-            uplift: [0.017388, -0.015919, -0.027105],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-    logging.warning(enricher.features_info)
-
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_metrics.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [0.1446]
-    assert len(enricher.features_info) == 1
-    first_feature_info = enricher.features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "feature"
-    assert first_feature_info[shap_value_header] == 0.1446
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv"
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
 
-def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
+def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     mock_default_requests(requests_mock, url)
@@ -1143,34 +1163,42 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker):
     )
 
     metrics = enricher.calculate_metrics()
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment],
-            rows_header: [5319],
-            target_mean_header: [0.6364],
-            baseline_gini: ["0.012 ± 0.019"],
-            enriched_gini: ["0.004 ± 0.045"],
-            uplift: [-0.008026],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-
-    features_info = enricher.get_features_info()
-    logging.warning(features_info)
-
     assert metrics is not None
+    features_info = enricher.get_features_info()
+    assert features_info is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_complex_feature_names_metrics.csv"
+            ),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_complex_feature_names_metrics.csv"
+        )
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
-    assert enricher.feature_names_ == ["f_feature123"]
-    assert enricher.feature_importances_ == [0.1966]
-    assert len(features_info) == 1
-    first_feature_info = features_info.iloc[0]
-    assert first_feature_info[feature_name_header] == "f_feature123"
-    assert first_feature_info[shap_value_header] == 0.1966
-    assert first_feature_info[hitrate_header] == 99.0
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv",
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv"
+        )
+    )
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
     mock_validation_progress(requests_mock, url, validation_search_task_id)
@@ -1910,7 +1938,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     assert_frame_equal(eval2_features, enriched_eval_X_2[eval2_features.columns])
 
 
-def test_features_enricher_with_datetime(requests_mock: Mocker):
+def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -2043,26 +2071,22 @@ def test_features_enricher_with_datetime(requests_mock: Mocker):
     assert len(first_feature_info["Value preview"]) > 0 and len(first_feature_info["Value preview"]) < 30
 
     metrics = enricher.calculate_metrics()
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.009 ± 0.031", "0.005 ± 0.015", "-0.043 ± 0.020"],
-            enriched_gini: ["-0.011 ± 0.032", "-0.011 ± 0.025", "-0.056 ± 0.042"],
-            uplift: [-0.001343, -0.01575, -0.012459],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_datetime_metrics.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_datetime_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
-def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
+def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
@@ -2098,7 +2122,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
 
     expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
 
-    def test(n_shuffles: int):
+    def test(n_shuffles: int, expected_df: pd.DataFrame):
         train_df = df.head(10000)
         for _ in range(n_shuffles):
             train_df = train_df.sample(frac=1).reset_index(drop=True)
@@ -2122,18 +2146,19 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker):
             pass
 
         actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
-        # actual_result_df.to_parquet(expected_result_path)
-        # expected_result_df = actual_result_df
-        assert_frame_equal(actual_result_df, expected_result_df)
+        if update_metrics_flag:
+            actual_result_df.to_parquet(expected_result_path)
+            expected_df = actual_result_df
+        assert_frame_equal(actual_result_df, expected_df)
 
     try:
         for i in range(5):
-            test(i)
+            test(i, expected_result_df)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
 
 
-def test_imbalanced_dataset(requests_mock: Mocker):
+def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     pd.set_option("display.max_columns", 1000)
     base_dir = os.path.dirname(os.path.realpath(__file__))
     url = "http://fake_url2"
@@ -2200,19 +2225,27 @@ def test_imbalanced_dataset(requests_mock: Mocker):
         enricher.fit(train_features, train_target, calculate_metrics=False, select_features=False)
 
         metrics = enricher.calculate_metrics()
+        assert metrics is not None
 
-        logging.warning(metrics)
+        if update_metrics_flag:
+            metrics.to_csv(
+                os.path.join(
+                    FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv"
+                ),
+                index=False,
+            )
 
-        assert metrics.loc[0, "Rows"] == 8000
-        assert metrics.loc[0, "Mean target"] == 0.125
-        assert metrics.loc[0, "Baseline GINI"] == "-0.026 ± 0.019"
-        assert metrics.loc[0, "Enriched GINI"] == "0.017 ± 0.027"
-        assert metrics.loc[0, "Uplift"] == 0.04281814180325569
+        expected_metrics = pd.read_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv"
+            )
+        )
+        assert_frame_equal(expected_metrics, metrics, atol=1e-6)
     finally:
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
 
-def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
+def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
 
@@ -2259,7 +2292,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
         expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
         expected_result_df["rep_date_f5d6bb"] = expected_result_df["rep_date_f5d6bb"].astype("Int64")
 
-        def test(n_shuffles: int):
+        def test(n_shuffles: int, expected_df: pd.DataFrame):
             train_df = initial_train_df.copy()
             for _ in range(n_shuffles):
                 train_df = initial_train_df.sample(frac=1).reset_index(drop=True)
@@ -2286,13 +2319,14 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker):
             actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
             actual_result_df["rep_date_f5d6bb"] = actual_result_df["rep_date_f5d6bb"].astype("Int64")
 
-            # actual_result_df.to_parquet(expected_result_path)
-            # expected_result_df = actual_result_df
-            assert_frame_equal(actual_result_df, expected_result_df)
+            if update_metrics_flag:
+                actual_result_df.to_parquet(expected_result_path)
+                expected_df = actual_result_df
+            assert_frame_equal(actual_result_df, expected_df)
 
         for i in range(5):
             print(f"Run {i} iteration")
-            test(i)
+            test(i, expected_result_df)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
         Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
@@ -2774,7 +2808,7 @@ def test_multikey_metrics_without_external_features():
     pass
 
 
-def test_select_features(requests_mock: Mocker):
+def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
 
     path_to_mock_features = os.path.join(
@@ -2862,23 +2896,18 @@ def test_select_features(requests_mock: Mocker):
     assert enriched_train_features.shape == (10000, 6)
 
     metrics = enricher.calculate_metrics()
-
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            baseline_gini: ["-0.002 ± 0.013", "-0.019 ± 0.015", "0.012 ± 0.009"],
-            enriched_gini: ["-0.007 ± 0.022", "0.002 ± 0.032", "-0.021 ± 0.022"],
-            uplift: [-0.005298, 0.02067, -0.033168],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics.csv"),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     enricher = FeaturesEnricher(
@@ -2902,21 +2931,20 @@ def test_select_features(requests_mock: Mocker):
     assert "client_feature" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()
-
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: [train_segment, eval_1_segment, eval_2_segment],
-            rows_header: [10000, 1000, 1000],
-            target_mean_header: [0.5044, 0.487, 0.486],
-            enriched_gini: ["-0.022 ± 0.011", "-0.003 ± 0.025", "-0.057 ± 0.023"],
-        }
-    )
-    logging.warning("Expected metrics: ")
-    logging.warning(expected_metrics)
-    logging.warning("Actual metrics: ")
-    logging.warning(metrics)
-
     assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics_2.csv"
+            ),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics_2.csv")
+    )
+
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 

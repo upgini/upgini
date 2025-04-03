@@ -1,0 +1,3 @@
+Dataset type,Rows,Mean target,Baseline GINI
+Train,28000,0.8825,0.481 ± 0.006
+Eval 1,2505,0.8854,0.452 ± 0.008

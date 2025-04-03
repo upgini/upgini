@@ -1,0 +1,4 @@
+Dataset type,Rows,Mean target,Baseline mean_absolute_error,Enriched mean_absolute_error,Uplift
+Train,500,0.51,0.496 ± 0.040,0.468 ± 0.070,0.028000000000000025
+Eval 1,250,0.452,0.494 ± 0.016,0.515 ± 0.015,-0.021600000000000008
+Eval 2,250,0.536,0.491 ± 0.017,0.490 ± 0.012,0.0007999999999999674
