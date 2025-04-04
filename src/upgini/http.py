@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import jwt
+
 # import pandas as pd
 import requests
 from pydantic import BaseModel
@@ -342,7 +343,9 @@ class _RestClient:
         else:
             return self._syncronized_refresh_access_token()
 
-    def _with_unauth_retry(self, request, try_number: int = 0, need_connection_retry: bool = True):
+    def _with_unauth_retry(
+        self, request, try_number: int = 0, need_connection_retry: bool = True, silent: bool = False
+    ):
         try:
             return request()
         except RequestException as e:
@@ -373,8 +376,9 @@ class _RestClient:
             elif "more than one concurrent search request" in e.message.lower():
                 raise ValidationError(bundle.get("concurrent_request"))
             else:
-                print(e)
-                show_status_error()
+                if not silent:
+                    print(e)
+                    show_status_error()
                 raise e
 
     @staticmethod
@@ -706,6 +710,7 @@ class _RestClient:
                     silent=True,
                 ),
                 need_connection_retry=False,
+                silent=True,
             )
         except Exception:
             self.send_log_event_unauth(log_event)
@@ -716,7 +721,7 @@ class _RestClient:
         try:
             requests.post(
                 url=urljoin(_RestClient.PROD_BACKEND_URL, api_path),
-                json=log_event.dict(exclude_none=True),
+                json=log_event.model_dump(exclude_none=True),
                 headers=_RestClient._get_base_headers(content_type="application/json"),
             )
         except Exception:

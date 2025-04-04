@@ -39,6 +39,11 @@ def sort_columns(
     sorted_keys = sorted(search_keys.keys(), key=lambda x: str(search_keys.get(x)))
     sorted_keys = [k for k in sorted_keys if k in df.columns and k not in exclude_columns]
 
+    duplicate_names = df.columns[df.columns.duplicated()].unique()
+    if len(duplicate_names) > 0:
+        logger.warning(f"WARNING: Found columns with duplicate names: {list(duplicate_names)}")
+        df = df[list(set(df.columns))]
+
     other_columns = sorted(
         [
             c

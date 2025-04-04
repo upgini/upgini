@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import logging
 import re
+import warnings
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -127,8 +128,11 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "cat_smooth": 12,
     "learning_rate": 0.25,  # CatBoost 0.25
     "min_sum_hessian_in_leaf": 0.01,
-    "objective": "softmax",
     "class_weight": "balanced",  # TODO pass dict with weights for each class
+    "objective": "multiclass",
+    "use_quantized_grad": "true",
+    "num_grad_quant_bins": "8",
+    "stochastic_rounding": "true",
     "verbosity": -1,
 }
 
@@ -356,7 +360,7 @@ class EstimatorWrapper:
         self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
 
-    def _remove_empty_target_rows(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+    def _remove_empty_target_rows(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray]:
         joined = pd.concat([x, y], axis=1)
         joined = joined[joined[y.name].notna()]
         joined = joined.reset_index(drop=True)
@@ -410,7 +414,10 @@ class EstimatorWrapper:
             for estimator, split in zip(self.cv_estimators, splits):
                 _, validation_idx = split
                 cv_x = x.iloc[validation_idx]
-                cv_y = y[validation_idx]
+                if isinstance(y, pd.Series):
+                    cv_y = y.iloc[validation_idx]
+                else:
+                    cv_y = y[validation_idx]
                 shaps = self.calculate_shap(cv_x, cv_y, estimator)
                 if shaps is not None:
                     for feature, shap_value in shaps.items():
@@ -757,29 +764,35 @@ class LightGBMWrapper(EstimatorWrapper):
         for feature in self.cat_features:
             x[feature] = x[feature].astype("category").cat.codes
         if not is_numeric_dtype(y_numpy):
-            y = correct_string_target(y)
+            y_numpy = correct_string_target(y_numpy)
 
-        return x, y, groups, params
+        return x, y_numpy, groups, params
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
-        x, y, params = super()._prepare_to_calculate(x, y)
+        x, y_numpy, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
             x = fill_na_cat_features(x, self.cat_features)
             for feature in self.cat_features:
                 x[feature] = x[feature].astype("category").cat.codes
         if not is_numeric_dtype(y):
-            y = correct_string_target(y)
-        return x, y, params
+            y_numpy = correct_string_target(y_numpy)
+        return x, y_numpy, params
 
     def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
         try:
-            import lightgbm as lgb
-            import shap
+            # Suppress specific warning from SHAP for LightGBM binary classifier
+            warnings.filterwarnings(
+                "ignore",
+                message=(
+                    "LightGBM binary classifier with TreeExplainer shap values output has changed to a list of ndarray"
+                ),
+            )
+            from shap import TreeExplainer
 
-            if not isinstance(estimator, (lgb.LGBMRegressor, lgb.LGBMClassifier)):
+            if not isinstance(estimator, (LGBMRegressor, LGBMClassifier)):
                 return None
 
-            explainer = shap.TreeExplainer(estimator)
+            explainer = TreeExplainer(estimator)
 
             shap_values = explainer.shap_values(x)
 
