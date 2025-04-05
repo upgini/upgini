@@ -3853,6 +3853,11 @@ if response.status_code == 200:
             ):
                 continue
 
+            # Temporary workaround for duplicate features metadata
+            if feature_meta.name in self.feature_names_:
+                self.logger.warning(f"WARNING: Duplicate feature metadata: {feature_meta}")
+                continue
+
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
 
