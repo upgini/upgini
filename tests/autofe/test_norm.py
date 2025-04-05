@@ -105,3 +105,14 @@ def test_deserialization_norm():
     result = feature.calculate(df)
     print(result)
     assert result.values[0] == 0.0006720419620861393
+
+
+def test_norm_operator_with_numeric_params_parse_obj():
+    norm = Norm(norm=2.5)
+
+    norm_dict = norm.get_params()
+    parsed_norm = Norm.parse_obj(norm_dict)
+
+    assert parsed_norm.norm == 2.5
+    assert parsed_norm.name == "norm"
+    assert parsed_norm.is_unary is True

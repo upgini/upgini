@@ -196,3 +196,19 @@ def test_date_list_diff_bounded_from_formula():
     # Test invalid formula returns None
     assert DateListDiffBounded.from_formula("invalid_formula") is None
     assert DateListDiffBounded.from_formula("date_diff_invalid") is None
+
+
+def test_date_list_diff_bounded_parse_obj():
+    date_diff = DateListDiffBounded(
+        diff_unit="Y", lower_bound=18, upper_bound=25, aggregation="count", replace_negative=True
+    )
+
+    date_diff_dict = date_diff.get_params()
+    parsed_date_diff = DateListDiffBounded.parse_obj(date_diff_dict)
+
+    assert parsed_date_diff.diff_unit == "Y"
+    assert parsed_date_diff.lower_bound == 18
+    assert parsed_date_diff.upper_bound == 25
+    assert parsed_date_diff.aggregation == "count"
+    assert parsed_date_diff.replace_negative is True
+    assert parsed_date_diff.to_formula() == "date_diff_Y_18_25_count"

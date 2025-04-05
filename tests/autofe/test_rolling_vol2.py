@@ -180,3 +180,16 @@ def test_rolling_volatility2_with_offset():
         result_no_offset.iloc[1:-1].reset_index(drop=True),
         check_names=False,
     )
+
+
+def test_rolling_volatility2_parse_obj():
+    roll_vol2 = RollingVolatility2(window_size=4, window_unit="h", offset_size=1, offset_unit="d")
+
+    roll_vol2_dict = roll_vol2.get_params()
+    parsed_roll_vol2 = RollingVolatility2.parse_obj(roll_vol2_dict)
+
+    assert parsed_roll_vol2.window_size == 4
+    assert parsed_roll_vol2.window_unit == "h"
+    assert parsed_roll_vol2.offset_size == 1
+    assert parsed_roll_vol2.offset_unit == "d"
+    assert parsed_roll_vol2.to_formula() == "roll_vol2_4h_offset_1d"

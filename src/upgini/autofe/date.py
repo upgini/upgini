@@ -8,6 +8,7 @@ from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
+from upgini.autofe.utils import pydantic_validator
 
 
 def get_pydantic_version():
@@ -209,6 +210,14 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperator):
 
         return cls(diff_unit=diff_unit, lower_bound=lower_bound, upper_bound=upper_bound, aggregation=aggregation)
 
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        if self.lower_bound is not None:
+            res["lower_bound"] = str(self.lower_bound)
+        if self.upper_bound is not None:
+            res["upper_bound"] = str(self.upper_bound)
+        return res
+
     def _agg(self, x):
         x = x[
             (x >= (self.lower_bound if self.lower_bound is not None else -np.inf))
@@ -269,32 +278,17 @@ class DatePercentile(DatePercentileBase):
             {
                 "zero_month": self.zero_month,
                 "zero_year": self.zero_year,
-                "zero_bounds": self.zero_bounds,
+                "zero_bounds": json.dumps(self.zero_bounds),
                 "step": self.step,
             }
         )
         return res
 
-    # Check Pydantic version
-    if get_pydantic_version() >= 2:
-        # Use @field_validator for Pydantic 2.x
-        from pydantic import field_validator
-
-        @field_validator("zero_bounds", mode="before")
-        def parse_zero_bounds(cls, value):
-            if isinstance(value, str):
-                return json.loads(value)
-            return value
-
-    else:
-        # Use @validator for Pydantic 1.x
-        from pydantic import validator
-
-        @validator("zero_bounds", pre=True)
-        def parse_zero_bounds(cls, value):
-            if isinstance(value, str):
-                return json.loads(value)
-            return value
+    @pydantic_validator("zero_bounds", mode="before")
+    def parse_zero_bounds(cls, value):
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         months = date_col.dt.month

@@ -2,10 +2,11 @@ from typing import Dict, Optional, Union
 import numpy as np
 import pandas as pd
 
+from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 
 
-class TrendCoefficient(TimeSeriesBase):
+class TrendCoefficient(TimeSeriesBase, ParametrizedOperator):
     name: str = "trend_coef"
     step_size: int = 1
     step_unit: str = "D"

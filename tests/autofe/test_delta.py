@@ -265,3 +265,16 @@ def test_delta2_groups():
 
     # With 2-day delta, we don't have enough consecutive days for any group to calculate second delta
     check_delta2(2, "d", [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+
+
+def test_delta_operator_parse_obj():
+    delta = Delta(delta_size=3, delta_unit="d", offset_size=2, offset_unit="D")
+
+    delta_dict = delta.get_params()
+    parsed_delta = Delta.parse_obj(delta_dict)
+
+    assert parsed_delta.delta_size == 3
+    assert parsed_delta.delta_unit == "d"
+    assert parsed_delta.offset_size == 2
+    assert parsed_delta.offset_unit == "D"
+    assert parsed_delta.to_formula() == "delta_3d_offset_2D"

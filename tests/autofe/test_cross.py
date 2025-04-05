@@ -6,6 +6,7 @@ from pandas.testing import assert_series_equal
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import CrossSeriesInteraction
 from upgini.autofe.binary import Add, Subtract, Multiply, Divide
+from upgini.autofe.all_operators import find_op
 
 
 def test_cross_series_basic():
@@ -326,3 +327,119 @@ def test_cross_series_hash_component():
 
     assert feature1.get_hash() != feature2.get_hash()
     assert feature1.get_display_name() != feature2.get_display_name()
+
+
+def test_roll_on_different_cross_features():
+    # Create two different cross series features
+    cross_op1 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    cross_op2 = CrossSeriesInteraction(
+        interaction_op=Multiply(),  # Different operation
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    # Create features with these operators
+    cross_feature1 = Feature(op=cross_op1, children=[Column("date"), Column("category"), Column("value")])
+
+    cross_feature2 = Feature(op=cross_op2, children=[Column("date"), Column("category"), Column("value")])
+
+    # Create Roll features that use these cross features as input
+    # The same Roll operation is applied to both
+    from upgini.autofe.timeseries import Roll
+
+    roll_op = Roll(window_size=7, window_unit="D", aggregation="mean")
+
+    # Create Roll features using the cross features as input
+    roll_feature1 = Feature(op=roll_op, children=[cross_feature1])
+    roll_feature1.set_display_index(roll_feature1.get_hash())
+
+    roll_feature2 = Feature(op=roll_op, children=[cross_feature2])
+    roll_feature2.set_display_index(roll_feature2.get_hash())
+
+    # Verify that the display names are different
+    assert roll_feature1.get_hash() != roll_feature2.get_hash()
+    assert roll_feature1.get_display_name() != roll_feature2.get_display_name()
+
+    # Now test with same operation but different descriptors
+    cross_op3 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["A"],
+        right_descriptor=["B"],
+    )
+
+    cross_op4 = CrossSeriesInteraction(
+        interaction_op=Add(),
+        descriptor_indices=[1],
+        left_descriptor=["C"],  # Different descriptor
+        right_descriptor=["D"],  # Different descriptor
+    )
+
+    cross_feature3 = Feature(op=cross_op3, children=[Column("date"), Column("category"), Column("value")])
+
+    cross_feature4 = Feature(op=cross_op4, children=[Column("date"), Column("category"), Column("value")])
+
+    roll_feature3 = Feature(op=roll_op, children=[cross_feature3])
+    roll_feature3.set_display_index(roll_feature3.get_hash())
+
+    roll_feature4 = Feature(op=roll_op, children=[cross_feature4])
+    roll_feature4.set_display_index(roll_feature4.get_hash())
+
+    assert roll_feature3.get_hash() != roll_feature4.get_hash()
+    assert roll_feature3.get_display_name() != roll_feature4.get_display_name()
+
+
+def test_cross_series_interaction_parse_obj():
+    add_op = find_op("+")
+    assert add_op is not None
+
+    cross = CrossSeriesInteraction(
+        interaction_op=add_op,
+        descriptor_indices=[0, 1],
+        left_descriptor=["temperature", "humidity"],
+        right_descriptor=["pressure", "wind"],
+    )
+
+    cross_dict = cross.get_params()
+    parsed_cross = CrossSeriesInteraction.parse_obj(cross_dict)
+
+    assert parsed_cross.interaction_op.name == add_op.name
+    assert parsed_cross.descriptor_indices == [0, 1]
+    assert parsed_cross.left_descriptor == ["temperature", "humidity"]
+    assert parsed_cross.right_descriptor == ["pressure", "wind"]
+
+    assert cross.to_formula() == parsed_cross.to_formula()
+    assert cross.get_hash_component() == parsed_cross.get_hash_component()
+
+
+def test_cross_series_interaction_formula_roundtrip():
+    # Create a cross_mul operator with 4 children (2 descriptors)
+    mul_op = find_op("*")
+    assert mul_op is not None
+
+    cross = CrossSeriesInteraction(
+        interaction_op=mul_op,
+        descriptor_indices=[0, 1],
+        left_descriptor=["temperature", "humidity"],
+        right_descriptor=["pressure", "wind"],
+        offset_size=30,
+    )
+
+    # Test Feature with CrossSeriesInteraction operator
+    feature = Feature(op=cross, children=[Column("date"), Column("category1"), Column("category2"), Column("value")])
+
+    feature_formula = feature.to_formula()
+    recreated_feature = Feature.from_formula(feature_formula)
+
+    # Verify the feature was correctly recreated
+    assert recreated_feature is not None
+    assert recreated_feature.to_formula() == feature_formula
+    assert isinstance(recreated_feature.op, CrossSeriesInteraction)
+    assert recreated_feature.op.interaction_op.name == mul_op.name

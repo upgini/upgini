@@ -325,6 +325,10 @@ class RuntimeParameters(BaseModel):
     properties: Dict[str, Any] = {}
 
 
+class AutoFEParameters(BaseModel):
+    ts_gap_days: Optional[int] = None
+
+
 class SearchCustomization(BaseModel):
     featuresFilter: Optional[FeaturesFilter] = None
     extractFeatures: Optional[bool] = None

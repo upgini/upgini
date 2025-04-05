@@ -118,7 +118,7 @@ def spearmanr(
     # - dof: degrees of freedom
     # - t_stat: t-statistic
     # - alternative: 'two-sided', 'greater', 'less'
-    def compute_t_pvalue(t_stat, dof, alternative='two-sided'):
+    def compute_t_pvalue(t_stat, dof, alternative="two-sided"):
         from scipy.stats import t
 
         if alternative == "two-sided":

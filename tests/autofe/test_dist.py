@@ -40,3 +40,14 @@ def test_empty_distance():
     print(actual_values)
 
     assert_series_equal(actual_values, expected_values)
+
+
+def test_distance_parse_obj():
+    distance = Distance()
+
+    distance_dict = distance.get_params()
+    parsed_distance = Distance.parse_obj(distance_dict)
+
+    assert parsed_distance.name == "dist"
+    assert parsed_distance.is_binary is True
+    assert parsed_distance.to_formula() == "dist"

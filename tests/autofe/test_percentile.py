@@ -36,3 +36,18 @@ def test_date_percentile():
     assert_series_equal(
         operand.calculate(left=data.date, right=data.feature2), pd.Series([None] * len(data), dtype=float)
     )
+
+
+def test_date_percentile_parse_obj():
+    date_percentile = DatePercentile(
+        zero_month=3,
+        zero_year=2023,
+        zero_bounds=[0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
+    )
+
+    date_percentile_dict = date_percentile.get_params()
+    parsed_date_percentile = DatePercentile.parse_obj(date_percentile_dict)
+
+    assert parsed_date_percentile.zero_month == 3
+    assert parsed_date_percentile.zero_year == 2023
+    assert parsed_date_percentile.zero_bounds == [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]

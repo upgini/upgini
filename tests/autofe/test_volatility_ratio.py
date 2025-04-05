@@ -201,3 +201,20 @@ def test_volatility_ratio_with_offset():
         result_no_offset.iloc[1:-1].reset_index(drop=True),
         check_names=False,
     )
+
+
+def test_volatility_ratio_parse_obj():
+    volatility_ratio = VolatilityRatio(
+        short_window_size=3, short_window_unit="d", window_size=10, window_unit="D", offset_size=1, offset_unit="D"
+    )
+
+    vol_ratio_dict = volatility_ratio.get_params()
+    parsed_vol_ratio = VolatilityRatio.parse_obj(vol_ratio_dict)
+
+    assert parsed_vol_ratio.short_window_size == 3
+    assert parsed_vol_ratio.short_window_unit == "d"
+    assert parsed_vol_ratio.window_size == 10
+    assert parsed_vol_ratio.window_unit == "D"
+    assert parsed_vol_ratio.offset_size == 1
+    assert parsed_vol_ratio.offset_unit == "D"
+    assert parsed_vol_ratio.to_formula() == "vol_ratio_3d_to_10D_offset_1D"

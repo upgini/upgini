@@ -158,3 +158,15 @@ def test_ewma_volatility_with_offset():
         result_no_offset.iloc[1:-1].reset_index(drop=True),
         check_names=False,
     )
+
+
+def test_ewma_volatility_parse_obj():
+    ewma_vol = EWMAVolatility(window_size=5, offset_size=2, offset_unit="D")
+
+    ewma_vol_dict = ewma_vol.get_params()
+    parsed_ewma_vol = EWMAVolatility.parse_obj(ewma_vol_dict)
+
+    assert parsed_ewma_vol.window_size == 5
+    assert parsed_ewma_vol.offset_size == 2
+    assert parsed_ewma_vol.offset_unit == "D"
+    assert parsed_ewma_vol.to_formula() == "ewma_vol_5_offset_2D"

@@ -128,3 +128,16 @@ def test_lag_from_formula():
     # Test that constructed name matches formula pattern
     lag = Lag(lag_size=5, lag_unit="D")
     assert lag.to_formula() == "lag_5D"
+
+
+def test_lag_parse_obj():
+    lag = Lag(lag_size=3, lag_unit="d", offset_size=2, offset_unit="D")
+
+    lag_dict = lag.get_params()
+    parsed_lag = Lag.parse_obj(lag_dict)
+
+    assert parsed_lag.lag_size == 3
+    assert parsed_lag.lag_unit == "d"
+    assert parsed_lag.offset_size == 2
+    assert parsed_lag.offset_unit == "D"
+    assert parsed_lag.to_formula() == "lag_3d_offset_2D"
