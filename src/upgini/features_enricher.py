@@ -2283,7 +2283,7 @@ if response.status_code == 200:
                 self.logger.info(msg)
                 print(msg)
                 df.drop(columns=DEFAULT_INDEX, inplace=True)
-                validated_X.drop(columns=DEFAULT_INDEX, inplace=True)
+                validated_Xy.drop(columns=DEFAULT_INDEX, inplace=True)
 
             df = self.__add_country_code(df, search_keys)
 
@@ -2522,11 +2522,11 @@ if response.status_code == 200:
             # Prepare input DataFrame for __enrich by concatenating generated ids and client features
             combined_df = pd.concat(
                 [
-                    validated_Xy,
+                    validated_Xy.reset_index(drop=True),
                     df_with_original_index.reset_index(drop=True),
                 ],
                 axis=1,
-            )
+            ).set_index(validated_Xy.index)
 
             result_features = validation_task.get_all_validation_raw_features(trace_id, metrics_calculation)
             result_features.drop(columns=EVAL_SET_INDEX, inplace=True, errors="ignore")

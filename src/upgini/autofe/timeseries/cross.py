@@ -17,10 +17,12 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
     left_descriptor: List[str] = []
     right_descriptor: List[str] = []
 
-    @pydantic_validator("descriptor_indices")
+    @pydantic_validator("descriptor_indices", mode="before")
     def validate_descriptor_indices(cls, v):
         if isinstance(v, str):
-            return json.loads(v)
+            v = json.loads(v)
+        if not v:
+            raise ValueError("descriptor_indices cannot be empty")
         return v
 
     @pydantic_validator("left_descriptor", "right_descriptor", mode="before")
