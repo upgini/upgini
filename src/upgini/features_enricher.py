@@ -54,6 +54,7 @@ from upgini.metadata import (
     SORT_ID,
     SYSTEM_RECORD_ID,
     TARGET,
+    AutoFEParameters,
     CVType,
     FeaturesMetadataV2,
     FileColumnMeaningType,
@@ -407,6 +408,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
         select_features: bool = True,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -495,6 +497,7 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    auto_fe_parameters=auto_fe_parameters,
                     progress_callback=progress_callback,
                     search_id_callback=search_id_callback,
                 )
@@ -550,6 +553,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         select_features: bool = True,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -649,6 +653,7 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    auto_fe_parameters=auto_fe_parameters,
                     progress_callback=progress_callback,
                 )
                 self.logger.info("Inner fit finished successfully")
@@ -2675,6 +2680,7 @@ if response.status_code == 200:
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
@@ -2980,6 +2986,7 @@ if response.status_code == 200:
             runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
             force_downsampling=force_downsampling,
+            auto_fe_parameters=auto_fe_parameters,
         )
 
         if search_id_callback is not None:
