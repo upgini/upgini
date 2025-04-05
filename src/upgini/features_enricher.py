@@ -1488,7 +1488,6 @@ class FeaturesEnricher(TransformerMixin):
             should_not_exclude = set()
             for sk in excluding_search_keys:
                 renamed_sk = columns_renaming.get(sk, sk)
-                print(sk, renamed_sk)
                 if renamed_sk in search_keys_for_metrics or renamed_sk in self.feature_names_:
                     should_not_exclude.add(sk)
             excluding_search_keys = [sk for sk in excluding_search_keys if sk not in should_not_exclude]
