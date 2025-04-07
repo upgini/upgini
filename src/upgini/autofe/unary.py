@@ -1,8 +1,10 @@
-from typing import Dict, Optional
+import json
+from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
 from upgini.autofe.operator import PandasOperator, VectorizableMixin
+from upgini.autofe.utils import pydantic_validator
 
 
 class Abs(PandasOperator, VectorizableMixin):
@@ -153,3 +155,37 @@ class Embeddings(PandasOperator):
     is_unary: bool = True
     input_type: Optional[str] = "string"
     output_type: Optional[str] = "vector"
+
+
+class BinCat(PandasOperator):
+    name: str = "bin"
+    is_unary: bool = True
+    output_type: Optional[str] = "string"
+    bin_bounds: List[int]
+
+    def calculate_unary(self, data: pd.Series) -> pd.Series:
+        return data.apply(self._bin, bounds=self.bin_bounds).fillna(-1).astype(int).astype(str)
+
+    def _bin(self, f, bounds):
+        if f is None or np.isnan(f):
+            return np.nan
+        hit = np.where(f >= np.array(bounds))[0]
+        if hit.size > 0:
+            return np.max(hit) + 1
+        else:
+            return np.nan
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "bin_bounds": json.dumps(self.bin_bounds),
+            }
+        )
+        return res
+
+    @pydantic_validator("bin_bounds", mode="before")
+    def parse_bin_bounds(cls, value):
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
