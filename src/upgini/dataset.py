@@ -22,6 +22,7 @@ from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
+    AutoFEParameters,
     CVType,
     DataType,
     FeaturesFilter,
@@ -558,6 +559,7 @@ class Dataset:  # (pd.DataFrame):
         filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         metrics_calculation: Optional[bool] = False,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
     ) -> SearchCustomization:
         # self.logger.info("Constructing search customization")
         search_customization = SearchCustomization(
@@ -585,7 +587,10 @@ class Dataset:  # (pd.DataFrame):
             search_customization.featuresFilter = feature_filter
 
         search_customization.runtimeParameters.properties["etalon_imbalanced"] = self.imbalanced
-
+        if auto_fe_parameters is not None:
+            search_customization.runtimeParameters.properties["feature_generation_params.ts.gap_days"] = (
+                auto_fe_parameters.ts_gap_days
+            )
         return search_customization
 
     def _rename_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
@@ -640,6 +645,7 @@ class Dataset:  # (pd.DataFrame):
         max_features: Optional[int] = None,  # deprecated
         filter_features: Optional[dict] = None,  # deprecated
         runtime_parameters: Optional[RuntimeParameters] = None,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         force_downsampling: bool = False,
     ) -> SearchTask:
         if self.etalon_def is None:
@@ -658,6 +664,7 @@ class Dataset:  # (pd.DataFrame):
             max_features=max_features,
             filter_features=filter_features,
             runtime_parameters=runtime_parameters,
+            auto_fe_parameters=auto_fe_parameters,
         )
 
         if self.file_upload_id is not None and self.rest_client.check_uploaded_file_v2(

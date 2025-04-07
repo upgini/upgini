@@ -168,7 +168,13 @@ class SearchTask:
         for meta in self.provider_metadata_v2:
             if meta.features_used_for_embeddings is not None:
                 features_for_transform.update(meta.features_used_for_embeddings)
-
+            if meta.generated_features:
+                features_for_transform.update(
+                    c.original_name
+                    for f in meta.generated_features
+                    for c in f.base_columns
+                    if c.ads_definition_id is None
+                )
         return list(features_for_transform)
 
     def get_shuffle_kfold(self) -> Optional[bool]:

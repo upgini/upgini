@@ -4,12 +4,6 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from upgini.autofe.operator import PandasOperator
 
-# Used in derived classes
-try:
-    from pydantic import field_validator as validator  # V2
-except ImportError:
-    from pydantic import validator  # noqa: F401  V1
-
 
 class TimeSeriesBase(PandasOperator, abc.ABC):
     is_vector: bool = True
@@ -85,7 +79,7 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         """
         import re
 
-        offset_regex = f"{base_regex}_offset_(\\d+)([a-zA-Z])"
+        offset_regex = f"{base_regex}_offset_(\\d+)([a-zA-Z])$"
         match = re.match(offset_regex, formula)
 
         if match:
