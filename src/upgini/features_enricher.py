@@ -707,8 +707,8 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
-        y: Optional[pd.Series] = None,
         *args,
+        y: Optional[pd.Series] = None,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -2529,7 +2529,6 @@ if response.status_code == 200:
             ).set_index(validated_Xy.index)
 
             result_features = validation_task.get_all_validation_raw_features(trace_id, metrics_calculation)
-            result_features.drop(columns=EVAL_SET_INDEX, inplace=True, errors="ignore")
 
             result = self.__enrich(
                 combined_df,
@@ -3758,6 +3757,8 @@ if response.status_code == 200:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError(self.bundle.get("features_wasnt_returned"))
+
+        result_features.drop(columns=EVAL_SET_INDEX, inplace=True, errors="ignore")
 
         comparing_columns = input_df.columns
         dup_features = [
