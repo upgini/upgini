@@ -54,6 +54,7 @@ from upgini.metadata import (
     SORT_ID,
     SYSTEM_RECORD_ID,
     TARGET,
+    AutoFEParameters,
     CVType,
     FeaturesMetadataV2,
     FileColumnMeaningType,
@@ -407,6 +408,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
         select_features: bool = True,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         **kwargs,
     ):
         """Fit to data.
@@ -495,6 +497,7 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    auto_fe_parameters=auto_fe_parameters,
                     progress_callback=progress_callback,
                     search_id_callback=search_id_callback,
                 )
@@ -550,6 +553,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         select_features: bool = True,
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -649,6 +653,7 @@ class FeaturesEnricher(TransformerMixin):
                     importance_threshold=importance_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                    auto_fe_parameters=auto_fe_parameters,
                     progress_callback=progress_callback,
                 )
                 self.logger.info("Inner fit finished successfully")
@@ -703,6 +708,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: pd.DataFrame,
         *args,
+        y: Optional[pd.Series] = None,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -763,9 +769,10 @@ class FeaturesEnricher(TransformerMixin):
 
             start_time = time.time()
             try:
-                result, _, _ = self.__inner_transform(
+                result, _, _, _ = self.__inner_transform(
                     trace_id,
                     X,
+                    y=y,
                     exclude_features_sources=exclude_features_sources,
                     importance_threshold=importance_threshold,
                     max_features=max_features,
@@ -1478,12 +1485,12 @@ class FeaturesEnricher(TransformerMixin):
 
         excluding_search_keys = list(search_keys.keys())
         if search_keys_for_metrics is not None and len(search_keys_for_metrics) > 0:
-            excluded = set()
+            should_not_exclude = set()
             for sk in excluding_search_keys:
-                renamed_sk = columns_renaming.get(sk)
+                renamed_sk = columns_renaming.get(sk, sk)
                 if renamed_sk in search_keys_for_metrics or renamed_sk in self.feature_names_:
-                    excluded.add(sk)
-            excluding_search_keys = [sk for sk in excluding_search_keys if sk not in excluded]
+                    should_not_exclude.add(sk)
+            excluding_search_keys = [sk for sk in excluding_search_keys if sk not in should_not_exclude]
 
         self.logger.info(f"Excluding search keys: {excluding_search_keys}")
 
@@ -1682,7 +1689,6 @@ class FeaturesEnricher(TransformerMixin):
                 validated_X,
                 validated_y,
                 eval_set,
-                is_demo_dataset,
                 exclude_features_sources,
                 trace_id,
                 progress_bar,
@@ -1698,8 +1704,14 @@ class FeaturesEnricher(TransformerMixin):
         if exclude_features_sources:
             enriched_X = enriched_X.drop(columns=exclude_features_sources, errors="ignore")
 
-        return self.__mk_sampled_data_tuple(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming
+        return self.__cache_and_return_results(
+            datasets_hash,
+            X_sampled,
+            y_sampled,
+            enriched_X,
+            eval_set_sampled_dict,
+            columns_renaming,
+            search_keys,
         )
 
     def __sample_only_input(
@@ -1776,17 +1788,14 @@ class FeaturesEnricher(TransformerMixin):
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         datasets_hash = hash_input(X_sampled, y_sampled, eval_set_sampled_dict)
-        self.__cached_sampled_datasets[datasets_hash] = (
+        return self.__cache_and_return_results(
+            datasets_hash,
             X_sampled,
             y_sampled,
             enriched_X,
             eval_set_sampled_dict,
-            search_keys,
             columns_renaming,
-        )
-
-        return self.__mk_sampled_data_tuple(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming
+            search_keys,
         )
 
     def __sample_balanced(
@@ -1825,12 +1834,33 @@ class FeaturesEnricher(TransformerMixin):
         # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
         # can differs from it
         fit_features = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
-        enriched_Xy, enriched_eval_sets = self.__enrich(
+
+        # Pre-process features if we need to drop outliers
+        if rows_to_drop is not None:
+            self.logger.info(f"Before dropping target outliers size: {len(fit_features)}")
+            fit_features = fit_features[
+                ~fit_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
+            ]
+            self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
+
+        enriched_eval_sets = {}
+        enriched_Xy = self.__enrich(
             self.df_with_original_index,
             fit_features,
-            rows_to_drop=rows_to_drop,
+            how="inner",
             drop_system_record_id=False,
         )
+
+        # Handle eval sets extraction based on EVAL_SET_INDEX
+        if EVAL_SET_INDEX in enriched_Xy.columns:
+            eval_set_indices = list(enriched_Xy[EVAL_SET_INDEX].unique())
+            if 0 in eval_set_indices:
+                eval_set_indices.remove(0)
+            for eval_set_index in eval_set_indices:
+                enriched_eval_sets[eval_set_index] = enriched_Xy.loc[
+                    enriched_Xy[EVAL_SET_INDEX] == eval_set_index
+                ].copy()
+            enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
         x_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
         X_sampled = enriched_Xy[x_columns].copy()
@@ -1855,17 +1885,14 @@ class FeaturesEnricher(TransformerMixin):
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         datasets_hash = hash_input(self.X, self.y, self.eval_set)
-        self.__cached_sampled_datasets[datasets_hash] = (
+        return self.__cache_and_return_results(
+            datasets_hash,
             X_sampled,
             y_sampled,
             enriched_X,
             eval_set_sampled_dict,
-            search_keys,
             self.fit_columns_renaming,
-        )
-
-        return self.__mk_sampled_data_tuple(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, self.fit_columns_renaming
+            search_keys,
         )
 
     def __sample_imbalanced(
@@ -1873,169 +1900,162 @@ class FeaturesEnricher(TransformerMixin):
         validated_X: pd.DataFrame,
         validated_y: pd.Series,
         eval_set: Optional[List[tuple]],
-        is_demo_dataset: bool,
         exclude_features_sources: Optional[List[str]],
         trace_id: str,
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
     ) -> _SampledDataForMetrics:
-        eval_set_sampled_dict = {}
-        if eval_set is not None:
-            self.logger.info("Transform with eval_set")
-            # concatenate X and eval_set with eval_set_index
-            df = validated_X.copy()
-            df[TARGET] = validated_y
-            df[EVAL_SET_INDEX] = 0
-            for idx, eval_pair in enumerate(eval_set):
-                eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
-                eval_df_with_index = eval_x.copy()
-                eval_df_with_index[TARGET] = eval_y
-                eval_df_with_index[EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df_with_index])
+        has_eval_set = eval_set is not None
 
-            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
+        self.logger.info(f"Transform {'with' if has_eval_set else 'without'} eval_set")
 
-            # downsample if need to eval_set threshold
-            num_samples = _num_samples(df)
-            force_downsampling = (
-                not self.disable_force_downsampling
-                and self.columns_for_online_api is not None
-                and num_samples > Dataset.FORCE_SAMPLE_SIZE
-            )
-            # TODO: check that system_record_id was added before this step
-            if force_downsampling:
-                self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
-                df = balance_undersample_forced(
-                    df=df,
-                    target_column=TARGET,
-                    id_columns=self.id_columns,
-                    date_column=self._get_date_column(self.search_keys),
-                    task_type=self.model_task_type,
-                    cv_type=self.cv,
-                    random_state=self.random_state,
-                    sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                    logger=self.logger,
-                    bundle=self.bundle,
-                    warning_callback=self.__log_warning,
-                )
-            elif num_samples > Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD:
-                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS}")
-                df = df.sample(n=Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS, random_state=self.random_state)
+        # Prepare
+        df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set)
+        df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
+        df = self.__downsample_for_metrics(df)
 
-            eval_set_sampled_dict = {}
+        # Transform
+        enriched_df, columns_renaming, generated_features, search_keys = self.__inner_transform(
+            trace_id,
+            X=df.drop(columns=[TARGET]),
+            y=df[TARGET],
+            exclude_features_sources=exclude_features_sources,
+            silent_mode=True,
+            metrics_calculation=True,
+            progress_bar=progress_bar,
+            progress_callback=progress_callback,
+            add_fit_system_record_id=True,
+        )
+        if enriched_df is None:
+            return None
 
-            tmp_target_name = "__target"
-            df = df.rename(columns={TARGET: tmp_target_name})
+        x_columns = [
+            c
+            for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
+            if c in enriched_df.columns
+        ]
 
-            enriched_df, columns_renaming, generated_features = self.__inner_transform(
-                trace_id,
-                df,
-                exclude_features_sources=exclude_features_sources,
-                silent_mode=True,
-                metrics_calculation=True,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-                add_fit_system_record_id=True,
-                target_name=tmp_target_name,
-            )
-            if enriched_df is None:
-                return None
+        X_sampled, y_sampled, enriched_X = self.__extract_train_data(enriched_df, x_columns)
+        eval_set_sampled_dict = self.__extract_eval_data(
+            enriched_df, x_columns, enriched_X.columns.tolist(), len(eval_set) if has_eval_set else 0
+        )
 
-            enriched_df = enriched_df.rename(columns={tmp_target_name: TARGET})
-
-            x_columns = [
-                c
-                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
-                if c in enriched_df.columns
-            ]
-
-            enriched_Xy = enriched_df.query(f"{EVAL_SET_INDEX} == 0")
-            X_sampled = enriched_Xy[x_columns].copy()
-            y_sampled = enriched_Xy[TARGET].copy()
-            enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX])
-            enriched_X_columns = enriched_X.columns.tolist()
-
-            for idx in range(len(eval_set)):
-                enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
-                eval_x_sampled = enriched_eval_xy[x_columns].copy()
-                eval_y_sampled = enriched_eval_xy[TARGET].copy()
-                enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
-                eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
-        else:
-            self.logger.info("Transform without eval_set")
-            df = validated_X.copy()
-
-            df[TARGET] = validated_y
-
-            df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
-
-            num_samples = _num_samples(df)
-            force_downsampling = (
-                not self.disable_force_downsampling
-                and self.columns_for_online_api is not None
-                and num_samples > Dataset.FORCE_SAMPLE_SIZE
-            )
-
-            if force_downsampling:
-                self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
-                df = balance_undersample_forced(
-                    df=df,
-                    target_column=TARGET,
-                    id_columns=self.id_columns,
-                    date_column=self._get_date_column(self.search_keys),
-                    task_type=self.model_task_type,
-                    cv_type=self.cv,
-                    random_state=self.random_state,
-                    sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                    logger=self.logger,
-                    bundle=self.bundle,
-                    warning_callback=self.__log_warning,
-                )
-            elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
-                self.logger.info(f"Downsampling from {num_samples} to {Dataset.FIT_SAMPLE_ROWS}")
-                df = df.sample(n=Dataset.FIT_SAMPLE_ROWS, random_state=self.random_state)
-
-            tmp_target_name = "__target"
-            df = df.rename(columns={TARGET: tmp_target_name})
-
-            enriched_Xy, columns_renaming, generated_features = self.__inner_transform(
-                trace_id,
-                df,
-                exclude_features_sources=exclude_features_sources,
-                silent_mode=True,
-                metrics_calculation=True,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-                add_fit_system_record_id=True,
-                target_name=tmp_target_name,
-            )
-            if enriched_Xy is None:
-                return None
-
-            enriched_Xy = enriched_Xy.rename(columns={tmp_target_name: TARGET})
-
-            x_columns = [
-                c
-                for c in (validated_X.columns.tolist() + generated_features + [SYSTEM_RECORD_ID])
-                if c in enriched_Xy.columns
-            ]
-
-            X_sampled = enriched_Xy[x_columns].copy()
-            y_sampled = enriched_Xy[TARGET].copy()
-            enriched_X = enriched_Xy.drop(columns=TARGET)
-
+        # Cache and return results
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
+        return self.__cache_and_return_results(
+            datasets_hash,
+            X_sampled,
+            y_sampled,
+            enriched_X,
+            eval_set_sampled_dict,
+            columns_renaming,
+            search_keys,
+        )
+
+    def __combine_train_and_eval_sets(
+        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]]
+    ) -> pd.DataFrame:
+        df = validated_X.copy()
+        df[TARGET] = validated_y
+        if eval_set is None:
+            return df
+
+        df[EVAL_SET_INDEX] = 0
+
+        for idx, eval_pair in enumerate(eval_set):
+            eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+            eval_df_with_index = eval_x.copy()
+            eval_df_with_index[TARGET] = eval_y
+            eval_df_with_index[EVAL_SET_INDEX] = idx + 1
+            df = pd.concat([df, eval_df_with_index])
+
+        return df
+
+    def __downsample_for_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        num_samples = _num_samples(df)
+        force_downsampling = (
+            not self.disable_force_downsampling
+            and self.columns_for_online_api is not None
+            and num_samples > Dataset.FORCE_SAMPLE_SIZE
+        )
+
+        if force_downsampling:
+            self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
+            return balance_undersample_forced(
+                df=df,
+                target_column=TARGET,
+                id_columns=self.id_columns,
+                date_column=self._get_date_column(self.search_keys),
+                task_type=self.model_task_type,
+                cv_type=self.cv,
+                random_state=self.random_state,
+                sample_size=Dataset.FORCE_SAMPLE_SIZE,
+                logger=self.logger,
+                bundle=self.bundle,
+                warning_callback=self.__log_warning,
+            )
+        elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
+            if EVAL_SET_INDEX in df.columns:
+                threshold = Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
+                sample_size = Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS
+            else:
+                threshold = Dataset.FIT_SAMPLE_THRESHOLD
+                sample_size = Dataset.FIT_SAMPLE_ROWS
+
+            if num_samples > threshold:
+                self.logger.info(f"Downsampling from {num_samples} to {sample_size}")
+                return df.sample(n=sample_size, random_state=self.random_state)
+
+        return df
+
+    def __extract_train_data(
+        self, enriched_df: pd.DataFrame, x_columns: List[str]
+    ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+        if EVAL_SET_INDEX in enriched_df.columns:
+            enriched_Xy = enriched_df.query(f"{EVAL_SET_INDEX} == 0")
+        else:
+            enriched_Xy = enriched_df
+        X_sampled = enriched_Xy[x_columns].copy()
+        y_sampled = enriched_Xy[TARGET].copy()
+        enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
+        return X_sampled, y_sampled, enriched_X
+
+    def __extract_eval_data(
+        self, enriched_df: pd.DataFrame, x_columns: List[str], enriched_X_columns: List[str], eval_set_len: int
+    ) -> Dict[int, Tuple]:
+        eval_set_sampled_dict = {}
+
+        for idx in range(eval_set_len):
+            enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
+            eval_x_sampled = enriched_eval_xy[x_columns].copy()
+            eval_y_sampled = enriched_eval_xy[TARGET].copy()
+            enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
+            eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
+
+        return eval_set_sampled_dict
+
+    def __cache_and_return_results(
+        self,
+        datasets_hash: str,
+        X_sampled: pd.DataFrame,
+        y_sampled: pd.Series,
+        enriched_X: pd.DataFrame,
+        eval_set_sampled_dict: Dict[int, Tuple],
+        columns_renaming: Dict[str, str],
+        search_keys: Dict[str, SearchKey],
+    ) -> _SampledDataForMetrics:
+
         self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
             y_sampled,
             enriched_X,
             eval_set_sampled_dict,
-            self.search_keys,
+            search_keys,
             columns_renaming,
         )
 
         return self.__mk_sampled_data_tuple(
-            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, self.search_keys, columns_renaming
+            X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming
         )
 
     def __mk_sampled_data_tuple(
@@ -2047,7 +2067,11 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: Dict,
         columns_renaming: Dict[str, str],
     ):
-        search_keys = {k: v for k, v in search_keys.items() if k in X_sampled.columns.to_list()}
+        search_keys = {
+            columns_renaming.get(k, k): v
+            for k, v in search_keys.items()
+            if columns_renaming.get(k, k) in X_sampled.columns.to_list()
+        }
         return FeaturesEnricher._SampledDataForMetrics(
             X_sampled=X_sampled,
             y_sampled=y_sampled,
@@ -2161,6 +2185,7 @@ if response.status_code == 200:
         trace_id: str,
         X: pd.DataFrame,
         *,
+        y: Optional[pd.Series] = None,
         exclude_features_sources: Optional[List[str]] = None,
         importance_threshold: Optional[float] = None,
         max_features: Optional[int] = None,
@@ -2169,8 +2194,7 @@ if response.status_code == 200:
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         add_fit_system_record_id: bool = False,
-        target_name: Optional[str] = None,
-    ) -> Tuple[pd.DataFrame, Dict[str, str], List[str]]:
+    ) -> Tuple[pd.DataFrame, Dict[str, str], List[str], Dict[str, SearchKey]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
 
@@ -2179,20 +2203,28 @@ if response.status_code == 200:
             self.logger.info("Start transform")
 
             validated_X = self._validate_X(X, is_transform=True)
+            if y is not None:
+                validated_y = self._validate_y(validated_X, y)
+                df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set=None)
+            else:
+                validated_y = None
+                df = validated_X
 
-            self.__log_debug_information(validated_X, exclude_features_sources=exclude_features_sources)
+            validated_Xy = df.copy()
+
+            self.__log_debug_information(validated_X, validated_y, exclude_features_sources=exclude_features_sources)
 
             self.__validate_search_keys(self.search_keys, self.search_id)
 
             if len(self.feature_names_) == 0:
                 self.logger.warning(self.bundle.get("no_important_features_for_transform"))
-                return X, {c: c for c in X.columns}, []
+                return X, {c: c for c in X.columns}, [], {}
 
             if self._has_paid_features(exclude_features_sources):
                 msg = self.bundle.get("transform_with_paid_features")
                 self.logger.warning(msg)
                 self.__display_support_link(msg)
-                return None, {c: c for c in X.columns}, []
+                return None, {c: c for c in X.columns}, [], {}
 
             features_meta = self._search_task.get_all_features_metadata_v2()
             online_api_features = [fm.name for fm in features_meta if fm.from_online_api and fm.shap_value > 0]
@@ -2215,7 +2247,7 @@ if response.status_code == 200:
                         self.logger.warning(msg)
                         print(msg)
                         show_request_quote_button()
-                        return None, {c: c for c in X.columns}, []
+                        return None, {c: c for c in X.columns}, [], {}
                     else:
                         msg = self.bundle.get("transform_usage_info").format(
                             transform_usage.limit, transform_usage.transformed_rows
@@ -2223,28 +2255,26 @@ if response.status_code == 200:
                         self.logger.info(msg)
                         print(msg)
 
-            is_demo_dataset = hash_input(validated_X) in DEMO_DATASET_HASHES
+            is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
             columns_to_drop = [
-                c for c in validated_X.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
+                c for c in df.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
             ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
                 print(msg)
-                validated_X = validated_X.drop(columns=columns_to_drop)
+                df = df.drop(columns=columns_to_drop)
 
             search_keys = self.search_keys.copy()
             if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
-                self.search_keys.update(
+                search_keys.update(
                     {col: SearchKey.CUSTOM_KEY for col in self.id_columns if col not in self.search_keys}
                 )
 
             search_keys = self.__prepare_search_keys(
-                validated_X, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
+                df, search_keys, is_demo_dataset, is_transform=True, silent_mode=silent_mode
             )
-
-            df = validated_X.copy()
 
             df = self.__handle_index_search_keys(df, search_keys)
 
@@ -2253,7 +2283,7 @@ if response.status_code == 200:
                 self.logger.info(msg)
                 print(msg)
                 df.drop(columns=DEFAULT_INDEX, inplace=True)
-                validated_X.drop(columns=DEFAULT_INDEX, inplace=True)
+                validated_Xy.drop(columns=DEFAULT_INDEX, inplace=True)
 
             df = self.__add_country_code(df, search_keys)
 
@@ -2284,8 +2314,11 @@ if response.status_code == 200:
             features_for_transform = self._search_task.get_features_for_transform() or []
             if len(features_for_transform) > 0:
                 missing_features_for_transform = [
-                    columns_renaming.get(f) for f in features_for_transform if f not in df.columns
+                    columns_renaming.get(f) or f for f in features_for_transform if f not in df.columns
                 ]
+                if TARGET in missing_features_for_transform:
+                    raise ValidationError(self.bundle.get("missing_target_for_transform"))
+
                 if len(missing_features_for_transform) > 0:
                     raise ValidationError(
                         self.bundle.get("missing_features_for_transform").format(missing_features_for_transform)
@@ -2341,11 +2374,10 @@ if response.status_code == 200:
                 converter = PostalCodeSearchKeyConverter(postal_code)
                 df = converter.convert(df)
 
-            # generated_features = [f for f in generated_features if f in self.fit_generated_features]
+            meaning_types = {}
+            meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
+            meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-            meaning_types = {col: key.value for col, key in search_keys.items()}
-            for col in features_for_transform:
-                meaning_types[col] = FileColumnMeaningType.FEATURE
             features_not_to_pass = [
                 c
                 for c in df.columns
@@ -2354,13 +2386,12 @@ if response.status_code == 200:
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
             ]
 
-            if add_fit_system_record_id and target_name is not None:
-                reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
+            if add_fit_system_record_id:
                 df = self.__add_fit_system_record_id(
                     df,
                     search_keys,
                     SYSTEM_RECORD_ID,
-                    reversed_columns_renaming.get(target_name, target_name),
+                    TARGET,
                     columns_renaming,
                     silent=True,
                 )
@@ -2485,25 +2516,29 @@ if response.status_code == 200:
             if progress_callback is not None:
                 progress_callback(progress)
 
-            def enrich():
-                res, _ = self.__enrich(
-                    df_with_original_index,
-                    validation_task.get_all_validation_raw_features(trace_id, metrics_calculation),
-                    validated_X,
-                    is_transform=True,
-                )
-                return res
-
             if not silent_mode:
                 print(self.bundle.get("transform_start"))
-                # with Spinner():
-                result = enrich()
-            else:
-                result = enrich()
+
+            # Prepare input DataFrame for __enrich by concatenating generated ids and client features
+            combined_df = pd.concat(
+                [
+                    validated_Xy.reset_index(drop=True),
+                    df_with_original_index.reset_index(drop=True),
+                ],
+                axis=1,
+            ).set_index(validated_Xy.index)
+
+            result_features = validation_task.get_all_validation_raw_features(trace_id, metrics_calculation)
+
+            result = self.__enrich(
+                combined_df,
+                result_features,
+                how="left",
+            )
 
             selecting_columns = [
                 c
-                for c in itertools.chain(validated_X.columns.tolist(), generated_features)
+                for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
                 if c not in self.dropped_client_feature_names_
             ]
             filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
@@ -2515,7 +2550,7 @@ if response.status_code == 200:
 
             selecting_columns = list(set(selecting_columns))
             # sorting: first columns from X, then generated features, then enriched features
-            sorted_selecting_columns = [c for c in validated_X.columns if c in selecting_columns]
+            sorted_selecting_columns = [c for c in validated_Xy.columns if c in selecting_columns]
             for c in generated_features:
                 if c in selecting_columns and c not in sorted_selecting_columns:
                     sorted_selecting_columns.append(c)
@@ -2533,7 +2568,7 @@ if response.status_code == 200:
             if add_fit_system_record_id:
                 result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
 
-            return result, columns_renaming, generated_features
+            return result, columns_renaming, generated_features, search_keys
 
     def _get_excluded_features(self, max_features: Optional[int], importance_threshold: Optional[float]) -> List[str]:
         features_info = self._internal_features_info
@@ -2643,6 +2678,7 @@ if response.status_code == 200:
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
+        auto_fe_parameters: Optional[AutoFEParameters] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
@@ -2948,6 +2984,7 @@ if response.status_code == 200:
             runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
             force_downsampling=force_downsampling,
+            auto_fe_parameters=auto_fe_parameters,
         )
 
         if search_id_callback is not None:
@@ -3712,23 +3749,19 @@ if response.status_code == 200:
 
     def __enrich(
         self,
-        df_with_original_index: pd.DataFrame,
+        input_df: pd.DataFrame,
         result_features: Optional[pd.DataFrame],
-        X: Optional[pd.DataFrame] = None,
-        is_transform=False,
-        rows_to_drop: Optional[pd.DataFrame] = None,
+        how: str = "inner",
         drop_system_record_id=True,
-    ) -> Tuple[pd.DataFrame, Dict[int, pd.DataFrame]]:
+    ) -> pd.DataFrame:
         if result_features is None:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError(self.bundle.get("features_wasnt_returned"))
-        result_features = (
-            result_features.drop(columns=EVAL_SET_INDEX)
-            if EVAL_SET_INDEX in result_features.columns
-            else result_features
-        )
 
-        comparing_columns = X.columns if is_transform else df_with_original_index.columns
+        if EVAL_SET_INDEX in result_features.columns:
+            result_features = result_features.drop(columns=EVAL_SET_INDEX)
+
+        comparing_columns = input_df.columns
         dup_features = [
             c
             for c in comparing_columns
@@ -3738,63 +3771,39 @@ if response.status_code == 200:
             self.logger.warning(f"X contain columns with same name as returned from backend: {dup_features}")
             raise ValidationError(self.bundle.get("returned_features_same_as_passed").format(dup_features))
 
-        # index overrites from result_features
-        original_index_name = df_with_original_index.index.name
-        df_with_original_index = df_with_original_index.reset_index()
+        # Handle index and column renaming
+        original_index_name = input_df.index.name
+        renamed_column = None
+
+        # Handle column rename if it conflicts with index name
+        if original_index_name in input_df.columns:
+            renamed_column = f"{original_index_name}_renamed"
+            input_df = input_df.rename(columns={original_index_name: renamed_column})
+
+        # Reset index for the merge operation
+        input_df = input_df.reset_index()
+
         # TODO drop system_record_id before merge
+        # Merge with result features
         result_features = pd.merge(
-            df_with_original_index,
+            input_df,
             result_features,
             on=ENTITY_SYSTEM_RECORD_ID,
-            how="left" if is_transform else "inner",
+            how=how,
         )
+
+        # Restore the index
         result_features = result_features.set_index(original_index_name or DEFAULT_INDEX)
         result_features.index.name = original_index_name
 
-        if rows_to_drop is not None:
-            self.logger.info(f"Before dropping target outliers size: {len(result_features)}")
-            result_features = result_features[
-                ~result_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
-            ]
-            self.logger.info(f"After dropping target outliers size: {len(result_features)}")
-
-        result_eval_sets = {}
-        if not is_transform and EVAL_SET_INDEX in result_features.columns:
-            result_train_features = result_features.loc[result_features[EVAL_SET_INDEX] == 0].copy()
-            eval_set_indices = list(result_features[EVAL_SET_INDEX].unique())
-            if 0 in eval_set_indices:
-                eval_set_indices.remove(0)
-            for eval_set_index in eval_set_indices:
-                result_eval_sets[eval_set_index] = result_features.loc[
-                    result_features[EVAL_SET_INDEX] == eval_set_index
-                ].copy()
-            result_train_features = result_train_features.drop(columns=EVAL_SET_INDEX)
-        else:
-            result_train_features = result_features
-
-        if is_transform:
-            index_name = X.index.name
-            renamed_column = None
-            if index_name in X.columns:
-                renamed_column = f"{index_name}_renamed"
-                X = X.rename(columns={index_name: renamed_column})
-            result_train = pd.concat([X.reset_index(), result_train_features.reset_index(drop=True)], axis=1).set_index(
-                index_name or DEFAULT_INDEX
-            )
-            result_train.index.name = index_name
-            if renamed_column is not None:
-                result_train = result_train.rename(columns={renamed_column: index_name})
-        else:
-            result_train = result_train_features
+        # Restore renamed column if needed
+        if renamed_column is not None:
+            result_features = result_features.rename(columns={renamed_column: original_index_name})
 
         if drop_system_record_id:
-            result_train = result_train.drop(columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore")
-            for eval_set_index in result_eval_sets.keys():
-                result_eval_sets[eval_set_index] = result_eval_sets[eval_set_index].drop(
-                    columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore"
-                )
+            result_features = result_features.drop(columns=[SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID], errors="ignore")
 
-        return result_train, result_eval_sets
+        return result_features
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False

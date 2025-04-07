@@ -66,3 +66,36 @@ def test_string_sim():
     assert_series_equal(JaroWinklerSim1().calculate_binary(data["a"], data["b"]).round(3), expected_jw1)
     assert_series_equal(JaroWinklerSim2().calculate_binary(data["a"], data["b"]).round(3), expected_jw2)
     assert_series_equal(LevenshteinSim().calculate_binary(data["a"], data["b"]).round(3), expected_lv)
+
+
+def test_jaro_winkler_sim1_parse_obj():
+    jw_sim1 = JaroWinklerSim1()
+
+    jw_sim1_dict = jw_sim1.get_params()
+    parsed_jw_sim1 = JaroWinklerSim1.parse_obj(jw_sim1_dict)
+
+    assert parsed_jw_sim1.name == "sim_jw1"
+    assert parsed_jw_sim1.is_binary is True
+    assert parsed_jw_sim1.to_formula() == "sim_jw1"
+
+
+def test_jaro_winkler_sim2_parse_obj():
+    jw_sim2 = JaroWinklerSim2()
+
+    jw_sim2_dict = jw_sim2.get_params()
+    parsed_jw_sim2 = JaroWinklerSim2.parse_obj(jw_sim2_dict)
+
+    assert parsed_jw_sim2.name == "sim_jw2"
+    assert parsed_jw_sim2.is_binary is True
+    assert parsed_jw_sim2.to_formula() == "sim_jw2"
+
+
+def test_levenshtein_sim_parse_obj():
+    lev_sim = LevenshteinSim()
+
+    lev_sim_dict = lev_sim.get_params()
+    parsed_lev_sim = LevenshteinSim.parse_obj(lev_sim_dict)
+
+    assert parsed_lev_sim.name == "sim_lv"
+    assert parsed_lev_sim.is_binary is True
+    assert parsed_lev_sim.to_formula() == "sim_lv"

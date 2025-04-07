@@ -1,16 +1,13 @@
+import json
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-try:
-    from pydantic import field_validator as validator  # V2
-except ImportError:
-    from pydantic import validator  # V1
-
 from upgini.autofe.all_operators import find_op
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
+from upgini.autofe.utils import pydantic_validator
 
 
 class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
@@ -20,11 +17,24 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
     left_descriptor: List[str] = []
     right_descriptor: List[str] = []
 
-    @validator("descriptor_indices")
-    @classmethod
+    @pydantic_validator("descriptor_indices", mode="before")
     def validate_descriptor_indices(cls, v):
+        if isinstance(v, str):
+            v = json.loads(v)
         if not v:
-            raise ValueError("descriptor_indices cannot be empty for CrossSeriesInteraction")
+            raise ValueError("descriptor_indices cannot be empty")
+        return v
+
+    @pydantic_validator("left_descriptor", "right_descriptor", mode="before")
+    def parse_descriptors(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+    @pydantic_validator("interaction_op", mode="before")
+    def validate_interaction_op(cls, v):
+        if isinstance(v, str):
+            return find_op(v)
         return v
 
     def __init__(self, **data):
@@ -88,9 +98,9 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         res.update(
             {
                 "interaction_op": self._get_interaction_op_name(),
-                "descriptor_indices": self.descriptor_indices,
-                "left_descriptor": self.left_descriptor,
-                "right_descriptor": self.right_descriptor,
+                "descriptor_indices": json.dumps(self.descriptor_indices),
+                "left_descriptor": json.dumps(self.left_descriptor),
+                "right_descriptor": json.dumps(self.right_descriptor),
             }
         )
         return res

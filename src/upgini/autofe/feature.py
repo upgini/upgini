@@ -112,7 +112,11 @@ class Feature:
 
     def get_hash(self) -> str:
         return hashlib.sha256(
-            "_".join([self.op.get_hash_component()] + [ch.get_display_name() for ch in self.children]).encode("utf-8")
+            "_".join(
+                [self.op.get_hash_component()]
+                + [ch.op.get_hash_component() for ch in self.children if isinstance(ch, Feature)]
+                + [ch.get_display_name() for ch in self.children]
+            ).encode("utf-8")
         ).hexdigest()[:8]
 
     def set_alias(self, alias: str) -> "Feature":

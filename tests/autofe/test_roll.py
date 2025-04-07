@@ -190,3 +190,17 @@ def test_roll_hours():
     check_roll(1, "d", "mean", [1.0, 2.0, 2.5, 4.0, 4.5])
     check_roll(2, "d", "median", [1.0, 1.5, 2.0, 3.0, 3.5])
     check_roll(2, "H", "norm_mean", [1.0, 1.0, 1.2, 1.0, 1.111111])
+
+
+def test_roll_operator_parse_obj():
+    roll = Roll(window_size=5, window_unit="d", aggregation="mean", offset_size=1, offset_unit="D")
+
+    roll_dict = roll.get_params()
+    parsed_roll = Roll.parse_obj(roll_dict)
+
+    assert parsed_roll.window_size == 5
+    assert parsed_roll.window_unit == "d"
+    assert parsed_roll.aggregation == "mean"
+    assert parsed_roll.offset_size == 1
+    assert parsed_roll.offset_unit == "D"
+    assert parsed_roll.to_formula() == "roll_5d_mean_offset_1D"
