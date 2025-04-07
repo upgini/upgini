@@ -162,6 +162,7 @@ class BinCat(PandasOperator):
     is_unary: bool = True
     output_type: Optional[str] = "string"
     bin_bounds: List[int]
+    is_categorical: bool = True
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return data.apply(self._bin, bounds=self.bin_bounds).fillna(-1).astype(int).astype(str)
