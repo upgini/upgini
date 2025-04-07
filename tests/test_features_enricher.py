@@ -1508,7 +1508,7 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
         enricher.fit_transform(df.drop(columns="target"), df.target)
 
 
-def test_filter_by_importance(requests_mock: Mocker):
+def test_filter_by_importance(requests_mock: Mocker, update_metrics_flag: bool):
     url = "https://some.fake.url"
 
     path_to_mock_features = os.path.join(
@@ -1581,21 +1581,23 @@ def test_filter_by_importance(requests_mock: Mocker):
 
     enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
 
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: ["Train", "Eval 1", "Eval 2"],
-            rows_header: [9999, 999, 1000],
-            target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.022 ± 0.009", "0.013 ± 0.025"],
-        }
-    )
-
     metrics = enricher.calculate_metrics(importance_threshold=0.8)
     assert metrics is not None
-    logging.warning("Expected metrics:")
-    logging.warning(expected_metrics)
-    logging.warning("Calculated metrics:")
-    logging.warning(metrics)
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
+            ),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
+        )
+    )
+
     assert_frame_equal(metrics, expected_metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1625,7 +1627,7 @@ def test_filter_by_importance(requests_mock: Mocker):
     assert test_features.shape == (1000, 4)
 
 
-def test_filter_by_max_features(requests_mock: Mocker):
+def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "https://some.fake.url"
 
     path_to_mock_features = os.path.join(
@@ -1698,20 +1700,22 @@ def test_filter_by_max_features(requests_mock: Mocker):
     enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
 
     metrics = enricher.calculate_metrics(max_features=0)
-
-    expected_metrics = pd.DataFrame(
-        {
-            segment_header: ["Train", "Eval 1", "Eval 2"],
-            rows_header: [9999, 999, 1000],
-            target_mean_header: [0.5045, 0.4875, 0.486],
-            baseline_gini: ["-0.015 ± 0.016", "-0.022 ± 0.009", "0.013 ± 0.025"],
-        }
-    )
     assert metrics is not None
-    logging.warning("Expected metrics:")
-    logging.warning(expected_metrics)
-    logging.warning("Calculated metrics:")
-    logging.warning(metrics)
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
+            ),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
+        )
+    )
+
     assert_frame_equal(metrics, expected_metrics, atol=1e-6)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
