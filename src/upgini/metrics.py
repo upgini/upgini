@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier, LGBMRegressor
+import lightgbm as lgb
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
@@ -759,6 +760,7 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
         x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
+        params["callbacks"] = [lgb.early_stopping(stopping_rounds=20)]
         self.cat_features = _get_cat_features(x)
         x = fill_na_cat_features(x, self.cat_features)
         for feature in self.cat_features:

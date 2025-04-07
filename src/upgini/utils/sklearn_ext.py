@@ -349,6 +349,14 @@ def is_catboost_estimator(estimator):
         return False
 
 
+def is_lightgbm_estimator(estimator):
+    try:
+        from lightgbm import LGBMClassifier, LGBMRegressor
+        return isinstance(estimator, (LGBMClassifier, LGBMRegressor))
+    except ImportError:
+        return False
+
+
 def _fit_and_score(
     estimator,
     X,
@@ -505,6 +513,9 @@ def _fit_and_score(
             estimator.fit(X_train, **fit_params)
         else:
             if is_catboost_estimator(estimator):
+                fit_params = fit_params.copy()
+                fit_params["eval_set"] = [(X_test, y_test)]
+            elif is_lightgbm_estimator(estimator):
                 fit_params = fit_params.copy()
                 fit_params["eval_set"] = [(X_test, y_test)]
             estimator.fit(X_train, y_train, **fit_params)
