@@ -18,7 +18,6 @@ from upgini.http import (
 )
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
-    AutoFEParameters,
     FeaturesMetadataV2,
     FileMetadata,
     GeneratedFeatureMetadata,

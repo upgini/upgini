@@ -4,12 +4,6 @@ from typing import Dict, List, Optional
 import pandas as pd
 from upgini.autofe.operator import PandasOperator
 
-# Used in derived classes
-try:
-    from pydantic import field_validator as validator  # V2
-except ImportError:
-    from pydantic import validator  # V1
-
 
 class TimeSeriesBase(PandasOperator, abc.ABC):
     is_vector: bool = True
