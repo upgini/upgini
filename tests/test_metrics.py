@@ -1249,6 +1249,12 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
 
     assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
 
+    estimator2 = LGBMClassifier(random_seed=42, max_depth=5, n_estimators=10)
+    metrics2 = enricher.calculate_metrics(estimator=estimator2, scoring="mean_absolute_error")
+    assert metrics2 is not None
+
+    assert not metrics2.equals(metrics_df), "Metrics should be different for different model parameters"
+
 
 def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"

@@ -1088,7 +1088,7 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, fitting_X, enriched_shaps)
+                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent)
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1256,7 +1256,7 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
-    def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float]):
+    def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
         new_shaps = {
             renaming.get(feature, feature): _round_shap_value(shap)
@@ -1265,7 +1265,7 @@ class FeaturesEnricher(TransformerMixin):
         }
         self.__prepare_feature_importances(trace_id, df, new_shaps)
 
-        if self.features_info_display_handle is not None:
+        if not silent and self.features_info_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1277,7 +1277,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except (ImportError, NameError):
                 pass
-        if self.data_sources_display_handle is not None:
+        if not silent and self.data_sources_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1289,7 +1289,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except (ImportError, NameError):
                 pass
-        if self.autofe_features_display_handle is not None:
+        if not silent and self.autofe_features_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
                 autofe_descriptions_df = self.get_autofe_features_description()
@@ -1302,7 +1302,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
             except (ImportError, NameError):
                 pass
-        if self.report_button_handle is not None:
+        if not silent and self.report_button_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
