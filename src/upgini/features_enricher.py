@@ -3758,7 +3758,8 @@ if response.status_code == 200:
             self.logger.error(f"result features not found by search_task_id: {self.get_search_id()}")
             raise RuntimeError(self.bundle.get("features_wasnt_returned"))
 
-        result_features.drop(columns=EVAL_SET_INDEX, inplace=True, errors="ignore")
+        if EVAL_SET_INDEX in result_features.columns:
+            result_features = result_features.drop(columns=EVAL_SET_INDEX)
 
         comparing_columns = input_df.columns
         dup_features = [
