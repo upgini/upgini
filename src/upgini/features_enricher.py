@@ -834,7 +834,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         trace_id: Optional[str] = None,
-        silent: bool = False,
+        internal_call: bool = False,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
@@ -1088,7 +1088,7 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent)
+                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent=not internal_call)
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1249,7 +1249,7 @@ class FeaturesEnricher(TransformerMixin):
                     if self.raise_validation_error:
                         raise e
                 else:
-                    if not silent:
+                    if not internal_call:
                         self._dump_python_libs()
                         self.__display_support_link()
                     raise e
@@ -4129,7 +4129,7 @@ if response.status_code == 200:
             max_features=max_features,
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             trace_id=trace_id,
-            silent=True,
+            internal_call=True,
             progress_bar=progress_bar,
             progress_callback=progress_callback,
         )

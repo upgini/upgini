@@ -151,5 +151,5 @@ def test_trend_coef_polyfit_fails():
         children=[Column("date"), Column("value")],
     )
 
-    expected_res_constant = pd.Series([0.0, 0.0, 0.0], name="value")
+    expected_res_constant = pd.Series([0, 0, 0], name="value")
     assert_series_equal(feature_constant.calculate(df_constant), expected_res_constant)
