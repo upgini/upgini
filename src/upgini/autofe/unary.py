@@ -157,11 +157,11 @@ class Embeddings(PandasOperator):
     output_type: Optional[str] = "vector"
 
 
-class BinCat(PandasOperator):
+class Bin(PandasOperator):
     name: str = "bin"
     is_unary: bool = True
     output_type: Optional[str] = "string"
-    bin_bounds: List[int]
+    bin_bounds: List[int] = []
     is_categorical: bool = True
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
