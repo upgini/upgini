@@ -87,7 +87,7 @@ def get_sort_columns_dict(
     df_with_target = df_with_target.loc[~target.isna()]
     df = df_with_target.iloc[:, :-1]
     target = df_with_target.iloc[:, -1]
-    df = df.fillna(df.mean())
+    df = df.fillna(df.apply(lambda x: int(x.mean()) if pd.api.types.is_integer_dtype(x) else x.mean()))
     omit_nan = False
     hashes = [hash_series(df[col]) for col in columns_for_sort]
     df = np.asarray(df, dtype=np.float32)
