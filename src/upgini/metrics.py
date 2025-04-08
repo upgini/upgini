@@ -760,7 +760,7 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
         x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
-        params["callbacks"] = [lgb.early_stopping(stopping_rounds=20)]
+        params["callbacks"] = [lgb.early_stopping(stopping_rounds=20, verbose=False)]
         self.cat_features = _get_cat_features(x)
         x = fill_na_cat_features(x, self.cat_features)
         for feature in self.cat_features:
