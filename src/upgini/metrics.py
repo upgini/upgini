@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 import logging
 import re
-import warnings
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -119,18 +118,16 @@ LIGHTGBM_REGRESSION_PARAMS = {
 
 LIGHTGBM_MULTICLASS_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
-    "deterministic": True,
-    "min_gain_to_split": 0.001,
     "n_estimators": 275,
-    "max_depth": 3,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "min_gain_to_split": 0.001,
     "max_cat_threshold": 80,
-    "min_data_per_group": 25,
-    "cat_l2": 10,
-    "cat_smooth": 12,
-    "learning_rate": 0.25,  # CatBoost 0.25
-    "min_sum_hessian_in_leaf": 0.01,
-    "class_weight": "balanced",  # TODO pass dict with weights for each class
+    "min_data_per_group": 20,
+    "cat_smooth": 18,
+    "cat_l2" : 8,
     "objective": "multiclass",
+    "class_weight": "balanced",
     "use_quantized_grad": "true",
     "num_grad_quant_bins": "8",
     "stochastic_rounding": "true",
@@ -139,21 +136,21 @@ LIGHTGBM_MULTICLASS_PARAMS = {
 
 LIGHTGBM_BINARY_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
-    "deterministic": True,
     "min_gain_to_split": 0.001,
     "n_estimators": 275,
     "max_depth": 5,
-    "max_cat_threshold": 80,
-    "min_data_per_group": 25,
-    "cat_l2": 10,
-    "cat_smooth": 12,
     "learning_rate": 0.05,
-    "feature_fraction": 1.0,
-    "min_sum_hessian_in_leaf": 0.01,
     "objective": "binary",
-    "class_weight": "balanced",  # TODO pass dict with weights for each class
+    "class_weight": "balanced",
+    "deterministic": True,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 20,
+    "cat_smooth": 18,
+    "cat_l2" : 8,
     "verbosity": -1,
 }
+
+LIGHTGBM_EARLY_STOPPING_ROUNDS = 20
 
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
@@ -757,11 +754,17 @@ class LightGBMWrapper(EstimatorWrapper):
             logger=logger,
         )
         self.cat_features = None
+        self.n_classes = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
         x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
-        params["callbacks"] = [lgb.early_stopping(stopping_rounds=20, verbose=False)]
+        if self.target_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
+            self.n_classes = len(np.unique(y_numpy))
+        if LIGHTGBM_EARLY_STOPPING_ROUNDS is not None:
+            params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
+        if self.cat_features:
+            params["categorical_feature"] = self.cat_features
         x = fill_na_cat_features(x, self.cat_features)
         for feature in self.cat_features:
             x[feature] = x[feature].astype("category").cat.codes
@@ -782,31 +785,40 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
         try:
-            # Suppress specific warning from SHAP for LightGBM binary classifier
-            warnings.filterwarnings(
-                "ignore",
-                message=(
-                    "LightGBM binary classifier with TreeExplainer shap values output has changed to a list of ndarray"
-                ),
+            shap_matrix = estimator.predict(
+                x,
+                predict_disable_shape_check=True,
+                raw_score=True,
+                pred_leaf=False,
+                pred_early_stop=True,
+                pred_contrib=True,
             )
-            from shap import TreeExplainer
 
-            if not isinstance(estimator, (LGBMRegressor, LGBMClassifier)):
-                return None
+            if self.target_type == ModelTaskType.MULTICLASS:
+                n_feat = x.shape[1]
+                shap_matrix.shape = (shap_matrix.shape[0], self.n_classes, n_feat + 1)
+                shap_matrix = np.mean(np.abs(shap_matrix), axis=1)
 
-            explainer = TreeExplainer(estimator)
+            # exclude base value
+            shap_matrix = shap_matrix[:, :-1]
 
-            shap_values = explainer.shap_values(x)
-
-            # For classification, shap_values is returned as a list for each class
-            # Take values for the positive class
-            if isinstance(shap_values, list):
-                shap_values = shap_values[1]
-
-            # Calculate mean absolute SHAP value for each feature
             feature_importance = {}
             for i, col in enumerate(x.columns):
-                feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
+                feature_importance[col] = np.mean(np.abs(shap_matrix[:, i]))
+
+            # # exclude last column (base value)
+            # shap_values_only = shap_values[:, :-1]
+            # mean_abs_shap = np.mean(np.abs(shap_values_only), axis=0)
+
+            # # For classification, shap_values is returned as a list for each class
+            # # Take values for the positive class
+            # if isinstance(shap_values, list):
+            #     shap_values = shap_values[1]
+
+            # # Calculate mean absolute SHAP value for each feature
+            # feature_importance = {}
+            # for i, col in enumerate(x.columns):
+            #     feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
 
             return feature_importance
 

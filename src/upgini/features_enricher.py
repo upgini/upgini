@@ -1512,8 +1512,7 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
 
         filtered_enriched_features = self.__filtered_enriched_features(
-            importance_threshold,
-            max_features,
+            importance_threshold, max_features, trace_id, validated_X
         )
         filtered_enriched_features = [c for c in filtered_enriched_features if c not in client_features]
 
@@ -2541,7 +2540,9 @@ if response.status_code == 200:
                 for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
                 if c not in self.dropped_client_feature_names_
             ]
-            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
+            filtered_columns = self.__filtered_enriched_features(
+                importance_threshold, max_features, trace_id, validated_X
+            )
             selecting_columns.extend(
                 c for c in filtered_columns if c in result.columns and c not in validated_X.columns
             )
@@ -3805,6 +3806,46 @@ if response.status_code == 200:
 
         return result_features
 
+    def __get_features_importance_from_server(self, trace_id: str, df: pd.DataFrame):
+        if self._search_task is None:
+            raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception(self.bundle.get("missing_features_meta"))
+
+        original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
+        df = df.rename(columns=original_names_dict)
+
+        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
+
+        importances = {}
+
+        for feature_meta in features_meta:
+            if feature_meta.name in original_names_dict.keys():
+                feature_meta.name = original_names_dict[feature_meta.name]
+
+            is_client_feature = feature_meta.name in df.columns
+
+            if feature_meta.shap_value == 0.0:
+                continue
+
+            # Use only important features
+            if (
+                feature_meta.name == COUNTRY
+                # In select_features mode we select also from etalon features and need to show them
+                or (not self.fit_select_features and is_client_feature)
+            ):
+                continue
+
+            # Temporary workaround for duplicate features metadata
+            if feature_meta.name in importances:
+                self.logger.warning(f"WARNING: Duplicate feature metadata: {feature_meta}")
+                continue
+
+            importances[feature_meta.name] = feature_meta.shap_value
+
+        return importances
+
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
     ):
@@ -3990,9 +4031,12 @@ if response.status_code == 200:
         )
 
     def __filtered_importance_names(
-        self, importance_threshold: Optional[float], max_features: Optional[int]
+        self, importance_threshold: Optional[float], max_features: Optional[int], trace_id: str, df: pd.DataFrame
     ) -> List[str]:
-        if len(self.feature_names_) == 0:
+        # get features importance from server
+        filtered_importances = self.__get_features_importance_from_server(trace_id, df)
+
+        if len(filtered_importances) == 0:
             return []
 
         filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
@@ -4212,11 +4256,13 @@ if response.status_code == 200:
         self,
         importance_threshold: Optional[float],
         max_features: Optional[int],
+        trace_id: str,
+        df: pd.DataFrame,
     ) -> List[str]:
         importance_threshold = self.__validate_importance_threshold(importance_threshold)
         max_features = self.__validate_max_features(max_features)
 
-        return self.__filtered_importance_names(importance_threshold, max_features)
+        return self.__filtered_importance_names(importance_threshold, max_features, trace_id, df)
 
     def __detect_missing_search_keys(
         self,
