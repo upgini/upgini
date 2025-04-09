@@ -160,12 +160,12 @@ class Embeddings(PandasOperator):
 class Bin(PandasOperator):
     name: str = "bin"
     is_unary: bool = True
-    output_type: Optional[str] = "string"
+    output_type: Optional[str] = "category"
     bin_bounds: List[int] = []
     is_categorical: bool = True
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return data.apply(self._bin, bounds=self.bin_bounds).fillna(-1).astype(int).astype(str)
+        return data.apply(self._bin, bounds=self.bin_bounds).fillna(-1).astype(int).astype("category")
 
     def _bin(self, f, bounds):
         if f is None or np.isnan(f):
