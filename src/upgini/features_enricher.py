@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -3812,6 +3813,7 @@ if response.status_code == 200:
         features_meta = self._search_task.get_all_features_metadata_v2()
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
+        features_meta = deepcopy(features_meta)
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         df = df.rename(columns=original_names_dict)
@@ -3854,6 +3856,7 @@ if response.status_code == 200:
         features_meta = self._search_task.get_all_features_metadata_v2()
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
+        features_meta = deepcopy(features_meta)
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
@@ -4039,11 +4042,11 @@ if response.status_code == 200:
         if len(filtered_importances) == 0:
             return []
 
-        filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
-
         if importance_threshold is not None:
             filtered_importances = [
-                (name, importance) for name, importance in filtered_importances if importance > importance_threshold
+                (name, importance)
+                for name, importance in filtered_importances.items()
+                if importance > importance_threshold
             ]
         if max_features is not None:
             filtered_importances = list(filtered_importances)[:max_features]
