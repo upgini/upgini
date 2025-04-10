@@ -93,7 +93,7 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def get_params(self) -> Dict[str, str | None]:
+    def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
         res.update(
             {
