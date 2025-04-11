@@ -162,16 +162,18 @@ class Feature:
             return self.cached_display_name
 
         should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary else False
-        prev_name = [self.children[0].get_op_display_name()] if should_stack_op else []
+        components = []
 
         if self.alias:
-            components = ["f_autofe", self.alias]
-        elif shorten and (not self.op.is_unary or should_stack_op):
-            components = ["f_autofe"] + prev_name + [self.get_op_display_name()]
-        else:
-            components = (
-                ["f_" + "_f_".join(self.get_columns(**kwargs))] + ["autofe"] + prev_name + [self.get_op_display_name()]
+            components.extend(["f_autofe", self.alias])
+        elif should_stack_op:
+            components.extend(
+                [self.children[0].get_display_name(cache=cache, shorten=shorten, **kwargs), self.get_op_display_name()]
             )
+        elif shorten:
+            components.extend(["f_autofe", self.get_op_display_name()])
+        else:
+            components = ["f_" + "_f_".join(self.get_columns(**kwargs))] + ["autofe", self.get_op_display_name()]
         components.extend([str(self.display_index)] if self.display_index is not None else [])
         display_name = "_".join(components)
 

@@ -46,6 +46,14 @@ def test_get_display_name():
     assert feature8.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_value_autofe_lag_10d_123"
     assert feature8.get_display_name(shorten=True) == "f_autofe_lag_10d_123"
 
+    feature9 = Feature.from_formula("bin(abs(date_diff(b,c)))").set_display_index("123")
+    assert feature9.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_abs_bin_123"
+    assert feature9.get_display_name(shorten=True) == "f_autofe_date_diff_type1_abs_bin_123"
+
+    feature10 = Feature.from_formula("date_per(date, abs(date_diff(b,c)))").set_display_index("123")
+    assert feature10.get_display_name(cache=False) == "f_date_f_b_f_c_autofe_date_per_method1_123"
+    assert feature10.get_display_name(shorten=True) == "f_autofe_date_per_method1_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
