@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -841,7 +842,7 @@ class FeaturesEnricher(TransformerMixin):
         max_features: Optional[int] = None,
         remove_outliers_calc_metrics: Optional[bool] = None,
         trace_id: Optional[str] = None,
-        silent: bool = False,
+        internal_call: bool = False,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         **kwargs,
@@ -1095,7 +1096,7 @@ class FeaturesEnricher(TransformerMixin):
                         enriched_shaps = enriched_cv_result.shap_values
 
                         if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, fitting_X, enriched_shaps)
+                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent=not internal_call)
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1256,14 +1257,14 @@ class FeaturesEnricher(TransformerMixin):
                     if self.raise_validation_error:
                         raise e
                 else:
-                    if not silent:
+                    if not internal_call:
                         self._dump_python_libs()
                         self.__display_support_link()
                     raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
-    def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float]):
+    def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
         new_shaps = {
             renaming.get(feature, feature): _round_shap_value(shap)
@@ -1272,7 +1273,7 @@ class FeaturesEnricher(TransformerMixin):
         }
         self.__prepare_feature_importances(trace_id, df, new_shaps)
 
-        if self.features_info_display_handle is not None:
+        if not silent and self.features_info_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1284,7 +1285,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except (ImportError, NameError):
                 pass
-        if self.data_sources_display_handle is not None:
+        if not silent and self.data_sources_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1296,7 +1297,7 @@ class FeaturesEnricher(TransformerMixin):
                 )
             except (ImportError, NameError):
                 pass
-        if self.autofe_features_display_handle is not None:
+        if not silent and self.autofe_features_display_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
                 autofe_descriptions_df = self.get_autofe_features_description()
@@ -1309,7 +1310,7 @@ class FeaturesEnricher(TransformerMixin):
                     )
             except (ImportError, NameError):
                 pass
-        if self.report_button_handle is not None:
+        if not silent and self.report_button_handle is not None:
             try:
                 _ = get_ipython()  # type: ignore
 
@@ -1512,8 +1513,7 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
 
         filtered_enriched_features = self.__filtered_enriched_features(
-            importance_threshold,
-            max_features,
+            importance_threshold, max_features, trace_id, validated_X
         )
         filtered_enriched_features = [c for c in filtered_enriched_features if c not in client_features]
 
@@ -2541,7 +2541,9 @@ if response.status_code == 200:
                 for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
                 if c not in self.dropped_client_feature_names_
             ]
-            filtered_columns = self.__filtered_enriched_features(importance_threshold, max_features)
+            filtered_columns = self.__filtered_enriched_features(
+                importance_threshold, max_features, trace_id, validated_X
+            )
             selecting_columns.extend(
                 c for c in filtered_columns if c in result.columns and c not in validated_X.columns
             )
@@ -3248,8 +3250,7 @@ if response.status_code == 200:
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
             raise ValidationError(self.bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-        eval_X = eval_pair[0]
-        eval_y = eval_pair[1]
+        eval_X, eval_y = eval_pair
 
         if _num_samples(eval_X) == 0:
             raise ValidationError(self.bundle.get("eval_x_is_empty"))
@@ -3805,6 +3806,47 @@ if response.status_code == 200:
 
         return result_features
 
+    def __get_features_importance_from_server(self, trace_id: str, df: pd.DataFrame):
+        if self._search_task is None:
+            raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception(self.bundle.get("missing_features_meta"))
+        features_meta = deepcopy(features_meta)
+
+        original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
+        df = df.rename(columns=original_names_dict)
+
+        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
+
+        importances = {}
+
+        for feature_meta in features_meta:
+            if feature_meta.name in original_names_dict.keys():
+                feature_meta.name = original_names_dict[feature_meta.name]
+
+            is_client_feature = feature_meta.name in df.columns
+
+            if feature_meta.shap_value == 0.0:
+                continue
+
+            # Use only important features
+            if (
+                feature_meta.name == COUNTRY
+                # In select_features mode we select also from etalon features and need to show them
+                or (not self.fit_select_features and is_client_feature)
+            ):
+                continue
+
+            # Temporary workaround for duplicate features metadata
+            if feature_meta.name in importances:
+                self.logger.warning(f"WARNING: Duplicate feature metadata: {feature_meta}")
+                continue
+
+            importances[feature_meta.name] = feature_meta.shap_value
+
+        return importances
+
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
     ):
@@ -3813,6 +3855,7 @@ if response.status_code == 200:
         features_meta = self._search_task.get_all_features_metadata_v2()
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
+        features_meta = deepcopy(features_meta)
 
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
@@ -3828,14 +3871,22 @@ if response.status_code == 200:
 
         original_shaps = {original_names_dict.get(fm.name, fm.name): fm.shap_value for fm in features_meta}
 
-        if updated_shaps is not None:
-            for fm in features_meta:
-                fm.shap_value = updated_shaps.get(fm.name, 0.0)
-
-        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+
+            if updated_shaps is not None:
+                updating_shap = updated_shaps.get(feature_meta.name)
+                if updating_shap is None:
+                    self.logger.warning(
+                        f"WARNING: Shap value for feature {feature_meta.name} not found and will be set to 0.0"
+                    )
+                    updating_shap = 0.0
+                feature_meta.shap_value = updating_shap
+
+        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
+
+        for feature_meta in features_meta:
 
             is_client_feature = feature_meta.name in df.columns
 
@@ -3848,7 +3899,7 @@ if response.status_code == 200:
             # Use only important features
             if (
                 # feature_meta.name in self.fit_generated_features or
-                feature_meta.name == COUNTRY
+                feature_meta.name == COUNTRY  # constant synthetic column
                 # In select_features mode we select also from etalon features and need to show them
                 or (not self.fit_select_features and is_client_feature)
             ):
@@ -3990,16 +4041,19 @@ if response.status_code == 200:
         )
 
     def __filtered_importance_names(
-        self, importance_threshold: Optional[float], max_features: Optional[int]
+        self, importance_threshold: Optional[float], max_features: Optional[int], trace_id: str, df: pd.DataFrame
     ) -> List[str]:
-        if len(self.feature_names_) == 0:
-            return []
+        # get features importance from server
+        filtered_importances = self.__get_features_importance_from_server(trace_id, df)
 
-        filtered_importances = list(zip(self.feature_names_, self.feature_importances_))
+        if len(filtered_importances) == 0:
+            return []
 
         if importance_threshold is not None:
             filtered_importances = [
-                (name, importance) for name, importance in filtered_importances if importance > importance_threshold
+                (name, importance)
+                for name, importance in filtered_importances.items()
+                if importance > importance_threshold
             ]
         if max_features is not None:
             filtered_importances = list(filtered_importances)[:max_features]
@@ -4084,7 +4138,10 @@ if response.status_code == 200:
             )
 
         if all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
-            msg = self.bundle.get("unregistered_only_personal_keys")
+            if self.__is_registered:
+                msg = self.bundle.get("only_custom_keys")
+            else:
+                msg = self.bundle.get("unregistered_only_personal_keys")
             self.logger.warning(msg + f" Provided search keys: {search_keys}")
             raise ValidationError(msg)
 
@@ -4135,7 +4192,7 @@ if response.status_code == 200:
             max_features=max_features,
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             trace_id=trace_id,
-            silent=True,
+            internal_call=True,
             progress_bar=progress_bar,
             progress_callback=progress_callback,
         )
@@ -4209,11 +4266,13 @@ if response.status_code == 200:
         self,
         importance_threshold: Optional[float],
         max_features: Optional[int],
+        trace_id: str,
+        df: pd.DataFrame,
     ) -> List[str]:
         importance_threshold = self.__validate_importance_threshold(importance_threshold)
         max_features = self.__validate_max_features(max_features)
 
-        return self.__filtered_importance_names(importance_threshold, max_features)
+        return self.__filtered_importance_names(importance_threshold, max_features, trace_id, df)
 
     def __detect_missing_search_keys(
         self,

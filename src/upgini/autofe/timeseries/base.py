@@ -1,5 +1,5 @@
 import abc
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from upgini.autofe.operator import PandasOperator
@@ -64,7 +64,7 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         return base_formula
 
     @classmethod
-    def _parse_offset_from_formula(cls, formula: str, base_regex: str) -> tuple[Optional[dict], Optional[str]]:
+    def _parse_offset_from_formula(cls, formula: str, base_regex: str) -> Tuple[Optional[Dict], Optional[str]]:
         """
         Parse the offset component from a formula.
 
