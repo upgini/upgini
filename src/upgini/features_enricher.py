@@ -3250,8 +3250,7 @@ if response.status_code == 200:
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
             raise ValidationError(self.bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
-        eval_X = eval_pair[0]
-        eval_y = eval_pair[1]
+        eval_X, eval_y = eval_pair
 
         if _num_samples(eval_X) == 0:
             raise ValidationError(self.bundle.get("eval_x_is_empty"))
@@ -3872,14 +3871,22 @@ if response.status_code == 200:
 
         original_shaps = {original_names_dict.get(fm.name, fm.name): fm.shap_value for fm in features_meta}
 
-        if updated_shaps is not None:
-            for fm in features_meta:
-                fm.shap_value = updated_shaps.get(fm.name, 0.0)
-
-        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         for feature_meta in features_meta:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
+
+            if updated_shaps is not None:
+                updating_shap = updated_shaps.get(feature_meta.name)
+                if updating_shap is None:
+                    self.logger.warning(
+                        f"WARNING: Shap value for feature {feature_meta.name} not found and will be set to 0.0"
+                    )
+                    updating_shap = 0.0
+                feature_meta.shap_value = updating_shap
+
+        features_meta.sort(key=lambda m: (-m.shap_value, m.name))
+
+        for feature_meta in features_meta:
 
             is_client_feature = feature_meta.name in df.columns
 
@@ -3892,7 +3899,7 @@ if response.status_code == 200:
             # Use only important features
             if (
                 # feature_meta.name in self.fit_generated_features or
-                feature_meta.name == COUNTRY
+                feature_meta.name == COUNTRY  # constant synthetic column
                 # In select_features mode we select also from etalon features and need to show them
                 or (not self.fit_select_features and is_client_feature)
             ):

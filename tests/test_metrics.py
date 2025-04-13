@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 
+from lightgbm import LGBMClassifier
 import numpy as np
 import pandas as pd
 import pytest
@@ -19,7 +20,7 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
     SearchKey,
 )
-from upgini.metrics import CATBOOST_BINARY_PARAMS
+from upgini.metrics import CATBOOST_BINARY_PARAMS, LIGHTGBM_BINARY_PARAMS
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
@@ -1254,6 +1255,132 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
     assert metrics2 is not None
 
     assert not metrics2.equals(metrics_df), "Metrics should be different for different model parameters"
+
+
+def test_lightgbm_metric_binary_with_cat_features(requests_mock: Mocker, update_metrics_flag: bool):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_summary(
+        requests_mock,
+        url,
+        search_task_id,
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="ads_feature1",
+                    type="numerical",
+                    source="ads",
+                    hit_rate=99.0,
+                    shap_value=10.1,
+                ),
+                FeaturesMetadataV2(
+                    name="cat_feature2",
+                    type="categorical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.2,
+                ),
+                FeaturesMetadataV2(
+                    name="feature1",
+                    type="numerical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+                FeaturesMetadataV2(
+                    name="country",
+                    type="categorical",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9900, hit_rate=0.99, hit_rate_percent=99.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    mock_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        ads_search_task_id,
+        validation_search_task_id,
+    )
+    path_to_mock_validation_features = os.path.join(
+        FIXTURE_DIR, "validation_features_with_entity_system_record_id.parquet"
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_validation_features)
+
+    df = pd.read_parquet(os.path.join(FIXTURE_DIR, "input_with_cat.parquet"))
+    df_train = df[0:500]
+    X = df_train[["phone", "country", "feature1", "cat_feature2"]]
+    y = df_train["target"]
+    eval_1 = df[500:750]
+    eval_2 = df[750:1000]
+    eval_X_1 = eval_1[["phone", "country", "feature1", "cat_feature2"]]
+    eval_y_1 = eval_1["target"]
+    eval_X_2 = eval_2[["phone", "country", "feature1", "cat_feature2"]]
+    eval_y_2 = eval_2["target"]
+    eval_set = [(eval_X_1, eval_y_1), (eval_X_2, eval_y_2)]
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
+        enricher.calculate_metrics()
+
+    enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False, select_features=False)
+
+    assert len(enriched_X) == len(X)
+
+    estimator = LGBMClassifier(**LIGHTGBM_BINARY_PARAMS)
+
+    metrics_df = enricher.calculate_metrics(estimator=estimator, scoring="roc_auc")
+    assert metrics_df is not None
+
+    if update_metrics_flag:
+        metrics_df.to_csv(
+            os.path.join(FIXTURE_DIR, "test_metrics/test_lightgbm_metric_binary_with_cat_features.csv"), index=False
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_metrics/test_lightgbm_metric_binary_with_cat_features.csv")
+    )
+
+    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
 
 
 def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):

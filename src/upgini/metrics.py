@@ -8,13 +8,14 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier, LGBMRegressor
-import lightgbm as lgb
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
+from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
@@ -125,7 +126,7 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "max_cat_threshold": 80,
     "min_data_per_group": 20,
     "cat_smooth": 18,
-    "cat_l2" : 8,
+    "cat_l2": 8,
     "objective": "multiclass",
     "class_weight": "balanced",
     "use_quantized_grad": "true",
@@ -146,7 +147,7 @@ LIGHTGBM_BINARY_PARAMS = {
     "max_cat_threshold": 80,
     "min_data_per_group": 20,
     "cat_smooth": 18,
-    "cat_l2" : 8,
+    "cat_l2": 8,
     "verbosity": -1,
 }
 
@@ -754,6 +755,7 @@ class LightGBMWrapper(EstimatorWrapper):
             logger=logger,
         )
         self.cat_features = None
+        self.cat_encoder = None
         self.n_classes = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
@@ -764,10 +766,13 @@ class LightGBMWrapper(EstimatorWrapper):
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
         if self.cat_features:
-            params["categorical_feature"] = self.cat_features
-        x = fill_na_cat_features(x, self.cat_features)
-        for feature in self.cat_features:
-            x[feature] = x[feature].astype("category").cat.codes
+            x = fill_na_cat_features(x, self.cat_features)
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            encoded = pd.DataFrame(
+                encoder.fit_transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
+            )
+            x[self.cat_features] = encoded
+            self.cat_encoder = encoder
         if not is_numeric_dtype(y_numpy):
             y_numpy = correct_string_target(y_numpy)
 
@@ -777,8 +782,10 @@ class LightGBMWrapper(EstimatorWrapper):
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
             x = fill_na_cat_features(x, self.cat_features)
-            for feature in self.cat_features:
-                x[feature] = x[feature].astype("category").cat.codes
+            if self.cat_encoder is not None:
+                x[self.cat_features] = pd.DataFrame(
+                    self.cat_encoder.transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
+                )
         if not is_numeric_dtype(y):
             y_numpy = correct_string_target(y_numpy)
         return x, y_numpy, params
