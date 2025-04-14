@@ -90,7 +90,8 @@ class FeatureInfo:
 def _get_feature_sample(feature_meta: FeaturesMetadataV2, data: Optional[pd.DataFrame]) -> str:
     if data is not None and len(data) > 0 and feature_meta.name in data.columns:
         if len(data) > 3:
-            feature_sample = np.random.choice(data[feature_meta.name].dropna().unique(), 3).tolist()
+            rand = np.random.RandomState(42)
+            feature_sample = rand.choice(data[feature_meta.name].dropna().unique(), 3).tolist()
         else:
             feature_sample = data[feature_meta.name].dropna().unique().tolist()
         if len(feature_sample) > 0 and isinstance(feature_sample[0], float):

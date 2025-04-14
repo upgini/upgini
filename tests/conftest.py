@@ -9,6 +9,20 @@ from upgini.ads import FileColumnMeaningType
 np.random.seed(42)
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-metrics",
+        action="store_true",
+        default=False,
+        help="Force update metrics",
+    )
+
+
+@pytest.fixture
+def update_metrics_flag(request):
+    return request.config.getoption("--update-metrics") or False
+
+
 @pytest.fixture
 def etalon():
     d = 1577836800000
@@ -21,8 +35,8 @@ def etalon():
             [4, d, 66666666, None, 0.5],
             [5, None, 77777777, 1, 0.5],
             [6, None, 88888888, 1, 0.5],
-            [7, d, 99999999, np.Inf, 0.5],
-            [8, d, 11111111, np.NaN, 0.5],
+            [7, d, 99999999, np.inf, 0.5],
+            [8, d, 11111111, np.nan, 0.5],
             [9, None, None, None, None],
         ],
         columns=["system_record_id", "timestamp", "msisdn", "target", "score"],

@@ -74,6 +74,8 @@ def remove_fintech_duplicates(
         # Checking for different dates by the same personal keys
         uniques = grouped_by_personal_cols[date_col].nunique()
         total = len(uniques)
+        if total == 0:
+            return segment_df, None
         diff_dates = len(uniques[uniques > 1])
         if diff_dates / total >= 0.6:
             return segment_df, None

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import inspect
 import logging
 import re
 from collections import defaultdict
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import catboost
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from catboost import CatBoost, CatBoostClassifier, CatBoostRegressor, Pool
+from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
+from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
@@ -27,11 +28,8 @@ except ImportError:
     from sklearn.metrics._scorer import SCORERS
 
     available_scorers = SCORERS
-from sklearn.metrics._regression import (
-    _check_reg_targets,
-    check_consistent_length,
-)
 from sklearn.metrics import mean_squared_error
+from sklearn.metrics._regression import _check_reg_targets, check_consistent_length
 from sklearn.model_selection import BaseCrossValidator
 
 from upgini.errors import ValidationError
@@ -88,12 +86,72 @@ CATBOOST_MULTICLASS_PARAMS = {
 
 LIGHTGBM_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
-    "num_leaves": 16,
+    # "num_leaves": 16,
+    # "n_estimators": 150,
+    # "min_child_weight": 1,
     "max_depth": 4,
-    "n_estimators": 150,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 25,
+    "num_boost_round": 150,
+    "cat_l2": 10,
+    "cat_smooth": 12,
     "learning_rate": 0.05,
-    "min_child_weight": 1,
+    "feature_fraction": 1.0,
+    "min_sum_hessian_in_leaf": 0.01,
 }
+
+LIGHTGBM_REGRESSION_PARAMS = {
+    "random_state": DEFAULT_RANDOM_STATE,
+    "deterministic": True,
+    "min_gain_to_split": 0.001,
+    "n_estimators": 275,
+    "max_depth": 5,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 25,
+    "cat_l2": 10,
+    "cat_smooth": 12,
+    "learning_rate": 0.05,
+    "feature_fraction": 1.0,
+    "min_sum_hessian_in_leaf": 0.01,
+    "objective": "huber",
+    "verbosity": -1,
+}
+
+LIGHTGBM_MULTICLASS_PARAMS = {
+    "random_state": DEFAULT_RANDOM_STATE,
+    "n_estimators": 275,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "min_gain_to_split": 0.001,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 20,
+    "cat_smooth": 18,
+    "cat_l2": 8,
+    "objective": "multiclass",
+    "class_weight": "balanced",
+    "use_quantized_grad": "true",
+    "num_grad_quant_bins": "8",
+    "stochastic_rounding": "true",
+    "verbosity": -1,
+}
+
+LIGHTGBM_BINARY_PARAMS = {
+    "random_state": DEFAULT_RANDOM_STATE,
+    "min_gain_to_split": 0.001,
+    "n_estimators": 275,
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "objective": "binary",
+    "class_weight": "balanced",
+    "deterministic": True,
+    "max_cat_threshold": 80,
+    "min_data_per_group": 20,
+    "cat_smooth": 18,
+    "cat_l2": 8,
+    "verbosity": -1,
+}
+
+LIGHTGBM_EARLY_STOPPING_ROUNDS = 20
 
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
@@ -211,6 +269,15 @@ SUPPORTED_CATBOOST_METRICS = {
 }
 
 
+def is_catboost_estimator(estimator):
+    try:
+        from catboost import CatBoostClassifier, CatBoostRegressor
+
+        return isinstance(estimator, (CatBoostClassifier, CatBoostRegressor))
+    except ImportError:
+        return False
+
+
 @dataclass
 class _CrossValResults:
     metric: Optional[float]
@@ -292,7 +359,7 @@ class EstimatorWrapper:
         self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
 
-    def _remove_empty_target_rows(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+    def _remove_empty_target_rows(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray]:
         joined = pd.concat([x, y], axis=1)
         joined = joined[joined[y.name].notna()]
         joined = joined.reset_index(drop=True)
@@ -346,12 +413,15 @@ class EstimatorWrapper:
             for estimator, split in zip(self.cv_estimators, splits):
                 _, validation_idx = split
                 cv_x = x.iloc[validation_idx]
-                cv_y = y[validation_idx]
+                if isinstance(y, pd.Series):
+                    cv_y = y.iloc[validation_idx]
+                else:
+                    cv_y = y[validation_idx]
                 shaps = self.calculate_shap(cv_x, cv_y, estimator)
                 if shaps is not None:
                     for feature, shap_value in shaps.items():
                         # shap_values_all_folds[feature] = shap_values_all_folds.get(feature, []) + shap_value.tolist()
-                        shap_values_all_folds[feature].extend(shap_value.tolist())
+                        shap_values_all_folds[feature].append(shap_value)
 
         if shap_values_all_folds:
             average_shap_values = {
@@ -427,21 +497,18 @@ class EstimatorWrapper:
         }
         if estimator is None:
             params = {}
-            params["has_time"] = has_date
-            # if metric_name.upper() in SUPPORTED_CATBOOST_METRICS:
-            #     params["eval_metric"] = SUPPORTED_CATBOOST_METRICS[metric_name.upper()]
             if target_type == ModelTaskType.MULTICLASS:
-                params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
+                params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
+                params = _get_add_params(params, LIGHTGBM_BINARY_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
+                params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
+                estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
@@ -450,31 +517,21 @@ class EstimatorWrapper:
             else:
                 estimator_copy = deepcopy(estimator)
             kwargs["estimator"] = estimator_copy
-            if isinstance(estimator, (CatBoostClassifier, CatBoostRegressor)):
+            if is_catboost_estimator(estimator):
                 if cat_features is not None:
                     for cat_feature in cat_features:
                         if cat_feature not in x.columns:
                             logger.error(
                                 f"Client cat_feature `{cat_feature}` not found in x columns: {x.columns.to_list()}"
                             )
-                    estimator_copy.set_params(
-                        # cat_features=[x.columns.get_loc(cat_feature) for cat_feature in cat_features]
-                        cat_features=cat_features
-                    )
+                    estimator_copy.set_params(cat_features=cat_features, has_time=has_date)
                 estimator = CatBoostWrapper(**kwargs)
             else:
-                try:
-                    from lightgbm import LGBMClassifier, LGBMRegressor
-
-                    if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
-                        estimator = LightGBMWrapper(**kwargs)
-                    else:
-                        logger.warning(
-                            f"Unexpected estimator is used for metrics: {estimator}. "
-                            "Default strategy for category features will be used"
-                        )
-                        estimator = OtherEstimatorWrapper(**kwargs)
-                except ModuleNotFoundError:
+                if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
+                    estimator = LightGBMWrapper(**kwargs)
+                elif is_catboost_estimator(estimator):
+                    estimator = CatBoostWrapper(**kwargs)
+                else:
                     logger.warning(
                         f"Unexpected estimator is used for metrics: {estimator}. "
                         "Default strategy for category features will be used"
@@ -487,7 +544,7 @@ class EstimatorWrapper:
 class CatBoostWrapper(EstimatorWrapper):
     def __init__(
         self,
-        estimator: Union[CatBoostClassifier, CatBoostRegressor],
+        estimator,
         scorer: Callable,
         metric_name: str,
         multiplier: int,
@@ -517,6 +574,9 @@ class CatBoostWrapper(EstimatorWrapper):
         x, y, groups, params = super()._prepare_to_fit(x, y)
 
         # Find embeddings
+        import catboost
+        from catboost import CatBoostClassifier
+
         if hasattr(CatBoostClassifier, "get_embedding_feature_indices"):
             emb_pattern = r"(.+)_emb\d+"
             self.emb_features = [c for c in x.columns if re.match(emb_pattern, c) and is_numeric_dtype(x[c])]
@@ -637,8 +697,10 @@ class CatBoostWrapper(EstimatorWrapper):
             else:
                 raise e
 
-    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator: CatBoost) -> Optional[Dict[str, float]]:
+    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
         try:
+            from catboost import Pool
+
             # Create Pool for fold data, if need (for example, when categorical features are present)
             fold_pool = Pool(
                 x,
@@ -693,27 +755,83 @@ class LightGBMWrapper(EstimatorWrapper):
             logger=logger,
         )
         self.cat_features = None
+        self.cat_encoder = None
+        self.n_classes = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
-        x, y, groups, params = super()._prepare_to_fit(x, y)
+        x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
+        if self.target_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
+            self.n_classes = len(np.unique(y_numpy))
+        if LIGHTGBM_EARLY_STOPPING_ROUNDS is not None:
+            params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
-        x = fill_na_cat_features(x, self.cat_features)
-        for feature in self.cat_features:
-            x[feature] = x[feature].astype("category").cat.codes
-        if not is_numeric_dtype(y):
-            y = correct_string_target(y)
+        if self.cat_features:
+            x = fill_na_cat_features(x, self.cat_features)
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            encoded = pd.DataFrame(
+                encoder.fit_transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
+            )
+            x[self.cat_features] = encoded
+            self.cat_encoder = encoder
+        if not is_numeric_dtype(y_numpy):
+            y_numpy = correct_string_target(y_numpy)
 
-        return x, y, groups, params
+        return x, y_numpy, groups, params
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
-        x, y, params = super()._prepare_to_calculate(x, y)
+        x, y_numpy, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
             x = fill_na_cat_features(x, self.cat_features)
-            for feature in self.cat_features:
-                x[feature] = x[feature].astype("category").cat.codes
+            if self.cat_encoder is not None:
+                x[self.cat_features] = pd.DataFrame(
+                    self.cat_encoder.transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
+                )
         if not is_numeric_dtype(y):
-            y = correct_string_target(y)
-        return x, y, params
+            y_numpy = correct_string_target(y_numpy)
+        return x, y_numpy, params
+
+    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
+        try:
+            shap_matrix = estimator.predict(
+                x,
+                predict_disable_shape_check=True,
+                raw_score=True,
+                pred_leaf=False,
+                pred_early_stop=True,
+                pred_contrib=True,
+            )
+
+            if self.target_type == ModelTaskType.MULTICLASS:
+                n_feat = x.shape[1]
+                shap_matrix.shape = (shap_matrix.shape[0], self.n_classes, n_feat + 1)
+                shap_matrix = np.mean(np.abs(shap_matrix), axis=1)
+
+            # exclude base value
+            shap_matrix = shap_matrix[:, :-1]
+
+            feature_importance = {}
+            for i, col in enumerate(x.columns):
+                feature_importance[col] = np.mean(np.abs(shap_matrix[:, i]))
+
+            # # exclude last column (base value)
+            # shap_values_only = shap_values[:, :-1]
+            # mean_abs_shap = np.mean(np.abs(shap_values_only), axis=0)
+
+            # # For classification, shap_values is returned as a list for each class
+            # # Take values for the positive class
+            # if isinstance(shap_values, list):
+            #     shap_values = shap_values[1]
+
+            # # Calculate mean absolute SHAP value for each feature
+            # feature_importance = {}
+            # for i, col in enumerate(x.columns):
+            #     feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
+
+            return feature_importance
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate SHAP values: {str(e)}")
+            return None
 
 
 class OtherEstimatorWrapper(EstimatorWrapper):

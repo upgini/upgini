@@ -204,7 +204,7 @@ def balance_undersample(
 def balance_undersample_forced(
     df: pd.DataFrame,
     target_column: str,
-    id_columns: List[str],
+    id_columns: Optional[List[str]],
     date_column: str,
     task_type: ModelTaskType,
     cv_type: Optional[CVType],
@@ -287,7 +287,7 @@ DEFAULT_TIME_UNIT_THRESHOLD = pd.Timedelta(weeks=4)
 
 def balance_undersample_time_series_trunc(
     df: pd.DataFrame,
-    id_columns: List[str],
+    id_columns: Optional[List[str]],
     date_column: str,
     sample_size: int,
     random_state: int = 42,
@@ -298,6 +298,8 @@ def balance_undersample_time_series_trunc(
     **kwargs,
 ):
     # Convert date column to datetime
+    if id_columns is None:
+        id_columns = [date_column]
     dates_df = df[id_columns + [date_column]].copy()
     dates_df[date_column] = pd.to_datetime(dates_df[date_column], unit="ms")
 
