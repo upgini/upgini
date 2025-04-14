@@ -780,9 +780,6 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
-        print("prepare to calculate")
-        print(x.dtypes.to_dict())
-        print(self.cat_features)
         if self.cat_features is not None:
             x = fill_na_cat_features(x, self.cat_features)
             if self.cat_encoder is not None:
