@@ -341,7 +341,7 @@ class EstimatorWrapper:
         for c in x.columns:
             if is_numeric_dtype(x[c]):
                 x[c] = x[c].astype(float)
-            else:
+            elif not x[c].dtype == "category":
                 x[c] = x[c].astype(str)
 
         if not isinstance(y, pd.Series):
@@ -765,6 +765,9 @@ class LightGBMWrapper(EstimatorWrapper):
         if LIGHTGBM_EARLY_STOPPING_ROUNDS is not None:
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
+        print("prepare to fit")
+        print(x.dtypes.to_dict())
+        print(self.cat_features)
         if self.cat_features:
             x = fill_na_cat_features(x, self.cat_features)
             encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
@@ -780,6 +783,9 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
+        print("prepare to calculate")
+        print(x.dtypes.to_dict())
+        print(self.cat_features)
         if self.cat_features is not None:
             x = fill_na_cat_features(x, self.cat_features)
             if self.cat_encoder is not None:
