@@ -765,9 +765,6 @@ class LightGBMWrapper(EstimatorWrapper):
         if LIGHTGBM_EARLY_STOPPING_ROUNDS is not None:
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
-        print("prepare to fit")
-        print(x.dtypes.to_dict())
-        print(self.cat_features)
         if self.cat_features:
             x = fill_na_cat_features(x, self.cat_features)
             encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
