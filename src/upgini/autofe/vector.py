@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -22,3 +22,25 @@ class Sum(PandasOperator, VectorizableMixin):
 
     def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
         return pd.DataFrame(data).T.fillna(0).sum(axis=1)
+
+
+class OnnxModel(PandasOperator):
+    name: str = "onnx"
+    is_vector: bool = True
+    output_type: Optional[str] = "float"
+    model_name: str
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "model_name": self.model_name,
+            }
+        )
+        return res
+
+    # def load_model(self):
+    #     ...
+
+    # def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+    #     ...
