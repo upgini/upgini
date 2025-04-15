@@ -451,6 +451,20 @@ def test_balance_undersampling_time_series_trunc():
     assert sampled_df["id"].nunique() == 1
     assert unique_dates(sampled_df) == ["2020-07-01"]
 
+    # Test empty id_columns
+    sampled_df = balance_undersample_time_series_trunc(
+        df=df,
+        id_columns=None,
+        date_column="date",
+        sample_size=6,
+        random_state=42,
+        highfreq_trunc_lengths=[pd.DateOffset(days=2), pd.DateOffset(days=1)],
+        lowfreq_trunc_lengths=[],
+    )
+    assert len(sampled_df) == 6
+    assert sampled_df["id"].nunique() == 3
+    assert unique_dates(sampled_df) == ["2020-01-02", "2020-01-03"]
+
 
 def test_binary_psi_calculation(requests_mock: Mocker):
     url = "http://fake_url"
