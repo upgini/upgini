@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from upgini.autofe.operator import PandasOperator, VectorizableMixin
+from upgini.autofe.operator import OperatorRegistry, PandasOperator, VectorizableMixin
 
 
 class Mean(PandasOperator, VectorizableMixin):
@@ -24,11 +24,11 @@ class Sum(PandasOperator, VectorizableMixin):
         return pd.DataFrame(data).T.fillna(0).sum(axis=1)
 
 
-class OnnxModel(PandasOperator):
+class OnnxModel(PandasOperator, metaclass=OperatorRegistry):
     name: str = "onnx"
     is_vector: bool = True
     output_type: Optional[str] = "float"
-    model_name: str
+    model_name: str = ""
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
