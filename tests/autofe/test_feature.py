@@ -13,7 +13,8 @@ from upgini.autofe.vector import Mean
 
 def test_get_display_name():
     feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
-    assert feature1.get_display_name() == "f_f1_autofe_abs_123"
+    assert feature1.get_display_name(cache=False) == "f_f1_autofe_abs_123"
+    assert feature1.get_display_name(shorten=True) == "f_f1_autofe_abs_123"
 
     feature2 = Feature.from_formula("(f1/f2)").set_display_index("123")
     assert feature2.get_display_name(cache=False) == "f_f1_f_f2_autofe_div_123"

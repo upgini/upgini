@@ -170,7 +170,7 @@ class Feature:
             components.extend(
                 [self.children[0].get_display_name(cache=cache, shorten=shorten, **kwargs), self.get_op_display_name()]
             )
-        elif shorten:
+        elif shorten and not self.op.is_unary:
             components.extend(["f_autofe", self.get_op_display_name()])
         else:
             components = ["f_" + "_f_".join(self.get_columns(**kwargs))] + ["autofe", self.get_op_display_name()]
