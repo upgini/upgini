@@ -55,6 +55,14 @@ def test_get_display_name():
     assert feature10.get_display_name(cache=False) == "f_date_f_b_f_c_autofe_date_per_method1_123"
     assert feature10.get_display_name(shorten=True) == "f_autofe_date_per_method1_123"
 
+    feature11 = Feature.from_formula("date_diff_min(date,vectorize(f1,f2,f3))").set_display_index("123")
+    feature11.op.alias = "date_diff_min_vectorize"
+    assert feature11.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_f3_autofe_date_diff_min_vectorize_123"
+    assert (
+        feature11.get_display_name(cache=False, use_op_alias=False) == "f_date_f_f1_f_f2_f_f3_autofe_date_diff_min_123"
+    )
+    assert feature11.get_display_name(shorten=True) == "f_autofe_date_diff_min_vectorize_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")
