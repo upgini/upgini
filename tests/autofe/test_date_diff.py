@@ -148,9 +148,9 @@ def test_date_diff_list_bounded():
         columns=["date1", "date2", "date3"],
     )
 
-    def check_num_by_years(lower_bound, upper_bound, expected_formula, expected_values):
+    def check_num_by_years(lower_bound, upper_bound, expected_formula, expected_values, normalize=False):
         operand = DateListDiffBounded(
-            diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound
+            diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound, normalize=normalize
         )
         assert operand.to_formula() == expected_formula
         assert_series_equal(operand.calculate_binary(df.date1, df.date2).rename(None), expected_values)
@@ -161,6 +161,18 @@ def test_date_diff_list_bounded():
     check_num_by_years(30, 45, "date_diff_Y_30_45_count", pd.Series([0.0, 1.0, 0.0, 0.0, None, 0.0]))
     check_num_by_years(45, 60, "date_diff_Y_45_60_count", pd.Series([0.0, 1.0, 0.0, 0.0, None, 0.0]))
     check_num_by_years(60, None, "date_diff_Y_60_plusinf_count", pd.Series([0.0, 1.0, 0.0, 0.0, None, 0.0]))
+
+    # Test with normalization
+    check_num_by_years(
+        0, 18, "date_diff_Y_0_18_count_norm", pd.Series([2.0 / 3.0, 1.0 / 7.0, 0.0, 0.0, None, 0.0]), normalize=True
+    )
+    check_num_by_years(
+        18,
+        23,
+        "date_diff_Y_18_23_count_norm",
+        pd.Series([1.0 / 3.0, 2.0 / 7.0, 2.0 / 2.0, 0.0, None, 0.0]),
+        normalize=True,
+    )
 
     operand = DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=0, upper_bound=18)
     assert_series_equal(
@@ -175,6 +187,7 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound == 18
     assert op.upper_bound == 23
     assert op.aggregation == "count"
+    assert op.normalize is False
     assert op.to_formula() == "date_diff_Y_18_23_count"
 
     # Test with only lower bound
@@ -183,6 +196,7 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound == 60
     assert op.upper_bound is None
     assert op.aggregation == "mean"
+    assert op.normalize is False
     assert op.to_formula() == "date_diff_D_60_plusinf_mean"
 
     # Test with only upper bound
@@ -191,7 +205,17 @@ def test_date_list_diff_bounded_from_formula():
     assert op.lower_bound is None
     assert op.upper_bound == 18
     assert op.aggregation == "nunique"
+    assert op.normalize is False
     assert op.to_formula() == "date_diff_Y_minusinf_18_nunique"
+
+    # Test with normalization
+    op = DateListDiffBounded.from_formula("date_diff_Y_18_23_count_norm")
+    assert op.diff_unit == "Y"
+    assert op.lower_bound == 18
+    assert op.upper_bound == 23
+    assert op.aggregation == "count"
+    assert op.normalize is True
+    assert op.to_formula() == "date_diff_Y_18_23_count_norm"
 
     # Test invalid formula returns None
     assert DateListDiffBounded.from_formula("invalid_formula") is None
@@ -211,4 +235,18 @@ def test_date_list_diff_bounded_parse_obj():
     assert parsed_date_diff.upper_bound == 25
     assert parsed_date_diff.aggregation == "count"
     assert parsed_date_diff.replace_negative is True
+    assert parsed_date_diff.normalize is None
     assert parsed_date_diff.to_formula() == "date_diff_Y_18_25_count"
+
+    # Test with normalization
+    date_diff = DateListDiffBounded(diff_unit="Y", lower_bound=18, upper_bound=25, aggregation="count", normalize=True)
+
+    date_diff_dict = date_diff.get_params()
+    parsed_date_diff = DateListDiffBounded.parse_obj(date_diff_dict)
+
+    assert parsed_date_diff.diff_unit == "Y"
+    assert parsed_date_diff.lower_bound == 18
+    assert parsed_date_diff.upper_bound == 25
+    assert parsed_date_diff.aggregation == "count"
+    assert parsed_date_diff.normalize is True
+    assert parsed_date_diff.to_formula() == "date_diff_Y_18_25_count_norm"

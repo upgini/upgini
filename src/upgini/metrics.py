@@ -326,7 +326,7 @@ class EstimatorWrapper:
         for c in x.columns:
             if is_numeric_dtype(x[c]):
                 x[c] = x[c].astype(float)
-            else:
+            elif not x[c].dtype == "category":
                 x[c] = x[c].astype(str)
 
         if not isinstance(y, pd.Series):

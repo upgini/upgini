@@ -8,6 +8,13 @@ def test_get_operands_from_registry():
     assert freq.name == "freq"
     assert freq.__class__.__name__ == "Freq"
 
+    # Test Bin operand
+    bincat = OperatorRegistry.get_operator("bin")
+    assert bincat is not None
+    assert bincat.name == "bin"
+    assert bincat.__class__.__name__ == "Bin"
+    assert bincat.is_categorical is True
+
     # Test parametrized group by operand
     parsed = OperatorRegistry.get_operator("GroupByThenMin")
     assert parsed is not None

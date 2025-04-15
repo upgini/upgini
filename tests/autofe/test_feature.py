@@ -13,7 +13,8 @@ from upgini.autofe.vector import Mean
 
 def test_get_display_name():
     feature1 = Feature.from_formula("abs(f1)").set_display_index("123")
-    assert feature1.get_display_name() == "f_f1_autofe_abs_123"
+    assert feature1.get_display_name(cache=False) == "f_f1_autofe_abs_123"
+    assert feature1.get_display_name(shorten=True) == "f_f1_autofe_abs_123"
 
     feature2 = Feature.from_formula("(f1/f2)").set_display_index("123")
     assert feature2.get_display_name(cache=False) == "f_f1_f_f2_autofe_div_123"
@@ -45,6 +46,22 @@ def test_get_display_name():
     feature8 = Feature.from_formula("lag_10D(date,f1,f2,value)").set_display_index("123")
     assert feature8.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_value_autofe_lag_10d_123"
     assert feature8.get_display_name(shorten=True) == "f_autofe_lag_10d_123"
+
+    feature9 = Feature.from_formula("bin(abs(date_diff(b,c)))").set_display_index("123")
+    assert feature9.get_display_name(cache=False) == "f_b_f_c_autofe_date_diff_type1_abs_bin_123"
+    assert feature9.get_display_name(shorten=True) == "f_autofe_date_diff_type1_abs_bin_123"
+
+    feature10 = Feature.from_formula("date_per(date, abs(date_diff(b,c)))").set_display_index("123")
+    assert feature10.get_display_name(cache=False) == "f_date_f_b_f_c_autofe_date_per_method1_123"
+    assert feature10.get_display_name(shorten=True) == "f_autofe_date_per_method1_123"
+
+    feature11 = Feature.from_formula("date_diff_min(date,vectorize(f1,f2,f3))").set_display_index("123")
+    feature11.op.alias = "date_diff_min_vectorize"
+    assert feature11.get_display_name(cache=False) == "f_date_f_f1_f_f2_f_f3_autofe_date_diff_min_vectorize_123"
+    assert (
+        feature11.get_display_name(cache=False, use_op_alias=False) == "f_date_f_f1_f_f2_f_f3_autofe_date_diff_min_123"
+    )
+    assert feature11.get_display_name(shorten=True) == "f_autofe_date_diff_min_vectorize_123"
 
 
 def test_get_hash():

@@ -187,15 +187,20 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
 class DateListDiffBounded(DateListDiff, ParametrizedOperator):
     lower_bound: Optional[int] = None
     upper_bound: Optional[int] = None
+    normalize: Optional[bool] = None
 
     def to_formula(self) -> str:
         lower_bound = "minusinf" if self.lower_bound is None else self.lower_bound
         upper_bound = "plusinf" if self.upper_bound is None else self.upper_bound
-        return f"date_diff_{self.diff_unit}_{lower_bound}_{upper_bound}_{self.aggregation}"
+        norm = "_norm" if self.normalize else ""
+        return f"date_diff_{self.diff_unit}_{lower_bound}_{upper_bound}_{self.aggregation}{norm}"
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["DateListDiffBounded"]:
         import re
+
+        normalize = formula.endswith("_norm")
+        formula = formula.replace("_norm", "")
 
         pattern = r"^date_diff_([^_]+)_((minusinf|\d+))_((plusinf|\d+))_(\w+)$"
         match = re.match(pattern, formula)
@@ -207,8 +212,13 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperator):
         lower_bound = None if match.group(2) == "minusinf" else int(match.group(2))
         upper_bound = None if match.group(4) == "plusinf" else int(match.group(4))
         aggregation = match.group(6)
-
-        return cls(diff_unit=diff_unit, lower_bound=lower_bound, upper_bound=upper_bound, aggregation=aggregation)
+        return cls(
+            diff_unit=diff_unit,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            aggregation=aggregation,
+            normalize=normalize,
+        )
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
@@ -216,14 +226,20 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperator):
             res["lower_bound"] = str(self.lower_bound)
         if self.upper_bound is not None:
             res["upper_bound"] = str(self.upper_bound)
+        if self.normalize is not None:
+            res["normalize"] = str(self.normalize)
         return res
 
     def _agg(self, x):
+        orig_len = len(x)
         x = x[
             (x >= (self.lower_bound if self.lower_bound is not None else -np.inf))
             & (x < (self.upper_bound if self.upper_bound is not None else np.inf))
         ]
-        return super()._agg(x)
+        agg_res = super()._agg(x)
+        if self.normalize and orig_len > 0:
+            return agg_res / orig_len
+        return agg_res
 
 
 class DatePercentileBase(PandasOperator, abc.ABC):

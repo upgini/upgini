@@ -154,24 +154,34 @@ class Feature:
         for child in self.children:
             child.delete_data()
 
-    def get_op_display_name(self) -> str:
-        return (self.op.alias or self.op.to_formula()).lower()
+    def get_op_display_name(self, use_alias: bool = True) -> str:
+        return (self.op.alias or self.op.to_formula()).lower() if use_alias else self.op.to_formula()
 
-    def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
+    def get_display_name(self, cache: bool = True, shorten: bool = False, use_op_alias: bool = True, **kwargs) -> str:
         if self.cached_display_name is not None and cache:
             return self.cached_display_name
 
         should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary else False
-        prev_name = [self.children[0].get_op_display_name()] if should_stack_op else []
+        components = []
 
         if self.alias:
-            components = ["f_autofe", self.alias]
-        elif shorten and (not self.op.is_unary or should_stack_op):
-            components = ["f_autofe"] + prev_name + [self.get_op_display_name()]
-        else:
-            components = (
-                ["f_" + "_f_".join(self.get_columns(**kwargs))] + ["autofe"] + prev_name + [self.get_op_display_name()]
+            components.extend(["f_autofe", self.alias])
+        elif should_stack_op:
+            components.extend(
+                [
+                    self.children[0].get_display_name(
+                        cache=cache, shorten=shorten, use_op_alias=use_op_alias, **kwargs
+                    ),
+                    self.get_op_display_name(use_alias=use_op_alias),
+                ]
             )
+        elif shorten and not self.op.is_unary:
+            components.extend(["f_autofe", self.get_op_display_name(use_alias=use_op_alias)])
+        else:
+            components = ["f_" + "_f_".join(self.get_columns(**kwargs))] + [
+                "autofe",
+                self.get_op_display_name(use_alias=use_op_alias),
+            ]
         components.extend([str(self.display_index)] if self.display_index is not None else [])
         display_name = "_".join(components)
 
