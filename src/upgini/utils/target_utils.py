@@ -297,9 +297,9 @@ def balance_undersample_time_series_trunc(
     time_unit_threshold: pd.Timedelta = DEFAULT_TIME_UNIT_THRESHOLD,
     **kwargs,
 ):
-    # Convert date column to datetime
     if id_columns is None:
-        id_columns = [date_column]
+        id_columns = []
+    # Convert date column to datetime
     dates_df = df[id_columns + [date_column]].copy()
     dates_df[date_column] = pd.to_datetime(dates_df[date_column], unit="ms")
 
