@@ -19,6 +19,7 @@ from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 try:
     from sklearn.metrics import get_scorer_names
@@ -30,7 +31,7 @@ except ImportError:
     available_scorers = SCORERS
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics._regression import _check_reg_targets, check_consistent_length
-from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -84,22 +85,6 @@ CATBOOST_MULTICLASS_PARAMS = {
     "auto_class_weights": "Balanced",
 }
 
-LIGHTGBM_PARAMS = {
-    "random_state": DEFAULT_RANDOM_STATE,
-    # "num_leaves": 16,
-    # "n_estimators": 150,
-    # "min_child_weight": 1,
-    "max_depth": 4,
-    "max_cat_threshold": 80,
-    "min_data_per_group": 25,
-    "num_boost_round": 150,
-    "cat_l2": 10,
-    "cat_smooth": 12,
-    "learning_rate": 0.05,
-    "feature_fraction": 1.0,
-    "min_sum_hessian_in_leaf": 0.01,
-}
-
 LIGHTGBM_REGRESSION_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
     "deterministic": True,
@@ -128,7 +113,7 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "cat_smooth": 18,
     "cat_l2": 8,
     "objective": "multiclass",
-    "class_weight": "balanced",
+    # "class_weight": "balanced",
     "use_quantized_grad": "true",
     "num_grad_quant_bins": "8",
     "stochastic_rounding": "true",
@@ -142,7 +127,7 @@ LIGHTGBM_BINARY_PARAMS = {
     "max_depth": 5,
     "learning_rate": 0.05,
     "objective": "binary",
-    "class_weight": "balanced",
+    # "class_weight": "balanced",
     "deterministic": True,
     "max_cat_threshold": 80,
     "min_data_per_group": 20,
@@ -496,7 +481,7 @@ class EstimatorWrapper:
             "logger": logger,
         }
         if estimator is None:
-            params = {}
+            params = {"random_state": DEFAULT_RANDOM_STATE}
             if target_type == ModelTaskType.MULTICLASS:
                 params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
                 params = _get_add_params(params, add_params)
@@ -506,7 +491,8 @@ class EstimatorWrapper:
                 params = _get_add_params(params, add_params)
                 estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
+                if not isinstance(cv, TimeSeriesSplit) and not isinstance(cv, BlockedTimeSeriesSplit):
+                    params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
                 params = _get_add_params(params, add_params)
                 estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
             else:
