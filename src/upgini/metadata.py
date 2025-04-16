@@ -326,7 +326,7 @@ class RuntimeParameters(BaseModel):
 
 
 class AutoFEParameters(BaseModel):
-    ts_gap_days: Optional[int] = None
+    ts_gap_days: int = 0
 
 
 class SearchCustomization(BaseModel):
