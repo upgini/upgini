@@ -749,6 +749,8 @@ class LightGBMWrapper(EstimatorWrapper):
         if self.target_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]:
             self.n_classes = len(np.unique(y_numpy))
         if LIGHTGBM_EARLY_STOPPING_ROUNDS is not None:
+            if self.target_type == ModelTaskType.BINARY:
+                params["eval_metric"] = "auc"
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
         if self.cat_features:

@@ -1,2 +1,2 @@
 Dataset type,Rows,Mean target,Baseline GINI,Enriched GINI,Uplift
-Train,5319,0.6364,0.005 ± 0.032,-0.002 ± 0.026,-0.006360200390036819
+Train,5319,0.6364,0.010 ± 0.037,0.001 ± 0.031,-0.00859938720713822
