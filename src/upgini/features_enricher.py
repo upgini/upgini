@@ -3999,6 +3999,10 @@ if response.status_code == 200:
                         description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = bc.hashed_name
                         feature_idx += 1
 
+                # Don't show features with more than 2 base columns
+                if feature_idx > 3:
+                    continue
+
                 description[self.bundle.get("autofe_descriptions_function")] = ",".join(
                     sorted(autofe_feature.get_all_operand_names())
                 )
