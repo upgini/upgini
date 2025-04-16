@@ -481,7 +481,7 @@ class EstimatorWrapper:
             "logger": logger,
         }
         if estimator is None:
-            params = {"random_state": DEFAULT_RANDOM_STATE}
+            params = {"random_state": DEFAULT_RANDOM_STATE, "verbose": -1}
             if target_type == ModelTaskType.MULTICLASS:
                 params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
                 params = _get_add_params(params, add_params)
