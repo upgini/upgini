@@ -1,9 +1,9 @@
 import logging
 import tempfile
 import time
+import uuid
 from functools import lru_cache
 from typing import Dict, List, Optional
-import uuid
 
 import pandas as pd
 
@@ -115,6 +115,11 @@ class SearchTask:
             else:
                 self.logger.error(f"Search failed with errors: {','.join(error_messages)}")
                 raise RuntimeError(bundle.get("all_providers_failed_with_error").format(",".join(error_messages)))
+
+        if check_fit and self.summary.task_type != "INITIAL":
+            raise RuntimeError(
+                bundle.get("search_task_not_initial").format(self.search_task_id, self.summary.initial_search_task_id)
+            )
 
         if self.summary.status in ["COMPLETED", "VALIDATION_COMPLETED"] or (
             check_fit and "VALIDATION" in self.summary.status
