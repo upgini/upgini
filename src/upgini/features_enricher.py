@@ -757,7 +757,8 @@ class FeaturesEnricher(TransformerMixin):
             if new_progress:
                 progress_bar.display()
         trace_id = trace_id or str(uuid.uuid4())
-        with MDC(trace_id=trace_id):
+        search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
+        with MDC(trace_id=trace_id, search_id=search_id):
             self.dump_input(trace_id, X)
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for transform: {args}"
@@ -887,7 +888,8 @@ class FeaturesEnricher(TransformerMixin):
 
         trace_id = trace_id or str(uuid.uuid4())
         start_time = time.time()
-        with MDC(trace_id=trace_id):
+        search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
+        with MDC(trace_id=trace_id, search_id=search_id):
             self.logger.info("Start calculate metrics")
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for calculate_metrics: {args}"
@@ -2199,7 +2201,8 @@ if response.status_code == 200:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
 
         start_time = time.time()
-        with MDC(trace_id=trace_id):
+        search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
+        with MDC(trace_id=trace_id, search_id=search_id):
             self.logger.info("Start transform")
 
             validated_X = self._validate_X(X, is_transform=True)
@@ -2473,7 +2476,7 @@ if response.status_code == 200:
             gc.collect()
 
             if not silent_mode:
-                print(self.bundle.get("polling_search_task").format(validation_task.search_task_id))
+                print(self.bundle.get("polling_transform_task").format(validation_task.search_task_id))
                 if not self.__is_registered:
                     print(self.bundle.get("polling_unregister_information"))
 
@@ -2989,137 +2992,141 @@ if response.status_code == 200:
             auto_fe_parameters=auto_fe_parameters,
         )
 
-        if search_id_callback is not None:
-            search_id_callback(self._search_task.search_task_id)
+        with MDC(search_id=self._search_task.search_task_id):
 
-        print(self.bundle.get("polling_search_task").format(self._search_task.search_task_id))
-        if not self.__is_registered:
-            print(self.bundle.get("polling_unregister_information"))
+            if search_id_callback is not None:
+                search_id_callback(self._search_task.search_task_id)
 
-        progress = self.get_progress(trace_id)
-        prev_progress = None
-        progress.recalculate_eta(time.time() - start_time)
-        if progress_bar is not None:
-            progress_bar.progress = progress.to_progress_bar()
-        if progress_callback is not None:
-            progress_callback(progress)
-        poll_period_seconds = 1
-        try:
-            while progress.stage != ProgressStage.GENERATING_REPORT.value:
-                if prev_progress is None or prev_progress.percent != progress.percent:
-                    progress.recalculate_eta(time.time() - start_time)
-                else:
-                    progress.update_eta(prev_progress.eta - poll_period_seconds)
-                prev_progress = progress
-                if progress_bar is not None:
-                    progress_bar.progress = progress.to_progress_bar()
-                if progress_callback is not None:
-                    progress_callback(progress)
-                if progress.stage == ProgressStage.FAILED.value:
-                    self.logger.error(
-                        f"Search {self._search_task.search_task_id} failed with error {progress.error}"
-                        f" and message {progress.error_message}"
-                    )
-                    raise RuntimeError(self.bundle.get("search_task_failed_status"))
-                time.sleep(poll_period_seconds)
-                progress = self.get_progress(trace_id)
-        except KeyboardInterrupt as e:
-            print(self.bundle.get("search_stopping"))
-            self.rest_client.stop_search_task_v2(trace_id, self._search_task.search_task_id)
-            self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
-            print(self.bundle.get("search_stopped"))
-            raise e
+            print(self.bundle.get("polling_search_task").format(self._search_task.search_task_id))
+            if not self.__is_registered:
+                print(self.bundle.get("polling_unregister_information"))
 
-        self._search_task.poll_result(trace_id, quiet=True)
+            progress = self.get_progress(trace_id)
+            prev_progress = None
+            progress.recalculate_eta(time.time() - start_time)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
+            poll_period_seconds = 1
+            try:
+                while progress.stage != ProgressStage.GENERATING_REPORT.value:
+                    if prev_progress is None or prev_progress.percent != progress.percent:
+                        progress.recalculate_eta(time.time() - start_time)
+                    else:
+                        progress.update_eta(prev_progress.eta - poll_period_seconds)
+                    prev_progress = progress
+                    if progress_bar is not None:
+                        progress_bar.progress = progress.to_progress_bar()
+                    if progress_callback is not None:
+                        progress_callback(progress)
+                    if progress.stage == ProgressStage.FAILED.value:
+                        self.logger.error(
+                            f"Search {self._search_task.search_task_id} failed with error {progress.error}"
+                            f" and message {progress.error_message}"
+                        )
+                        raise RuntimeError(self.bundle.get("search_task_failed_status"))
+                    time.sleep(poll_period_seconds)
+                    progress = self.get_progress(trace_id)
+            except KeyboardInterrupt as e:
+                print(self.bundle.get("search_stopping"))
+                self.rest_client.stop_search_task_v2(trace_id, self._search_task.search_task_id)
+                self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
+                print(self.bundle.get("search_stopped"))
+                raise e
 
-        seconds_left = time.time() - start_time
-        progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
-        if progress_bar is not None:
-            progress_bar.progress = progress.to_progress_bar()
-        if progress_callback is not None:
-            progress_callback(progress)
+            self._search_task.poll_result(trace_id, quiet=True)
 
-        self.imbalanced = dataset.imbalanced
+            seconds_left = time.time() - start_time
+            progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
 
-        zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
-        if zero_hit_search_keys:
-            self.logger.warning(
-                f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
-            )
-            zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
-            if zero_hit_columns:
-                msg = self.bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
-                self.__log_warning(msg, show_support_link=True)
+            self.imbalanced = dataset.imbalanced
 
-        if (
-            self._search_task.unused_features_for_generation is not None
-            and len(self._search_task.unused_features_for_generation) > 0
-        ):
-            unused_features_for_generation = [
-                dataset.columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
-            ]
-            msg = self.bundle.get("features_not_generated").format(unused_features_for_generation)
-            self.__log_warning(msg)
+            zero_hit_search_keys = self._search_task.get_zero_hit_rate_search_keys()
+            if zero_hit_search_keys:
+                self.logger.warning(
+                    f"Intersections with this search keys are empty for all datasets: {zero_hit_search_keys}"
+                )
+                zero_hit_columns = self.get_columns_by_search_keys(zero_hit_search_keys)
+                if zero_hit_columns:
+                    msg = self.bundle.get("features_info_zero_hit_rate_search_keys").format(zero_hit_columns)
+                    self.__log_warning(msg, show_support_link=True)
 
-        self.__prepare_feature_importances(trace_id, df)
+            if (
+                self._search_task.unused_features_for_generation is not None
+                and len(self._search_task.unused_features_for_generation) > 0
+            ):
+                unused_features_for_generation = [
+                    dataset.columns_renaming.get(col) or col for col in self._search_task.unused_features_for_generation
+                ]
+                msg = self.bundle.get("features_not_generated").format(unused_features_for_generation)
+                self.__log_warning(msg)
 
-        self.__show_selected_features(self.fit_search_keys)
+            self.__prepare_feature_importances(trace_id, df)
 
-        autofe_description = self.get_autofe_features_description()
-        if autofe_description is not None:
-            self.logger.info(f"AutoFE descriptions: {autofe_description}")
-            self.autofe_features_display_handle = display_html_dataframe(
-                df=autofe_description,
-                internal_df=autofe_description,
-                header=self.bundle.get("autofe_descriptions_header"),
-                display_id=f"autofe_descriptions_{uuid.uuid4()}",
-            )
+            self.__show_selected_features(self.fit_search_keys)
 
-        if self._has_paid_features(exclude_features_sources):
-            if calculate_metrics is not None and calculate_metrics:
-                msg = self.bundle.get("metrics_with_paid_features")
-                self.logger.warning(msg)
-                self.__display_support_link(msg)
-        else:
-            if (scoring is not None or estimator is not None) and calculate_metrics is None:
-                calculate_metrics = True
+            autofe_description = self.get_autofe_features_description()
+            if autofe_description is not None:
+                self.logger.info(f"AutoFE descriptions: {autofe_description}")
+                self.autofe_features_display_handle = display_html_dataframe(
+                    df=autofe_description,
+                    internal_df=autofe_description,
+                    header=self.bundle.get("autofe_descriptions_header"),
+                    display_id=f"autofe_descriptions_{uuid.uuid4()}",
+                )
 
-            if calculate_metrics is None:
-                if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
-                    [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
-                ):
-                    msg = self.bundle.get("too_small_for_metrics")
+            if self._has_paid_features(exclude_features_sources):
+                if calculate_metrics is not None and calculate_metrics:
+                    msg = self.bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
-                    calculate_metrics = False
-                elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
-                    self.logger.warning("Too big dataset for automatic metrics calculation")
-                    calculate_metrics = False
-                else:
+                    self.__display_support_link(msg)
+            else:
+                if (scoring is not None or estimator is not None) and calculate_metrics is None:
                     calculate_metrics = True
 
-            del df, validated_X, validated_y, dataset
-            gc.collect()
+                if calculate_metrics is None:
+                    if len(validated_X) < self.CALCULATE_METRICS_MIN_THRESHOLD or any(
+                        [len(eval_X) < self.CALCULATE_METRICS_MIN_THRESHOLD for eval_X, _ in validated_eval_set]
+                    ):
+                        msg = self.bundle.get("too_small_for_metrics")
+                        self.logger.warning(msg)
+                        calculate_metrics = False
+                    elif len(dataset) * len(dataset.columns) > self.CALCULATE_METRICS_THRESHOLD:
+                        self.logger.warning("Too big dataset for automatic metrics calculation")
+                        calculate_metrics = False
+                    else:
+                        calculate_metrics = True
 
-            if calculate_metrics:
-                try:
-                    self.__show_metrics(
-                        scoring,
-                        estimator,
-                        importance_threshold,
-                        max_features,
-                        remove_outliers_calc_metrics,
-                        trace_id,
-                        progress_bar,
-                        progress_callback,
-                    )
-                except Exception:
-                    self.report_button_handle = self.__show_report_button(display_id=f"report_button_{uuid.uuid4()}")
-                    raise
+                del df, validated_X, validated_y, dataset
+                gc.collect()
 
-        self.report_button_handle = self.__show_report_button(display_id=f"report_button_{uuid.uuid4()}")
+                if calculate_metrics:
+                    try:
+                        self.__show_metrics(
+                            scoring,
+                            estimator,
+                            importance_threshold,
+                            max_features,
+                            remove_outliers_calc_metrics,
+                            trace_id,
+                            progress_bar,
+                            progress_callback,
+                        )
+                    except Exception:
+                        self.report_button_handle = self.__show_report_button(
+                            display_id=f"report_button_{uuid.uuid4()}"
+                        )
+                        raise
 
-        if not self.warning_counter.has_warnings():
-            self.__display_support_link(self.bundle.get("all_ok_community_invite"))
+            self.report_button_handle = self.__show_report_button(display_id=f"report_button_{uuid.uuid4()}")
+
+            if not self.warning_counter.has_warnings():
+                self.__display_support_link(self.bundle.get("all_ok_community_invite"))
 
     def __should_add_date_column(self):
         return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
@@ -3443,7 +3450,8 @@ if response.status_code == 200:
                 f"Estimator: {estimator}\n"
                 f"Remove target outliers: {remove_outliers_calc_metrics}\n"
                 f"Exclude columns: {self.exclude_columns}\n"
-                f"Search id: {self.search_id}\n"
+                f"Passed search id: {self.search_id}\n"
+                f"Search id from search task: {self._search_task.search_task_id if self._search_task else None}\n"
                 f"Custom loss: {self.loss}\n"
                 f"Logs enabled: {self.logs_enabled}\n"
                 f"Raise validation error: {self.raise_validation_error}\n"

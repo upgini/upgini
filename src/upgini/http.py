@@ -125,6 +125,8 @@ class SearchTaskSummary:
         self.search_task_id = response["searchTaskId"]
         self.file_upload_id = response["fileUploadTaskId"]
         self.status = response["searchTaskStatus"]
+        self.task_type = response.get("searchTaskType")
+        self.initial_search_task_id = response.get("initialSearchTaskId")
         # self.features_found = response["featuresFoundCount"]
         # self.providers_checked = response["providersCheckedCount"]
         # self.important_providers_count = response["importantProvidersCount"]
