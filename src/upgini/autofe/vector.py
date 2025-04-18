@@ -1,8 +1,8 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
-from upgini.autofe.operator import PandasOperator, VectorizableMixin
+from upgini.autofe.operator import OperatorRegistry, PandasOperator, VectorizableMixin
 
 
 class Mean(PandasOperator, VectorizableMixin):
@@ -31,3 +31,19 @@ class Vectorize(PandasOperator, VectorizableMixin):
 
     def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
         return pd.DataFrame(data).T.apply(lambda x: x.to_list(), axis=1)
+
+
+class OnnxModel(PandasOperator, metaclass=OperatorRegistry):
+    name: str = "onnx"
+    is_vector: bool = True
+    output_type: Optional[str] = "float"
+    model_name: str = ""
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "model_name": self.model_name,
+            }
+        )
+        return res
