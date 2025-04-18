@@ -87,7 +87,6 @@ CATBOOST_MULTICLASS_PARAMS = {
 
 LIGHTGBM_REGRESSION_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
-    "deterministic": True,
     "min_gain_to_split": 0.001,
     "n_estimators": 275,
     "max_depth": 5,
@@ -99,6 +98,8 @@ LIGHTGBM_REGRESSION_PARAMS = {
     "feature_fraction": 1.0,
     "min_sum_hessian_in_leaf": 0.01,
     "objective": "huber",
+    "deterministic": "true",
+    "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -117,6 +118,8 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "use_quantized_grad": "true",
     "num_grad_quant_bins": "8",
     "stochastic_rounding": "true",
+    "deterministic": "true",
+    "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -128,11 +131,12 @@ LIGHTGBM_BINARY_PARAMS = {
     "learning_rate": 0.05,
     "objective": "binary",
     # "class_weight": "balanced",
-    "deterministic": True,
     "max_cat_threshold": 80,
     "min_data_per_group": 20,
     "cat_smooth": 18,
     "cat_l2": 8,
+    "deterministic": "true",
+    "force_col_wise": "true",
     "verbosity": -1,
 }
 

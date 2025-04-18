@@ -47,9 +47,3 @@ class OnnxModel(PandasOperator, metaclass=OperatorRegistry):
             }
         )
         return res
-
-    # def load_model(self):
-    #     ...
-
-    # def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
-    #     ...
