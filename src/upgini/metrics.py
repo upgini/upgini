@@ -99,7 +99,7 @@ LIGHTGBM_REGRESSION_PARAMS = {
     "min_sum_hessian_in_leaf": 0.01,
     "objective": "huber",
     "deterministic": "true",
-    "force_col_wise": "true",
+    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -119,7 +119,7 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "num_grad_quant_bins": "8",
     "stochastic_rounding": "true",
     "deterministic": "true",
-    "force_col_wise": "true",
+    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -136,7 +136,7 @@ LIGHTGBM_BINARY_PARAMS = {
     "cat_smooth": 18,
     "cat_l2": 8,
     "deterministic": "true",
-    "force_col_wise": "true",
+    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -145,33 +145,33 @@ LIGHTGBM_EARLY_STOPPING_ROUNDS = 20
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
 
-NA_VALUES = [
-    "",
-    " ",
-    "   ",
-    "#n/a",
-    "#n/a n/a",
-    "#na",
-    "-1.#ind",
-    "-1.#qnan",
-    "-nan",
-    "1.#ind",
-    "1.#qnan",
-    "n/a",
-    "na",
-    "null",
-    "nan",
-    "n/a",
-    "nan",
-    "none",
-    "-",
-    "undefined",
-    "[[unknown]]",
-    "[not provided]",
-    "[unknown]",
-]
+# NA_VALUES = [
+#     "",
+#     " ",
+#     "   ",
+#     "#n/a",
+#     "#n/a n/a",
+#     "#na",
+#     "-1.#ind",
+#     "-1.#qnan",
+#     "-nan",
+#     "1.#ind",
+#     "1.#qnan",
+#     "n/a",
+#     "na",
+#     "null",
+#     "nan",
+#     "n/a",
+#     "nan",
+#     "none",
+#     "-",
+#     "undefined",
+#     "[[unknown]]",
+#     "[not provided]",
+#     "[unknown]",
+# ]
 
-NA_REPLACEMENT = "NA"
+# NA_REPLACEMENT = "NA"
 
 SUPPORTED_CATBOOST_METRICS = {
     s.upper(): s
@@ -758,8 +758,8 @@ class LightGBMWrapper(EstimatorWrapper):
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         self.cat_features = _get_cat_features(x)
         if self.cat_features:
-            x = fill_na_cat_features(x, self.cat_features)
-            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            # x = fill_na_cat_features(x, self.cat_features)
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
             encoded = pd.DataFrame(
                 encoder.fit_transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
             )
@@ -773,7 +773,7 @@ class LightGBMWrapper(EstimatorWrapper):
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
-            x = fill_na_cat_features(x, self.cat_features)
+            # x = fill_na_cat_features(x, self.cat_features)
             if self.cat_encoder is not None:
                 x[self.cat_features] = pd.DataFrame(
                     self.cat_encoder.transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
@@ -857,7 +857,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         self.cat_features = _get_cat_features(x)
         num_features = [col for col in x.columns if col not in self.cat_features]
         x[num_features] = x[num_features].fillna(-999)
-        x = fill_na_cat_features(x, self.cat_features)
+        # x = fill_na_cat_features(x, self.cat_features)
         # TODO use one-hot encoding if cardinality is less 50
         for feature in self.cat_features:
             x[feature] = x[feature].astype("category").cat.codes
@@ -870,7 +870,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         if self.cat_features is not None:
             num_features = [col for col in x.columns if col not in self.cat_features]
             x[num_features] = x[num_features].fillna(-999)
-            x = fill_na_cat_features(x, self.cat_features)
+            # x = fill_na_cat_features(x, self.cat_features)
             # TODO use one-hot encoding if cardinality is less 50
             for feature in self.cat_features:
                 x[feature] = x[feature].astype("category").cat.codes
@@ -1056,10 +1056,10 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     return mse if squared else np.sqrt(mse)
 
 
-def fill_na_cat_features(df: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
-    for c in cat_features:
-        if c in df.columns:
-            df[c] = df[c].astype("string").fillna(NA_REPLACEMENT).astype(str)
-            na_filter = df[c].str.lower().isin(NA_VALUES)
-            df.loc[na_filter, c] = NA_REPLACEMENT
-    return df
+# def fill_na_cat_features(df: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
+#     for c in cat_features:
+#         if c in df.columns:
+#             df[c] = df[c].astype("string").fillna(NA_REPLACEMENT).astype(str)
+#             na_filter = df[c].str.lower().isin(NA_VALUES)
+#             df.loc[na_filter, c] = NA_REPLACEMENT
+#     return df

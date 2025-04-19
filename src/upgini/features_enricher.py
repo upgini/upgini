@@ -1119,7 +1119,7 @@ class FeaturesEnricher(TransformerMixin):
                         self.bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                     }
                     if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                        validated_y
+                        y_sorted
                     ):
                         train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                             # np.mean(validated_y), 4
@@ -1197,7 +1197,7 @@ class FeaturesEnricher(TransformerMixin):
                                 # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                                validated_eval_set[idx][1]
+                                eval_y_sorted
                             ):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
                                     # np.mean(validated_eval_set[idx][1]), 4
@@ -3886,9 +3886,10 @@ if response.status_code == 200:
             if updated_shaps is not None:
                 updating_shap = updated_shaps.get(feature_meta.name)
                 if updating_shap is None:
-                    self.logger.warning(
-                        f"WARNING: Shap value for feature {feature_meta.name} not found and will be set to 0.0"
-                    )
+                    if feature_meta.shap_value != 0.0:
+                        self.logger.warning(
+                            f"WARNING: Shap value for feature {feature_meta.name} not found and will be set to 0.0"
+                        )
                     updating_shap = 0.0
                 feature_meta.shap_value = updating_shap
 
