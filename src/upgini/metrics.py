@@ -337,11 +337,6 @@ class EstimatorWrapper:
             else:
                 if x[c].dtype == "category" and x[c].cat.categories.dtype == np.int64:
                     x[c] = x[c].astype(np.int64)
-            # else:
-            #     if is_numeric_dtype(x[c]):
-            #         x[c] = x[c].fillna(np.nan)
-            #     else:
-            #         x[c] = x[c].fillna("NA")
 
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
@@ -421,7 +416,6 @@ class EstimatorWrapper:
                 shaps = self.calculate_shap(cv_x, cv_y, estimator)
                 if shaps is not None:
                     for feature, shap_value in shaps.items():
-                        # shap_values_all_folds[feature] = shap_values_all_folds.get(feature, []) + shap_value.tolist()
                         shap_values_all_folds[feature].append(shap_value)
 
         if shap_values_all_folds:
@@ -615,8 +609,13 @@ class CatBoostWrapper(EstimatorWrapper):
         self.cat_features, self.features_to_encode, self.exclude_features = _get_cat_features(
             self.logger, x, self.cat_features, self.text_features, self.grouped_embedding_features
         )
-        # TODO fillna cat feature with None
-        params["cat_features"] = self.features_to_encode
+        if self.features_to_encode:
+            for c in self.features_to_encode:
+                if is_numeric_dtype(x[c]):
+                    x[c] = x[c].fillna(np.nan)
+                else:
+                    x[c] = x[c].fillna("NA")
+            params["cat_features"] = self.features_to_encode
 
         return x, y, groups, params
 
@@ -645,7 +644,13 @@ class CatBoostWrapper(EstimatorWrapper):
         if self.grouped_embedding_features:
             x, emb_columns = self.group_embeddings(x)
             params["embedding_features"] = emb_columns
+
         if self.features_to_encode:
+            for c in self.features_to_encode:
+                if is_numeric_dtype(x[c]):
+                    x[c] = x[c].fillna(np.nan)
+                else:
+                    x[c] = x[c].fillna("NA")
             params["cat_features"] = self.features_to_encode
 
         return x, y, params
