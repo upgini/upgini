@@ -5,7 +5,7 @@
 
 import logging
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json as jsonlogger
 
 from upgini.mdc.context import get_mdc_fields, new_log_context
 

@@ -11,15 +11,16 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from catboost import CatBoostClassifier, CatBoostRegressor
+from category_encoders.cat_boost import CatBoostEncoder
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
-from sklearn.preprocessing import OrdinalEncoder
 
+# from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
-from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 try:
     from sklearn.metrics import get_scorer_names
@@ -31,12 +32,12 @@ except ImportError:
     available_scorers = SCORERS
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics._regression import _check_reg_targets, check_consistent_length
-from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
+from sklearn.model_selection import BaseCrossValidator  # , TimeSeriesSplit
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
 from upgini.resource_bundle import bundle
-from upgini.utils.target_utils import correct_string_target
+from upgini.utils.target_utils import prepare_target
 
 DEFAULT_RANDOM_STATE = 42
 
@@ -287,6 +288,7 @@ class EstimatorWrapper:
         self,
         estimator,
         scorer: Callable,
+        cat_features: Optional[List[str]],
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
@@ -298,9 +300,8 @@ class EstimatorWrapper:
     ):
         self.estimator = estimator
         self.scorer = scorer
-        self.metric_name = (
-            "GINI" if metric_name.upper() == "ROC_AUC" and target_type == ModelTaskType.BINARY else metric_name
-        )
+        self.cat_features = cat_features
+        self.metric_name = metric_name
         self.multiplier = multiplier
         self.cv = cv
         self.target_type = target_type
@@ -328,10 +329,19 @@ class EstimatorWrapper:
     ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
         self.logger.info(f"Before preparing data columns: {x.columns.to_list()}")
         for c in x.columns:
-            if is_numeric_dtype(x[c]):
-                x[c] = x[c].astype(float)
-            elif not x[c].dtype == "category":
-                x[c] = x[c].astype(str)
+            if c not in self.cat_features:
+                if is_numeric_dtype(x[c]):
+                    x[c] = x[c].astype(float)
+                elif not x[c].dtype == "category":
+                    x[c] = x[c].astype(str)
+            else:
+                if x[c].dtype == "category" and x[c].cat.categories.dtype == np.int64:
+                    x[c] = x[c].astype(np.int64)
+            # else:
+            #     if is_numeric_dtype(x[c]):
+            #         x[c] = x[c].fillna(np.nan)
+            #     else:
+            #         x[c] = x[c].fillna("NA")
 
         if not isinstance(y, pd.Series):
             raise Exception(bundle.get("metrics_unsupported_target_type").format(type(y)))
@@ -344,6 +354,8 @@ class EstimatorWrapper:
             x = x.drop(columns="__groups")
         else:
             x, y = self._remove_empty_target_rows(x, y)
+
+        y = prepare_target(y, self.target_type)
 
         self.logger.info(f"After preparing data columns: {x.columns.to_list()}")
         return x, y, groups
@@ -465,7 +477,7 @@ class EstimatorWrapper:
         logger: logging.Logger,
         target_type: ModelTaskType,
         cv: BaseCrossValidator,
-        x: pd.DataFrame,
+        *,
         scoring: Union[Callable, str, None] = None,
         cat_features: Optional[List[str]] = None,
         text_features: Optional[List[str]] = None,
@@ -473,9 +485,10 @@ class EstimatorWrapper:
         groups: Optional[List[str]] = None,
         has_date: Optional[bool] = None,
     ) -> EstimatorWrapper:
-        scorer, metric_name, multiplier = _get_scorer(target_type, scoring)
+        scorer, metric_name, multiplier = define_scorer(target_type, scoring)
         kwargs = {
             "scorer": scorer,
+            "cat_features": cat_features,
             "metric_name": metric_name,
             "multiplier": multiplier,
             "cv": cv,
@@ -485,20 +498,29 @@ class EstimatorWrapper:
             "logger": logger,
         }
         if estimator is None:
-            params = {"random_state": DEFAULT_RANDOM_STATE, "verbose": -1}
+            params = {"has_time": has_date}
             if target_type == ModelTaskType.MULTICLASS:
-                params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
+                params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
+                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                # params = _get_add_params(params, LIGHTGBM_MULTICLASS_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.BINARY:
-                params = _get_add_params(params, LIGHTGBM_BINARY_PARAMS)
+                params = _get_add_params(params, CATBOOST_BINARY_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
+                estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
+                # params = _get_add_params(params, LIGHTGBM_BINARY_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = LightGBMWrapper(LGBMClassifier(**params), **kwargs)
             elif target_type == ModelTaskType.REGRESSION:
-                if not isinstance(cv, TimeSeriesSplit) and not isinstance(cv, BlockedTimeSeriesSplit):
-                    params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
+                params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
                 params = _get_add_params(params, add_params)
-                estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
+                estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
+                # if not isinstance(cv, TimeSeriesSplit) and not isinstance(cv, BlockedTimeSeriesSplit):
+                #     params = _get_add_params(params, LIGHTGBM_REGRESSION_PARAMS)
+                # params = _get_add_params(params, add_params)
+                # estimator = LightGBMWrapper(LGBMRegressor(**params), **kwargs)
             else:
                 raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
         else:
@@ -509,18 +531,11 @@ class EstimatorWrapper:
             kwargs["estimator"] = estimator_copy
             if is_catboost_estimator(estimator):
                 if cat_features is not None:
-                    for cat_feature in cat_features:
-                        if cat_feature not in x.columns:
-                            logger.error(
-                                f"Client cat_feature `{cat_feature}` not found in x columns: {x.columns.to_list()}"
-                            )
                     estimator_copy.set_params(cat_features=cat_features, has_time=has_date)
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
                     estimator = LightGBMWrapper(**kwargs)
-                elif is_catboost_estimator(estimator):
-                    estimator = CatBoostWrapper(**kwargs)
                 else:
                     logger.warning(
                         f"Unexpected estimator is used for metrics: {estimator}. "
@@ -536,6 +551,7 @@ class CatBoostWrapper(EstimatorWrapper):
         self,
         estimator,
         scorer: Callable,
+        cat_features: Optional[List[str]],
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
@@ -547,6 +563,7 @@ class CatBoostWrapper(EstimatorWrapper):
         super(CatBoostWrapper, self).__init__(
             estimator,
             scorer,
+            cat_features,
             metric_name,
             multiplier,
             cv,
@@ -555,10 +572,10 @@ class CatBoostWrapper(EstimatorWrapper):
             text_features=text_features,
             logger=logger,
         )
-        self.cat_features = None
         self.emb_features = None
         self.grouped_embedding_features = None
-        self.exclude_features = []
+        self.drop_cat_features = []
+        self.features_to_encode = []
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
         x, y, groups, params = super()._prepare_to_fit(x, y)
@@ -595,37 +612,11 @@ class CatBoostWrapper(EstimatorWrapper):
             self.logger.warning(f"Text features are not supported by this Catboost version {catboost.__version__}")
 
         # Find rest categorical features
-        self.cat_features = _get_cat_features(x, self.text_features, self.grouped_embedding_features)
-        # x = fill_na_cat_features(x, self.cat_features)
-        unique_cat_features = []
-        for name in self.cat_features:
-            # Remove constant categorical features
-            if x[name].nunique() > 1:
-                unique_cat_features.append(name)
-            else:
-                self.logger.info(f"Drop column {name} on preparing data for fit")
-                x = x.drop(columns=name)
-                self.exclude_features.append(name)
-        self.cat_features = unique_cat_features
-        if (
-            hasattr(self.estimator, "get_param")
-            and hasattr(self.estimator, "_init_params")
-            and self.estimator.get_param("cat_features") is not None
-        ):
-            estimator_cat_features = self.estimator.get_param("cat_features")
-            if all([isinstance(c, int) for c in estimator_cat_features]):
-                cat_features_idx = {x.columns.get_loc(c) for c in self.cat_features}
-                cat_features_idx.update(estimator_cat_features)
-                self.cat_features = [x.columns[idx] for idx in cat_features_idx]
-            elif all([isinstance(c, str) for c in estimator_cat_features]):
-                self.cat_features = list(set(self.cat_features + estimator_cat_features))
-            else:
-                print(f"WARNING: Unsupported type of cat_features in CatBoost estimator: {estimator_cat_features}")
-
-            del self.estimator._init_params["cat_features"]
-
-        self.logger.info(f"Selected categorical features: {self.cat_features}")
-        params["cat_features"] = self.cat_features
+        self.cat_features, self.features_to_encode, self.exclude_features = _get_cat_features(
+            self.logger, x, self.cat_features, self.text_features, self.grouped_embedding_features
+        )
+        # TODO fillna cat feature with None
+        params["cat_features"] = self.features_to_encode
 
         return x, y, groups, params
 
@@ -654,9 +645,8 @@ class CatBoostWrapper(EstimatorWrapper):
         if self.grouped_embedding_features:
             x, emb_columns = self.group_embeddings(x)
             params["embedding_features"] = emb_columns
-        if self.cat_features:
-            # x = fill_na_cat_features(x, self.cat_features)
-            params["cat_features"] = self.cat_features
+        if self.features_to_encode:
+            params["cat_features"] = self.features_to_encode
 
         return x, y, params
 
@@ -700,23 +690,29 @@ class CatBoostWrapper(EstimatorWrapper):
                 embedding_features=self.grouped_embedding_features,
             )
 
-            # Get SHAP values of current estimator
-            shap_values_fold = estimator.get_feature_importance(data=fold_pool, type="ShapValues")
+            shap_values = estimator.get_feature_importance(data=fold_pool, type="ShapValues")
 
-            # Remove last columns (base value) and flatten
             if self.target_type == ModelTaskType.MULTICLASS:
-                all_shaps = shap_values_fold[:, :, :-1]
-                all_shaps = [all_shaps[:, :, k].flatten() for k in range(all_shaps.shape[2])]
+                # For multiclass, shap_values has shape (n_samples, n_classes, n_features + 1)
+                # Last column is bias term
+                shap_values = shap_values[:, :, :-1]  # Remove bias term
+                # Average SHAP values across classes
+                shap_values = np.mean(np.abs(shap_values), axis=1)
             else:
-                all_shaps = shap_values_fold[:, :-1]
-                all_shaps = [all_shaps[:, k].flatten() for k in range(all_shaps.shape[1])]
+                # For binary/regression, shap_values has shape (n_samples, n_features + 1)
+                # Last column is bias term
+                shap_values = shap_values[:, :-1]  # Remove bias term
+                # Take absolute values
+                shap_values = np.abs(shap_values)
 
-            all_shaps = np.abs(all_shaps)
+            feature_importance = {}
+            for i, col in enumerate(x.columns):
+                feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
 
-            return dict(zip(estimator.feature_names_, all_shaps))
+            return feature_importance
 
-        except Exception:
-            self.logger.exception("Failed to recalculate new SHAP values")
+        except Exception as e:
+            self.logger.exception(f"Failed to recalculate new SHAP values: {str(e)}")
             return None
 
 
@@ -725,6 +721,7 @@ class LightGBMWrapper(EstimatorWrapper):
         self,
         estimator,
         scorer: Callable,
+        cat_features: Optional[List[str]],
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
@@ -736,6 +733,7 @@ class LightGBMWrapper(EstimatorWrapper):
         super(LightGBMWrapper, self).__init__(
             estimator,
             scorer,
+            cat_features,
             metric_name,
             multiplier,
             cv,
@@ -744,9 +742,10 @@ class LightGBMWrapper(EstimatorWrapper):
             text_features=text_features,
             logger=logger,
         )
-        self.cat_features = None
         self.cat_encoder = None
         self.n_classes = None
+        self.exclude_features = []
+        self.features_to_encode = []
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
         x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
@@ -756,30 +755,25 @@ class LightGBMWrapper(EstimatorWrapper):
             if self.target_type == ModelTaskType.BINARY:
                 params["eval_metric"] = "auc"
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
-        self.cat_features = _get_cat_features(x)
-        if self.cat_features:
-            # x = fill_na_cat_features(x, self.cat_features)
-            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
-            encoded = pd.DataFrame(
-                encoder.fit_transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
-            )
-            x[self.cat_features] = encoded
+        self.cat_features, self.features_to_encode, self.exclude_features = _get_cat_features(
+            self.logger, x, self.cat_features
+        )
+        if self.features_to_encode:
+            encoder = CatBoostEncoder(random_state=DEFAULT_RANDOM_STATE, return_df=True)
+            encoded = encoder.fit_transform(x[self.features_to_encode].astype("object"), y_numpy).astype("category")
+            x[self.features_to_encode] = encoded
             self.cat_encoder = encoder
-        if not is_numeric_dtype(y_numpy):
-            y_numpy = correct_string_target(y_numpy)
 
         return x, y_numpy, groups, params
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        if self.exclude_features:
+            x = x.drop(columns=self.exclude_features)
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
-        if self.cat_features is not None:
-            # x = fill_na_cat_features(x, self.cat_features)
-            if self.cat_encoder is not None:
-                x[self.cat_features] = pd.DataFrame(
-                    self.cat_encoder.transform(x[self.cat_features]), columns=self.cat_features, dtype="category"
-                )
-        if not is_numeric_dtype(y):
-            y_numpy = correct_string_target(y_numpy)
+        if self.features_to_encode is not None and self.cat_encoder is not None:
+            x[self.features_to_encode] = self.cat_encoder.transform(x[self.features_to_encode].astype("object")).astype(
+                "category"
+            )
         return x, y_numpy, params
 
     def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
@@ -805,20 +799,6 @@ class LightGBMWrapper(EstimatorWrapper):
             for i, col in enumerate(x.columns):
                 feature_importance[col] = np.mean(np.abs(shap_matrix[:, i]))
 
-            # # exclude last column (base value)
-            # shap_values_only = shap_values[:, :-1]
-            # mean_abs_shap = np.mean(np.abs(shap_values_only), axis=0)
-
-            # # For classification, shap_values is returned as a list for each class
-            # # Take values for the positive class
-            # if isinstance(shap_values, list):
-            #     shap_values = shap_values[1]
-
-            # # Calculate mean absolute SHAP value for each feature
-            # feature_importance = {}
-            # for i, col in enumerate(x.columns):
-            #     feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
-
             return feature_importance
 
         except Exception as e:
@@ -831,6 +811,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         self,
         estimator,
         scorer: Callable,
+        cat_features: Optional[List[str]],
         metric_name: str,
         multiplier: int,
         cv: BaseCrossValidator,
@@ -842,6 +823,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         super(OtherEstimatorWrapper, self).__init__(
             estimator,
             scorer,
+            cat_features,
             metric_name,
             multiplier,
             cv,
@@ -850,32 +832,32 @@ class OtherEstimatorWrapper(EstimatorWrapper):
             text_features=text_features,
             logger=logger,
         )
-        self.cat_features = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: np.ndarray) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
-        x, y, groups, params = super()._prepare_to_fit(x, y)
-        self.cat_features = _get_cat_features(x)
+        x, y_numpy, groups, params = super()._prepare_to_fit(x, y)
+        self.cat_features, self.features_to_encode, self.exclude_features = _get_cat_features(
+            self.logger, x, self.cat_features
+        )
         num_features = [col for col in x.columns if col not in self.cat_features]
         x[num_features] = x[num_features].fillna(-999)
-        # x = fill_na_cat_features(x, self.cat_features)
-        # TODO use one-hot encoding if cardinality is less 50
-        for feature in self.cat_features:
-            x[feature] = x[feature].astype("category").cat.codes
-        if not is_numeric_dtype(y):
-            y = correct_string_target(y)
-        return x, y, groups, params
+        if self.cat_features:
+            encoder = CatBoostEncoder(random_state=DEFAULT_RANDOM_STATE, return_df=True)
+            encoded = encoder.fit_transform(x[self.cat_features].astype("object"), y_numpy).astype("category")
+            x[self.cat_features] = encoded
+            self.cat_encoder = encoder
+        return x, y_numpy, groups, params
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
+        if self.exclude_features:
+            x = x.drop(columns=self.exclude_features)
         x, y, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
             num_features = [col for col in x.columns if col not in self.cat_features]
             x[num_features] = x[num_features].fillna(-999)
-            # x = fill_na_cat_features(x, self.cat_features)
-            # TODO use one-hot encoding if cardinality is less 50
-            for feature in self.cat_features:
-                x[feature] = x[feature].astype("category").cat.codes
-        if not is_numeric_dtype(y):
-            y = correct_string_target(y)
+            if self.features_to_encode and self.cat_encoder is not None:
+                x[self.features_to_encode] = self.cat_encoder.transform(
+                    x[self.features_to_encode].astype("object")
+                ).astype("category")
         return x, y, params
 
 
@@ -938,7 +920,7 @@ def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
     return scoring, metric_name, multiplier
 
 
-def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:
+def define_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None]) -> Tuple[Callable, str, int]:
     if scoring is None:
         if target_type == ModelTaskType.BINARY:
             scoring = "roc_auc"
@@ -957,16 +939,42 @@ def _get_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None])
     else:
         metric_name = str(scoring)
 
+    metric_name = "GINI" if metric_name.upper() == "ROC_AUC" and target_type == ModelTaskType.BINARY else metric_name
+
     return scoring, metric_name, multiplier
 
 
 def _get_cat_features(
-    x: pd.DataFrame, text_features: Optional[List[str]] = None, emb_features: Optional[List[str]] = None
+    logger: logging.Logger,
+    x: pd.DataFrame,
+    cat_features: Optional[List[str]],
+    text_features: Optional[List[str]] = None,
+    emb_features: Optional[List[str]] = None,
 ) -> List[str]:
+    cat_features = cat_features or []
     text_features = text_features or []
     emb_features = emb_features or []
     exclude_features = text_features + emb_features
-    return [c for c in x.columns if c not in exclude_features and not is_numeric_dtype(x[c])]
+    cat_features = [c for c in cat_features if c not in exclude_features]
+    unique_cat_features = []
+    drop_cat_features = []
+    for name in cat_features:
+        # Remove constant categorical features
+        if x[name].nunique() > 1:
+            unique_cat_features.append(name)
+        else:
+            logger.info(f"Drop column {name} on preparing data for fit")
+            x = x.drop(columns=name)
+            drop_cat_features.append(name)
+    cat_features = unique_cat_features
+
+    logger.info(f"Selected categorical features: {cat_features}")
+
+    features_to_encode = list(set(x.select_dtypes(exclude=[np.number, np.datetime64, pd.CategoricalDtype()]).columns))
+
+    logger.info(f"Features to encode: {features_to_encode}")
+
+    return cat_features, features_to_encode, drop_cat_features
 
 
 def _get_add_params(input_params, add_params):

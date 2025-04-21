@@ -297,14 +297,14 @@ def test_default_metric_binary(requests_mock: Mocker, update_metrics_flag: bool)
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -406,14 +406,17 @@ def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: b
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="postal_code_13534a", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.1
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -600,19 +603,19 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker, update_metrics
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -711,19 +714,19 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker, update_metrics_fl
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -824,12 +827,12 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -908,7 +911,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
     assert_frame_equal(metrics_df, expected_metrics)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -929,12 +932,12 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1015,7 +1018,7 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
     assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -1041,21 +1044,21 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="cat_feature2",
+                    name="cat_feature2_3ef372",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.2,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="country",
+                    name="country_aff64e",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1169,7 +1172,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1282,21 +1285,21 @@ def test_lightgbm_metric_binary_with_cat_features(requests_mock: Mocker, update_
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="cat_feature2",
+                    name="cat_feature2_3ef372",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.2,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="country",
+                    name="country_aff64e",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1403,12 +1406,12 @@ def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1507,19 +1510,19 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.01
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.01
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(

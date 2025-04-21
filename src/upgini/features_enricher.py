@@ -63,7 +63,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper, validate_scoring_argument
+from upgini.metrics import EstimatorWrapper, define_scorer, validate_scoring_argument
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
@@ -310,6 +310,7 @@ class FeaturesEnricher(TransformerMixin):
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                    self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(trace_id, df, silent=True)
                     # TODO validate search_keys with search_keys from file_metadata
@@ -476,7 +477,7 @@ class FeaturesEnricher(TransformerMixin):
             self.__validate_search_keys(self.search_keys)
 
             # Validate client estimator params
-            self._get_client_cat_features(estimator, X, self.search_keys)
+            self._get_and_validate_client_cat_features(estimator, X, self.search_keys)
 
             try:
                 self.X = X
@@ -957,9 +958,17 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_support_link(msg)
                     return None
 
-                cat_features, search_keys_for_metrics = self._get_client_cat_features(
+                cat_features_from_backend = self.__get_categorical_features()
+                client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
+                for cat_feature in cat_features_from_backend:
+                    original_cat_feature = self.fit_columns_renaming.get(cat_feature)
+                    if original_cat_feature in self.search_keys:
+                        if self.search_keys[original_cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                            search_keys_for_metrics.append(original_cat_feature)
+                        else:
+                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(original_cat_feature))
                 search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
                 self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
@@ -976,7 +985,7 @@ class FeaturesEnricher(TransformerMixin):
                     search_keys_for_metrics=search_keys_for_metrics,
                     progress_bar=progress_bar,
                     progress_callback=progress_callback,
-                    cat_features=cat_features,
+                    client_cat_features=client_cat_features,
                 )
                 if prepared_data is None:
                     return None
@@ -994,11 +1003,19 @@ class FeaturesEnricher(TransformerMixin):
                 ) = prepared_data
 
                 # rename cat_features
-                if cat_features:
+                if client_cat_features:
                     for new_c, old_c in columns_renaming.items():
-                        if old_c in cat_features:
-                            cat_features.remove(old_c)
-                            cat_features.append(new_c)
+                        if old_c in client_cat_features:
+                            client_cat_features.remove(old_c)
+                            client_cat_features.append(new_c)
+                    for cat_feature in client_cat_features:
+                        if cat_feature not in fitting_X.columns:
+                            self.logger.error(
+                                f"Client cat_feature `{cat_feature}` not found in"
+                                f" x columns: {fitting_X.columns.to_list()}"
+                            )
+                else:
+                    client_cat_features = []
 
                 gc.collect()
 
@@ -1019,20 +1036,16 @@ class FeaturesEnricher(TransformerMixin):
 
                     has_date = self._get_date_column(search_keys) is not None
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
+                    cat_features = list(set(client_cat_features + cat_features_from_backend))
+                    baseline_cat_features = [f for f in cat_features if f in fitting_X.columns]
+                    enriched_cat_features = [f for f in cat_features if f in fitting_enriched_X.columns]
+                    if len(enriched_cat_features) < len(cat_features):
+                        missing_cat_features = [f for f in cat_features if f not in fitting_enriched_X.columns]
+                        self.logger.warning(
+                            f"Some cat_features were not found in enriched_X: {missing_cat_features}"
+                        )
 
-                    wrapper = EstimatorWrapper.create(
-                        estimator,
-                        self.logger,
-                        model_task_type,
-                        _cv,
-                        fitting_enriched_X,
-                        scoring,
-                        groups=groups,
-                        text_features=text_features,
-                        has_date=has_date,
-                    )
-                    metric = wrapper.metric_name
-                    multiplier = wrapper.multiplier
+                    _, metric, multiplier = define_scorer(model_task_type, scoring)
 
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
@@ -1050,9 +1063,8 @@ class FeaturesEnricher(TransformerMixin):
                             self.logger,
                             model_task_type,
                             _cv,
-                            fitting_enriched_X,
-                            scoring,
-                            cat_features,
+                            scoring=scoring,
+                            cat_features=baseline_cat_features,
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
@@ -1085,9 +1097,8 @@ class FeaturesEnricher(TransformerMixin):
                             self.logger,
                             model_task_type,
                             _cv,
-                            fitting_enriched_X,
-                            scoring,
-                            cat_features,
+                            scoring=scoring,
+                            cat_features=enriched_cat_features,
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
@@ -1420,7 +1431,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return _cv, groups
 
-    def _get_client_cat_features(
+    def _get_and_validate_client_cat_features(
         self, estimator: Optional[Any], X: pd.DataFrame, search_keys: Dict[str, SearchKey]
     ) -> Tuple[Optional[List[str]], List[str]]:
         cat_features = None
@@ -1428,12 +1439,20 @@ class FeaturesEnricher(TransformerMixin):
         if (
             estimator is not None
             and hasattr(estimator, "get_param")
+            and hasattr(estimator, "_init_params")
             and estimator.get_param("cat_features") is not None
         ):
-            cat_features = estimator.get_param("cat_features")
-            if len(cat_features) > 0:
-                if all([isinstance(f, int) for f in cat_features]):
-                    cat_features = [X.columns[i] for i in cat_features]
+            estimator_cat_features = estimator.get_param("cat_features")
+            if all([isinstance(c, int) for c in estimator_cat_features]):
+                cat_features = [X.columns[idx] for idx in estimator_cat_features]
+            elif all([isinstance(c, str) for c in estimator_cat_features]):
+                cat_features = estimator_cat_features
+            else:
+                print(f"WARNING: Unsupported type of cat_features in CatBoost estimator: {estimator_cat_features}")
+
+            del estimator._init_params["cat_features"]
+
+            if cat_features:
                 self.logger.info(f"Collected categorical features {cat_features} from user estimator")
                 for cat_feature in cat_features:
                     if cat_feature in search_keys:
@@ -1457,7 +1476,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys_for_metrics: Optional[List[str]] = None,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        cat_features: Optional[List[str]] = None,
+        client_cat_features: Optional[List[str]] = None,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -1531,7 +1550,7 @@ class FeaturesEnricher(TransformerMixin):
 
         # Detect and drop high cardinality columns in train
         columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
-        non_excluding_columns = (self.generate_features or []) + (cat_features or [])
+        non_excluding_columns = (self.generate_features or []) + (client_cat_features or [])
         columns_with_high_cardinality = [c for c in columns_with_high_cardinality if c not in non_excluding_columns]
         if len(columns_with_high_cardinality) > 0:
             self.logger.warning(
@@ -2069,10 +2088,12 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: Dict,
         columns_renaming: Dict[str, str],
     ):
+        # X_sampled - with hash-suffixes
+        reversed_renaming = {v: k for k, v in columns_renaming.items()}
         search_keys = {
-            columns_renaming.get(k, k): v
+            reversed_renaming.get(k, k): v
             for k, v in search_keys.items()
-            if columns_renaming.get(k, k) in X_sampled.columns.to_list()
+            if reversed_renaming.get(k, k) in X_sampled.columns.to_list()
         }
         return FeaturesEnricher._SampledDataForMetrics(
             X_sampled=X_sampled,
@@ -3854,6 +3875,13 @@ if response.status_code == 200:
             importances[feature_meta.name] = feature_meta.shap_value
 
         return importances
+
+    def __get_categorical_features(self) -> List[str]:
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception(self.bundle.get("missing_features_meta"))
+
+        return [f.name for f in features_meta if f.type == "categorical" and f.shap_value > 0.0]
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
