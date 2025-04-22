@@ -60,7 +60,7 @@ class EWMAVolatility(VolatilityBase, ParametrizedOperator):
         return res
 
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._ewma_vol)
+        return ts.apply(self._ewma_vol).iloc[:, [-1]]
 
     def _ewma_vol(self, x):
         x = pd.DataFrame(x).iloc[:, -1]
