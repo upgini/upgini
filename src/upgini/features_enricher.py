@@ -1023,12 +1023,12 @@ class FeaturesEnricher(TransformerMixin):
                     self.__log_warning(self.bundle.get("metrics_no_important_free_features"))
                     return None
 
-                maybe_phone_column = self._get_phone_column(self.search_keys)
-                text_features = (
-                    [f for f in self.generate_features if f != maybe_phone_column]
-                    if self.generate_features is not None
-                    else None
-                )
+                text_features = self.generate_features.copy() if self.generate_features else None
+                if text_features:
+                    for renamed, original in columns_renaming.items():
+                        if original in text_features:
+                            text_features.remove(original)
+                            text_features.append(renamed)
 
                 print(self.bundle.get("metrics_start"))
                 with Spinner():
@@ -1041,9 +1041,7 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_cat_features = [f for f in cat_features if f in fitting_enriched_X.columns]
                     if len(enriched_cat_features) < len(cat_features):
                         missing_cat_features = [f for f in cat_features if f not in fitting_enriched_X.columns]
-                        self.logger.warning(
-                            f"Some cat_features were not found in enriched_X: {missing_cat_features}"
-                        )
+                        self.logger.warning(f"Some cat_features were not found in enriched_X: {missing_cat_features}")
 
                     _, metric, multiplier = define_scorer(model_task_type, scoring)
 
@@ -2750,7 +2748,9 @@ if response.status_code == 200:
         if self.id_columns is not None:
             for id_column in self.id_columns:
                 if id_column not in validated_X.columns:
-                    raise ValidationError(self.bundle.get("missing_id_column").format(id_column))
+                    raise ValidationError(
+                        self.bundle.get("missing_id_column").format(id_column, list(validated_X.columns))
+                    )
 
         validate_scoring_argument(scoring)
 
@@ -3092,7 +3092,7 @@ if response.status_code == 200:
             self.__show_selected_features(self.fit_search_keys)
 
             autofe_description = self.get_autofe_features_description()
-            if autofe_description is not None:
+            if autofe_description is not None and len(autofe_description) > 0:
                 self.logger.info(f"AutoFE descriptions: {autofe_description}")
                 self.autofe_features_display_handle = display_html_dataframe(
                     df=autofe_description,
@@ -3934,6 +3934,7 @@ if response.status_code == 200:
                 continue
 
             # Use only important features
+            # If select_features is False, we don't show etalon features in the report
             if (
                 # feature_meta.name in self.fit_generated_features or
                 feature_meta.name == COUNTRY  # constant synthetic column
@@ -4260,12 +4261,13 @@ if response.status_code == 200:
                     display_id=f"features_info_{uuid.uuid4()}",
                 )
 
-                self.data_sources_display_handle = display_html_dataframe(
-                    self.relevant_data_sources,
-                    self._relevant_data_sources_wo_links,
-                    self.bundle.get("relevant_data_sources_header"),
-                    display_id=f"data_sources_{uuid.uuid4()}",
-                )
+                if len(self.relevant_data_sources) > 0:
+                    self.data_sources_display_handle = display_html_dataframe(
+                        self.relevant_data_sources,
+                        self._relevant_data_sources_wo_links,
+                        self.bundle.get("relevant_data_sources_header"),
+                        display_id=f"data_sources_{uuid.uuid4()}",
+                    )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
                 self.__log_warning(msg, show_support_link=True)

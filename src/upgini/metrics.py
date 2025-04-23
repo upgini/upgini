@@ -18,7 +18,6 @@ from numpy import log1p
 from pandas.api.types import is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
 
-# from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.sklearn_ext import cross_validate
 
@@ -100,7 +99,6 @@ LIGHTGBM_REGRESSION_PARAMS = {
     "min_sum_hessian_in_leaf": 0.01,
     "objective": "huber",
     "deterministic": "true",
-    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -115,12 +113,10 @@ LIGHTGBM_MULTICLASS_PARAMS = {
     "cat_smooth": 18,
     "cat_l2": 8,
     "objective": "multiclass",
-    # "class_weight": "balanced",
     "use_quantized_grad": "true",
     "num_grad_quant_bins": "8",
     "stochastic_rounding": "true",
     "deterministic": "true",
-    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -131,13 +127,11 @@ LIGHTGBM_BINARY_PARAMS = {
     "max_depth": 5,
     "learning_rate": 0.05,
     "objective": "binary",
-    # "class_weight": "balanced",
     "max_cat_threshold": 80,
     "min_data_per_group": 20,
     "cat_smooth": 18,
     "cat_l2": 8,
     "deterministic": "true",
-    # "force_col_wise": "true",
     "verbosity": -1,
 }
 
@@ -145,34 +139,6 @@ LIGHTGBM_EARLY_STOPPING_ROUNDS = 20
 
 N_FOLDS = 5
 BLOCKED_TS_TEST_SIZE = 0.2
-
-# NA_VALUES = [
-#     "",
-#     " ",
-#     "   ",
-#     "#n/a",
-#     "#n/a n/a",
-#     "#na",
-#     "-1.#ind",
-#     "-1.#qnan",
-#     "-nan",
-#     "1.#ind",
-#     "1.#qnan",
-#     "n/a",
-#     "na",
-#     "null",
-#     "nan",
-#     "n/a",
-#     "nan",
-#     "none",
-#     "-",
-#     "undefined",
-#     "[[unknown]]",
-#     "[not provided]",
-#     "[unknown]",
-# ]
-
-# NA_REPLACEMENT = "NA"
 
 SUPPORTED_CATBOOST_METRICS = {
     s.upper(): s
@@ -975,7 +941,8 @@ def _get_cat_features(
 
     logger.info(f"Selected categorical features: {cat_features}")
 
-    features_to_encode = list(set(x.select_dtypes(exclude=[np.number, np.datetime64, pd.CategoricalDtype()]).columns))
+    non_encode_features = list(set(x.select_dtypes(exclude=[np.number, np.datetime64, pd.CategoricalDtype()]).columns))
+    features_to_encode = [f for f in cat_features if f not in non_encode_features]
 
     logger.info(f"Features to encode: {features_to_encode}")
 
@@ -1067,12 +1034,3 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
         multioutput=multioutput,
     )
     return mse if squared else np.sqrt(mse)
-
-
-# def fill_na_cat_features(df: pd.DataFrame, cat_features: List[str]) -> pd.DataFrame:
-#     for c in cat_features:
-#         if c in df.columns:
-#             df[c] = df[c].astype("string").fillna(NA_REPLACEMENT).astype(str)
-#             na_filter = df[c].str.lower().isin(NA_VALUES)
-#             df.loc[na_filter, c] = NA_REPLACEMENT
-#     return df
