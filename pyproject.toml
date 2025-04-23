@@ -34,6 +34,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
+    "catboost>=1.0.3",
     "lightgbm>=4.6.0",
     "shap>=0.44.0",
     "fastparquet>=0.8.1",
@@ -53,7 +54,6 @@ dependencies = [
     "levenshtein>=0.25.1",
     "psutil>=5.9.0",
     "category-encoders>=2.8.1",
-    "catboost>=1.2.8"
 ]
 
 [project.urls]

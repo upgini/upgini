@@ -623,8 +623,8 @@ class CatBoostWrapper(EstimatorWrapper):
         emb_name = "__grouped_embeddings"
         df = df.copy()
         df[self.emb_features] = df[self.emb_features].fillna(0.0)
-        df[emb_name] = pd.Series(df[self.emb_features].values.tolist())
-        df = df.drop(columns=self.emb_features)
+        embeddings_series = pd.Series(df[self.emb_features].values.tolist(), index=df.index)
+        df = pd.concat([df.drop(columns=self.emb_features), pd.DataFrame({emb_name: embeddings_series})], axis=1)
 
         return df, [emb_name]
 
@@ -965,11 +965,11 @@ def _get_cat_features(
     drop_cat_features = []
     for name in cat_features:
         # Remove constant categorical features
-        if x[name].nunique() > 1:
+        if x[name].nunique(dropna=False) > 1:
             unique_cat_features.append(name)
         else:
-            logger.info(f"Drop column {name} on preparing data for fit")
-            x = x.drop(columns=name)
+            logger.warning(f"Drop column {name} on preparing data for fit")
+            x.drop(columns=name, inplace=True)
             drop_cat_features.append(name)
     cat_features = unique_cat_features
 
