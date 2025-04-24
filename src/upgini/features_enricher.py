@@ -1768,10 +1768,10 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        # normalizer = Normalizer(self.bundle, self.logger)
-        # df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
-        # columns_renaming = normalizer.columns_renaming
-        columns_renaming = {c: c for c in df.columns}
+        normalizer = Normalizer(self.bundle, self.logger)
+        df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
+        columns_renaming = normalizer.columns_renaming
+        # columns_renaming = {c: c for c in df.columns}
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
@@ -3881,7 +3881,7 @@ if response.status_code == 200:
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
 
-        return [f.name for f in features_meta if f.type == "categorical" and f.shap_value > 0.0]
+        return [f.name for f in features_meta if f.type == "categorical"]
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
