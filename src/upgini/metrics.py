@@ -15,7 +15,7 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from category_encoders.cat_boost import CatBoostEncoder
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype, is_integer_dtype, is_float_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
 
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
@@ -324,6 +324,9 @@ class EstimatorWrapper:
         self.text_features = text_features
         self.logger = logger or logging.getLogger()
         self.droped_features = []
+        self.converted_to_int = []
+        self.converted_to_str = []
+        self.converted_to_numeric = []
 
     def fit(self, x: pd.DataFrame, y: np.ndarray, **kwargs):
         x, y, _, fit_params = self._prepare_to_fit(x, y)
@@ -334,44 +337,6 @@ class EstimatorWrapper:
     def predict(self, x: pd.DataFrame, **kwargs):
         x, _, _ = self._prepare_to_calculate(x, None)
         return self.estimator.predict(x, **kwargs)
-
-    def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
-        x, y, groups = self._prepare_data(x, y, groups=self.groups)
-
-        self.logger.info(f"Before preparing data columns: {x.columns.to_list()}")
-        self.droped_features = []
-        for c in x.columns:
-            if _get_unique_count(x[c]) < 2:
-                self.logger.warning(f"Remove feature {c} because it has less than 2 unique values")
-                self.droped_features.append(c)
-                if c in self.cat_features:
-                    self.cat_features.remove(c)
-                x.drop(columns=[c], inplace=True)
-            elif c in self.cat_features:
-                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
-                    x[c] = x[c].astype(np.int64)
-                elif is_numeric_object(x[c]):
-                    self.logger.warning(
-                        f"Convert numeric feature {c} of type {x[c].dtype} to numeric and remove from cat_features"
-                    )
-                    x[c] = pd.to_numeric(x[c], errors="coerce")
-                    self.cat_features.remove(c)
-                elif x[c].dtype != "category":
-                    x[c] = x[c].astype(str)
-            elif self.text_features is not None and c in self.text_features:
-                x[c] = x[c].astype(str)
-            else:
-                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
-                    x[c] = x[c].astype(np.int64)
-                elif not is_valid_numeric_array_data(x[c]):
-                    try:
-                        x[c] = pd.to_numeric(x[c], errors="raise")
-                    except (ValueError, TypeError):
-                        self.logger.warning(f"Remove feature {c} because it is not numeric and not in cat_features")
-                        self.droped_features.append(c)
-                        x.drop(columns=[c], inplace=True)
-
-        return x, y, groups, {}
 
     def _prepare_data(
         self, x: pd.DataFrame, y: pd.Series, groups: Optional[np.ndarray] = None
@@ -403,26 +368,82 @@ class EstimatorWrapper:
 
         return x, y
 
+    def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, dict]:
+        x, y, groups = self._prepare_data(x, y, groups=self.groups)
+
+        self.logger.info(f"Before preparing data columns: {x.columns.to_list()}")
+        self.droped_features = []
+        self.converted_to_int = []
+        self.converted_to_str = []
+        self.converted_to_numeric = []
+        for c in x.columns:
+            if _get_unique_count(x[c]) < 2:
+                self.logger.warning(f"Remove feature {c} because it has less than 2 unique values")
+                if c in self.cat_features:
+                    self.cat_features.remove(c)
+                x.drop(columns=[c], inplace=True)
+                self.droped_features.append(c)
+            elif self.text_features is not None and c in self.text_features:
+                x[c] = x[c].astype(str)
+                self.converted_to_str.append(c)
+            elif c in self.cat_features:
+                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
+                    x[c] = x[c].astype(np.int64)
+                    self.converted_to_int.append(c)
+                elif x[c].dtype == "category" and is_integer_dtype(x[c].cat.categories):
+                    self.logger.info(
+                        f"Convert categorical feature {c} with integer categories"
+                        " to int64 and remove from cat_features"
+                    )
+                    x[c] = x[c].astype(np.int64)
+                    self.converted_to_int.append(c)
+                    self.cat_features.remove(c)
+                elif is_float_dtype(x[c]) or (x[c].dtype == "category" and is_float_dtype(x[c].cat.categories)):
+                    self.logger.info(
+                        f"Convert float cat feature {c} to string"
+                    )
+                    x[c] = x[c].astype(str)
+                    self.converted_to_str.append(c)
+                elif x[c].dtype not in ["category", "int64"]:
+                    x[c] = x[c].astype(str)
+                    self.converted_to_str.append(c)
+            else:
+                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
+                    self.logger.info(f"Convert bool feature {c} to int64")
+                    x[c] = x[c].astype(np.int64)
+                    self.converted_to_int.append(c)
+                elif not is_valid_numeric_array_data(x[c]):
+                    try:
+                        x[c] = pd.to_numeric(x[c], errors="raise")
+                        self.converted_to_numeric.append(c)
+                    except (ValueError, TypeError):
+                        self.logger.warning(f"Remove feature {c} because it is not numeric and not in cat_features")
+                        x.drop(columns=[c], inplace=True)
+                        self.droped_features.append(c)
+
+        return x, y, groups, {}
+
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y, _ = self._prepare_data(x, y)
 
         if self.droped_features:
-            self.logger.warning(f"Dropped features: {self.droped_features}")
+            self.logger.info(f"Drop features on calculate metrics: {self.droped_features}")
             x = x.drop(columns=self.droped_features)
 
-        for c in x.columns:
-            if c in self.cat_features:
-                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
-                    x[c] = x[c].astype(np.int64)
-                elif x[c].dtype != "category":
-                    x[c] = x[c].astype(str)
-            elif self.text_features is not None and c in self.text_features:
+        if self.converted_to_int:
+            self.logger.info(f"Convert to int features on calculate metrics: {self.converted_to_int}")
+            for c in self.converted_to_int:
+                x[c] = x[c].astype(np.int64)
+
+        if self.converted_to_str:
+            self.logger.info(f"Convert to str features on calculate metrics: {self.converted_to_str}")
+            for c in self.converted_to_str:
                 x[c] = x[c].astype(str)
-            else:
-                if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
-                    x[c] = x[c].astype(np.int64)
-                elif not is_valid_numeric_array_data(x[c]):
-                    x[c] = pd.to_numeric(x[c], errors="coerce")
+
+        if self.converted_to_numeric:
+            self.logger.info(f"Convert to numeric features on calculate metrics: {self.converted_to_numeric}")
+            for c in self.converted_to_numeric:
+                x[c] = pd.to_numeric(x[c], errors="coerce")
 
         return x, y, {}
 

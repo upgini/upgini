@@ -1614,40 +1614,40 @@ def approx(value: float):
 def test_catboost_wrapper_with_different_feature_types():
     df = pd.DataFrame(
         {
-            "constant_feature": [[1], [1], [1], [1], [1]],  # should be dropped
-            "text_feature": ["a", "b", "b", "a", "b"],  # should be passed to text_features
-            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],  # should be removed from cat_features
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "b", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
             "cat_float_category": pd.Categorical(
                 [1.5, 2.3, 3.1, 4.7, 5.2]
-            ),  # should be casted to float64removed from cat_features
-            "cat_int": [1, 2, 3, 1, 2],  # as is should be passed to cat_features
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
             "cat_int_category": pd.Categorical(
                 [1, 2, 3, 1, 2]
-            ),  # should be casted to int64 and removed from cat_features
-            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),  # as is should be passed to cat_features
-            "cat_str_object": ["a", "b", "c", "a", "b"],  # as is should be passed to cat_features
-            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),  # as is should be passed to cat_features
-            "cat_bool": [True, False, True, False, True],  # as is should be passed to cat_features
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
             "cat_bool_category": pd.Categorical(
                 [True, False, True, False, True]
-            ),  # as is should be passed to cat_features
-            "cat_mix": [1, "a", True, 1.5, "b"],  # as string should be passed to cat_features
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
             "cat_date": pd.to_datetime(
                 ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
-            ),  # should be casted to string
-            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],  # as is
-            "num_int": [1, 2, 3, 1, 2],  # as is
-            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),  # should be dropped
-            "num_str_object": ["x", "y", "z", "x", "y"],  # should be dropped
-            "num_bool": [True, False, True, False, True],  # should be casted to int64
-            "num_mix": [1, "a", True, 1.5, "b"],  # should be droped
-            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),  # should be casted to float64
-            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),  # should be casted to int64
-            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),  # should be casted to string
-            "num_bool_category": pd.Categorical([True, False, True, False, True]),  # should be casted to int64
-            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),  # should be droped
-            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],  # as is
-            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],  # converted to embeddings array with emb2, emb3 and emb4
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
@@ -1707,8 +1707,8 @@ def test_catboost_wrapper_with_different_feature_types():
         ]
     )
     assert prepared_x["text_feature"].dtype == "object"
-    assert prepared_x["cat_float"].dtype == "float64"
-    assert prepared_x["cat_float_category"].dtype == "float64"
+    assert prepared_x["cat_float"].dtype == "object"
+    assert prepared_x["cat_float_category"].dtype == "object"
     assert prepared_x["cat_int"].dtype == "int64"
     assert prepared_x["cat_int_category"].dtype == "int64"
     assert prepared_x["cat_str_category"].dtype == "category"
@@ -1717,7 +1717,7 @@ def test_catboost_wrapper_with_different_feature_types():
     assert prepared_x["cat_bool"].dtype == "int64"
     assert prepared_x["cat_bool_category"].dtype == "int64"
     assert prepared_x["cat_mix"].dtype == "object"
-    assert prepared_x["cat_date"].dtype == "int64"
+    assert prepared_x["cat_date"].dtype == "object"
     assert prepared_x["num_float"].dtype == "float64"
     assert prepared_x["num_int"].dtype == "int64"
     assert prepared_x["num_bool"].dtype == "int64"
@@ -1734,65 +1734,73 @@ def test_catboost_wrapper_with_different_feature_types():
             "cat_bool",
             "cat_bool_category",
             "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
         ]
     )
     assert set(wrapper.grouped_embedding_features) == set(["__grouped_embeddings", "num_array_of_numbers"])
     assert set(params["embedding_features"]) == set(["__grouped_embeddings", "num_array_of_numbers"])
     assert params["text_features"] == ["text_feature"]
-    assert params["cat_features"] == [
+    assert set(params["cat_features"]) == set([
         "cat_str_category",
         "cat_str_object",
         "cat_str",
         "cat_bool",
         "cat_bool_category",
         "cat_mix",
-    ]
+        "cat_date",
+        "cat_float",
+        "cat_float_category",
+        "cat_int",
+    ])
 
     prepared_x2, _, params2 = wrapper._prepare_to_calculate(df.drop("target", axis=1), df["target"])
     assert_frame_equal(prepared_x, prepared_x2)
     assert params == params2
 
     result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
-    assert result.get_display_metric() == "1.000 ± 0.000"
+    assert result.get_display_metric() == "0.750 ± 0.250"
 
 
 def test_lightgbm_wrapper_with_different_feature_types():
     df = pd.DataFrame(
         {
-            "constant_feature": [[1], [1], [1], [1], [1]],  # should be dropped
-            "text_feature": ["a", "b", "c", "a", "b"],  # should be encoded to category
-            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],  # should be removed from cat_features
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "c", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
             "cat_float_category": pd.Categorical(
                 [1.5, 2.3, 3.1, 4.7, 5.2]
-            ),  # should be casted to float64removed from cat_features
-            "cat_int": [1, 2, 3, 1, 2],  # as is should be passed to cat_features
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
             "cat_int_category": pd.Categorical(
                 [1, 2, 3, 1, 2]
-            ),  # should be casted to int64 and removed from cat_features
-            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),  # as is should be passed to cat_features
-            "cat_str_object": ["a", "b", "c", "a", "b"],  # as is should be passed to cat_features
-            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),  # as is should be passed to cat_features
-            "cat_bool": [True, False, True, False, True],  # as is should be passed to cat_features
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
             "cat_bool_category": pd.Categorical(
                 [True, False, True, False, True]
-            ),  # as is should be passed to cat_features
-            "cat_mix": [1, "a", True, 1.5, "b"],  # as string should be passed to cat_features
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
             "cat_date": pd.to_datetime(
                 ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
-            ),  # should be casted to string
-            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],  # as is
-            "num_int": [1, 2, 3, 1, 2],  # as is
-            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),  # should be dropped
-            "num_str_object": ["x", "y", "z", "x", "y"],  # should be dropped
-            "num_bool": [True, False, True, False, True],  # should be casted to int64
-            "num_mix": [1, "a", True, 1.5, "b"],  # should be droped
-            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),  # should be casted to float64
-            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),  # should be casted to int64
-            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),  # should be casted to string
-            "num_bool_category": pd.Categorical([True, False, True, False, True]),  # should be casted to int64
-            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),  # should be droped
-            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],  # should be dropped
-            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],  # converted to embeddings array with emb2, emb3 and emb4
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
@@ -1854,9 +1862,9 @@ def test_lightgbm_wrapper_with_different_feature_types():
         ]
     )
     assert prepared_x["text_feature"].dtype == "category"
-    assert prepared_x["cat_float"].dtype == "float64"
-    assert prepared_x["cat_float_category"].dtype == "float64"
-    assert prepared_x["cat_int"].dtype == "int64"
+    assert prepared_x["cat_float"].dtype == "category"
+    assert prepared_x["cat_float_category"].dtype == "category"
+    assert prepared_x["cat_int"].dtype == "category"
     assert prepared_x["cat_int_category"].dtype == "int64"
     assert prepared_x["cat_str_category"].dtype == "category"
     assert prepared_x["cat_str_object"].dtype == "category"
@@ -1864,7 +1872,7 @@ def test_lightgbm_wrapper_with_different_feature_types():
     assert prepared_x["cat_bool"].dtype == "category"
     assert prepared_x["cat_bool_category"].dtype == "category"
     assert prepared_x["cat_mix"].dtype == "category"
-    assert prepared_x["cat_date"].dtype == "int64"
+    assert prepared_x["cat_date"].dtype == "category"
     assert prepared_x["num_float"].dtype == "float64"
     assert prepared_x["num_int"].dtype == "int64"
     assert prepared_x["num_bool"].dtype == "int64"
@@ -1884,6 +1892,10 @@ def test_lightgbm_wrapper_with_different_feature_types():
             "cat_bool_category",
             "cat_str",
             "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
         ]
     )
 
@@ -1897,40 +1909,40 @@ def test_lightgbm_wrapper_with_different_feature_types():
 def test_other_wrapper_with_different_feature_types():
     df = pd.DataFrame(
         {
-            "constant_feature": [[1], [1], [1], [1], [1]],  # should be dropped
-            "text_feature": ["a", "b", "c", "a", "b"],  # should be encoded to category
-            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],  # should be removed from cat_features
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "c", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
             "cat_float_category": pd.Categorical(
                 [1.5, 2.3, 3.1, 4.7, 5.2]
-            ),  # should be casted to float64removed from cat_features
-            "cat_int": [1, 2, 3, 1, 2],  # as is should be passed to cat_features
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
             "cat_int_category": pd.Categorical(
                 [1, 2, 3, 1, 2]
-            ),  # should be casted to int64 and removed from cat_features
-            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),  # as is should be passed to cat_features
-            "cat_str_object": ["a", "b", "c", "a", "b"],  # as is should be passed to cat_features
-            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),  # as is should be passed to cat_features
-            "cat_bool": [True, False, True, False, True],  # as is should be passed to cat_features
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
             "cat_bool_category": pd.Categorical(
                 [True, False, True, False, True]
-            ),  # as is should be passed to cat_features
-            "cat_mix": [1, "a", True, 1.5, "b"],  # as string should be passed to cat_features
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
             "cat_date": pd.to_datetime(
                 ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
-            ),  # should be casted to string
-            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],  # as is
-            "num_int": [1, 2, 3, 1, 2],  # as is
-            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),  # should be dropped
-            "num_str_object": ["x", "y", "z", "x", "y"],  # should be dropped
-            "num_bool": [True, False, True, False, True],  # should be casted to int64
-            "num_mix": [1, "a", True, 1.5, "b"],  # should be droped
-            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),  # should be casted to float64
-            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),  # should be casted to int64
-            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),  # should be casted to string
-            "num_bool_category": pd.Categorical([True, False, True, False, True]),  # should be casted to int64
-            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),  # should be droped
-            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],  # should be dropped
-            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],  # converted to embeddings array with emb2, emb3 and emb4
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
             "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
@@ -1992,9 +2004,9 @@ def test_other_wrapper_with_different_feature_types():
         ]
     )
     assert prepared_x["text_feature"].dtype == "category"
-    assert prepared_x["cat_float"].dtype == "float64"
-    assert prepared_x["cat_float_category"].dtype == "float64"
-    assert prepared_x["cat_int"].dtype == "int64"
+    assert prepared_x["cat_float"].dtype == "category"
+    assert prepared_x["cat_float_category"].dtype == "category"
+    assert prepared_x["cat_int"].dtype == "category"
     assert prepared_x["cat_int_category"].dtype == "int64"
     assert prepared_x["cat_str_category"].dtype == "category"
     assert prepared_x["cat_str_object"].dtype == "category"
@@ -2002,7 +2014,7 @@ def test_other_wrapper_with_different_feature_types():
     assert prepared_x["cat_bool"].dtype == "category"
     assert prepared_x["cat_bool_category"].dtype == "category"
     assert prepared_x["cat_mix"].dtype == "category"
-    assert prepared_x["cat_date"].dtype == "int64"
+    assert prepared_x["cat_date"].dtype == "category"
     assert prepared_x["num_float"].dtype == "float64"
     assert prepared_x["num_int"].dtype == "int64"
     assert prepared_x["num_bool"].dtype == "int64"
@@ -2022,6 +2034,10 @@ def test_other_wrapper_with_different_feature_types():
             "cat_bool_category",
             "cat_str",
             "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
         ]
     )
 
@@ -2029,4 +2045,4 @@ def test_other_wrapper_with_different_feature_types():
     assert_frame_equal(prepared_x, prepared_x2)
 
     result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
-    assert result.get_display_metric() == "1.000 ± 0.000"
+    assert result.get_display_metric() == "0.750 ± 0.250"
