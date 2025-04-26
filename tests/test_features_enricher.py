@@ -417,7 +417,36 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(requests_mock, url, search_task_id, metadata_columns=[
+        {
+            "index": 0,
+            "name": "system_record_id",
+            "originalName": "system_record_id",
+            "dataType": "INT",
+            "meaningType": "SYSTEM_RECORD_ID",
+        },
+        {
+            "index": 1,
+            "name": "phone_num_a54a33",
+            "originalName": "phone_num",
+            "dataType": "STRING",
+            "meaningType": "MSISDN",
+        },
+        {
+            "index": 2,
+            "name": "rep_date_f5d6bb",
+            "originalName": "rep_date",
+            "dataType": "INT",
+            "meaningType": "DATE",
+        },
+        {
+            "index": 2,
+            "name": "client_feature_8ddf40",
+            "originalName": "client_feature",
+            "dataType": "INT",
+            "meaningType": "FEATURE",
+        },
+    ])
     mock_get_task_metadata_v2(
         requests_mock,
         url,

@@ -464,6 +464,8 @@ class EstimatorWrapper:
         if baseline_score_column is not None and self.metric_name == "GINI":
             self.logger.info("Calculate baseline GINI on passed baseline_score_column and target")
             metric = roc_auc_score(y, x[baseline_score_column])
+            metric_std = None
+            average_shap_values = None
         else:
             self.logger.info(f"Cross validate with estimeator: {self.estimator}")
             cv_results = cross_validate(

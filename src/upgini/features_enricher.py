@@ -1017,6 +1017,12 @@ class FeaturesEnricher(TransformerMixin):
                 else:
                     client_cat_features = []
 
+                # rename baseline_score_column
+                reversed_renaming = {v: k for k, v in columns_renaming.items()}
+                baseline_score_column = self.baseline_score_column
+                if baseline_score_column is not None:
+                    baseline_score_column = reversed_renaming[baseline_score_column]
+
                 gc.collect()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
@@ -1069,7 +1075,7 @@ class FeaturesEnricher(TransformerMixin):
                             has_date=has_date,
                         )
                         etalon_cv_result = baseline_estimator.cross_val_predict(
-                            fitting_X, y_sorted, self.baseline_score_column
+                            fitting_X, y_sorted, baseline_score_column
                         )
                         etalon_metric = etalon_cv_result.get_display_metric()
                         if etalon_metric is None:
@@ -1165,7 +1171,7 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
                                 etalon_eval_results = baseline_estimator.calculate_metric(
-                                    eval_X_sorted, eval_y_sorted, self.baseline_score_column
+                                    eval_X_sorted, eval_y_sorted, baseline_score_column
                                 )
                                 etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
@@ -1958,6 +1964,14 @@ class FeaturesEnricher(TransformerMixin):
         eval_set_sampled_dict = self.__extract_eval_data(
             enriched_df, x_columns, enriched_X.columns.tolist(), len(eval_set) if has_eval_set else 0
         )
+
+        # Add hash-suffixes because output of transform has original names
+        reversed_renaming = {v: k for k, v in columns_renaming.items()}
+        X_sampled.rename(columns=reversed_renaming, inplace=True)
+        enriched_X.rename(columns=reversed_renaming, inplace=True)
+        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
+            eval_X_sampled.rename(columns=reversed_renaming, inplace=True)
+            enriched_eval_X.rename(columns=reversed_renaming, inplace=True)
 
         # Cache and return results
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
