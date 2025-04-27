@@ -1053,8 +1053,9 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
-                    etalon_metric = None
+                    baseline_metric = None
                     baseline_estimator = None
+                    updating_shaps = None
                     custom_loss_add_params = get_additional_params_custom_loss(
                         self.loss, model_task_type, logger=self.logger
                     )
@@ -1074,17 +1075,18 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=text_features,
                             has_date=has_date,
                         )
-                        etalon_cv_result = baseline_estimator.cross_val_predict(
+                        baseline_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, baseline_score_column
                         )
-                        etalon_metric = etalon_cv_result.get_display_metric()
-                        if etalon_metric is None:
+                        baseline_metric = baseline_cv_result.get_display_metric()
+                        if baseline_metric is None:
                             self.logger.info(
                                 f"Baseline {metric} on train client features is None (maybe all features was removed)"
                             )
                             baseline_estimator = None
                         else:
-                            self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
+                            self.logger.info(f"Baseline {metric} on train client features: {baseline_metric}")
+                        updating_shaps = baseline_cv_result.shap_values
 
                     # 2 Fit and predict with KFold estimator on enriched tds
                     # and calculate final metric (and uplift)
@@ -1110,10 +1112,7 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         enriched_metric = enriched_cv_result.get_display_metric()
-                        enriched_shaps = enriched_cv_result.shap_values
-
-                        if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent=not internal_call)
+                        updating_shaps = enriched_cv_result.shap_values
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1122,8 +1121,8 @@ class FeaturesEnricher(TransformerMixin):
                             enriched_estimator = None
                         else:
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
-                        if etalon_metric is not None and enriched_metric is not None:
-                            uplift = (enriched_cv_result.metric - etalon_cv_result.metric) * multiplier
+                        if baseline_metric is not None and enriched_metric is not None:
+                            uplift = (enriched_cv_result.metric - baseline_cv_result.metric) * multiplier
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1141,8 +1140,10 @@ class FeaturesEnricher(TransformerMixin):
                             np.mean(y_sorted),
                             4,
                         )
-                    if etalon_metric is not None:
-                        train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
+                    if baseline_metric is not None:
+                        train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
+                            baseline_metric
+                        )
                     if enriched_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
                             enriched_metric
@@ -1233,6 +1234,9 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
+                    if updating_shaps is not None:
+                        self._update_shap_values(trace_id, fitting_X, updating_shaps, silent=not internal_call)
+
                     metrics_df = pd.DataFrame(metrics)
                     mean_target_hdr = self.bundle.get("quality_metrics_mean_target_header")
                     if mean_target_hdr in metrics_df.columns:
@@ -1283,6 +1287,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
+        self.logger.info(f"Updating SHAP values: {new_shaps}")
         new_shaps = {
             renaming.get(feature, feature): _round_shap_value(shap)
             for feature, shap in new_shaps.items()
@@ -1908,6 +1913,13 @@ class FeaturesEnricher(TransformerMixin):
                 eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
                 enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+
+        reversed_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
+        X_sampled.rename(columns=reversed_renaming, inplace=True)
+        enriched_X.rename(columns=reversed_renaming, inplace=True)
+        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
+            eval_X_sampled.rename(columns=reversed_renaming, inplace=True)
+            enriched_eval_X.rename(columns=reversed_renaming, inplace=True)
 
         datasets_hash = hash_input(self.X, self.y, self.eval_set)
         return self.__cache_and_return_results(

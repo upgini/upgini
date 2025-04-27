@@ -412,7 +412,7 @@ class EstimatorWrapper:
                     self.logger.info(f"Convert bool feature {c} to int64")
                     x[c] = x[c].astype(np.int64)
                     self.converted_to_int.append(c)
-                elif not is_valid_numeric_array_data(x[c]):
+                elif not is_valid_numeric_array_data(x[c]) and not is_numeric_dtype(x[c]):
                     try:
                         x[c] = pd.to_numeric(x[c], errors="raise")
                         self.converted_to_numeric.append(c)
