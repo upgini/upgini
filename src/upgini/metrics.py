@@ -368,6 +368,7 @@ class EstimatorWrapper:
         self.converted_to_str = []
         self.converted_to_numeric = []
         for c in x.columns:
+
             if _get_unique_count(x[c]) < 2:
                 self.logger.warning(f"Remove feature {c} because it has less than 2 unique values")
                 if c in self.cat_features:

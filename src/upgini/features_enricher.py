@@ -2381,6 +2381,25 @@ if response.status_code == 200:
                 df[columns_for_system_record_id], index=False
             ).astype("float64")
 
+            features_not_to_pass = []
+            if add_fit_system_record_id:
+                df = self.__add_fit_system_record_id(
+                    df,
+                    search_keys,
+                    SYSTEM_RECORD_ID,
+                    TARGET,
+                    columns_renaming,
+                    silent=True,
+                )
+                df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
+                features_not_to_pass.append(SORT_ID)
+
+            system_columns_with_original_index = [ENTITY_SYSTEM_RECORD_ID] + generated_features
+            if add_fit_system_record_id:
+                system_columns_with_original_index.append(SORT_ID)
+
+            df_before_explode = df[system_columns_with_original_index].copy()
+
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
 
@@ -2428,25 +2447,13 @@ if response.status_code == 200:
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-            features_not_to_pass = [
+            features_not_to_pass.extend([
                 c
                 for c in df.columns
                 if c not in search_keys.keys()
                 and c not in features_for_transform
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
-            ]
-
-            if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(
-                    df,
-                    search_keys,
-                    SYSTEM_RECORD_ID,
-                    TARGET,
-                    columns_renaming,
-                    silent=True,
-                )
-                df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
-                features_not_to_pass.append(SORT_ID)
+            ])
 
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -2462,10 +2469,6 @@ if response.status_code == 200:
                 meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
 
             df = df.reset_index(drop=True)
-            system_columns_with_original_index = [SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID] + generated_features
-            if add_fit_system_record_id:
-                system_columns_with_original_index.append(SORT_ID)
-            df_with_original_index = df[system_columns_with_original_index].copy()
 
             combined_search_keys = combine_search_keys(search_keys.keys())
 
@@ -2573,7 +2576,7 @@ if response.status_code == 200:
             combined_df = pd.concat(
                 [
                     validated_Xy.reset_index(drop=True),
-                    df_with_original_index.reset_index(drop=True),
+                    df_before_explode.reset_index(drop=True),
                 ],
                 axis=1,
             ).set_index(validated_Xy.index)
