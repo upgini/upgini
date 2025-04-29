@@ -63,6 +63,10 @@ def test_get_display_name():
     )
     assert feature11.get_display_name(shorten=True) == "f_autofe_date_diff_min_vectorize_123"
 
+    feature12 = Feature.from_formula("lag_1d(cross_div(target))").set_display_index("123")
+    assert feature12.get_display_name(cache=False) == "f_target_autofe_cross_div_lag_1d_123"
+    assert feature12.get_display_name(shorten=True) == "f_autofe_cross_div_lag_1d_123"
+
 
 def test_get_hash():
     feature1 = Feature.from_formula("GroupByThenMin(f1,f2)")

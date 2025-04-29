@@ -161,7 +161,7 @@ class Feature:
         if self.cached_display_name is not None and cache:
             return self.cached_display_name
 
-        should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary else False
+        should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary or self.op.is_vector else False
         components = []
 
         if self.alias:
