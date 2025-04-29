@@ -453,6 +453,7 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
+        auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
         if progress_callback is not None:
             progress_callback(search_progress)
@@ -607,6 +608,7 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         self.warning_counter.reset()
+        auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
@@ -2728,7 +2730,7 @@ if response.status_code == 200:
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
-        auto_fe_parameters: Optional[AutoFEParameters] = None,
+        auto_fe_parameters: AutoFEParameters,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
