@@ -1,3 +1,3 @@
 Feature name,SHAP value,Coverage %,Value preview,Provider,Source,Updates
-feature,0.0045,99.0,"1, 6, 8",<a href='https://upgini.com' target='_blank' rel='noopener noreferrer'>Upgini</a>,LLM with external data augmentation,
-client_feature,0.0042,100.0,"1.0, 2.0, 4.0",,,
+client_feature,0.0091,100.0,"1, 2, 4",,,
+feature,0.0056,99.0,"1, 6, 8",<a href='https://upgini.com' target='_blank' rel='noopener noreferrer'>Upgini</a>,LLM with external data augmentation,

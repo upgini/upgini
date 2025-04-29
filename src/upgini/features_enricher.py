@@ -63,7 +63,7 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper, validate_scoring_argument
+from upgini.metrics import EstimatorWrapper, define_scorer, validate_scoring_argument
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
@@ -310,6 +310,7 @@ class FeaturesEnricher(TransformerMixin):
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
                     x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                    self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(trace_id, df, silent=True)
                     # TODO validate search_keys with search_keys from file_metadata
@@ -452,6 +453,7 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         start_time = time.time()
+        auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
         if progress_callback is not None:
             progress_callback(search_progress)
@@ -476,7 +478,7 @@ class FeaturesEnricher(TransformerMixin):
             self.__validate_search_keys(self.search_keys)
 
             # Validate client estimator params
-            self._get_client_cat_features(estimator, X, self.search_keys)
+            self._get_and_validate_client_cat_features(estimator, X, self.search_keys)
 
             try:
                 self.X = X
@@ -606,6 +608,7 @@ class FeaturesEnricher(TransformerMixin):
         """
 
         self.warning_counter.reset()
+        auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         trace_id = str(uuid.uuid4())
         start_time = time.time()
         with MDC(trace_id=trace_id):
@@ -957,9 +960,17 @@ class FeaturesEnricher(TransformerMixin):
                     self.__display_support_link(msg)
                     return None
 
-                cat_features, search_keys_for_metrics = self._get_client_cat_features(
+                cat_features_from_backend = self.__get_categorical_features()
+                client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
+                for cat_feature in cat_features_from_backend:
+                    original_cat_feature = self.fit_columns_renaming.get(cat_feature)
+                    if original_cat_feature in self.search_keys:
+                        if self.search_keys[original_cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                            search_keys_for_metrics.append(original_cat_feature)
+                        else:
+                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(original_cat_feature))
                 search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
                 self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
@@ -976,7 +987,7 @@ class FeaturesEnricher(TransformerMixin):
                     search_keys_for_metrics=search_keys_for_metrics,
                     progress_bar=progress_bar,
                     progress_callback=progress_callback,
-                    cat_features=cat_features,
+                    client_cat_features=client_cat_features,
                 )
                 if prepared_data is None:
                     return None
@@ -994,11 +1005,25 @@ class FeaturesEnricher(TransformerMixin):
                 ) = prepared_data
 
                 # rename cat_features
-                if cat_features:
+                if client_cat_features:
                     for new_c, old_c in columns_renaming.items():
-                        if old_c in cat_features:
-                            cat_features.remove(old_c)
-                            cat_features.append(new_c)
+                        if old_c in client_cat_features:
+                            client_cat_features.remove(old_c)
+                            client_cat_features.append(new_c)
+                    for cat_feature in client_cat_features:
+                        if cat_feature not in fitting_X.columns:
+                            self.logger.error(
+                                f"Client cat_feature `{cat_feature}` not found in"
+                                f" x columns: {fitting_X.columns.to_list()}"
+                            )
+                else:
+                    client_cat_features = []
+
+                # rename baseline_score_column
+                reversed_renaming = {v: k for k, v in columns_renaming.items()}
+                baseline_score_column = self.baseline_score_column
+                if baseline_score_column is not None:
+                    baseline_score_column = reversed_renaming[baseline_score_column]
 
                 gc.collect()
 
@@ -1006,12 +1031,12 @@ class FeaturesEnricher(TransformerMixin):
                     self.__log_warning(self.bundle.get("metrics_no_important_free_features"))
                     return None
 
-                maybe_phone_column = self._get_phone_column(self.search_keys)
-                text_features = (
-                    [f for f in self.generate_features if f != maybe_phone_column]
-                    if self.generate_features is not None
-                    else None
-                )
+                text_features = self.generate_features.copy() if self.generate_features else None
+                if text_features:
+                    for renamed, original in columns_renaming.items():
+                        if original in text_features:
+                            text_features.remove(original)
+                            text_features.append(renamed)
 
                 print(self.bundle.get("metrics_start"))
                 with Spinner():
@@ -1019,25 +1044,20 @@ class FeaturesEnricher(TransformerMixin):
 
                     has_date = self._get_date_column(search_keys) is not None
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
+                    cat_features = list(set(client_cat_features + cat_features_from_backend))
+                    baseline_cat_features = [f for f in cat_features if f in fitting_X.columns]
+                    enriched_cat_features = [f for f in cat_features if f in fitting_enriched_X.columns]
+                    if len(enriched_cat_features) < len(cat_features):
+                        missing_cat_features = [f for f in cat_features if f not in fitting_enriched_X.columns]
+                        self.logger.warning(f"Some cat_features were not found in enriched_X: {missing_cat_features}")
 
-                    wrapper = EstimatorWrapper.create(
-                        estimator,
-                        self.logger,
-                        model_task_type,
-                        _cv,
-                        fitting_enriched_X,
-                        scoring,
-                        groups=groups,
-                        text_features=text_features,
-                        has_date=has_date,
-                    )
-                    metric = wrapper.metric_name
-                    multiplier = wrapper.multiplier
+                    _, metric, multiplier = define_scorer(model_task_type, scoring)
 
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
-                    etalon_metric = None
+                    baseline_metric = None
                     baseline_estimator = None
+                    updating_shaps = None
                     custom_loss_add_params = get_additional_params_custom_loss(
                         self.loss, model_task_type, logger=self.logger
                     )
@@ -1050,25 +1070,25 @@ class FeaturesEnricher(TransformerMixin):
                             self.logger,
                             model_task_type,
                             _cv,
-                            fitting_enriched_X,
-                            scoring,
-                            cat_features,
+                            scoring=scoring,
+                            cat_features=baseline_cat_features,
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
                             has_date=has_date,
                         )
-                        etalon_cv_result = baseline_estimator.cross_val_predict(
-                            fitting_X, y_sorted, self.baseline_score_column
+                        baseline_cv_result = baseline_estimator.cross_val_predict(
+                            fitting_X, y_sorted, baseline_score_column
                         )
-                        etalon_metric = etalon_cv_result.get_display_metric()
-                        if etalon_metric is None:
+                        baseline_metric = baseline_cv_result.get_display_metric()
+                        if baseline_metric is None:
                             self.logger.info(
                                 f"Baseline {metric} on train client features is None (maybe all features was removed)"
                             )
                             baseline_estimator = None
                         else:
-                            self.logger.info(f"Baseline {metric} on train client features: {etalon_metric}")
+                            self.logger.info(f"Baseline {metric} on train client features: {baseline_metric}")
+                        updating_shaps = baseline_cv_result.shap_values
 
                     # 2 Fit and predict with KFold estimator on enriched tds
                     # and calculate final metric (and uplift)
@@ -1085,9 +1105,8 @@ class FeaturesEnricher(TransformerMixin):
                             self.logger,
                             model_task_type,
                             _cv,
-                            fitting_enriched_X,
-                            scoring,
-                            cat_features,
+                            scoring=scoring,
+                            cat_features=enriched_cat_features,
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
@@ -1095,10 +1114,7 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         enriched_metric = enriched_cv_result.get_display_metric()
-                        enriched_shaps = enriched_cv_result.shap_values
-
-                        if enriched_shaps is not None:
-                            self._update_shap_values(trace_id, fitting_X, enriched_shaps, silent=not internal_call)
+                        updating_shaps = enriched_cv_result.shap_values
 
                         if enriched_metric is None:
                             self.logger.warning(
@@ -1107,8 +1123,8 @@ class FeaturesEnricher(TransformerMixin):
                             enriched_estimator = None
                         else:
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
-                        if etalon_metric is not None and enriched_metric is not None:
-                            uplift = (enriched_cv_result.metric - etalon_cv_result.metric) * multiplier
+                        if baseline_metric is not None and enriched_metric is not None:
+                            uplift = (enriched_cv_result.metric - baseline_cv_result.metric) * multiplier
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1126,8 +1142,10 @@ class FeaturesEnricher(TransformerMixin):
                             np.mean(y_sorted),
                             4,
                         )
-                    if etalon_metric is not None:
-                        train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = etalon_metric
+                    if baseline_metric is not None:
+                        train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
+                            baseline_metric
+                        )
                     if enriched_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
                             enriched_metric
@@ -1156,7 +1174,7 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
                                 etalon_eval_results = baseline_estimator.calculate_metric(
-                                    eval_X_sorted, eval_y_sorted, self.baseline_score_column
+                                    eval_X_sorted, eval_y_sorted, baseline_score_column
                                 )
                                 etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
@@ -1218,6 +1236,9 @@ class FeaturesEnricher(TransformerMixin):
 
                             metrics.append(eval_metrics)
 
+                    if updating_shaps is not None:
+                        self._update_shap_values(trace_id, fitting_X, updating_shaps, silent=not internal_call)
+
                     metrics_df = pd.DataFrame(metrics)
                     mean_target_hdr = self.bundle.get("quality_metrics_mean_target_header")
                     if mean_target_hdr in metrics_df.columns:
@@ -1268,6 +1289,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
+        self.logger.info(f"Updating SHAP values: {new_shaps}")
         new_shaps = {
             renaming.get(feature, feature): _round_shap_value(shap)
             for feature, shap in new_shaps.items()
@@ -1420,7 +1442,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return _cv, groups
 
-    def _get_client_cat_features(
+    def _get_and_validate_client_cat_features(
         self, estimator: Optional[Any], X: pd.DataFrame, search_keys: Dict[str, SearchKey]
     ) -> Tuple[Optional[List[str]], List[str]]:
         cat_features = None
@@ -1428,12 +1450,20 @@ class FeaturesEnricher(TransformerMixin):
         if (
             estimator is not None
             and hasattr(estimator, "get_param")
+            and hasattr(estimator, "_init_params")
             and estimator.get_param("cat_features") is not None
         ):
-            cat_features = estimator.get_param("cat_features")
-            if len(cat_features) > 0:
-                if all([isinstance(f, int) for f in cat_features]):
-                    cat_features = [X.columns[i] for i in cat_features]
+            estimator_cat_features = estimator.get_param("cat_features")
+            if all([isinstance(c, int) for c in estimator_cat_features]):
+                cat_features = [X.columns[idx] for idx in estimator_cat_features]
+            elif all([isinstance(c, str) for c in estimator_cat_features]):
+                cat_features = estimator_cat_features
+            else:
+                print(f"WARNING: Unsupported type of cat_features in CatBoost estimator: {estimator_cat_features}")
+
+            del estimator._init_params["cat_features"]
+
+            if cat_features:
                 self.logger.info(f"Collected categorical features {cat_features} from user estimator")
                 for cat_feature in cat_features:
                     if cat_feature in search_keys:
@@ -1457,7 +1487,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys_for_metrics: Optional[List[str]] = None,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        cat_features: Optional[List[str]] = None,
+        client_cat_features: Optional[List[str]] = None,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -1531,7 +1561,7 @@ class FeaturesEnricher(TransformerMixin):
 
         # Detect and drop high cardinality columns in train
         columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
-        non_excluding_columns = (self.generate_features or []) + (cat_features or [])
+        non_excluding_columns = (self.generate_features or []) + (client_cat_features or [])
         columns_with_high_cardinality = [c for c in columns_with_high_cardinality if c not in non_excluding_columns]
         if len(columns_with_high_cardinality) > 0:
             self.logger.warning(
@@ -1751,10 +1781,10 @@ class FeaturesEnricher(TransformerMixin):
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
 
-        # normalizer = Normalizer(self.bundle, self.logger)
-        # df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
-        # columns_renaming = normalizer.columns_renaming
-        columns_renaming = {c: c for c in df.columns}
+        normalizer = Normalizer(self.bundle, self.logger)
+        df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
+        columns_renaming = normalizer.columns_renaming
+        # columns_renaming = {c: c for c in df.columns}
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
 
@@ -1886,6 +1916,13 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
+        reversed_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
+        X_sampled.rename(columns=reversed_renaming, inplace=True)
+        enriched_X.rename(columns=reversed_renaming, inplace=True)
+        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
+            eval_X_sampled.rename(columns=reversed_renaming, inplace=True)
+            enriched_eval_X.rename(columns=reversed_renaming, inplace=True)
+
         datasets_hash = hash_input(self.X, self.y, self.eval_set)
         return self.__cache_and_return_results(
             datasets_hash,
@@ -1941,6 +1978,14 @@ class FeaturesEnricher(TransformerMixin):
         eval_set_sampled_dict = self.__extract_eval_data(
             enriched_df, x_columns, enriched_X.columns.tolist(), len(eval_set) if has_eval_set else 0
         )
+
+        # Add hash-suffixes because output of transform has original names
+        reversed_renaming = {v: k for k, v in columns_renaming.items()}
+        X_sampled.rename(columns=reversed_renaming, inplace=True)
+        enriched_X.rename(columns=reversed_renaming, inplace=True)
+        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
+            eval_X_sampled.rename(columns=reversed_renaming, inplace=True)
+            enriched_eval_X.rename(columns=reversed_renaming, inplace=True)
 
         # Cache and return results
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
@@ -2069,10 +2114,12 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: Dict,
         columns_renaming: Dict[str, str],
     ):
+        # X_sampled - with hash-suffixes
+        reversed_renaming = {v: k for k, v in columns_renaming.items()}
         search_keys = {
-            columns_renaming.get(k, k): v
+            reversed_renaming.get(k, k): v
             for k, v in search_keys.items()
-            if columns_renaming.get(k, k) in X_sampled.columns.to_list()
+            if reversed_renaming.get(k, k) in X_sampled.columns.to_list()
         }
         return FeaturesEnricher._SampledDataForMetrics(
             X_sampled=X_sampled,
@@ -2334,6 +2381,25 @@ if response.status_code == 200:
                 df[columns_for_system_record_id], index=False
             ).astype("float64")
 
+            features_not_to_pass = []
+            if add_fit_system_record_id:
+                df = self.__add_fit_system_record_id(
+                    df,
+                    search_keys,
+                    SYSTEM_RECORD_ID,
+                    TARGET,
+                    columns_renaming,
+                    silent=True,
+                )
+                df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
+                features_not_to_pass.append(SORT_ID)
+
+            system_columns_with_original_index = [ENTITY_SYSTEM_RECORD_ID] + generated_features
+            if add_fit_system_record_id:
+                system_columns_with_original_index.append(SORT_ID)
+
+            df_before_explode = df[system_columns_with_original_index].copy()
+
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
 
@@ -2381,25 +2447,13 @@ if response.status_code == 200:
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-            features_not_to_pass = [
+            features_not_to_pass.extend([
                 c
                 for c in df.columns
                 if c not in search_keys.keys()
                 and c not in features_for_transform
                 and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
-            ]
-
-            if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(
-                    df,
-                    search_keys,
-                    SYSTEM_RECORD_ID,
-                    TARGET,
-                    columns_renaming,
-                    silent=True,
-                )
-                df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
-                features_not_to_pass.append(SORT_ID)
+            ])
 
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -2415,10 +2469,6 @@ if response.status_code == 200:
                 meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
 
             df = df.reset_index(drop=True)
-            system_columns_with_original_index = [SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID] + generated_features
-            if add_fit_system_record_id:
-                system_columns_with_original_index.append(SORT_ID)
-            df_with_original_index = df[system_columns_with_original_index].copy()
 
             combined_search_keys = combine_search_keys(search_keys.keys())
 
@@ -2526,7 +2576,7 @@ if response.status_code == 200:
             combined_df = pd.concat(
                 [
                     validated_Xy.reset_index(drop=True),
-                    df_with_original_index.reset_index(drop=True),
+                    df_before_explode.reset_index(drop=True),
                 ],
                 axis=1,
             ).set_index(validated_Xy.index)
@@ -2683,7 +2733,7 @@ if response.status_code == 200:
         importance_threshold: Optional[float],
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
-        auto_fe_parameters: Optional[AutoFEParameters] = None,
+        auto_fe_parameters: AutoFEParameters,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
@@ -2729,7 +2779,9 @@ if response.status_code == 200:
         if self.id_columns is not None:
             for id_column in self.id_columns:
                 if id_column not in validated_X.columns:
-                    raise ValidationError(self.bundle.get("missing_id_column").format(id_column))
+                    raise ValidationError(
+                        self.bundle.get("missing_id_column").format(id_column, list(validated_X.columns))
+                    )
 
         validate_scoring_argument(scoring)
 
@@ -3071,7 +3123,7 @@ if response.status_code == 200:
             self.__show_selected_features(self.fit_search_keys)
 
             autofe_description = self.get_autofe_features_description()
-            if autofe_description is not None:
+            if autofe_description is not None and len(autofe_description) > 0:
                 self.logger.info(f"AutoFE descriptions: {autofe_description}")
                 self.autofe_features_display_handle = display_html_dataframe(
                     df=autofe_description,
@@ -3855,6 +3907,13 @@ if response.status_code == 200:
 
         return importances
 
+    def __get_categorical_features(self) -> List[str]:
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise Exception(self.bundle.get("missing_features_meta"))
+
+        return [f.name for f in features_meta if f.type == "categorical"]
+
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
     ):
@@ -3883,7 +3942,10 @@ if response.status_code == 200:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
 
-            if updated_shaps is not None:
+            is_client_feature = feature_meta.name in df.columns
+
+            # Show and update shap values for client features only if select_features is True
+            if updated_shaps is not None and (not is_client_feature or self.fit_select_features):
                 updating_shap = updated_shaps.get(feature_meta.name)
                 if updating_shap is None:
                     if feature_meta.shap_value != 0.0:
@@ -3906,6 +3968,7 @@ if response.status_code == 200:
                 continue
 
             # Use only important features
+            # If select_features is False, we don't show etalon features in the report
             if (
                 # feature_meta.name in self.fit_generated_features or
                 feature_meta.name == COUNTRY  # constant synthetic column
@@ -4216,7 +4279,7 @@ if response.status_code == 200:
     def __show_selected_features(self, search_keys: Dict[str, SearchKey]):
         search_key_names = [col for col, tpe in search_keys.items() if tpe != SearchKey.CUSTOM_KEY]
         if self.fit_columns_renaming:
-            search_key_names = [self.fit_columns_renaming.get(col, col) for col in search_key_names]
+            search_key_names = sorted(set([self.fit_columns_renaming.get(col, col) for col in search_key_names]))
         msg = self.bundle.get("features_info_header").format(len(self.feature_names_), search_key_names)
 
         try:
@@ -4232,12 +4295,13 @@ if response.status_code == 200:
                     display_id=f"features_info_{uuid.uuid4()}",
                 )
 
-                self.data_sources_display_handle = display_html_dataframe(
-                    self.relevant_data_sources,
-                    self._relevant_data_sources_wo_links,
-                    self.bundle.get("relevant_data_sources_header"),
-                    display_id=f"data_sources_{uuid.uuid4()}",
-                )
+                if len(self.relevant_data_sources) > 0:
+                    self.data_sources_display_handle = display_html_dataframe(
+                        self.relevant_data_sources,
+                        self._relevant_data_sources_wo_links,
+                        self.bundle.get("relevant_data_sources_header"),
+                        display_id=f"data_sources_{uuid.uuid4()}",
+                    )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
                 self.__log_warning(msg, show_support_link=True)

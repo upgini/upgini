@@ -60,12 +60,14 @@ class EWMAVolatility(VolatilityBase, ParametrizedOperator):
         return res
 
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._ewma_vol)
+        return ts.apply(self._ewma_vol).iloc[:, [-1]]
 
     def _ewma_vol(self, x):
-        x = pd.DataFrame(x).iloc[:, -1]
-        returns = self._get_returns(x, f"{self.step_size}{self.step_unit}")
-        return returns.ewm(span=self.window_size).std()
+        return_series = isinstance(x, pd.Series)
+        x = pd.DataFrame(x)
+        returns = self._get_returns(x.iloc[:, -1], f"{self.step_size}{self.step_unit}")
+        x.iloc[:, -1] = returns.ewm(span=self.window_size).std()
+        return x.iloc[:, -1] if return_series else x
 
 
 class RollingVolBase(VolatilityBase):

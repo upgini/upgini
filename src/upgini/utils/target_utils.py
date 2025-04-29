@@ -3,7 +3,7 @@ from typing import Callable, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype, is_bool_dtype
+from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 
 from upgini.errors import ValidationError
 from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
@@ -14,11 +14,14 @@ from upgini.utils.ts_utils import get_most_frequent_time_unit, trunc_datetime
 TS_MIN_DIFFERENT_IDS_RATIO = 0.2
 
 
-def correct_string_target(y: Union[pd.Series, np.ndarray]) -> Union[pd.Series, np.ndarray]:
-    if isinstance(y, pd.Series):
-        return y.astype(str).astype("category").cat.codes
-    elif isinstance(y, np.ndarray):
-        return pd.Series(y).astype(str).astype("category").cat.codes.values
+def prepare_target(y: Union[pd.Series, np.ndarray], target_type: ModelTaskType) -> Union[pd.Series, np.ndarray]:
+    if target_type != ModelTaskType.REGRESSION or (not is_numeric_dtype(y) and not is_datetime64_any_dtype(y)):
+        if isinstance(y, pd.Series):
+            y = y.astype(str).astype("category").cat.codes
+        elif isinstance(y, np.ndarray):
+            y = pd.Series(y).astype(str).astype("category").cat.codes.values
+
+    return y
 
 
 def define_task(

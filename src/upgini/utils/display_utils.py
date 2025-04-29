@@ -92,9 +92,9 @@ def display_html_dataframe(
     if table_tsv is not None:
         copy_and_share = f"""
             <div style="text-align: right">
-                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>\U0001F4C2 Copy</button>
+                <button onclick=navigator.clipboard.writeText(decodeURI('{table_tsv}'))>\U0001f4c2 Copy</button>
                 <a href='mailto:<Share with...>?subject={email_subject}&body={table_tsv}'>
-                    <button>\U0001F4E8 Share</button>
+                    <button>\U0001f4e8 Share</button>
                 </a>
             </div>"""
     else:
@@ -112,6 +112,7 @@ def display_html_dataframe(
 
             .upgini-df tbody td {{
                 padding: 0.5em;
+                color: black;
             }}
 
             .upgini-df tbody tr:nth-child(odd) {{
@@ -164,10 +165,12 @@ def make_html_report(
 
     try:
         from importlib.resources import files
-        font_path = files('upgini.utils').joinpath('Roboto-Regular.ttf')
+
+        font_path = files("upgini.utils").joinpath("Roboto-Regular.ttf")
     except Exception:
         from pkg_resources import resource_filename
-        font_path = resource_filename('upgini.utils', 'Roboto-Regular.ttf')
+
+        font_path = resource_filename("upgini.utils", "Roboto-Regular.ttf")
 
     return f"""<html>
         <head>
@@ -274,8 +277,10 @@ def make_html_report(
              if metrics_df is not None
              else ""
             }
-            <h3>Relevant data sources</h3>
-            {make_table(relevant_datasources_df)}
+            {"<h3>Relevant data sources</h3>" + make_table(relevant_datasources_df)
+             if len(relevant_datasources_df) > 0
+             else ""
+            }
             <h3>All relevant features. Listing ({len(relevant_features_df)} items)</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
             {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df, wrap_long_string=25)
@@ -311,7 +316,7 @@ def prepare_and_show_report(
 
 
 def show_button_download_pdf(
-    source: str, title="\U0001F4CA Download PDF report", display_id: Optional[str] = None, display_handle=None
+    source: str, title="\U0001f4ca Download PDF report", display_id: Optional[str] = None, display_handle=None
 ):
     from IPython.display import HTML, display
 

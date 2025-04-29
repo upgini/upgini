@@ -21,7 +21,6 @@ def test_calculate_shap_with_lgbm_classifier():
         logger=logging.getLogger(),
         target_type=ModelTaskType.BINARY,
         cv=None,
-        x=X,
         scoring="roc_auc",
     )
 
@@ -47,7 +46,6 @@ def test_calculate_shap_with_lgbm_regressor():
         logger=logging.getLogger(),
         target_type=ModelTaskType.REGRESSION,
         cv=None,
-        x=X,
         scoring="roc_auc",
     )
 
@@ -73,7 +71,6 @@ def test_calculate_shap_with_non_lgbm_model():
         logger=logging.getLogger(),
         target_type=ModelTaskType.MULTICLASS,
         cv=None,
-        x=X,
         scoring="roc_auc",
     )
 
@@ -93,7 +90,6 @@ def test_calculate_shap_with_empty_dataframe():
         logger=logging.getLogger(),
         target_type=ModelTaskType.BINARY,
         cv=None,
-        x=X,
         scoring="roc_auc",
     )
 
@@ -113,7 +109,6 @@ def test_calculate_shap_with_invalid_input():
         logger=logging.getLogger(),
         target_type=ModelTaskType.BINARY,
         cv=None,
-        x=X,
         scoring="roc_auc",
     )
 

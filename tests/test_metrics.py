@@ -2,13 +2,15 @@ import datetime
 import json
 import os
 
-from lightgbm import LGBMClassifier
 import numpy as np
 import pandas as pd
 import pytest
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
 from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import KFold
 
 from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
@@ -17,10 +19,18 @@ from upgini.metadata import (
     FeaturesMetadataV2,
     HitRateMetrics,
     ModelEvalSet,
+    ModelTaskType,
     ProviderTaskMetadataV2,
     SearchKey,
 )
-from upgini.metrics import CATBOOST_BINARY_PARAMS, LIGHTGBM_BINARY_PARAMS
+from upgini.metrics import (
+    CATBOOST_BINARY_PARAMS,
+    LIGHTGBM_BINARY_PARAMS,
+    CatBoostWrapper,
+    LightGBMWrapper,
+    OtherEstimatorWrapper,
+    _get_scorer_by_name,
+)
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
@@ -297,14 +307,14 @@ def test_default_metric_binary(requests_mock: Mocker, update_metrics_flag: bool)
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -406,14 +416,17 @@ def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: b
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="postal_code_13534a", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.1
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -600,19 +613,19 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker, update_metrics
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -711,19 +724,19 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker, update_metrics_fl
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -824,12 +837,12 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -908,7 +921,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
     assert_frame_equal(metrics_df, expected_metrics)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -929,12 +942,12 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1015,7 +1028,7 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
     assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
@@ -1041,21 +1054,21 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="cat_feature2",
+                    name="cat_feature2_3ef372",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.2,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="country",
+                    name="country_aff64e",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1169,7 +1182,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1282,21 +1295,21 @@ def test_lightgbm_metric_binary_with_cat_features(requests_mock: Mocker, update_
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="cat_feature2",
+                    name="cat_feature2_3ef372",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.2,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="country",
+                    name="country_aff64e",
                     type="categorical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1403,12 +1416,12 @@ def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
@@ -1507,19 +1520,19 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
                 FeaturesMetadataV2(
                     name="ads_feature1",
                     type="numerical",
-                    source="etalon",
+                    source="ads",
                     hit_rate=99.0,
                     shap_value=10.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature1",
+                    name="feature1_422b73",
                     type="numerical",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
-                    name="feature_2_cat", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.01
+                    name="feature_2_cat_508476", type="categorical", source="etalon", hit_rate=100.0, shap_value=0.01
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -1596,3 +1609,440 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
 
 def approx(value: float):
     return pytest.approx(value, abs=0.000001)
+
+
+def test_catboost_wrapper_with_different_feature_types():
+    df = pd.DataFrame(
+        {
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "b", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
+            "cat_float_category": pd.Categorical(
+                [1.5, 2.3, 3.1, 4.7, 5.2]
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
+            "cat_int_category": pd.Categorical(
+                [1, 2, 3, 1, 2]
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
+            "cat_bool_category": pd.Categorical(
+                [True, False, True, False, True]
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
+            "cat_date": pd.to_datetime(
+                ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "target": [0, 1, 0, 1, 0],
+        }
+    )
+
+    scoring, metric_name, multiplier = _get_scorer_by_name("roc_auc")
+
+    wrapper = CatBoostWrapper(
+        CatBoostClassifier(verbose=False),
+        scorer=scoring,
+        cat_features=[
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+        ],
+        text_features=["text_feature"],
+        metric_name=metric_name,
+        multiplier=multiplier,
+        cv=KFold(n_splits=2),
+        target_type=ModelTaskType.BINARY,
+    )
+
+    prepared_x, _, _, params = wrapper._prepare_to_fit(df.drop("target", axis=1), df["target"])
+    assert set(prepared_x.columns.to_list()) == set(
+        [
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+            "num_float",
+            "num_int",
+            "num_bool",
+            "num_float_category",
+            "num_int_category",
+            "num_bool_category",
+            "num_array_of_numbers",
+            "__grouped_embeddings",
+        ]
+    )
+    assert prepared_x["text_feature"].dtype == "object"
+    assert prepared_x["cat_float"].dtype == "object"
+    assert prepared_x["cat_float_category"].dtype == "object"
+    assert prepared_x["cat_int"].dtype == "int64"
+    assert prepared_x["cat_int_category"].dtype == "int64"
+    assert prepared_x["cat_str_category"].dtype == "category"
+    assert prepared_x["cat_str_object"].dtype == "object"
+    assert prepared_x["cat_str"].dtype == "object"
+    assert prepared_x["cat_bool"].dtype == "int64"
+    assert prepared_x["cat_bool_category"].dtype == "int64"
+    assert prepared_x["cat_mix"].dtype == "object"
+    assert prepared_x["cat_date"].dtype == "object"
+    assert prepared_x["num_float"].dtype == "float64"
+    assert prepared_x["num_int"].dtype == "int64"
+    assert prepared_x["num_bool"].dtype == "int64"
+    assert prepared_x["num_float_category"].dtype == "float64"
+    assert prepared_x["num_int_category"].dtype == "int64"
+    assert prepared_x["num_bool_category"].dtype == "int64"
+    assert prepared_x["num_array_of_numbers"].dtype == "object"
+    assert prepared_x["__grouped_embeddings"].dtype == "object"
+    assert set(wrapper.cat_features) == set(
+        [
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+        ]
+    )
+    assert set(wrapper.grouped_embedding_features) == set(["__grouped_embeddings", "num_array_of_numbers"])
+    assert set(params["embedding_features"]) == set(["__grouped_embeddings", "num_array_of_numbers"])
+    assert params["text_features"] == ["text_feature"]
+    assert set(params["cat_features"]) == set([
+        "cat_str_category",
+        "cat_str_object",
+        "cat_str",
+        "cat_bool",
+        "cat_bool_category",
+        "cat_mix",
+        "cat_date",
+        "cat_float",
+        "cat_float_category",
+        "cat_int",
+    ])
+
+    prepared_x2, _, params2 = wrapper._prepare_to_calculate(df.drop("target", axis=1), df["target"])
+    assert_frame_equal(prepared_x, prepared_x2)
+    assert params == params2
+
+    result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
+    assert result.get_display_metric() == "0.750 ± 0.250"
+
+
+def test_lightgbm_wrapper_with_different_feature_types():
+    df = pd.DataFrame(
+        {
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "c", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
+            "cat_float_category": pd.Categorical(
+                [1.5, 2.3, 3.1, 4.7, 5.2]
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
+            "cat_int_category": pd.Categorical(
+                [1, 2, 3, 1, 2]
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
+            "cat_bool_category": pd.Categorical(
+                [True, False, True, False, True]
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
+            "cat_date": pd.to_datetime(
+                ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "target": [0, 1, 0, 1, 0],
+        }
+    )
+
+    scoring, metric_name, multiplier = _get_scorer_by_name("roc_auc")
+
+    wrapper = LightGBMWrapper(
+        LGBMClassifier(verbose=-1),
+        scorer=scoring,
+        cat_features=[
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+        ],
+        text_features=["text_feature"],
+        metric_name=metric_name,
+        multiplier=multiplier,
+        cv=KFold(n_splits=2),
+        target_type=ModelTaskType.BINARY,
+    )
+
+    prepared_x, _, _, _ = wrapper._prepare_to_fit(df.drop("target", axis=1), df["target"])
+    assert set(prepared_x.columns.to_list()) == set(
+        [
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+            "num_float",
+            "num_int",
+            "num_bool",
+            "num_float_category",
+            "num_int_category",
+            "num_bool_category",
+            "num_emb1",
+            "num_emb2",
+            "num_emb3",
+            "num_emb4",
+        ]
+    )
+    assert prepared_x["text_feature"].dtype == "category"
+    assert prepared_x["cat_float"].dtype == "category"
+    assert prepared_x["cat_float_category"].dtype == "category"
+    assert prepared_x["cat_int"].dtype == "category"
+    assert prepared_x["cat_int_category"].dtype == "int64"
+    assert prepared_x["cat_str_category"].dtype == "category"
+    assert prepared_x["cat_str_object"].dtype == "category"
+    assert prepared_x["cat_str"].dtype == "category"
+    assert prepared_x["cat_bool"].dtype == "category"
+    assert prepared_x["cat_bool_category"].dtype == "category"
+    assert prepared_x["cat_mix"].dtype == "category"
+    assert prepared_x["cat_date"].dtype == "category"
+    assert prepared_x["num_float"].dtype == "float64"
+    assert prepared_x["num_int"].dtype == "int64"
+    assert prepared_x["num_bool"].dtype == "int64"
+    assert prepared_x["num_float_category"].dtype == "float64"
+    assert prepared_x["num_int_category"].dtype == "int64"
+    assert prepared_x["num_bool_category"].dtype == "int64"
+    assert prepared_x["num_emb1"].dtype == "float64"
+    assert prepared_x["num_emb2"].dtype == "float64"
+    assert prepared_x["num_emb3"].dtype == "float64"
+    assert prepared_x["num_emb4"].dtype == "float64"
+    assert set(wrapper.cat_features) == set(
+        [
+            "text_feature",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_str",
+            "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+        ]
+    )
+
+    prepared_x2, _, _ = wrapper._prepare_to_calculate(df.drop("target", axis=1), df["target"])
+    assert_frame_equal(prepared_x, prepared_x2)
+
+    result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
+    assert result.get_display_metric() == "0.500 ± 0.000"
+
+
+def test_other_wrapper_with_different_feature_types():
+    df = pd.DataFrame(
+        {
+            "constant_feature": [[1], [1], [1], [1], [1]],
+            "text_feature": ["a", "b", "c", "a", "b"],
+            "cat_float": [1.5, 2.3, 3.1, 4.7, 5.2],
+            "cat_float_category": pd.Categorical(
+                [1.5, 2.3, 3.1, 4.7, 5.2]
+            ),
+            "cat_int": [1, 2, 3, 1, 2],
+            "cat_int_category": pd.Categorical(
+                [1, 2, 3, 1, 2]
+            ),
+            "cat_str_category": pd.Categorical(["a", "b", "c", "a", "b"]),
+            "cat_str_object": ["a", "b", "c", "a", "b"],
+            "cat_str": pd.Series(["a", "b", "c", "a", "b"], dtype="string"),
+            "cat_bool": [True, False, True, False, True],
+            "cat_bool_category": pd.Categorical(
+                [True, False, True, False, True]
+            ),
+            "cat_mix": [1, "a", True, 1.5, "b"],
+            "cat_date": pd.to_datetime(
+                ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"]
+            ),
+            "num_float": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "num_int": [1, 2, 3, 1, 2],
+            "num_str": pd.Series(["x", "y", "z", "x", "y"], dtype="string"),
+            "num_str_object": ["x", "y", "z", "x", "y"],
+            "num_bool": [True, False, True, False, True],
+            "num_mix": [1, "a", True, 1.5, "b"],
+            "num_float_category": pd.Categorical([1.5, 2.3, 3.1, 4.7, 5.2]),
+            "num_int_category": pd.Categorical([1, 2, 3, 1, 2]),
+            "num_str_category": pd.Categorical(["x", "y", "z", "x", "y"]),
+            "num_bool_category": pd.Categorical([True, False, True, False, True]),
+            "num_mix_category": pd.Categorical([1, "a", True, 1.5, "b"]),
+            "num_array_of_numbers": [[1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 2, 3], [4, 5, 6]],
+            "num_emb1": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb2": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb3": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "num_emb4": [1.2, 3.4, 5.6, 7.8, 9.0],
+            "target": [0, 1, 0, 1, 0],
+        }
+    )
+
+    scoring, metric_name, multiplier = _get_scorer_by_name("roc_auc")
+
+    wrapper = OtherEstimatorWrapper(
+        RandomForestClassifier(random_state=42),
+        scorer=scoring,
+        cat_features=[
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+        ],
+        text_features=["text_feature"],
+        metric_name=metric_name,
+        multiplier=multiplier,
+        cv=KFold(n_splits=2),
+        target_type=ModelTaskType.BINARY,
+    )
+
+    prepared_x, _, _, _ = wrapper._prepare_to_fit(df.drop("target", axis=1), df["target"])
+    assert set(prepared_x.columns.to_list()) == set(
+        [
+            "text_feature",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+            "cat_int_category",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_str",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_mix",
+            "cat_date",
+            "num_float",
+            "num_int",
+            "num_bool",
+            "num_float_category",
+            "num_int_category",
+            "num_bool_category",
+            "num_emb1",
+            "num_emb2",
+            "num_emb3",
+            "num_emb4",
+        ]
+    )
+    assert prepared_x["text_feature"].dtype == "category"
+    assert prepared_x["cat_float"].dtype == "category"
+    assert prepared_x["cat_float_category"].dtype == "category"
+    assert prepared_x["cat_int"].dtype == "category"
+    assert prepared_x["cat_int_category"].dtype == "int64"
+    assert prepared_x["cat_str_category"].dtype == "category"
+    assert prepared_x["cat_str_object"].dtype == "category"
+    assert prepared_x["cat_str"].dtype == "category"
+    assert prepared_x["cat_bool"].dtype == "category"
+    assert prepared_x["cat_bool_category"].dtype == "category"
+    assert prepared_x["cat_mix"].dtype == "category"
+    assert prepared_x["cat_date"].dtype == "category"
+    assert prepared_x["num_float"].dtype == "float64"
+    assert prepared_x["num_int"].dtype == "int64"
+    assert prepared_x["num_bool"].dtype == "int64"
+    assert prepared_x["num_float_category"].dtype == "float64"
+    assert prepared_x["num_int_category"].dtype == "int64"
+    assert prepared_x["num_bool_category"].dtype == "int64"
+    assert prepared_x["num_emb1"].dtype == "float64"
+    assert prepared_x["num_emb2"].dtype == "float64"
+    assert prepared_x["num_emb3"].dtype == "float64"
+    assert prepared_x["num_emb4"].dtype == "float64"
+    assert set(wrapper.cat_features) == set(
+        [
+            "text_feature",
+            "cat_str_category",
+            "cat_str_object",
+            "cat_bool",
+            "cat_bool_category",
+            "cat_str",
+            "cat_mix",
+            "cat_date",
+            "cat_float",
+            "cat_float_category",
+            "cat_int",
+        ]
+    )
+
+    prepared_x2, _, _ = wrapper._prepare_to_calculate(df.drop("target", axis=1), df["target"])
+    assert_frame_equal(prepared_x, prepared_x2)
+
+    result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
+    assert result.get_display_metric() == "0.750 ± 0.250"

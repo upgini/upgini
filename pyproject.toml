@@ -34,6 +34,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
+    "catboost>=1.0.3",
     "lightgbm>=4.6.0",
     "shap>=0.44.0",
     "fastparquet>=0.8.1",
@@ -52,6 +53,7 @@ dependencies = [
     "jarowinkler>=2.0.0",
     "levenshtein>=0.25.1",
     "psutil>=5.9.0",
+    "category-encoders>=2.8.1",
 ]
 
 [project.urls]
@@ -99,6 +101,7 @@ pandas = ["2.1.0", "2.2.0"]
 
 [tool.hatch.envs.test]
 dependencies = [
+  "catboost>=1.2.8",
   "coverage[toml]",
   "pytest",
   "pytest-cov",
