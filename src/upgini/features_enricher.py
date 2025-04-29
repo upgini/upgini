@@ -3937,7 +3937,10 @@ if response.status_code == 200:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
 
-            if updated_shaps is not None:
+            is_client_feature = feature_meta.name in df.columns
+
+            # Show and update shap values for client features only if select_features is True
+            if updated_shaps is not None and (not is_client_feature or self.fit_select_features):
                 updating_shap = updated_shaps.get(feature_meta.name)
                 if updating_shap is None:
                     if feature_meta.shap_value != 0.0:

@@ -91,17 +91,8 @@ CATBOOST_MULTICLASS_PARAMS = {
 
 LIGHTGBM_REGRESSION_PARAMS = {
     "random_state": DEFAULT_RANDOM_STATE,
-    "min_gain_to_split": 0.001,
     "n_estimators": 275,
-    "max_depth": 5,
-    "max_cat_threshold": 80,
-    "min_data_per_group": 25,
-    "cat_l2": 10,
-    "cat_smooth": 12,
-    "learning_rate": 0.05,
     "feature_fraction": 1.0,
-    "min_sum_hessian_in_leaf": 0.01,
-    "objective": "huber",
     "deterministic": "true",
     "verbosity": -1,
 }
