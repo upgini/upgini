@@ -117,7 +117,7 @@ class Feature:
                 + [ch.op.get_hash_component() for ch in self.children if isinstance(ch, Feature)]
                 + [ch.get_display_name() for ch in self.children]
             ).encode("utf-8")
-        ).hexdigest()[:8]
+        ).hexdigest()[:10]
 
     def set_alias(self, alias: str) -> "Feature":
         self.alias = alias
