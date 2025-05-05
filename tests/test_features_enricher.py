@@ -417,36 +417,41 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id, metadata_columns=[
-        {
-            "index": 0,
-            "name": "system_record_id",
-            "originalName": "system_record_id",
-            "dataType": "INT",
-            "meaningType": "SYSTEM_RECORD_ID",
-        },
-        {
-            "index": 1,
-            "name": "phone_num_a54a33",
-            "originalName": "phone_num",
-            "dataType": "STRING",
-            "meaningType": "MSISDN",
-        },
-        {
-            "index": 2,
-            "name": "rep_date_f5d6bb",
-            "originalName": "rep_date",
-            "dataType": "INT",
-            "meaningType": "DATE",
-        },
-        {
-            "index": 2,
-            "name": "client_feature_8ddf40",
-            "originalName": "client_feature",
-            "dataType": "INT",
-            "meaningType": "FEATURE",
-        },
-    ])
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 2,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -458,10 +463,18 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
                     name="client_feature", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_sin", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="numeric",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_cos", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="numeric",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -1615,16 +1628,12 @@ def test_filter_by_importance(requests_mock: Mocker, update_metrics_flag: bool):
 
     if update_metrics_flag:
         metrics.to_csv(
-            os.path.join(
-                FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
-            ),
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"),
             index=False,
         )
 
     expected_metrics = pd.read_csv(
-        os.path.join(
-            FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
-        )
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv")
     )
 
     assert_frame_equal(metrics, expected_metrics, atol=1e-6)
@@ -1733,16 +1742,12 @@ def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool
 
     if update_metrics_flag:
         metrics.to_csv(
-            os.path.join(
-                FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
-            ),
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"),
             index=False,
         )
 
     expected_metrics = pd.read_csv(
-        os.path.join(
-            FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"
-        )
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv")
     )
 
     assert_frame_equal(metrics, expected_metrics, atol=1e-6)
@@ -1997,36 +2002,60 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
             features=[
                 FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
                 FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_sin",
+                    name="datetime_day_in_quarter_sin_65d4f7",
                     type="NUMERIC",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_cos",
+                    name="datetime_day_in_quarter_cos_eeb97a",
                     type="NUMERIC",
                     source="etalon",
                     hit_rate=100.0,
                     shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_second_sin_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_second_sin_60_d4ab6d",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_second_cos_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_second_cos_60_be3be7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_minute_sin_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_sin_60_609cc6",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_minute_cos_60", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_cos_60_c8c837",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_minute_sin_30", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_sin_30_73fdef",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
                 FeaturesMetadataV2(
-                    name="datetime_minute_cos_30", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.001
+                    name="datetime_minute_cos_30_256cfb",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.001,
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -2395,7 +2424,7 @@ def test_email_search_key(requests_mock: Mocker):
             "email_822444",
             "email_822444_hem",
             "email_822444_one_domain",
-            "email_domain",
+            "email_domain_10c73f",
             "current_date_b993c4",
         }
         assert {"email_822444", "email_822444_hem", "email_822444_one_domain", "current_date_b993c4"} == {
@@ -2562,7 +2591,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             "eml_13033c",
             "eml_13033c_hem",
             "eml_13033c_one_domain",
-            "eml_domain",
+            "eml_domain_7e1966",
         }
         assert {
             "postal_code_13534a",

@@ -84,7 +84,6 @@ class Normalizer:
                     SEARCH_KEY_UNNEST,
                     DateTimeSearchKeyConverter.DATETIME_COL,
                 ]
-                + self.generated_features
             ):
                 self.columns_renaming[column] = column
                 new_columns.append(column)
@@ -120,9 +119,13 @@ class Normalizer:
             # df.columns.values[col_idx] = new_column
             # rename(columns={column: new_column}, inplace=True)
 
-            if new_column != column and column in self.search_keys:
-                self.search_keys[new_column] = self.search_keys[column]
-                del self.search_keys[column]
+            if new_column != column:
+                if column in self.search_keys:
+                    self.search_keys[new_column] = self.search_keys[column]
+                    del self.search_keys[column]
+                if column in self.generated_features:
+                    self.generated_features.remove(column)
+                    self.generated_features.append(new_column)
             self.columns_renaming[new_column] = str(column)
         df.columns = new_columns
         return df
