@@ -1559,9 +1559,12 @@ class FeaturesEnricher(TransformerMixin):
         fitting_X = X_sorted[client_features].copy()
         fitting_enriched_X = enriched_X_sorted[client_features + existing_filtered_enriched_features].copy()
 
+        renamed_generate_features = [columns_renaming.get(c, c) for c in (self.generate_features or [])]
+        renamed_client_cat_features = [columns_renaming.get(c, c) for c in (client_cat_features or [])]
+
         # Detect and drop high cardinality columns in train
         columns_with_high_cardinality = FeaturesValidator.find_high_cardinality(fitting_X)
-        non_excluding_columns = (self.generate_features or []) + (client_cat_features or [])
+        non_excluding_columns = renamed_generate_features + renamed_client_cat_features
         columns_with_high_cardinality = [c for c in columns_with_high_cardinality if c not in non_excluding_columns]
         if len(columns_with_high_cardinality) > 0:
             self.logger.warning(

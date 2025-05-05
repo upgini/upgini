@@ -394,7 +394,7 @@ class Dataset:  # (pd.DataFrame):
             if col in mandatory_columns:
                 self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]
 
-            invalid_values = list(self.data.loc[self.data[f"{col}_is_valid"] == 0, col].head().values)  # type: ignore
+            invalid_values = list(set(self.data.loc[self.data[f"{col}_is_valid"] == 0, col].head().values))
             valid_share = self.data[f"{col}_is_valid"].sum() / nrows
             original_col_name = self.columns_renaming[col]
             validation_stats[original_col_name] = {}
