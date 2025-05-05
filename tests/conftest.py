@@ -20,7 +20,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture
 def update_metrics_flag(request):
-    return request.config.getoption("--update-metrics") or True
+    return request.config.getoption("--update-metrics") or False
 
 
 @pytest.fixture
