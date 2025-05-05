@@ -2450,13 +2450,15 @@ if response.status_code == 200:
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-            features_not_to_pass.extend([
-                c
-                for c in df.columns
-                if c not in search_keys.keys()
-                and c not in features_for_transform
-                and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
-            ])
+            features_not_to_pass.extend(
+                [
+                    c
+                    for c in df.columns
+                    if c not in search_keys.keys()
+                    and c not in features_for_transform
+                    and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
+                ]
+            )
 
             if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
                 df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -3715,7 +3717,7 @@ if response.status_code == 200:
         columns_to_sort = [date_column] if date_column is not None else []
 
         do_sorting = True
-        if self.id_columns and self.cv in [CVType.time_series, CVType.blocked_time_series]:
+        if self.id_columns and self.cv.is_time_series():
             # Check duplicates by date and id_columns
             reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
             renamed_id_columns = [reversed_columns_renaming.get(c, c) for c in self.id_columns]
@@ -3725,14 +3727,7 @@ if response.status_code == 200:
 
             duplicates = df.duplicated(subset=duplicate_check_columns, keep=False)
             if duplicates.any():
-                if not silent:
-                    self.__log_warning(self.bundle.get("date_and_id_columns_duplicates").format(duplicates.sum()))
-                else:
-                    self.logger.warning(
-                        f"Found {duplicates.sum()} duplicate rows by date and ID columns: {duplicate_check_columns}."
-                        " Will not sort dataset"
-                    )
-                do_sorting = False
+                raise ValueError(self.bundle.get("date_and_id_columns_duplicates").format(duplicates.sum()))
             else:
                 columns_to_hash = list(set(list(search_keys.keys()) + renamed_id_columns + [target_name]))
                 columns_to_hash = sort_columns(
