@@ -117,7 +117,7 @@ class Feature:
                 + [ch.op.get_hash_component() for ch in self.children if isinstance(ch, Feature)]
                 + [ch.get_display_name() for ch in self.children]
             ).encode("utf-8")
-        ).hexdigest()[:8]
+        ).hexdigest()[:10]
 
     def set_alias(self, alias: str) -> "Feature":
         self.alias = alias
@@ -161,7 +161,7 @@ class Feature:
         if self.cached_display_name is not None and cache:
             return self.cached_display_name
 
-        should_stack_op = not isinstance(self.children[0], Column) if self.op.is_unary else False
+        should_stack_op = not isinstance(self.children[-1], Column) if self.op.is_unary or self.op.is_vector else False
         components = []
 
         if self.alias:
@@ -169,7 +169,7 @@ class Feature:
         elif should_stack_op:
             components.extend(
                 [
-                    self.children[0].get_display_name(
+                    self.children[-1].get_display_name(
                         cache=cache, shorten=shorten, use_op_alias=use_op_alias, **kwargs
                     ),
                     self.get_op_display_name(use_alias=use_op_alias),
