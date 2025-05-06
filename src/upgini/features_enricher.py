@@ -3,6 +3,7 @@ import datetime
 import gc
 import hashlib
 import itertools
+import json
 import logging
 import numbers
 import os
@@ -59,6 +60,7 @@ from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
     FileColumnMeaningType,
+    FileColumnMetadata,
     ModelTaskType,
     RuntimeParameters,
     SearchKey,
@@ -2152,7 +2154,7 @@ class FeaturesEnricher(TransformerMixin):
             trace_id = trace_id or uuid.uuid4()
             return search_task.get_progress(trace_id)
 
-    def get_transactional_transform_api(self, only_online_sources=False):
+    def display_transactional_transform_api(self, only_online_sources=False):
         if self.api_key is None:
             raise ValidationError(self.bundle.get("transactional_transform_unregistered"))
         if self._search_task is None:
@@ -2178,20 +2180,36 @@ class FeaturesEnricher(TransformerMixin):
             return "test_value"
 
         file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
+
+        def get_column_meta(column_name: str) -> FileColumnMetadata:
+            for c in file_metadata.columns:
+                if c.name == column_name:
+                    return c
+
         search_keys = file_metadata.search_types()
         if SearchKey.IPV6_ADDRESS in search_keys:
             search_keys.pop(SearchKey.IPV6_ADDRESS, None)
-        original_names = {c.name: c.originalName for c in file_metadata.columns}
-        keys = (
-            "{"
-            + ", ".join(
-                [
-                    f'"{key.name}": {{"name": "{original_names.get(name, name)}", "value": "{key_example(key)}"}}'
-                    for key, name in search_keys.items()
-                ]
-            )
-            + "}"
-        )
+
+        search_keys_with_values = dict()
+        for sk_type, sk_name in search_keys.items():
+            if sk_type == SearchKey.IPV6_ADDRESS:
+                continue
+
+            sk_meta = get_column_meta(sk_name)
+            if sk_meta is None:
+                search_keys_with_values[sk_type.name] = [{"name": sk_name, "value": key_example(sk_type)}]
+            else:
+                if sk_meta.isUnnest:
+                    search_keys_with_values[sk_type.name] = [
+                        {"name": name, "value": key_example(sk_type)} for name in sk_meta.unnestKeyNames
+                    ]
+                else:
+                    search_keys_with_values[sk_type.name] = [{
+                        "name": sk_meta.originalName,
+                        "value": key_example(sk_type),
+                    }]
+
+        keys_section = json.dumps(search_keys_with_values)
         features_for_transform = self._search_task.get_features_for_transform()
         if features_for_transform:
             original_features_for_transform = [
@@ -2212,7 +2230,7 @@ class FeaturesEnricher(TransformerMixin):
 curl 'https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}' \\
     -H 'Authorization: {self.api_key}' \\
     -H 'Content-Type: application/json' \\
-    -d '{{"search_keys": {keys}{features_section}, "only_online_sources": {str(only_online_sources).lower()}}}'
+    -d '{{"search_keys": {keys_section}{features_section}, "only_online_sources": {str(only_online_sources).lower()}}}'
 
 {Format.BOLD}Python{Format.END}:
 
@@ -2221,13 +2239,12 @@ import requests
 response = requests.post(
     url='https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}',
     headers={{'Authorization': '{self.api_key}'}},
-    json={{"search_keys": {keys}{features_section}, "only_online_sources": {only_online_sources}}}
+    json={{"search_keys": {keys_section}{features_section}, "only_online_sources": {only_online_sources}}}
 )
 if response.status_code == 200:
     print(response.json())
 """
-
-        return api_example
+        print(api_example)
 
     def _get_copy_of_runtime_parameters(self) -> RuntimeParameters:
         return RuntimeParameters(properties=self.runtime_parameters.properties.copy())
@@ -2288,7 +2305,7 @@ if response.status_code == 200:
                 msg = self.bundle.get("online_api_features_transform").format(online_api_features)
                 self.logger.warning(msg)
                 print(msg)
-                print(self.get_transactional_transform_api(only_online_sources=True))
+                self.display_transactional_transform_api(only_online_sources=True)
 
             if not metrics_calculation:
                 transform_usage = self.rest_client.get_current_transform_usage(trace_id)
