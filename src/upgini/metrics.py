@@ -391,9 +391,7 @@ class EstimatorWrapper:
                     self.converted_to_int.append(c)
                     self.cat_features.remove(c)
                 elif is_float_dtype(x[c]) or (x[c].dtype == "category" and is_float_dtype(x[c].cat.categories)):
-                    self.logger.info(
-                        f"Convert float cat feature {c} to string"
-                    )
+                    self.logger.info(f"Convert float cat feature {c} to string")
                     x[c] = x[c].astype(str)
                     self.converted_to_str.append(c)
                 elif x[c].dtype not in ["category", "int64"]:
@@ -694,7 +692,15 @@ class CatBoostWrapper(EstimatorWrapper):
                     x[c] = x[c].fillna(np.nan)
                 elif x[c].dtype != "category":
                     x[c] = x[c].fillna("NA")
-            params["cat_features"] = self.cat_features
+            if isinstance(self.cv, TimeSeriesSplit) or isinstance(self.cv, BlockedTimeSeriesSplit):
+                self.logger.info("Using time-aware encoder for CatBoost")
+                encoder = CatBoostEncoder(random_state=DEFAULT_RANDOM_STATE, cols=self.cat_features, return_df=True)
+                encoded = encoder.fit_transform(x[self.cat_features].astype("object"), y)
+                x[self.cat_features] = encoded
+                self.cat_encoder = encoder
+            else:
+                self.cat_encoder = None
+                params["cat_features"] = self.cat_features
 
         return x, y, groups, params
 
@@ -738,7 +744,16 @@ class CatBoostWrapper(EstimatorWrapper):
                     x[c] = x[c].fillna(np.nan)
                 elif x[c].dtype != "category":
                     x[c] = x[c].fillna("NA")
-            params["cat_features"] = self.cat_features
+            if (
+                isinstance(self.cv, TimeSeriesSplit)
+                or isinstance(self.cv, BlockedTimeSeriesSplit)
+                and self.cat_encoder is not None
+            ):
+                self.logger.info("Using time-aware encoder for CatBoost")
+                encoded = self.cat_encoder.transform(x[self.cat_features].astype("object"), y)
+                x[self.cat_features] = encoded
+            else:
+                params["cat_features"] = self.cat_features
 
         return x, y, params
 
