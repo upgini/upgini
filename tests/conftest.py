@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from upgini.autofe.utils import pydantic_parse_method
 from upgini.dataset import Dataset, FileMetrics
 from upgini.ads import FileColumnMeaningType
 
@@ -86,4 +87,4 @@ def expected_binary_etalon_metadata():
             {"date_cut": 1552989600000.0, "count": 3000.0, "valid_count": 3000.0, "avg_target": 0.5},
         ],
     }
-    return FileMetrics.parse_obj(metadata)
+    return pydantic_parse_method(FileMetrics)(metadata)

@@ -5,6 +5,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.unary import Norm
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_norm():
@@ -111,7 +112,7 @@ def test_norm_operator_with_numeric_params_parse_obj():
     norm = Norm(norm=2.5)
 
     norm_dict = norm.get_params()
-    parsed_norm = Norm.parse_obj(norm_dict)
+    parsed_norm = pydantic_parse_method(Norm)(norm_dict)
 
     assert parsed_norm.norm == 2.5
     assert parsed_norm.name == "norm"

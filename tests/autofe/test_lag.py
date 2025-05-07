@@ -6,6 +6,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import Lag
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_lag_date():
@@ -134,7 +135,7 @@ def test_lag_parse_obj():
     lag = Lag(lag_size=3, lag_unit="d", offset_size=2, offset_unit="D")
 
     lag_dict = lag.get_params()
-    parsed_lag = Lag.parse_obj(lag_dict)
+    parsed_lag = pydantic_parse_method(Lag)(lag_dict)
 
     assert parsed_lag.lag_size == 3
     assert parsed_lag.lag_unit == "d"

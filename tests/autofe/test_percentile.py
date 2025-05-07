@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 from upgini.autofe.date import (
     DatePercentile,
 )
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_date_percentile():
@@ -46,7 +47,7 @@ def test_date_percentile_parse_obj():
     )
 
     date_percentile_dict = date_percentile.get_params()
-    parsed_date_percentile = DatePercentile.parse_obj(date_percentile_dict)
+    parsed_date_percentile = pydantic_parse_method(DatePercentile)(date_percentile_dict)
 
     assert parsed_date_percentile.zero_month == 3
     assert parsed_date_percentile.zero_year == 2023

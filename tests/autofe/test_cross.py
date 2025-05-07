@@ -7,6 +7,7 @@ from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import CrossSeriesInteraction
 from upgini.autofe.binary import Add, Subtract, Multiply, Divide
 from upgini.autofe.all_operators import find_op
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_cross_series_basic():
@@ -408,7 +409,7 @@ def test_cross_series_interaction_parse_obj():
     )
 
     cross_dict = cross.get_params()
-    parsed_cross = CrossSeriesInteraction.parse_obj(cross_dict)
+    parsed_cross = pydantic_parse_method(CrossSeriesInteraction)(cross_dict)
 
     assert parsed_cross.interaction_op.name == add_op.name
     assert parsed_cross.descriptor_indices == [0, 1]

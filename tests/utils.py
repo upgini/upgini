@@ -1,13 +1,14 @@
 import itertools
 import json
 import tempfile
+import uuid
 from random import randint
 from typing import Dict, List, Optional, Union
-import uuid
 
 import pandas as pd
 from requests_mock import Mocker
 
+from upgini.autofe.utils import pydantic_dump_method
 from upgini.metadata import ProviderTaskMetadataV2
 
 
@@ -156,7 +157,9 @@ def mock_get_metadata(
 
 
 def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_id: str, meta: ProviderTaskMetadataV2):
-    requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta.dict())
+    requests_mock.get(
+        url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=pydantic_dump_method(meta)()
+    )
 
 
 def mock_get_task_metadata_v2_from_file(requests_mock: Mocker, url: str, ads_search_task_id: str, meta_path: str):
@@ -529,11 +532,7 @@ def mock_validation_progress(requests_mock: Mocker, url: str, validation_search_
 def mock_target_outliers(requests_mock: Mocker, url: str, search_task_id: str):
     url = f"{url}/public/api/v2/search/target-outliers/{search_task_id}"
     outlier_id = uuid.uuid4()
-    response = {
-        "adsSearchTaskTargetOutliersDTO": [{
-            "adsSearchTaskTargetOutliersId": str(outlier_id)
-        }]
-    }
+    response = {"adsSearchTaskTargetOutliersDTO": [{"adsSearchTaskTargetOutliersId": str(outlier_id)}]}
     requests_mock.get(url, json=response)
     return outlier_id
 

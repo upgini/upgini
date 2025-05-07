@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries.volatility import VolatilityRatio, RollingVolatility
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def create_volatility_ratio(
@@ -209,7 +210,7 @@ def test_volatility_ratio_parse_obj():
     )
 
     vol_ratio_dict = volatility_ratio.get_params()
-    parsed_vol_ratio = VolatilityRatio.parse_obj(vol_ratio_dict)
+    parsed_vol_ratio = pydantic_parse_method(VolatilityRatio)(vol_ratio_dict)
 
     assert parsed_vol_ratio.short_window_size == 3
     assert parsed_vol_ratio.short_window_unit == "d"
