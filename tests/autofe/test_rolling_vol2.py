@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries.volatility import RollingVolatility, RollingVolatility2
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def first_order_vol(window_size: int, abs_returns: bool = False):
@@ -186,7 +187,7 @@ def test_rolling_volatility2_parse_obj():
     roll_vol2 = RollingVolatility2(window_size=4, window_unit="h", offset_size=1, offset_unit="d")
 
     roll_vol2_dict = roll_vol2.get_params()
-    parsed_roll_vol2 = RollingVolatility2.parse_obj(roll_vol2_dict)
+    parsed_roll_vol2 = pydantic_parse_method(RollingVolatility2)(roll_vol2_dict)
 
     assert parsed_roll_vol2.window_size == 4
     assert parsed_roll_vol2.window_unit == "h"

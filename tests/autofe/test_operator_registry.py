@@ -1,5 +1,6 @@
 from upgini.autofe.operator import OperatorRegistry
 from upgini.autofe.timeseries import Roll
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_parametrized_operator_registry_roundtrip():
@@ -7,7 +8,7 @@ def test_parametrized_operator_registry_roundtrip():
     assert roll_from_registry is not None
 
     roll_dict = roll_from_registry.get_params()
-    parsed_roll = Roll.parse_obj(roll_dict)
+    parsed_roll = pydantic_parse_method(Roll)(roll_dict)
 
     assert parsed_roll.window_size == 3
     assert parsed_roll.window_unit == "d"

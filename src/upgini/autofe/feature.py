@@ -8,6 +8,7 @@ from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operators import find_op
 from upgini.autofe.operator import Operator, PandasOperator
+from upgini.autofe.utils import pydantic_dump_method, pydantic_parse_method
 
 
 class Column:
@@ -80,9 +81,9 @@ class Feature:
         self.alias = alias
 
     def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
-        obj_dict = self.op.dict().copy()
+        obj_dict = pydantic_dump_method(self.op)().copy()
         obj_dict.update(params or {})
-        self.op = self.op.__class__.parse_obj(obj_dict)
+        self.op = pydantic_parse_method(self.op.__class__)(obj_dict)
         self.op.set_params(params)
 
         for child in self.children:

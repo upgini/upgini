@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Feature, Column
 from upgini.autofe.timeseries import Delta, Delta2
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_delta():
@@ -271,7 +272,7 @@ def test_delta_operator_parse_obj():
     delta = Delta(delta_size=3, delta_unit="d", offset_size=2, offset_unit="D")
 
     delta_dict = delta.get_params()
-    parsed_delta = Delta.parse_obj(delta_dict)
+    parsed_delta = pydantic_parse_method(Delta)(delta_dict)
 
     assert parsed_delta.delta_size == 3
     assert parsed_delta.delta_unit == "d"

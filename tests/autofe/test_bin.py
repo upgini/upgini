@@ -2,6 +2,7 @@ import pandas as pd
 from pandas.testing import assert_series_equal
 
 from upgini.autofe.unary import Bin
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_bin_basic():
@@ -73,7 +74,7 @@ def test_bin_parse_obj():
 
     # Convert to dict, then parse back to object
     bin_dict = op.get_params()
-    parsed_bin = Bin.parse_obj(bin_dict)
+    parsed_bin = pydantic_parse_method(Bin)(bin_dict)
 
     # Verify the parsed object has the same parameters
     assert parsed_bin.bin_bounds == [0, 10, 20, 30, 40, 50]

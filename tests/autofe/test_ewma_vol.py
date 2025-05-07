@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries.volatility import EWMAVolatility
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_ewma_volatility_calculate():
@@ -164,7 +165,7 @@ def test_ewma_volatility_parse_obj():
     ewma_vol = EWMAVolatility(window_size=5, offset_size=2, offset_unit="D")
 
     ewma_vol_dict = ewma_vol.get_params()
-    parsed_ewma_vol = EWMAVolatility.parse_obj(ewma_vol_dict)
+    parsed_ewma_vol = pydantic_parse_method(EWMAVolatility)(ewma_vol_dict)
 
     assert parsed_ewma_vol.window_size == 5
     assert parsed_ewma_vol.offset_size == 2

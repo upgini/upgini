@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import TrendCoefficient
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_trend_coef():
@@ -159,7 +160,7 @@ def test_trend_coefficient_parse_obj():
     trend_coef = TrendCoefficient(offset_size=2, offset_unit="D")
 
     trend_dict = trend_coef.get_params()
-    parsed_trend = TrendCoefficient.parse_obj(trend_dict)
+    parsed_trend = pydantic_parse_method(TrendCoefficient)(trend_dict)
 
     assert parsed_trend.offset_size == 2
     assert parsed_trend.offset_unit == "D"

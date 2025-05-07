@@ -9,6 +9,7 @@ from upgini.autofe.date import (
     DateListDiff,
     DateListDiffBounded,
 )
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_date_diff():
@@ -228,7 +229,7 @@ def test_date_list_diff_bounded_parse_obj():
     )
 
     date_diff_dict = date_diff.get_params()
-    parsed_date_diff = DateListDiffBounded.parse_obj(date_diff_dict)
+    parsed_date_diff = pydantic_parse_method(DateListDiffBounded)(date_diff_dict)
 
     assert parsed_date_diff.diff_unit == "Y"
     assert parsed_date_diff.lower_bound == 18
@@ -242,7 +243,7 @@ def test_date_list_diff_bounded_parse_obj():
     date_diff = DateListDiffBounded(diff_unit="Y", lower_bound=18, upper_bound=25, aggregation="count", normalize=True)
 
     date_diff_dict = date_diff.get_params()
-    parsed_date_diff = DateListDiffBounded.parse_obj(date_diff_dict)
+    parsed_date_diff = pydantic_parse_method(DateListDiffBounded)(date_diff_dict)
 
     assert parsed_date_diff.diff_unit == "Y"
     assert parsed_date_diff.lower_bound == 18

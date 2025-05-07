@@ -4,6 +4,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.binary import Distance, Sim
 from upgini.autofe.feature import Feature
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_distance_calculation():
@@ -81,7 +82,7 @@ def test_distance_parse_obj():
     distance = Distance()
 
     distance_dict = distance.get_params()
-    parsed_distance = Distance.parse_obj(distance_dict)
+    parsed_distance = pydantic_parse_method(Distance)(distance_dict)
 
     assert parsed_distance.name == "dist"
     assert parsed_distance.is_binary is True

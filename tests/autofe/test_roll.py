@@ -6,6 +6,7 @@ from pandas.testing import assert_series_equal
 
 from upgini.autofe.feature import Column, Feature
 from upgini.autofe.timeseries import Roll
+from upgini.autofe.utils import pydantic_parse_method
 
 
 def test_roll_date():
@@ -196,7 +197,7 @@ def test_roll_operator_parse_obj():
     roll = Roll(window_size=5, window_unit="d", aggregation="mean", offset_size=1, offset_unit="D")
 
     roll_dict = roll.get_params()
-    parsed_roll = Roll.parse_obj(roll_dict)
+    parsed_roll = pydantic_parse_method(Roll)(roll_dict)
 
     assert parsed_roll.window_size == 5
     assert parsed_roll.window_unit == "d"

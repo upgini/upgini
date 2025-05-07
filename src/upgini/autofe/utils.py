@@ -81,3 +81,31 @@ def pydantic_validator(field_name: str, *fields, mode: str = "before", **kwargs)
             return wrapper
 
         return decorator
+
+
+def pydantic_json_method(obj):
+    if get_pydantic_version() >= 2:
+        return obj.model_dump_json
+    else:
+        return obj.json
+
+
+def pydantic_parse_method(cls):
+    if get_pydantic_version() >= 2:
+        return cls.model_validate
+    else:
+        return cls.parse_obj
+
+
+def pydantic_dump_method(obj):
+    if get_pydantic_version() >= 2:
+        return obj.model_dump
+    else:
+        return obj.dict
+
+
+def pydantic_copy_method(obj):
+    if get_pydantic_version() >= 2:
+        return obj.model_copy
+    else:
+        return obj.copy
