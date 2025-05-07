@@ -8,6 +8,7 @@ from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operators import find_op
 from upgini.autofe.operator import Operator, PandasOperator
+from upgini.autofe.timeseries.base import TimeSeriesBase
 from upgini.autofe.utils import pydantic_dump_method, pydantic_parse_method
 
 
@@ -162,7 +163,11 @@ class Feature:
         if self.cached_display_name is not None and cache:
             return self.cached_display_name
 
-        should_stack_op = not isinstance(self.children[-1], Column) if self.op.is_unary or self.op.is_vector else False
+        should_stack_op = (
+            not isinstance(self.children[-1], Column)
+            if self.op.is_unary or isinstance(self.op, TimeSeriesBase)
+            else False
+        )
         components = []
 
         if self.alias:
