@@ -30,7 +30,7 @@ from pandas.api.types import (
 from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
-from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
@@ -71,6 +71,7 @@ from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.utils.country_utils import (
     CountrySearchKeyConverter,
     CountrySearchKeyDetector,
@@ -114,7 +115,9 @@ from upgini.utils.postal_code_utils import (
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
-    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+    from upgini.utils.fallback_progress_bar import (
+        CustomFallbackProgressBar as ProgressBar,
+    )
 
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import (
@@ -239,6 +242,7 @@ class FeaturesEnricher(TransformerMixin):
         add_date_if_missing: bool = True,
         disable_force_downsampling: bool = False,
         id_columns: Optional[List[str]] = None,
+        generate_search_key_features: bool = True,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -365,6 +369,8 @@ class FeaturesEnricher(TransformerMixin):
         self.exclude_columns = exclude_columns
         self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
+        self.generate_search_key_features = generate_search_key_features
+
         self.features_info_display_handle = None
         self.data_sources_display_handle = None
         self.autofe_features_display_handle = None
@@ -1045,6 +1051,7 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     has_date = self._get_date_column(search_keys) is not None
+                    has_time = has_date and isinstance(_cv, TimeSeriesSplit) or isinstance(_cv, BlockedTimeSeriesSplit)
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
                     cat_features = list(set(client_cat_features + cat_features_from_backend))
                     baseline_cat_features = [f for f in cat_features if f in fitting_X.columns]
@@ -1077,7 +1084,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
-                            has_date=has_date,
+                            has_time=has_time,
                         )
                         baseline_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, baseline_score_column
@@ -1112,7 +1119,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
-                            has_date=has_date,
+                            has_time=has_time,
                         )
                         enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         enriched_metric = enriched_cv_result.get_display_metric()
@@ -1773,7 +1780,13 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         generated_features = []
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
+            converter = DateTimeSearchKeyConverter(
+                date_column,
+                self.date_format,
+                self.logger,
+                self.bundle,
+                generate_cyclical_features=self.generate_search_key_features,
+            )
             # Leave original date column values
             df_with_date_features = converter.convert(df, keep_time=True)
             df_with_date_features[date_column] = df[date_column]
@@ -1781,7 +1794,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = converter.generated_features
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
-        if email_columns:
+        if email_columns and self.generate_search_key_features:
             generator = EmailDomainGenerator(email_columns)
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
@@ -2204,10 +2217,12 @@ class FeaturesEnricher(TransformerMixin):
                         {"name": name, "value": key_example(sk_type)} for name in sk_meta.unnestKeyNames
                     ]
                 else:
-                    search_keys_with_values[sk_type.name] = [{
-                        "name": sk_meta.originalName,
-                        "value": key_example(sk_type),
-                    }]
+                    search_keys_with_values[sk_type.name] = [
+                        {
+                            "name": sk_meta.originalName,
+                            "value": key_example(sk_type),
+                        }
+                    ]
 
         keys_section = json.dumps(search_keys_with_values)
         features_for_transform = self._search_task.get_features_for_transform()
@@ -2360,7 +2375,13 @@ if response.status_code == 200:
             generated_features = []
             date_column = self._get_date_column(search_keys)
             if date_column is not None:
-                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
+                converter = DateTimeSearchKeyConverter(
+                    date_column,
+                    self.date_format,
+                    self.logger,
+                    bundle=self.bundle,
+                    generate_cyclical_features=self.generate_search_key_features,
+                )
                 df = converter.convert(df, keep_time=True)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
@@ -2370,7 +2391,7 @@ if response.status_code == 200:
                     df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
 
             email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
-            if email_columns:
+            if email_columns and self.generate_search_key_features:
                 generator = EmailDomainGenerator(email_columns)
                 df = generator.generate(df)
                 generated_features.extend(generator.generated_features)
@@ -2860,6 +2881,7 @@ if response.status_code == 200:
                 self.date_format,
                 self.logger,
                 bundle=self.bundle,
+                generate_cyclical_features=self.generate_search_key_features,
             )
             df = converter.convert(df, keep_time=True)
             if converter.has_old_dates:
@@ -2872,7 +2894,7 @@ if response.status_code == 200:
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
-        if email_columns:
+        if email_columns and self.generate_search_key_features:
             generator = EmailDomainGenerator(email_columns)
             df = generator.generate(df)
             self.fit_generated_features.extend(generator.generated_features)
@@ -3564,7 +3586,9 @@ if response.status_code == 200:
             maybe_date_col = SearchKey.find_key(self.search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format)
+                date_converter = DateTimeSearchKeyConverter(
+                    maybe_date_col, self.date_format, generate_cyclical_features=False
+                )
                 converted_X = date_converter.convert(X)
                 min_date = converted_X[maybe_date_col].min()
                 max_date = converted_X[maybe_date_col].max()
@@ -3603,7 +3627,7 @@ if response.status_code == 200:
             self.__log_warning(bundle.get("current_date_added"))
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
-            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE)
+            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
             df = converter.convert(df)
         return df
 

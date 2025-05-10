@@ -6,16 +6,26 @@ import re
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Tuple,
+    Union,
+    runtime_checkable,
+)
 
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, CatBoostRegressor
-from category_encoders.cat_boost import CatBoostEncoder
 from lightgbm import LGBMClassifier, LGBMRegressor
 from numpy import log1p
-from pandas.api.types import is_numeric_dtype, is_integer_dtype, is_float_dtype
+from pandas.api.types import is_float_dtype, is_integer_dtype, is_numeric_dtype
 from sklearn.metrics import check_scoring, get_scorer, make_scorer, roc_auc_score
 
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
@@ -32,10 +42,7 @@ except ImportError:
     available_scorers = SCORERS
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics._regression import _check_reg_targets, check_consistent_length
-from sklearn.model_selection import (  # , TimeSeriesSplit
-    BaseCrossValidator,
-    TimeSeriesSplit,
-)
+from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
 
 from upgini.errors import ValidationError
 from upgini.metadata import ModelTaskType
@@ -54,6 +61,16 @@ CATBOOST_REGRESSION_PARAMS = {
     "one_hot_max_size": 100,
     "verbose": False,
     "random_state": DEFAULT_RANDOM_STATE,
+    "allow_writing_files": False,
+}
+
+CATBOOST_TS_PARAMS = {
+    "learning_rate": 0.05,
+    "early_stopping_rounds": 20,
+    "use_best_model": True,
+    "one_hot_max_size": 100,
+    "verbose": False,
+    "random_state": 42,
     "allow_writing_files": False,
 }
 
@@ -311,6 +328,7 @@ class EstimatorWrapper:
         self.target_type = target_type
         self.add_params = add_params
         self.cv_estimators = None
+        self.cv_cat_encoders: Optional[List[Optional[HasTransform]]] = None
         self.groups = groups
         self.text_features = text_features
         self.logger = logger or logging.getLogger()
@@ -391,9 +409,7 @@ class EstimatorWrapper:
                     self.converted_to_int.append(c)
                     self.cat_features.remove(c)
                 elif is_float_dtype(x[c]) or (x[c].dtype == "category" and is_float_dtype(x[c].cat.categories)):
-                    self.logger.info(
-                        f"Convert float cat feature {c} to string"
-                    )
+                    self.logger.info(f"Convert float cat feature {c} to string")
                     x[c] = x[c].astype(str)
                     self.converted_to_str.append(c)
                 elif x[c].dtype not in ["category", "int64"]:
@@ -439,7 +455,9 @@ class EstimatorWrapper:
 
         return x, y, {}
 
-    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
+    def calculate_shap(
+        self, x: pd.DataFrame, y: pd.Series, estimator, cat_encoder: Optional[HasTransform]
+    ) -> Optional[Dict[str, float]]:
         return None
 
     def cross_val_predict(
@@ -470,9 +488,11 @@ class EstimatorWrapper:
                 fit_params=fit_params,
                 return_estimator=True,
                 error_score="raise",
+                random_state=DEFAULT_RANDOM_STATE,
             )
             metrics_by_fold = cv_results["test_score"]
             self.cv_estimators = cv_results["estimator"]
+            self.cv_cat_encoders = cv_results["cat_encoder"]
 
             self.check_fold_metrics(metrics_by_fold)
 
@@ -480,14 +500,14 @@ class EstimatorWrapper:
 
             splits = self.cv.split(x, y, groups)
 
-            for estimator, split in zip(self.cv_estimators, splits):
+            for estimator, cat_encoder, split in zip(self.cv_estimators, self.cv_cat_encoders, splits):
                 _, validation_idx = split
                 cv_x = x.iloc[validation_idx]
                 if isinstance(y, pd.Series):
                     cv_y = y.iloc[validation_idx]
                 else:
                     cv_y = y[validation_idx]
-                shaps = self.calculate_shap(cv_x, cv_y, estimator)
+                shaps = self.calculate_shap(cv_x, cv_y, estimator, cat_encoder)
                 if shaps is not None:
                     for feature, shap_value in shaps.items():
                         shap_values_all_folds[feature].append(shap_value)
@@ -527,8 +547,19 @@ class EstimatorWrapper:
             metric, metric_std = roc_auc_score(y, x[baseline_score_column]), None
         else:
             metrics = []
-            for est in self.cv_estimators:
-                metrics.append(self.scorer(est, x, y))
+            for est, cat_encoder in zip(self.cv_estimators, self.cv_cat_encoders):
+                x_copy = x.copy()
+                if cat_encoder is not None:
+                    if hasattr(cat_encoder, "feature_names_in_"):
+                        encoded = cat_encoder.transform(x_copy[cat_encoder.feature_names_in_])
+                    else:
+                        encoded = cat_encoder.transform(x[self.cat_features])
+                    if isinstance(self.cv, TimeSeriesSplit) or isinstance(self.cv, BlockedTimeSeriesSplit):
+                        encoded = encoded.astype(int)
+                    else:
+                        encoded = encoded.astype("category")
+                    x_copy[self.cat_features] = encoded
+                metrics.append(self.scorer(est, x_copy, y))
 
             metric, metric_std = self._calculate_metric_from_folds(metrics)
         return _CrossValResults(metric=metric, metric_std=metric_std, shap_values=None)
@@ -551,7 +582,7 @@ class EstimatorWrapper:
         text_features: Optional[List[str]] = None,
         add_params: Optional[Dict[str, Any]] = None,
         groups: Optional[List[str]] = None,
-        has_date: Optional[bool] = None,
+        has_time: bool = False,
     ) -> EstimatorWrapper:
         scorer, metric_name, multiplier = define_scorer(target_type, scoring)
         kwargs = {
@@ -568,7 +599,7 @@ class EstimatorWrapper:
         if estimator is None:
             if EstimatorWrapper.default_estimator == "catboost":
                 logger.info("Using CatBoost as default estimator")
-                params = {"has_time": has_date}
+                params = {"has_time": has_time}
                 if target_type == ModelTaskType.MULTICLASS:
                     params = _get_add_params(params, CATBOOST_MULTICLASS_PARAMS)
                     params = _get_add_params(params, add_params)
@@ -578,7 +609,10 @@ class EstimatorWrapper:
                     params = _get_add_params(params, add_params)
                     estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
                 elif target_type == ModelTaskType.REGRESSION:
-                    params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
+                    if not isinstance(cv, TimeSeriesSplit) and not isinstance(cv, BlockedTimeSeriesSplit):
+                        params = _get_add_params(params, CATBOOST_TS_PARAMS)
+                    else:
+                        params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
                     params = _get_add_params(params, add_params)
                     estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
                 else:
@@ -610,8 +644,8 @@ class EstimatorWrapper:
                 estimator_copy = deepcopy(estimator)
             kwargs["estimator"] = estimator_copy
             if is_catboost_estimator(estimator):
-                if has_date is not None:
-                    estimator_copy.set_params(has_time=has_date)
+                if has_time is not None:
+                    estimator_copy.set_params(has_time=has_time)
                 estimator = CatBoostWrapper(**kwargs)
             else:
                 if isinstance(estimator, (LGBMClassifier, LGBMRegressor)):
@@ -769,15 +803,24 @@ class CatBoostWrapper(EstimatorWrapper):
             else:
                 raise e
 
-    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
+    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator, cat_encoder) -> Optional[Dict[str, float]]:
         try:
             from catboost import Pool
+
+            if cat_encoder is not None:
+                if isinstance(self.cv, TimeSeriesSplit) or isinstance(self.cv, BlockedTimeSeriesSplit):
+                    encoded = cat_encoder.transform(x[self.cat_features]).astype(int)
+                    cat_features = None
+                else:
+                    encoded = cat_encoder.transform(x[self.cat_features])
+                    cat_features = encoded.columns.to_list()
+                x[self.cat_features] = encoded
 
             # Create Pool for fold data, if need (for example, when categorical features are present)
             fold_pool = Pool(
                 x,
                 y,
-                cat_features=self.cat_features,
+                cat_features=cat_features,
                 text_features=self.text_features,
                 embedding_features=self.grouped_embedding_features,
             )
@@ -834,7 +877,6 @@ class LightGBMWrapper(EstimatorWrapper):
             text_features=text_features,
             logger=logger,
         )
-        self.cat_encoder = None
         self.n_classes = None
 
     def _prepare_to_fit(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series, np.ndarray, dict]:
@@ -846,10 +888,10 @@ class LightGBMWrapper(EstimatorWrapper):
                 params["eval_metric"] = "auc"
             params["callbacks"] = [lgb.early_stopping(stopping_rounds=LIGHTGBM_EARLY_STOPPING_ROUNDS, verbose=False)]
         if self.cat_features:
-            encoder = CatBoostEncoder(random_state=DEFAULT_RANDOM_STATE, cols=self.cat_features, return_df=True)
-            encoded = encoder.fit_transform(x[self.cat_features].astype("object"), y_numpy).astype("category")
-            x[self.cat_features] = encoded
-            self.cat_encoder = encoder
+            for c in self.cat_features:
+                if x[c].dtype != "category":
+                    x[c] = x[c].astype("category")
+
         for c in x.columns:
             if x[c].dtype not in ["category", "int64", "float64", "bool"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
@@ -859,15 +901,26 @@ class LightGBMWrapper(EstimatorWrapper):
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
-        if self.cat_features is not None and self.cat_encoder is not None:
-            encoded = self.cat_encoder.transform(x[self.cat_features].astype("object"), y_numpy).astype("category")
-            x[self.cat_features] = encoded
+        if self.cat_features:
+            for c in self.cat_features:
+                if x[c].dtype != "category":
+                    x[c] = x[c].astype("category")
         return x, y_numpy, params
 
-    def calculate_shap(self, x: pd.DataFrame, y: pd.Series, estimator) -> Optional[Dict[str, float]]:
+    def calculate_shap(
+        self, x: pd.DataFrame, y: pd.Series, estimator, cat_encoder: Optional[HasTransform]
+    ) -> Optional[Dict[str, float]]:
         try:
+            x_copy = x.copy()
+            if cat_encoder is not None:
+                if isinstance(self.cv, TimeSeriesSplit) or isinstance(self.cv, BlockedTimeSeriesSplit):
+                    encoded = cat_encoder.transform(x_copy[self.cat_features]).astype(int)
+                else:
+                    encoded = cat_encoder.transform(x_copy[self.cat_features]).astype("category")
+                x_copy[self.cat_features] = encoded
+
             shap_matrix = estimator.predict(
-                x,
+                x_copy,
                 predict_disable_shape_check=True,
                 raw_score=True,
                 pred_leaf=False,
@@ -926,10 +979,10 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         num_features = [col for col in x.columns if col not in self.cat_features]
         x[num_features] = x[num_features].fillna(-999)
         if self.cat_features:
-            encoder = CatBoostEncoder(random_state=DEFAULT_RANDOM_STATE, return_df=True)
-            encoded = encoder.fit_transform(x[self.cat_features].astype("object"), y_numpy).astype("category")
-            x[self.cat_features] = encoded
-            self.cat_encoder = encoder
+            for c in self.cat_features:
+                if x[c].dtype != "category":
+                    x[c] = x[c].astype("category")
+            params["cat_features"] = self.cat_features
         for c in x.columns:
             if x[c].dtype not in ["category", "int64", "float64", "bool"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
@@ -940,13 +993,20 @@ class OtherEstimatorWrapper(EstimatorWrapper):
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y_numpy, params = super()._prepare_to_calculate(x, y)
         if self.cat_features is not None:
+            for c in self.cat_features:
+                if x[c].dtype != "category":
+                    x[c] = x[c].astype("category")
             num_features = [col for col in x.columns if col not in self.cat_features]
-            x[num_features] = x[num_features].fillna(-999)
-            if self.cat_features and self.cat_encoder is not None:
-                x[self.cat_features] = self.cat_encoder.transform(
-                    x[self.cat_features].astype("object"), y_numpy
-                ).astype("category")
+        else:
+            num_features = x.columns
+        x[num_features] = x[num_features].fillna(-999)
+
         return x, y_numpy, params
+
+
+@runtime_checkable
+class HasTransform(Protocol):
+    def transform(self, X: pd.DataFrame, y: Optional[Union[pd.Series, np.ndarray]] = None) -> pd.DataFrame: ...
 
 
 def validate_scoring_argument(scoring: Union[Callable, str, None]):

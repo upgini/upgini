@@ -1,4 +1,5 @@
 import functools
+import inspect
 import numbers
 import time
 import warnings
@@ -9,6 +10,7 @@ from traceback import format_exc
 
 import numpy as np
 import scipy.sparse as sp
+from category_encoders import CatBoostEncoder
 from joblib import Parallel, logger
 from scipy.sparse import issparse
 from sklearn import config_context, get_config
@@ -16,9 +18,12 @@ from sklearn.base import clone, is_classifier
 from sklearn.exceptions import FitFailedWarning, NotFittedError
 from sklearn.metrics import check_scoring
 from sklearn.metrics._scorer import _MultimetricScorer
-from sklearn.model_selection import StratifiedKFold, check_cv
+from sklearn.model_selection import StratifiedKFold, TimeSeriesSplit, check_cv
+from sklearn.preprocessing import OrdinalEncoder
 from sklearn.utils.fixes import np_version, parse_version
 from sklearn.utils.validation import indexable
+
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 
 # from sklearn.model_selection import cross_validate as original_cross_validate
 
@@ -59,6 +64,7 @@ def cross_validate(
     return_train_score=False,
     return_estimator=False,
     error_score=np.nan,
+    random_state=None,
 ):
     """Evaluate metric(s) by cross-validation and also record fit/score times.
 
@@ -279,6 +285,8 @@ def cross_validate(
                 return_times=True,
                 return_estimator=return_estimator,
                 error_score=error_score,
+                is_timeseries=isinstance(cv, TimeSeriesSplit) or isinstance(cv, BlockedTimeSeriesSplit),
+                random_state=random_state,
             )
             for train, test in cv.split(x, y, groups)
         )
@@ -296,6 +304,7 @@ def cross_validate(
         ret = {}
         ret["fit_time"] = results["fit_time"]
         ret["score_time"] = results["score_time"]
+        ret["cat_encoder"] = results["cat_encoder"]
 
         if return_estimator:
             ret["estimator"] = results["estimator"]
@@ -320,16 +329,16 @@ def cross_validate(
             else:
                 shuffle = False
             if hasattr(cv, "random_state") and shuffle:
-                random_state = cv.random_state
+                cv_random_state = cv.random_state
             else:
-                random_state = None
+                cv_random_state = None
             return cross_validate(
                 estimator,
                 x,
                 y,
                 groups=groups,
                 scoring=scoring,
-                cv=StratifiedKFold(n_splits=cv.get_n_splits(), shuffle=shuffle, random_state=random_state),
+                cv=StratifiedKFold(n_splits=cv.get_n_splits(), shuffle=shuffle, random_state=cv_random_state),
                 n_jobs=n_jobs,
                 verbose=verbose,
                 fit_params=fit_params,
@@ -337,21 +346,46 @@ def cross_validate(
                 return_train_score=return_train_score,
                 return_estimator=return_estimator,
                 error_score=error_score,
+                random_state=random_state,
             )
         raise e
 
 
-def is_catboost_estimator(estimator):
+def _is_catboost_estimator(estimator):
     try:
         from catboost import CatBoostClassifier, CatBoostRegressor
+
         return isinstance(estimator, (CatBoostClassifier, CatBoostRegressor))
     except ImportError:
         return False
 
 
-def is_lightgbm_estimator(estimator):
+def _supports_cat_features(estimator) -> bool:
+    """Check if estimator's fit method accepts cat_features parameter.
+
+    Parameters
+    ----------
+    estimator : estimator object
+        The estimator to check.
+
+    Returns
+    -------
+    bool
+        True if estimator's fit method accepts cat_features parameter, False otherwise.
+    """
+    try:
+        # Get the signature of the fit method
+        fit_params = inspect.signature(estimator.fit).parameters
+        # Check if cat_features is in the parameters
+        return "cat_features" in fit_params
+    except (AttributeError, ValueError):
+        return False
+
+
+def _is_lightgbm_estimator(estimator):
     try:
         from lightgbm import LGBMClassifier, LGBMRegressor
+
         return isinstance(estimator, (LGBMClassifier, LGBMRegressor))
     except ImportError:
         return False
@@ -375,6 +409,8 @@ def _fit_and_score(
     split_progress=None,
     candidate_progress=None,
     error_score=np.nan,
+    is_timeseries=False,
+    random_state=None,
 ):
     """Fit estimator and compute scores for a given dataset split.
 
@@ -509,13 +545,24 @@ def _fit_and_score(
 
     result = {}
     try:
+        if "cat_features" in fit_params and fit_params["cat_features"]:
+            X_train, y_train, X_test, y_test, cat_features, cat_encoder = _encode_cat_features(
+                X_train, y_train, X_test, y_test, fit_params["cat_features"], estimator, is_timeseries, random_state
+            )
+            if cat_features and _supports_cat_features(estimator):
+                fit_params["cat_features"] = cat_features
+            else:
+                del fit_params["cat_features"]
+        else:
+            cat_encoder = None
+        result["cat_encoder"] = cat_encoder
         if y_train is None:
             estimator.fit(X_train, **fit_params)
         else:
-            if is_catboost_estimator(estimator):
+            if _is_catboost_estimator(estimator):
                 fit_params = fit_params.copy()
                 fit_params["eval_set"] = [(X_test, y_test)]
-            elif is_lightgbm_estimator(estimator):
+            elif _is_lightgbm_estimator(estimator):
                 fit_params = fit_params.copy()
                 fit_params["eval_set"] = [(X_test, y_test)]
             estimator.fit(X_train, y_train, **fit_params)
@@ -1245,3 +1292,60 @@ def _num_samples(x):
         return len(x)
     except TypeError as type_error:
         raise TypeError(message) from type_error
+
+
+def _encode_cat_features(X_train, y_train, X_test, y_test, cat_features, estimator, is_timeseries, random_state):
+    if _is_catboost_estimator(estimator):
+        if is_timeseries:
+            # Fit encoder on training fold
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            encoder.fit(X_train[cat_features], y_train)
+
+            X_train[cat_features] = encoder.transform(X_train[cat_features]).astype(int)
+            X_test[cat_features] = encoder.transform(X_test[cat_features]).astype(int)
+
+            # Don't use as categorical features, so CatBoost will not encode them
+            return X_train, y_train, X_test, y_test, [], encoder
+        else:
+            return X_train, y_train, X_test, y_test, cat_features, None
+    else:
+        if is_timeseries:
+            # Fit encoder on training fold
+            encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+            encoder.fit(X_train[cat_features], y_train)
+
+            # Progressive encoding on train (using y)
+            X_train[cat_features] = encoder.transform(X_train[cat_features], y_train).astype(int)
+
+            # Static encoding on validation (no y)
+            X_test[cat_features] = encoder.transform(X_test[cat_features]).astype(int)
+
+            return X_train, y_train, X_test, y_test, [], encoder
+        else:
+            # Shuffle train data
+            X_train_shuffled, y_train_shuffled = _shuffle_pair(
+                X_train[cat_features].astype("object"), y_train, random_state
+            )
+
+            # Fit encoder on training fold
+            encoder = CatBoostEncoder(random_state=random_state, cols=cat_features)
+            encoder.fit(X_train_shuffled, y_train_shuffled)
+
+            # Progressive encoding on train (using y)
+            X_train[cat_features] = encoder.transform(X_train[cat_features], y_train).astype("category")
+
+            # Static encoding on validation (no y)
+            X_test[cat_features] = encoder.transform(X_test[cat_features]).astype("category")
+
+            return X_train, y_train, X_test, y_test, cat_features, encoder
+
+
+def _shuffle_pair(X, y, random_state):
+    # If X doesn't have reseted index there could be a problem
+    # shuffled_idx = np.random.RandomState(random_state).permutation(len(X))
+    # return X.iloc[shuffled_idx], pd.Series(y).iloc[shuffled_idx]
+
+    Xy = X.copy()
+    Xy["target"] = y
+    Xy_shuffled = Xy.sample(frac=1, random_state=random_state)
+    return Xy_shuffled.drop(columns="target"), Xy_shuffled["target"]

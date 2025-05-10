@@ -41,6 +41,7 @@ class DateTimeSearchKeyConverter:
         date_format: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
         bundle: Optional[ResourceBundle] = None,
+        generate_cyclical_features: bool = True,
     ):
         self.date_column = date_column
         self.date_format = date_format
@@ -51,6 +52,7 @@ class DateTimeSearchKeyConverter:
             self.logger.setLevel("FATAL")
         self.generated_features: List[str] = []
         self.bundle = bundle or get_custom_bundle()
+        self.generate_cyclical_features = generate_cyclical_features
         self.has_old_dates = False
 
     @staticmethod
@@ -121,61 +123,63 @@ class DateTimeSearchKeyConverter:
                 df[cos_feature] = np.cos(2 * np.pi * df[column] / period)
                 self.generated_features.append(cos_feature)
 
-        df["quarter"] = df[self.date_column].dt.quarter
+        if self.generate_cyclical_features:
 
-        # Calculate the start date of the quarter for each timestamp
-        df["quarter_start"] = df[self.date_column].dt.to_period("Q").dt.start_time
+            df["quarter"] = df[self.date_column].dt.quarter
 
-        # Calculate the day in the quarter
-        df["day_in_quarter"] = (df[self.date_column] - df["quarter_start"]).dt.days + 1
+            # Calculate the start date of the quarter for each timestamp
+            df["quarter_start"] = df[self.date_column].dt.to_period("Q").dt.start_time
 
-        # Vectorized calculation of days_in_quarter
-        quarter = df["quarter"]
-        start = df["quarter_start"]
-        year = start.dt.year
-        month = start.dt.month
+            # Calculate the day in the quarter
+            df["day_in_quarter"] = (df[self.date_column] - df["quarter_start"]).dt.days + 1
 
-        quarter_end_year = np.where(quarter == 4, year + 1, year)
-        quarter_end_month = np.where(quarter == 4, 1, month + 3)
+            # Vectorized calculation of days_in_quarter
+            quarter = df["quarter"]
+            start = df["quarter_start"]
+            year = start.dt.year
+            month = start.dt.month
 
-        end = pd.to_datetime({"year": quarter_end_year, "month": quarter_end_month, "day": 1})
-        end.index = df.index
+            quarter_end_year = np.where(quarter == 4, year + 1, year)
+            quarter_end_month = np.where(quarter == 4, 1, month + 3)
 
-        df["days_in_quarter"] = (end - start).dt.days
+            end = pd.to_datetime({"year": quarter_end_year, "month": quarter_end_month, "day": 1})
+            end.index = df.index
 
-        add_cyclical_features(df, "day_in_quarter", df["days_in_quarter"])  # Days in the quarter
+            df["days_in_quarter"] = (end - start).dt.days
 
-        df.drop(columns=["quarter", "quarter_start", "day_in_quarter", "days_in_quarter"], inplace=True)
+            add_cyclical_features(df, "day_in_quarter", df["days_in_quarter"])  # Days in the quarter
 
-        df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
+            df.drop(columns=["quarter", "quarter_start", "day_in_quarter", "days_in_quarter"], inplace=True)
 
-        seconds_without_na = df[seconds].dropna()
-        if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
-            self.logger.info("Time found in date search key. Add extra features based on time")
+            df[seconds] = (df[self.date_column] - df[self.date_column].dt.floor("D")).dt.seconds
 
-            # Extract basic components
-            df["second"] = df[self.date_column].dt.second
-            df["minute"] = df[self.date_column].dt.minute
-            df["hour"] = df[self.date_column].dt.hour
+            seconds_without_na = df[seconds].dropna()
+            if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
+                self.logger.info("Time found in date search key. Add extra features based on time")
 
-            # Apply cyclical transformations
-            add_cyclical_features(df, "second", 60)  # Seconds in a minute
-            add_cyclical_features(df, "minute", 60)  # Minutes in an hour
-            add_cyclical_features(df, "minute", 30)  # Minutes in half an hour
-            add_cyclical_features(df, "hour", 24)  # Hours in a day
+                # Extract basic components
+                df["second"] = df[self.date_column].dt.second
+                df["minute"] = df[self.date_column].dt.minute
+                df["hour"] = df[self.date_column].dt.hour
 
-            # Drop intermediate columns if not needed
-            df.drop(columns=["second", "minute", "hour"], inplace=True)
-        else:
-            keep_time = False
+                # Apply cyclical transformations
+                add_cyclical_features(df, "second", 60)  # Seconds in a minute
+                add_cyclical_features(df, "minute", 60)  # Minutes in an hour
+                add_cyclical_features(df, "minute", 30)  # Minutes in half an hour
+                add_cyclical_features(df, "hour", 24)  # Hours in a day
 
-        for generated_feature in self.generated_features[:]:
-            if df[generated_feature].dropna().nunique() <= 1:
-                self.logger.warning(f"Generated constant feature {generated_feature} will be dropped")
-                df.drop(columns=generated_feature, inplace=True)
-                self.generated_features.remove(generated_feature)
+                # Drop intermediate columns if not needed
+                df.drop(columns=["second", "minute", "hour"], inplace=True)
+            else:
+                keep_time = False
 
-        df.drop(columns=seconds, inplace=True)
+            for generated_feature in self.generated_features[:]:
+                if df[generated_feature].dropna().nunique() <= 1:
+                    self.logger.warning(f"Generated constant feature {generated_feature} will be dropped")
+                    df.drop(columns=generated_feature, inplace=True)
+                    self.generated_features.remove(generated_feature)
+
+            df.drop(columns=seconds, inplace=True)
 
         if keep_time:
             df[self.DATETIME_COL] = df[self.date_column].astype(np.int64) // 1_000_000
@@ -247,99 +251,107 @@ def is_time_series(df: pd.DataFrame, date_col: str) -> bool:
 
 
 def is_blocked_time_series(df: pd.DataFrame, date_col: str, search_keys: List[str]) -> bool:
-    df = df.copy()
-    seconds = "datetime_seconds"
-    if isinstance(df[date_col].dtype, pd.PeriodDtype):
-        df[date_col] = df[date_col].dt.to_timestamp()
-    else:
-        df[date_col] = pd.to_datetime(df[date_col])
-    df[date_col] = df[date_col].dt.tz_localize(None)
-    df[seconds] = (df[date_col] - df[date_col].dt.floor("D")).dt.seconds
+    try:
+        df = df.copy()
+        seconds = "datetime_seconds"
+        if isinstance(df[date_col].dtype, pd.PeriodDtype):
+            df[date_col] = df[date_col].dt.to_timestamp()
+        elif is_numeric_dtype(df[date_col]):
+            df[date_col] = pd.to_datetime(df[date_col], unit="ms")
+        else:
+            df[date_col] = pd.to_datetime(df[date_col])
+        df[date_col] = df[date_col].dt.tz_localize(None)
+        df[seconds] = (df[date_col] - df[date_col].dt.floor("D")).dt.seconds
 
-    seconds_without_na = df[seconds].dropna()
-    columns_to_drop = [c for c in search_keys if c != date_col] + [seconds]
-    df.drop(columns=columns_to_drop, inplace=True)
-    # Date, not datetime
-    if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
+        seconds_without_na = df[seconds].dropna()
+        columns_to_drop = [c for c in search_keys if c != date_col] + [seconds]
+        df.drop(columns=columns_to_drop, inplace=True)
+        # Date, not datetime
+        if (seconds_without_na != 0).any() and seconds_without_na.nunique() > 1:
+            return False
+
+        nunique_dates = df[date_col].nunique()
+        # Unique dates count more than 270
+        if nunique_dates < 270:
+            return False
+
+        min_date = df[date_col].min()
+        max_date = df[date_col].max()
+        days_delta = (max_date - min_date).days + 1
+        # Missing dates less than 30% (unique dates count and days delta between earliest and latest dates)
+        if nunique_dates / days_delta < 0.3:
+            return False
+
+        accumulated_changing_columns = set()
+
+        def check_differences(group: pd.DataFrame):
+            changing_columns = group.columns[group.nunique(dropna=False) > 1].to_list()
+            accumulated_changing_columns.update(changing_columns)
+
+        def is_multiple_rows(group: pd.DataFrame) -> bool:
+            return group.shape[0] > 1
+
+        grouped = df.groupby(date_col)[[c for c in df.columns if c != date_col]]
+        dates_with_multiple_rows = grouped.apply(is_multiple_rows).sum()
+
+        # share of dates with more than one record is more than 99%
+        if dates_with_multiple_rows / nunique_dates < 0.99:
+            return False
+
+        if df.shape[1] <= 3:
+            return True
+
+        grouped.apply(check_differences)
+        return len(accumulated_changing_columns) <= 2
+    except Exception:
         return False
-
-    nunique_dates = df[date_col].nunique()
-    # Unique dates count more than 270
-    if nunique_dates < 270:
-        return False
-
-    min_date = df[date_col].min()
-    max_date = df[date_col].max()
-    days_delta = (max_date - min_date).days + 1
-    # Missing dates less than 30% (unique dates count and days delta between earliest and latest dates)
-    if nunique_dates / days_delta < 0.3:
-        return False
-
-    accumulated_changing_columns = set()
-
-    def check_differences(group: pd.DataFrame):
-        changing_columns = group.columns[group.nunique(dropna=False) > 1].to_list()
-        accumulated_changing_columns.update(changing_columns)
-
-    def is_multiple_rows(group: pd.DataFrame) -> bool:
-        return group.shape[0] > 1
-
-    grouped = df.groupby(date_col)[[c for c in df.columns if c != date_col]]
-    dates_with_multiple_rows = grouped.apply(is_multiple_rows).sum()
-
-    # share of dates with more than one record is more than 99%
-    if dates_with_multiple_rows / nunique_dates < 0.99:
-        return False
-
-    if df.shape[1] <= 3:
-        return True
-
-    grouped.apply(check_differences)
-    return len(accumulated_changing_columns) <= 2
 
 
 def is_dates_distribution_valid(
     df: pd.DataFrame,
     search_keys: Dict[str, SearchKey],
 ) -> bool:
-    maybe_date_col = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+    try:
+        maybe_date_col = SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
 
-    if EVAL_SET_INDEX in df.columns:
-        X = df.query(f"{EVAL_SET_INDEX} == 0")
-    else:
-        X = df
+        if EVAL_SET_INDEX in df.columns:
+            X = df.query(f"{EVAL_SET_INDEX} == 0")
+        else:
+            X = df
 
-    if maybe_date_col is None:
-        for col in X.columns:
-            if col in search_keys:
-                continue
-            try:
-                if isinstance(X[col].dtype, pd.PeriodDtype):
+        if maybe_date_col is None:
+            for col in X.columns:
+                if col in search_keys:
+                    continue
+                try:
+                    if isinstance(X[col].dtype, pd.PeriodDtype):
+                        pass
+                    elif pd.__version__ >= "2.0.0":
+                        # Format mixed to avoid massive warnings
+                        pd.to_datetime(X[col], format="mixed")
+                    else:
+                        pd.to_datetime(X[col])
+                    maybe_date_col = col
+                    break
+                except Exception:
                     pass
-                elif pd.__version__ >= "2.0.0":
-                    # Format mixed to avoid massive warnings
-                    pd.to_datetime(X[col], format="mixed")
-                else:
-                    pd.to_datetime(X[col])
-                maybe_date_col = col
-                break
-            except Exception:
-                pass
 
-    if maybe_date_col is None:
-        return
+        if maybe_date_col is None:
+            return
 
-    if isinstance(X[maybe_date_col].dtype, pd.PeriodDtype):
-        dates = X[maybe_date_col].dt.to_timestamp().dt.date
-    elif pd.__version__ >= "2.0.0":
-        dates = pd.to_datetime(X[maybe_date_col], format="mixed").dt.date
-    else:
-        dates = pd.to_datetime(X[maybe_date_col]).dt.date
+        if isinstance(X[maybe_date_col].dtype, pd.PeriodDtype):
+            dates = X[maybe_date_col].dt.to_timestamp().dt.date
+        elif pd.__version__ >= "2.0.0":
+            dates = pd.to_datetime(X[maybe_date_col], format="mixed").dt.date
+        else:
+            dates = pd.to_datetime(X[maybe_date_col]).dt.date
 
-    date_counts = dates.value_counts().sort_index()
+        date_counts = dates.value_counts().sort_index()
 
-    date_counts_1 = date_counts[: round(len(date_counts) / 2)]
-    date_counts_2 = date_counts[round(len(date_counts) / 2) :]
-    ratio = date_counts_2.mean() / date_counts_1.mean()
+        date_counts_1 = date_counts[: round(len(date_counts) / 2)]
+        date_counts_2 = date_counts[round(len(date_counts) / 2) :]
+        ratio = date_counts_2.mean() / date_counts_1.mean()
 
-    return ratio >= 0.8 and ratio <= 1.2
+        return ratio >= 0.8 and ratio <= 1.2
+    except Exception:
+        return False

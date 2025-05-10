@@ -104,9 +104,9 @@ def remove_fintech_duplicates(
         sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
 
         # Convert date columns for further checks
-        sub_df = DateTimeSearchKeyConverter(date_col, date_format=date_format, logger=logger, bundle=bundle).convert(
-            sub_df
-        )
+        sub_df = DateTimeSearchKeyConverter(
+            date_col, date_format=date_format, logger=logger, bundle=bundle, generate_cyclical_features=False
+        ).convert(sub_df)
         grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)
         rows_with_diff_target = grouped_by_personal_cols.filter(has_diff_target_within_60_days)
 

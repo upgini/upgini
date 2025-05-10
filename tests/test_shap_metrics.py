@@ -2,7 +2,6 @@ import logging
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import pytest
 from upgini.metadata import ModelTaskType
 from upgini.metrics import EstimatorWrapper
 from sklearn.ensemble import RandomForestClassifier
@@ -24,7 +23,7 @@ def test_calculate_shap_with_lgbm_classifier():
         scoring="roc_auc",
     )
 
-    shap_values = wrapper.calculate_shap(X, y, model)
+    shap_values = wrapper.calculate_shap(X, y, model, cat_encoder=None)
 
     assert shap_values is not None
     assert isinstance(shap_values, dict)
@@ -49,7 +48,7 @@ def test_calculate_shap_with_lgbm_regressor():
         scoring="roc_auc",
     )
 
-    shap_values = wrapper.calculate_shap(X, y, model)
+    shap_values = wrapper.calculate_shap(X, y, model, cat_encoder=None)
 
     assert shap_values is not None
     assert isinstance(shap_values, dict)
@@ -74,7 +73,7 @@ def test_calculate_shap_with_non_lgbm_model():
         scoring="roc_auc",
     )
 
-    shap_values = wrapper.calculate_shap(X, y, model)
+    shap_values = wrapper.calculate_shap(X, y, model, cat_encoder=None)
 
     assert shap_values is None
 
@@ -93,12 +92,11 @@ def test_calculate_shap_with_empty_dataframe():
         scoring="roc_auc",
     )
 
-    shap_values = wrapper.calculate_shap(X, y, model)
+    shap_values = wrapper.calculate_shap(X, y, model, cat_encoder=None)
 
     assert shap_values is None
 
 
-@pytest.mark.xfail
 def test_calculate_shap_with_invalid_input():
     X = "invalid_input"
     y = None
@@ -112,6 +110,6 @@ def test_calculate_shap_with_invalid_input():
         scoring="roc_auc",
     )
 
-    shap_values = wrapper.calculate_shap(X, y, model)
+    shap_values = wrapper.calculate_shap(X, y, model, cat_encoder=None)
 
     assert shap_values is None

@@ -192,6 +192,18 @@ def test_multivariate_time_series():
     assert is_blocked_time_series(df, "date", ["date", "feature3"])
 
 
+def test_blocked_time_series_with_invalid_date():
+    df = pd.DataFrame(
+        {
+            "date": ["2020-01-01", "2020-01-02", None, "invalid_date"],
+            "feature1": np.random.randint(0, 1000, 4),
+            "feature2": np.random.randint(0, 1000, 4),
+            "feature3": np.random.randint(0, 1000, 4),
+        }
+    )
+    assert not is_blocked_time_series(df, "date", ["date"])
+
+
 def test_validate_dates_distribution():
     df = pd.DataFrame({"date": ["2020-01-01"] * 10 + ["2020-02-01"] * 20 + ["2020-03-01"] * 30 + ["2020-04-01"] * 40})
     is_valid = is_dates_distribution_valid(df, {})
@@ -209,3 +221,5 @@ def test_validate_dates_distribution():
     )
     is_valid = is_dates_distribution_valid(df, {"date1": SearchKey.DATE})
     assert not is_valid
+
+

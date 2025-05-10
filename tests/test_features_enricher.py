@@ -3036,6 +3036,20 @@ def test_id_columns_validation(requests_mock: Mocker):
         )
 
 
+def test_adjusting_cv():
+    # TODO
+    assert True
+    # enricher = FeaturesEnricher(
+    #     search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+    #     endpoint=url,
+    #     api_key="fake_api_key",
+    #     date_format="%Y-%m-%d",
+    #     cv=CVType.time_series,
+    #     logs_enabled=False,
+    # )
+    # enricher._FeaturesEnricher__adjust_cv(df)
+
+
 class DataFrameWrapper:
     def __init__(self):
         self.df: Optional[pd.DataFrame] = None
