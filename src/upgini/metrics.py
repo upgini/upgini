@@ -807,10 +807,10 @@ class CatBoostWrapper(EstimatorWrapper):
         try:
             from catboost import Pool
 
+            cat_features = None
             if cat_encoder is not None:
                 if isinstance(self.cv, TimeSeriesSplit) or isinstance(self.cv, BlockedTimeSeriesSplit):
                     encoded = cat_encoder.transform(x[self.cat_features]).astype(int)
-                    cat_features = None
                 else:
                     encoded = cat_encoder.transform(x[self.cat_features])
                     cat_features = encoded.columns.to_list()

@@ -192,7 +192,7 @@ def clean_full_duplicates(
         unique_columns.remove(TARGET)
         marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
         if marked_duplicates.sum() > 0:
-            dups_indices = df[marked_duplicates].index.to_list()
+            dups_indices = df[marked_duplicates].index.to_list()[:100]
             nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns, keep=False))
             num_dup_rows = nrows_after_full_dedup - nrows_after_tgt_dedup
             share_tgt_dedup = 100 * num_dup_rows / nrows_after_full_dedup

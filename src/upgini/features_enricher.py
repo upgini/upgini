@@ -2299,11 +2299,16 @@ if response.status_code == 200:
 
             self.__log_debug_information(validated_X, validated_y, exclude_features_sources=exclude_features_sources)
 
-            self.__validate_search_keys(self.search_keys, self.search_id)
+            filtered_columns = self.__filtered_enriched_features(
+                importance_threshold, max_features, trace_id, validated_X
+            )
+            # If there are no important features, return original dataframe
+            if not filtered_columns:
+                msg = self.bundle.get("no_important_features_for_transform")
+                self.__log_warning(msg, show_support_link=True)
+                return X, {c: c for c in X.columns}, [], dict()
 
-            if len(self.feature_names_) == 0:
-                self.logger.warning(self.bundle.get("no_important_features_for_transform"))
-                return X, {c: c for c in X.columns}, [], {}
+            self.__validate_search_keys(self.search_keys, self.search_id)
 
             if self._has_paid_features(exclude_features_sources):
                 msg = self.bundle.get("transform_with_paid_features")
@@ -2444,6 +2449,8 @@ if response.status_code == 200:
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
 
+            # Convert search keys and generate features on them
+
             email_column = self._get_email_column(search_keys)
             hem_column = self._get_hem_column(search_keys)
             if email_column:
@@ -2483,6 +2490,26 @@ if response.status_code == 200:
             if postal_code:
                 converter = PostalCodeSearchKeyConverter(postal_code)
                 df = converter.convert(df)
+
+            # TODO return X + generated features
+            # external_features = [fm for fm in features_meta if fm.shap_value > 0 and fm.source != "etalon"]
+            # if not external_features:
+            #     # Unexplode dataframe back to original shape
+            #     if len(unnest_search_keys) > 0:
+            #         df = df.groupby(ENTITY_SYSTEM_RECORD_ID).first().reset_index()
+                
+            #     # Get important features from etalon source
+            #     etalon_features = [fm.name for fm in features_meta if fm.shap_value > 0 and fm.source == "etalon"]
+                
+            #     # Select only etalon features that exist in dataframe
+            #     available_etalon_features = [f for f in etalon_features if f in df.columns]
+                
+            #     # Return original dataframe with only important etalon features
+            #     result = df[available_etalon_features].copy()
+            #     result.index = validated_Xy.index
+                
+            #     return result, columns_renaming, generated_features, search_keys
+            #     ...
 
             meaning_types = {}
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
@@ -2637,9 +2664,6 @@ if response.status_code == 200:
                 for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
                 if c not in self.dropped_client_feature_names_
             ]
-            filtered_columns = self.__filtered_enriched_features(
-                importance_threshold, max_features, trace_id, validated_X
-            )
             selecting_columns.extend(
                 c for c in filtered_columns if c in result.columns and c not in validated_X.columns
             )
@@ -2942,7 +2966,10 @@ if response.status_code == 200:
                 self.__log_warning(fintech_warning)
         df, full_duplicates_warning = clean_full_duplicates(df, self.logger, bundle=self.bundle)
         if full_duplicates_warning:
-            self.__log_warning(full_duplicates_warning)
+            if len(df) == 0:
+                raise ValidationError(full_duplicates_warning)
+            else:
+                self.__log_warning(full_duplicates_warning)
 
         # Explode multiple search keys
         df = self.__add_fit_system_record_id(
