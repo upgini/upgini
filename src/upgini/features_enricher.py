@@ -300,7 +300,7 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
-        self.dropped_client_feature_names_ = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
@@ -315,7 +315,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
-                    x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                    x_columns = [c.name for c in file_metadata.columns]
                     self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(trace_id, df, silent=True)
@@ -2347,9 +2347,7 @@ if response.status_code == 200:
 
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [
-                c for c in df.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
-            ]
+            columns_to_drop = [c for c in df.columns if c in self.feature_names_]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -2404,6 +2402,17 @@ if response.status_code == 200:
             normalizer = Normalizer(self.bundle, self.logger)
             df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
             columns_renaming = normalizer.columns_renaming
+
+            # If there are no external features, we don't call backend on transform
+            external_features = [fm for fm in features_meta if fm.shap_value > 0 and fm.source != "etalon"]
+            if not external_features:
+                self.logger.warning(
+                    "No external features found, returning original dataframe"
+                    f" with generated important features: {filtered_columns}"
+                )
+                filtered_columns = [c for c in filtered_columns if c in df.columns]
+                self.logger.warning(f"Filtered columns by existance in dataframe: {filtered_columns}")
+                return df[filtered_columns], columns_renaming, generated_features, search_keys
 
             # Don't pass all features in backend on transform
             runtime_parameters = self._get_copy_of_runtime_parameters()
@@ -2490,26 +2499,6 @@ if response.status_code == 200:
             if postal_code:
                 converter = PostalCodeSearchKeyConverter(postal_code)
                 df = converter.convert(df)
-
-            # TODO return X + generated features
-            # external_features = [fm for fm in features_meta if fm.shap_value > 0 and fm.source != "etalon"]
-            # if not external_features:
-            #     # Unexplode dataframe back to original shape
-            #     if len(unnest_search_keys) > 0:
-            #         df = df.groupby(ENTITY_SYSTEM_RECORD_ID).first().reset_index()
-                
-            #     # Get important features from etalon source
-            #     etalon_features = [fm.name for fm in features_meta if fm.shap_value > 0 and fm.source == "etalon"]
-                
-            #     # Select only etalon features that exist in dataframe
-            #     available_etalon_features = [f for f in etalon_features if f in df.columns]
-                
-            #     # Return original dataframe with only important etalon features
-            #     result = df[available_etalon_features].copy()
-            #     result.index = validated_Xy.index
-                
-            #     return result, columns_renaming, generated_features, search_keys
-            #     ...
 
             meaning_types = {}
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
@@ -2659,14 +2648,15 @@ if response.status_code == 200:
                 how="left",
             )
 
+            selected_generated_features = [
+                c for c in generated_features if not self.fit_select_features or c in filtered_columns
+            ]
             selecting_columns = [
                 c
-                for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
-                if c not in self.dropped_client_feature_names_
+                for c in itertools.chain(validated_Xy.columns.tolist(), selected_generated_features)
+                if c not in self.zero_shap_client_features
             ]
-            selecting_columns.extend(
-                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
-            )
+            selecting_columns.extend(c for c in result.columns if c in filtered_columns and c not in selecting_columns)
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
@@ -3372,8 +3362,12 @@ if response.status_code == 200:
             Xy[TARGET] = y
             validated_y = Xy[TARGET].copy()
 
-        if validated_y.nunique() < 2:
+        y_nunique = validated_y.nunique()
+        if y_nunique < 2:
             raise ValidationError(self.bundle.get("y_is_constant"))
+
+        if self.model_task_type == ModelTaskType.BINARY and y_nunique != 2:
+            raise ValidationError(self.bundle.get("binary_target_unique_count_not_2").format(y_nunique))
 
         return validated_y
 
@@ -3449,8 +3443,12 @@ if response.status_code == 200:
         else:
             raise ValidationError(self.bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
-        if validated_eval_y.nunique() < 2:
+        eval_y_nunique = validated_eval_y.nunique()
+        if eval_y_nunique < 2:
             raise ValidationError(self.bundle.get("y_is_constant_eval_set"))
+
+        if self.model_task_type == ModelTaskType.BINARY and eval_y_nunique != 2:
+            raise ValidationError(self.bundle.get("binary_target_eval_unique_count_not_2").format(eval_y_nunique))
 
         return validated_eval_X, validated_eval_y
 
@@ -3993,10 +3991,11 @@ if response.status_code == 200:
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
+        # To be sure that names with hash suffixes
         df = df.rename(columns=original_names_dict)
 
         self.feature_names_ = []
-        self.dropped_client_feature_names_ = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
@@ -4008,7 +4007,7 @@ if response.status_code == 200:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
 
-            is_client_feature = feature_meta.name in df.columns
+            is_client_feature = original_names_dict.get(feature_meta.name, feature_meta.name) in df.columns
 
             # Show and update shap values for client features only if select_features is True
             if updated_shaps is not None and (not is_client_feature or self.fit_select_features):
@@ -4024,13 +4023,13 @@ if response.status_code == 200:
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
 
         for feature_meta in features_meta:
-
-            is_client_feature = feature_meta.name in df.columns
+            original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
+            is_client_feature = original_name in df.columns
 
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
-                if self.fit_select_features:
-                    self.dropped_client_feature_names_.append(feature_meta.name)
+                if is_client_feature and self.fit_select_features:
+                    self.zero_shap_client_features.append(original_name)
                 continue
 
             # Use only important features

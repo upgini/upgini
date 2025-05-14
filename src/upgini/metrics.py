@@ -815,6 +815,8 @@ class CatBoostWrapper(EstimatorWrapper):
                     encoded = cat_encoder.transform(x[self.cat_features])
                     cat_features = encoded.columns.to_list()
                 x[self.cat_features] = encoded
+            else:
+                cat_features = self.cat_features
 
             # Create Pool for fold data, if need (for example, when categorical features are present)
             fold_pool = Pool(
