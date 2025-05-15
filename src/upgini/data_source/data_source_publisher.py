@@ -5,6 +5,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional, Union
 
+import pandas as pd
+
 from upgini.errors import HttpError, ValidationError
 from upgini.http import LoggerFactory, get_rest_client
 from upgini.mdc import MDC
@@ -136,6 +138,25 @@ class DataSourcePublisher:
                     or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}
                 ) and not date_format:
                     raise ValidationError("date_format argument is required for PHONE+DATE and HEM+DATE search keys")
+
+                if secondary_search_keys:
+                    response = self._rest_client.get_active_ads_definitions()
+                    definitions = pd.DataFrame(response["adsDefinitions"])
+                    prod_secondary_definitions = definitions.query(
+                        "(secondarySearchKeys.astype('string') != '[]') & (adsDefinitionAccessType == 'PROD')"
+                    )[["name", "searchKeys", "secondarySearchKeys"]]
+                    for _, row in prod_secondary_definitions.iterrows():
+                        existing_secondary_keys = {item for sublist in row["secondarySearchKeys"] for item in sublist}
+                        if existing_secondary_keys == {v.value.name for v in secondary_search_keys.values()}:
+                            existing_search_keys = {item for sublist in row["searchKeys"] for item in sublist}
+                            if (
+                                existing_search_keys == {v.value.name for v in search_keys.values()}
+                                or ("IP" in str(existing_search_keys) and "IP" in str(search_keys.values()))
+                            ):
+                                raise ValidationError(
+                                    "ADS with the same PRIMARY_KEYS -> SECONDARY_KEYS mapping "
+                                    f"already exists: {row['name']}"
+                                )
 
                 request = {
                     "dataTableUri": data_table_uri,
