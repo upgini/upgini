@@ -1671,6 +1671,10 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_y_sorted,
             )
 
+        fitting_X, fitting_enriched_X, fitting_eval_set_dict = self._convert_id_columns_to_int(
+            fitting_X, fitting_enriched_X, fitting_eval_set_dict, columns_renaming
+        )
+
         return (
             validated_X,
             fitting_X,
@@ -1683,6 +1687,38 @@ class FeaturesEnricher(TransformerMixin):
             cv,
             columns_renaming,
         )
+
+    def _convert_id_columns_to_int(
+        self,
+        fitting_X: pd.DataFrame,
+        fitting_enriched_X: pd.DataFrame,
+        fitting_eval_set_dict: Dict[int, Tuple[pd.DataFrame, pd.Series]],
+        columns_renaming: Dict[str, str] = {},
+    ) -> pd.DataFrame:
+        def _set_encoded(col_name: str, df: pd.DataFrame, slice: Tuple[int, int], combined_col: pd.Series):
+            df[col_name] = combined_col.iloc[slice[0] : slice[1]]
+            return slice[1]
+
+        inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
+
+        if self.id_columns:
+            self.logger.info(f"Convert id columns to int: {self.id_columns}")
+            for col in self.id_columns:
+                col = inverse_columns_renaming.get(col, col)
+                combined_col = pd.concat(
+                    [fitting_X[col], fitting_enriched_X[col]]
+                    + [eval_set_pair[0][col] for eval_set_pair in fitting_eval_set_dict.values()]
+                )
+                combined_col = combined_col.astype("category").cat.codes
+                slice_end = _set_encoded(col, fitting_X, (0, len(fitting_X)), combined_col)
+                slice_end = _set_encoded(
+                    col, fitting_enriched_X, (slice_end, slice_end + len(fitting_enriched_X)), combined_col
+                )
+                for eval_set_pair in fitting_eval_set_dict.values():
+                    slice_end = _set_encoded(
+                        col, eval_set_pair[0], (slice_end, slice_end + len(eval_set_pair[0])), combined_col
+                    )
+        return fitting_X, fitting_enriched_X, fitting_eval_set_dict
 
     @dataclass
     class _SampledDataForMetrics:
@@ -3976,7 +4012,7 @@ if response.status_code == 200:
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
 
-        return [f.name for f in features_meta if f.type == "categorical"]
+        return [f.name for f in features_meta if f.type == "categorical" and f.name not in self.id_columns]
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False

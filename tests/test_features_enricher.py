@@ -3910,3 +3910,88 @@ class DataFrameWrapper:
 
 class TestException(Exception):
     pass
+
+
+def test_convert_id_columns_to_int():
+    # Create test data
+    fitting_X = pd.DataFrame({"id": ["A", "B", "C"], "value": [1, 2, 3]})
+
+    fitting_enriched_X = pd.DataFrame({"id": ["B", "C", "D"], "value": [2, 3, 4]})
+
+    eval_X1 = pd.DataFrame({"id": ["D", "E", "A"], "value": [1, 4, 5]})
+
+    eval_X2 = pd.DataFrame({"id": ["E", "C", "F"], "value": [3, 5, 6]})
+
+    fitting_eval_set_dict = {
+        0: (eval_X1, pd.Series([1, 0, 1])),
+        1: (eval_X2, pd.Series([0, 1, 0])),
+    }
+
+    # Create FeaturesEnricher instance with id_columns
+    enricher = FeaturesEnricher(id_columns=["id"], search_keys={"id": SearchKey.CUSTOM_KEY})
+
+    # Call the method
+    result_X, result_enriched_X, result_eval_set_dict = enricher._convert_id_columns_to_int(
+        fitting_X, fitting_enriched_X, fitting_eval_set_dict
+    )
+
+    # Verify results
+    # Check that all id columns are converted to integers
+    assert result_X["id"].dtype == np.int8
+    assert result_enriched_X["id"].dtype == np.int8
+    assert result_eval_set_dict[0][0]["id"].dtype == np.int8
+    assert result_eval_set_dict[1][0]["id"].dtype == np.int8
+
+    # Check that the encoding is consistent across all datasets
+    # Get unique values and their encodings
+    all_ids = pd.concat(
+        [result_X["id"], result_enriched_X["id"], result_eval_set_dict[0][0]["id"], result_eval_set_dict[1][0]["id"]]
+    ).unique()
+
+    # Verify that we have 6 unique encoded values (A through F)
+    assert len(all_ids) == 6
+
+    # Verify that the same original ID always maps to the same encoded value
+    id_mapping = {}
+    for df in [result_X, result_enriched_X, result_eval_set_dict[0][0], result_eval_set_dict[1][0]]:
+        for orig_id, encoded_id in zip(df["id"], df["id"]):
+            if orig_id not in id_mapping:
+                id_mapping[orig_id] = encoded_id
+            else:
+                assert id_mapping[orig_id] == encoded_id
+
+    # Verify that non-id columns are not modified
+    assert result_X["value"].equals(fitting_X["value"])
+    assert result_enriched_X["value"].equals(fitting_enriched_X["value"])
+    assert result_eval_set_dict[0][0]["value"].equals(eval_X1["value"])
+    assert result_eval_set_dict[1][0]["value"].equals(eval_X2["value"])
+
+
+def test_convert_id_columns_to_int_no_id_columns():
+    # Create test data
+    fitting_X = pd.DataFrame({"value": [1, 2, 3]})
+
+    fitting_enriched_X = pd.DataFrame({"value": [2, 3, 4]})
+
+    eval_X1 = pd.DataFrame({"value": [1, 4, 5]})
+
+    eval_X2 = pd.DataFrame({"value": [3, 5, 6]})
+
+    fitting_eval_set_dict = {
+        0: (eval_X1, pd.Series([1, 0, 1]), pd.DataFrame({"value": [1, 4, 5]})),
+        1: (eval_X2, pd.Series([0, 1, 0]), pd.DataFrame({"value": [3, 5, 6]})),
+    }
+
+    # Create FeaturesEnricher instance without id_columns
+    enricher = FeaturesEnricher(id_columns=None, search_keys={"value": SearchKey.CUSTOM_KEY})
+
+    # Call the method
+    result_X, result_enriched_X, result_eval_set_dict = enricher._convert_id_columns_to_int(
+        fitting_X, fitting_enriched_X, fitting_eval_set_dict
+    )
+
+    # Verify that the dataframes are unchanged
+    assert result_X.equals(fitting_X)
+    assert result_enriched_X.equals(fitting_enriched_X)
+    assert result_eval_set_dict[0][0].equals(eval_X1)
+    assert result_eval_set_dict[1][0].equals(eval_X2)
