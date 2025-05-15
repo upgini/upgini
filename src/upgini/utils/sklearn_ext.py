@@ -1324,7 +1324,7 @@ def _encode_cat_features(X_train, y_train, X_test, y_test, cat_features, estimat
         else:
             # Shuffle train data
             X_train_shuffled, y_train_shuffled = _shuffle_pair(
-                X_train[cat_features].astype("object"), y_train, random_state
+                X_train[cat_features], y_train, random_state
             )
 
             # Fit encoder on training fold
