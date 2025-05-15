@@ -30,7 +30,7 @@ from pandas.api.types import (
 from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
-from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
@@ -71,6 +71,7 @@ from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
+from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
 from upgini.utils.country_utils import (
     CountrySearchKeyConverter,
     CountrySearchKeyDetector,
@@ -114,7 +115,9 @@ from upgini.utils.postal_code_utils import (
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
 except Exception:
-    from upgini.utils.fallback_progress_bar import CustomFallbackProgressBar as ProgressBar
+    from upgini.utils.fallback_progress_bar import (
+        CustomFallbackProgressBar as ProgressBar,
+    )
 
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import (
@@ -239,6 +242,7 @@ class FeaturesEnricher(TransformerMixin):
         add_date_if_missing: bool = True,
         disable_force_downsampling: bool = False,
         id_columns: Optional[List[str]] = None,
+        generate_search_key_features: bool = True,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -296,7 +300,7 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
-        self.dropped_client_feature_names_ = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
@@ -311,7 +315,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
-                    x_columns = [c.originalName or c.name for c in file_metadata.columns]
+                    x_columns = [c.name for c in file_metadata.columns]
                     self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(trace_id, df, silent=True)
@@ -365,6 +369,8 @@ class FeaturesEnricher(TransformerMixin):
         self.exclude_columns = exclude_columns
         self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
+        self.generate_search_key_features = generate_search_key_features
+
         self.features_info_display_handle = None
         self.data_sources_display_handle = None
         self.autofe_features_display_handle = None
@@ -1045,6 +1051,7 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     has_date = self._get_date_column(search_keys) is not None
+                    has_time = has_date and isinstance(_cv, TimeSeriesSplit) or isinstance(_cv, BlockedTimeSeriesSplit)
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
                     cat_features = list(set(client_cat_features + cat_features_from_backend))
                     baseline_cat_features = [f for f in cat_features if f in fitting_X.columns]
@@ -1077,7 +1084,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
-                            has_date=has_date,
+                            has_time=has_time,
                         )
                         baseline_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, baseline_score_column
@@ -1112,7 +1119,7 @@ class FeaturesEnricher(TransformerMixin):
                             add_params=custom_loss_add_params,
                             groups=groups,
                             text_features=text_features,
-                            has_date=has_date,
+                            has_time=has_time,
                         )
                         enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
                         enriched_metric = enriched_cv_result.get_display_metric()
@@ -1773,7 +1780,13 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         generated_features = []
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, self.bundle)
+            converter = DateTimeSearchKeyConverter(
+                date_column,
+                self.date_format,
+                self.logger,
+                self.bundle,
+                generate_cyclical_features=self.generate_search_key_features,
+            )
             # Leave original date column values
             df_with_date_features = converter.convert(df, keep_time=True)
             df_with_date_features[date_column] = df[date_column]
@@ -1781,7 +1794,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features = converter.generated_features
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
-        if email_columns:
+        if email_columns and self.generate_search_key_features:
             generator = EmailDomainGenerator(email_columns)
             df = generator.generate(df)
             generated_features.extend(generator.generated_features)
@@ -2204,10 +2217,12 @@ class FeaturesEnricher(TransformerMixin):
                         {"name": name, "value": key_example(sk_type)} for name in sk_meta.unnestKeyNames
                     ]
                 else:
-                    search_keys_with_values[sk_type.name] = [{
-                        "name": sk_meta.originalName,
-                        "value": key_example(sk_type),
-                    }]
+                    search_keys_with_values[sk_type.name] = [
+                        {
+                            "name": sk_meta.originalName,
+                            "value": key_example(sk_type),
+                        }
+                    ]
 
         keys_section = json.dumps(search_keys_with_values)
         features_for_transform = self._search_task.get_features_for_transform()
@@ -2284,11 +2299,16 @@ if response.status_code == 200:
 
             self.__log_debug_information(validated_X, validated_y, exclude_features_sources=exclude_features_sources)
 
-            self.__validate_search_keys(self.search_keys, self.search_id)
+            filtered_columns = self.__filtered_enriched_features(
+                importance_threshold, max_features, trace_id, validated_X
+            )
+            # If there are no important features, return original dataframe
+            if not filtered_columns:
+                msg = self.bundle.get("no_important_features_for_transform")
+                self.__log_warning(msg, show_support_link=True)
+                return X, {c: c for c in X.columns}, [], dict()
 
-            if len(self.feature_names_) == 0:
-                self.logger.warning(self.bundle.get("no_important_features_for_transform"))
-                return X, {c: c for c in X.columns}, [], {}
+            self.__validate_search_keys(self.search_keys, self.search_id)
 
             if self._has_paid_features(exclude_features_sources):
                 msg = self.bundle.get("transform_with_paid_features")
@@ -2327,9 +2347,7 @@ if response.status_code == 200:
 
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [
-                c for c in df.columns if c in self.feature_names_ and c in self.dropped_client_feature_names_
-            ]
+            columns_to_drop = [c for c in df.columns if c in self.feature_names_]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -2360,7 +2378,13 @@ if response.status_code == 200:
             generated_features = []
             date_column = self._get_date_column(search_keys)
             if date_column is not None:
-                converter = DateTimeSearchKeyConverter(date_column, self.date_format, self.logger, bundle=self.bundle)
+                converter = DateTimeSearchKeyConverter(
+                    date_column,
+                    self.date_format,
+                    self.logger,
+                    bundle=self.bundle,
+                    generate_cyclical_features=self.generate_search_key_features,
+                )
                 df = converter.convert(df, keep_time=True)
                 self.logger.info(f"Date column after convertion: {df[date_column]}")
                 generated_features.extend(converter.generated_features)
@@ -2370,7 +2394,7 @@ if response.status_code == 200:
                     df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
 
             email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
-            if email_columns:
+            if email_columns and self.generate_search_key_features:
                 generator = EmailDomainGenerator(email_columns)
                 df = generator.generate(df)
                 generated_features.extend(generator.generated_features)
@@ -2378,6 +2402,17 @@ if response.status_code == 200:
             normalizer = Normalizer(self.bundle, self.logger)
             df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
             columns_renaming = normalizer.columns_renaming
+
+            # If there are no external features, we don't call backend on transform
+            external_features = [fm for fm in features_meta if fm.shap_value > 0 and fm.source != "etalon"]
+            if not external_features:
+                self.logger.warning(
+                    "No external features found, returning original dataframe"
+                    f" with generated important features: {filtered_columns}"
+                )
+                filtered_columns = [c for c in filtered_columns if c in df.columns]
+                self.logger.warning(f"Filtered columns by existance in dataframe: {filtered_columns}")
+                return df[filtered_columns], columns_renaming, generated_features, search_keys
 
             # Don't pass all features in backend on transform
             runtime_parameters = self._get_copy_of_runtime_parameters()
@@ -2422,6 +2457,8 @@ if response.status_code == 200:
 
             # Explode multiple search keys
             df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
+
+            # Convert search keys and generate features on them
 
             email_column = self._get_email_column(search_keys)
             hem_column = self._get_hem_column(search_keys)
@@ -2611,17 +2648,15 @@ if response.status_code == 200:
                 how="left",
             )
 
+            selected_generated_features = [
+                c for c in generated_features if not self.fit_select_features or c in filtered_columns
+            ]
             selecting_columns = [
                 c
-                for c in itertools.chain(validated_Xy.columns.tolist(), generated_features)
-                if c not in self.dropped_client_feature_names_
+                for c in itertools.chain(validated_Xy.columns.tolist(), selected_generated_features)
+                if c not in self.zero_shap_client_features
             ]
-            filtered_columns = self.__filtered_enriched_features(
-                importance_threshold, max_features, trace_id, validated_X
-            )
-            selecting_columns.extend(
-                c for c in filtered_columns if c in result.columns and c not in validated_X.columns
-            )
+            selecting_columns.extend(c for c in result.columns if c in filtered_columns and c not in selecting_columns)
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
 
@@ -2860,6 +2895,7 @@ if response.status_code == 200:
                 self.date_format,
                 self.logger,
                 bundle=self.bundle,
+                generate_cyclical_features=self.generate_search_key_features,
             )
             df = converter.convert(df, keep_time=True)
             if converter.has_old_dates:
@@ -2872,7 +2908,7 @@ if response.status_code == 200:
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
-        if email_columns:
+        if email_columns and self.generate_search_key_features:
             generator = EmailDomainGenerator(email_columns)
             df = generator.generate(df)
             self.fit_generated_features.extend(generator.generated_features)
@@ -2920,7 +2956,10 @@ if response.status_code == 200:
                 self.__log_warning(fintech_warning)
         df, full_duplicates_warning = clean_full_duplicates(df, self.logger, bundle=self.bundle)
         if full_duplicates_warning:
-            self.__log_warning(full_duplicates_warning)
+            if len(df) == 0:
+                raise ValidationError(full_duplicates_warning)
+            else:
+                self.__log_warning(full_duplicates_warning)
 
         # Explode multiple search keys
         df = self.__add_fit_system_record_id(
@@ -3323,8 +3362,12 @@ if response.status_code == 200:
             Xy[TARGET] = y
             validated_y = Xy[TARGET].copy()
 
-        if validated_y.nunique() < 2:
+        y_nunique = validated_y.nunique()
+        if y_nunique < 2:
             raise ValidationError(self.bundle.get("y_is_constant"))
+
+        if self.model_task_type == ModelTaskType.BINARY and y_nunique != 2:
+            raise ValidationError(self.bundle.get("binary_target_unique_count_not_2").format(y_nunique))
 
         return validated_y
 
@@ -3400,8 +3443,12 @@ if response.status_code == 200:
         else:
             raise ValidationError(self.bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
-        if validated_eval_y.nunique() < 2:
+        eval_y_nunique = validated_eval_y.nunique()
+        if eval_y_nunique < 2:
             raise ValidationError(self.bundle.get("y_is_constant_eval_set"))
+
+        if self.model_task_type == ModelTaskType.BINARY and eval_y_nunique != 2:
+            raise ValidationError(self.bundle.get("binary_target_eval_unique_count_not_2").format(eval_y_nunique))
 
         return validated_eval_X, validated_eval_y
 
@@ -3564,7 +3611,9 @@ if response.status_code == 200:
             maybe_date_col = SearchKey.find_key(self.search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                date_converter = DateTimeSearchKeyConverter(maybe_date_col, self.date_format)
+                date_converter = DateTimeSearchKeyConverter(
+                    maybe_date_col, self.date_format, generate_cyclical_features=False
+                )
                 converted_X = date_converter.convert(X)
                 min_date = converted_X[maybe_date_col].min()
                 max_date = converted_X[maybe_date_col].max()
@@ -3603,7 +3652,7 @@ if response.status_code == 200:
             self.__log_warning(bundle.get("current_date_added"))
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
-            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE)
+            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
             df = converter.convert(df)
         return df
 
@@ -3942,10 +3991,11 @@ if response.status_code == 200:
         original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
+        # To be sure that names with hash suffixes
         df = df.rename(columns=original_names_dict)
 
         self.feature_names_ = []
-        self.dropped_client_feature_names_ = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
@@ -3957,7 +4007,7 @@ if response.status_code == 200:
             if feature_meta.name in original_names_dict.keys():
                 feature_meta.name = original_names_dict[feature_meta.name]
 
-            is_client_feature = feature_meta.name in df.columns
+            is_client_feature = original_names_dict.get(feature_meta.name, feature_meta.name) in df.columns
 
             # Show and update shap values for client features only if select_features is True
             if updated_shaps is not None and (not is_client_feature or self.fit_select_features):
@@ -3973,13 +4023,13 @@ if response.status_code == 200:
         features_meta.sort(key=lambda m: (-m.shap_value, m.name))
 
         for feature_meta in features_meta:
-
-            is_client_feature = feature_meta.name in df.columns
+            original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
+            is_client_feature = original_name in df.columns
 
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
-                if self.fit_select_features:
-                    self.dropped_client_feature_names_.append(feature_meta.name)
+                if is_client_feature and self.fit_select_features:
+                    self.zero_shap_client_features.append(original_name)
                 continue
 
             # Use only important features

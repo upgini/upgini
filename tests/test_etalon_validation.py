@@ -243,6 +243,23 @@ def test_python_datetime_to_timestamp_conversion():
     assert df["date"].iloc[2] == 1578009600000
 
 
+def test_convert_datetime_without_cyclical_features():
+    df = pd.DataFrame(
+        [
+            {"date": datetime(2020, 1, 1, 12, 30, 0)},
+            {"date": datetime(2020, 1, 2, 13, 40, 0)},
+            {"date": datetime(2020, 1, 3, 14, 50, 0)},
+        ]
+    )
+    converter = DateTimeSearchKeyConverter("date", generate_cyclical_features=False)
+    df = converter.convert(df)
+    assert df.columns.to_list() == ["date"]
+    assert df["date"].dtype == "Int64"
+    assert df["date"].iloc[0] == 1577836800000
+    assert df["date"].iloc[1] == 1577923200000
+    assert df["date"].iloc[2] == 1578009600000
+
+
 def test_constant_and_empty_validation():
     df = pd.DataFrame(
         {

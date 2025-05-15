@@ -106,13 +106,80 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -169,6 +236,22 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     )
     assert enriched_train_features.shape == (10000, 6)
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv"), index=False
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
 
     if update_metrics_flag:
@@ -181,11 +264,12 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv"), index=False
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info_after_metrics.csv"),
+            index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info.csv")
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_features_info_after_metrics.csv")
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -225,13 +309,80 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
     ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id)
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -319,13 +470,80 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -375,6 +593,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             train_features,
             train_target,
             calculate_metrics=False,
+            select_features=False,
             keep_input=True,
         )
         assert enriched_train_features.shape == (6, 5)
@@ -383,9 +602,26 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             train_features,
             train_target,
             calculate_metrics=False,
+            select_features=False,
             keep_input=False,
         )
         assert enriched_train_features.shape == (6, 3)
+
+        enriched_train_features = enricher.fit_transform(
+            train_features,
+            train_target,
+            calculate_metrics=False,
+            keep_input=True,
+        )
+        assert enriched_train_features.shape == (6, 3)
+
+        enriched_train_features = enricher.fit_transform(
+            train_features,
+            train_target,
+            calculate_metrics=False,
+            keep_input=False,
+        )
+        assert enriched_train_features.shape == (6, 1)
     finally:
         Dataset.MIN_ROWS_COUNT = min_rows_count
 
@@ -460,7 +696,7 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
             features=[
                 FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1),
                 FeaturesMetadataV2(
-                    name="client_feature", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                    name="client_feature_8ddf40", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
                 ),
                 FeaturesMetadataV2(
                     name="datetime_day_in_quarter_sin_65d4f7",
@@ -533,6 +769,21 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
     logging.warning(enriched_train_features)
     assert enriched_train_features.shape == (10000, 4)
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv"),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics(
         train_features,
         train_target,
@@ -541,7 +792,8 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
 
     if update_metrics_flag:
         metrics.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"), index=False
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"),
+            index=False,
         )
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"))
@@ -551,12 +803,14 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv"),
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info_after_metrics.csv"
+            ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info.csv")
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher_features_info_after_metrics.csv")
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -601,13 +855,80 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         url,
         search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -673,6 +994,23 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
     )
     assert enriched_train_features.shape == (10000, 5)
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv"),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
 
     if update_metrics_flag:
@@ -689,12 +1027,17 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv"),
+            os.path.join(
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_with_demo_key_features_info_after_metrics.csv",
+            ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info.csv")
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_features_info_after_metrics.csv"
+        )
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -750,13 +1093,80 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         url,
         search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -823,6 +1233,17 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     )
     assert enriched_train_features.shape == (10000, 5)
 
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
     assert metrics is not None
 
@@ -840,12 +1261,16 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv"),
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info_after_metrics.csv"
+            ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv")
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info_after_metrics.csv"
+        )
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -874,13 +1299,80 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         url,
         search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -949,6 +1441,25 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     assert enriched_train_features.shape == (10000, 5)
     assert enriched_train_features.index.name == "custom_index_name"
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv"
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
 
     assert metrics is not None
@@ -968,13 +1479,17 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     if update_metrics_flag:
         enricher.features_info.to_csv(
             os.path.join(
-                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv"
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_with_named_index_features_info_after_metrics.csv",
             ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_features_info.csv")
+        os.path.join(
+            FIXTURE_DIR,
+            "test_features_enricher/test_features_enricher_with_named_index_features_info_after_metrics.csv",
+        )
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -1001,13 +1516,80 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         url,
         search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -1076,6 +1658,25 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     assert enriched_train_features.shape == (10000, 5)
     assert "index" not in enriched_train_features.columns
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv"
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
     assert metrics is not None
 
@@ -1094,13 +1695,17 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     if update_metrics_flag:
         enricher.features_info.to_csv(
             os.path.join(
-                FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv"
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_with_index_column_features_info_after_metrics.csv",
             ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_features_info.csv")
+        os.path.join(
+            FIXTURE_DIR,
+            "test_features_enricher/test_features_enricher_with_index_column_features_info_after_metrics.csv",
+        )
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
@@ -1204,6 +1809,23 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
         select_features=False,
     )
 
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv",
+            ),
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(
+            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv"
+        )
+    )
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
     metrics = enricher.calculate_metrics()
     assert metrics is not None
     features_info = enricher.get_features_info()
@@ -1229,14 +1851,16 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
         enricher.features_info.to_csv(
             os.path.join(
                 FIXTURE_DIR,
-                "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv",
+                "test_features_enricher/"
+                "test_features_enricher_with_complex_feature_names_features_info_after_metrics.csv",
             ),
             index=False,
         )
 
     expected_features_info = pd.read_csv(
         os.path.join(
-            FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info.csv"
+            FIXTURE_DIR,
+            "test_features_enricher/test_features_enricher_with_complex_feature_names_features_info_after_metrics.csv",
         )
     )
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
@@ -1331,6 +1955,20 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
                 ),
                 FeaturesMetadataV2(
                     name="SystemRecordId_473310000", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=1.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=1.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=1.0,
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -1573,7 +2211,23 @@ def test_filter_by_importance(requests_mock: Mocker, update_metrics_flag: bool):
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.15,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.2,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -1655,16 +2309,17 @@ def test_filter_by_importance(requests_mock: Mocker, update_metrics_flag: bool):
         eval_set=eval_set,
         calculate_metrics=False,
         keep_input=True,
-        importance_threshold=0.8,
+        importance_threshold=0.1,
     )
 
-    assert train_features.shape == (10000, 4)
+    assert train_features.shape == (10000, 5)
 
-    test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.8)
+    test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.5)
 
-    assert test_features.shape == (1000, 4)
+    assert test_features.shape == (1000, 3)
 
 
+@pytest.mark.skip(reason="This functionality is deprecated")
 def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "https://some.fake.url"
 
@@ -1688,7 +2343,23 @@ def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.15,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.2,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -1769,15 +2440,15 @@ def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool
         eval_set=eval_set,
         calculate_metrics=False,
         keep_input=True,
-        max_features=0,
+        max_features=2,
         select_features=False,
     )
 
-    assert train_features.shape == (10000, 4)
+    assert train_features.shape == (10000, 5)
 
     test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
 
-    assert test_features.shape == (1000, 4)
+    assert test_features.shape == (1000, 2)
 
 
 def test_validation_metrics_calculation(requests_mock: Mocker):
@@ -1881,13 +2552,80 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         url,
         search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.5
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -2520,13 +3258,80 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
         ads_search_task_id,
         ProviderTaskMetadataV2(
-            features=[FeaturesMetadataV2(name="feature", type="numeric", source="ads", hit_rate=99.0, shap_value=10.1)],
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.0,
+                ),
+            ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
             ),
@@ -2889,7 +3694,55 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         search_task_id,
         validation_search_task_id,
     )
-    mock_get_metadata(requests_mock, url, search_task_id)
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
     mock_get_task_metadata_v2(
         requests_mock,
         url,
@@ -2898,7 +3751,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
             features=[
                 FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
                 FeaturesMetadataV2(
-                    name="client_feature", type="NUMERIC", source="etalon", hit_rate=99.0, shap_value=0.0
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=99.0, shap_value=0.0
                 ),
             ],
             hit_rate_metrics=HitRateMetrics(
@@ -2989,7 +3842,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         keep_input=True,
         select_features=True,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 3)
     assert "client_feature" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()
@@ -3034,6 +3887,20 @@ def test_id_columns_validation(requests_mock: Mocker):
             df.drop(columns="target"),
             df.target,
         )
+
+
+def test_adjusting_cv():
+    # TODO
+    assert True
+    # enricher = FeaturesEnricher(
+    #     search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+    #     endpoint=url,
+    #     api_key="fake_api_key",
+    #     date_format="%Y-%m-%d",
+    #     cv=CVType.time_series,
+    #     logs_enabled=False,
+    # )
+    # enricher._FeaturesEnricher__adjust_cv(df)
 
 
 class DataFrameWrapper:
