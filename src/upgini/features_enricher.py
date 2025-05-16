@@ -31,6 +31,7 @@ from scipy.stats import ks_2samp
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import BaseCrossValidator, TimeSeriesSplit
+from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
@@ -287,6 +288,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.search_keys = search_keys or {}
         self.id_columns = id_columns
+        self.id_columns_encoder = None
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
 
@@ -935,6 +937,7 @@ class FeaturesEnricher(TransformerMixin):
 
             if self.X is None:
                 self.X = X
+                self.id_columns_encoder = OrdinalEncoder().fit(X[self.id_columns])
             if self.y is None:
                 self.y = y
             if self.eval_set is None:
@@ -1616,6 +1619,7 @@ class FeaturesEnricher(TransformerMixin):
             fitting_X, y_sorted, search_keys, self.model_task_type, sort_all_columns=True, logger=self.logger
         )
         fitting_X = fitting_X[fitting_x_columns]
+        fitting_X = self._encode_id_columns(fitting_X, self.fit_columns_renaming)
         self.logger.info(f"Final sorted list of fitting X columns: {fitting_x_columns}")
         fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
         fitting_enriched_x_columns = sort_columns(
@@ -1627,6 +1631,7 @@ class FeaturesEnricher(TransformerMixin):
             logger=self.logger,
         )
         fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
+        fitting_enriched_X = self._encode_id_columns(fitting_enriched_X, self.fit_columns_renaming)
         self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
@@ -1653,6 +1658,9 @@ class FeaturesEnricher(TransformerMixin):
                         .str.replace(",", ".", regex=False)
                         .astype(np.float64)
                     )
+
+            fitting_eval_X = self._encode_id_columns(fitting_eval_X, self.fit_columns_renaming)
+            fitting_enriched_eval_X = self._encode_id_columns(fitting_enriched_eval_X, self.fit_columns_renaming)
 
             fitting_eval_set_dict[idx] = (
                 fitting_eval_X,
@@ -2277,7 +2285,9 @@ if response.status_code == 200:
         with MDC(trace_id=trace_id, search_id=search_id):
             self.logger.info("Start transform")
 
-            validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set=None)
+            validated_X, validated_y, validated_eval_set = self._validate_train_eval(
+                X, y, eval_set=None, is_transform=True
+            )
             df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
 
             validated_Xy = df.copy()
@@ -2332,7 +2342,7 @@ if response.status_code == 200:
 
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [c for c in df.columns if c in self.feature_names_]
+            columns_to_drop = [c for c in df.columns if c in self.feature_names_ and c not in (self.id_columns or [])]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -2639,7 +2649,7 @@ if response.status_code == 200:
             selecting_columns = [
                 c
                 for c in itertools.chain(validated_Xy.columns.tolist(), selected_generated_features)
-                if c not in self.zero_shap_client_features
+                if c not in self.zero_shap_client_features or c in (self.id_columns or [])
             ]
             selecting_columns.extend(c for c in result.columns if c in filtered_columns and c not in selecting_columns)
             if add_fit_system_record_id:
@@ -2833,14 +2843,8 @@ if response.status_code == 200:
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
         )
 
-        df = pd.concat([validated_X, validated_y], axis=1)
-
-        if validated_eval_set is not None and len(validated_eval_set) > 0:
-            df[EVAL_SET_INDEX] = 0
-            for idx, (eval_X, eval_y) in enumerate(validated_eval_set):
-                eval_df = pd.concat([eval_X, eval_y], axis=1)
-                eval_df[EVAL_SET_INDEX] = idx + 1
-                df = pd.concat([df, eval_df])
+        df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
+        self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns])
 
         self.fit_search_keys = self.search_keys.copy()
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
@@ -2951,47 +2955,8 @@ if response.status_code == 200:
         # TODO check maybe need to drop _time column from df_with_original_index
 
         df, unnest_search_keys = self._explode_multiple_search_keys(df, self.fit_search_keys, self.fit_columns_renaming)
-
-        # Convert EMAIL to HEM after unnesting to do it only with one column
-        email_column = self._get_email_column(self.fit_search_keys)
-        hem_column = self._get_hem_column(self.fit_search_keys)
-        if email_column:
-            converter = EmailSearchKeyConverter(
-                email_column,
-                hem_column,
-                self.fit_search_keys,
-                self.fit_columns_renaming,
-                list(unnest_search_keys.keys()),
-                self.bundle,
-                self.logger,
-            )
-            df = converter.convert(df)
-
-        ip_column = self._get_ip_column(self.fit_search_keys)
-        if ip_column:
-            converter = IpSearchKeyConverter(
-                ip_column,
-                self.fit_search_keys,
-                self.fit_columns_renaming,
-                list(unnest_search_keys.keys()),
-                self.bundle,
-                self.logger,
-            )
-            df = converter.convert(df)
-        phone_column = self._get_phone_column(self.fit_search_keys)
-        country_column = self._get_country_column(self.fit_search_keys)
-        if phone_column:
-            converter = PhoneSearchKeyConverter(phone_column, country_column)
-            df = converter.convert(df)
-
-        if country_column:
-            converter = CountrySearchKeyConverter(country_column)
-            df = converter.convert(df)
-
-        postal_code = self._get_postal_column(self.fit_search_keys)
-        if postal_code:
-            converter = PostalCodeSearchKeyConverter(postal_code)
-            df = converter.convert(df)
+        # Convert EMAIL to HEM etc after unnesting to do it only with one column
+        df = self.__convert_unnestable_keys(df, unnest_search_keys)
 
         non_feature_columns = [
             self.TARGET_NAME,
@@ -3221,6 +3186,49 @@ if response.status_code == 200:
             if not self.warning_counter.has_warnings():
                 self.__display_support_link(self.bundle.get("all_ok_community_invite"))
 
+    def __convert_unnestable_keys(self, df: pd.DataFrame, unnest_search_keys: Dict[str, str]):
+        email_column = self._get_email_column(self.fit_search_keys)
+        hem_column = self._get_hem_column(self.fit_search_keys)
+        if email_column:
+            converter = EmailSearchKeyConverter(
+                email_column,
+                hem_column,
+                self.fit_search_keys,
+                self.fit_columns_renaming,
+                list(unnest_search_keys.keys()),
+                self.bundle,
+                self.logger,
+            )
+            df = converter.convert(df)
+
+        ip_column = self._get_ip_column(self.fit_search_keys)
+        if ip_column:
+            converter = IpSearchKeyConverter(
+                ip_column,
+                self.fit_search_keys,
+                self.fit_columns_renaming,
+                list(unnest_search_keys.keys()),
+                self.bundle,
+                self.logger,
+            )
+            df = converter.convert(df)
+        phone_column = self._get_phone_column(self.fit_search_keys)
+        country_column = self._get_country_column(self.fit_search_keys)
+        if phone_column:
+            converter = PhoneSearchKeyConverter(phone_column, country_column)
+            df = converter.convert(df)
+
+        if country_column:
+            converter = CountrySearchKeyConverter(country_column)
+            df = converter.convert(df)
+
+        postal_code = self._get_postal_column(self.fit_search_keys)
+        if postal_code:
+            converter = PostalCodeSearchKeyConverter(postal_code)
+            df = converter.convert(df)
+
+        return df
+
     def __should_add_date_column(self):
         return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
 
@@ -3264,39 +3272,35 @@ if response.status_code == 200:
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
     def _validate_train_eval(
-        self, X: pd.DataFrame, y: pd.Series, eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]]
-    ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
-        validated_X = self._validate_X(X)
-        validated_y = self._validate_y(X, y)
-        validated_eval_set = self._validate_eval_set(X, eval_set)
-        validated_X, validated_eval_set = self._convert_id_columns_to_int(validated_X, validated_eval_set)
-        return validated_X, validated_y, validated_eval_set
-
-    def _convert_id_columns_to_int(
         self,
         X: pd.DataFrame,
+        y: pd.Series,
         eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]],
-        columns_renaming: Dict[str, str] = {},
-    ) -> Tuple[pd.DataFrame, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
-        def _set_encoded(col_name: str, df: pd.DataFrame, slice: Tuple[int, int], combined_col: pd.Series):
-            if not pd.api.types.is_numeric_dtype(df[col_name].dtype):
-                df[col_name] = combined_col.iloc[slice[0] : slice[1]]
-            return slice[1]
+        is_transform: bool = False,
+    ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
+        validated_X = self._validate_X(X, is_transform)
+        validated_y = self._validate_y(X, y)
+        validated_eval_set = self._validate_eval_set(X, eval_set)
+        return validated_X, validated_y, validated_eval_set
 
-        inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
+    def _encode_id_columns(
+        self,
+        X: pd.DataFrame,
+        columns_renaming: Optional[Dict[str, str]] = None,
+    ) -> pd.DataFrame:
+        columns_renaming = columns_renaming or {}
 
-        if self.id_columns:
-            self.logger.info(f"Convert id columns to int: {self.id_columns}")
-            for col in self.id_columns:
-                col = inverse_columns_renaming.get(col, col)
-                combined_col = pd.concat([X[col]] + [eval_set_pair[0][col] for eval_set_pair in eval_set])
-                combined_col = combined_col.astype("category").cat.codes
-                slice_end = _set_encoded(col, X, (0, len(X)), combined_col)
-                for _, eval_set_pair in enumerate(eval_set):
-                    slice_end = _set_encoded(
-                        col, eval_set_pair[0], (slice_end, slice_end + len(eval_set_pair[0])), combined_col
-                    )
-        return X, eval_set
+        if self.id_columns and self.id_columns_encoder is not None:
+            inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
+            renamed_id_columns = [
+                inverse_columns_renaming.get(col, col) for col in self.id_columns_encoder.feature_names_in_
+            ]
+            self.logger.info(f"Convert id columns to int: {renamed_id_columns}")
+            X[renamed_id_columns] = self.id_columns_encoder.transform(
+                X[renamed_id_columns].rename(columns=columns_renaming)
+            )
+
+        return X
 
     def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
         if isinstance(X, pd.DataFrame):
