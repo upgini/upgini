@@ -937,7 +937,9 @@ class FeaturesEnricher(TransformerMixin):
 
             if self.X is None:
                 self.X = X
-                self.id_columns_encoder = OrdinalEncoder().fit(X[self.id_columns])
+                self.id_columns_encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1).fit(
+                    X[self.id_columns]
+                )
             if self.y is None:
                 self.y = y
             if self.eval_set is None:
@@ -1576,7 +1578,11 @@ class FeaturesEnricher(TransformerMixin):
             fitting_enriched_X = fitting_enriched_X.drop(columns=columns_with_high_cardinality, errors="ignore")
 
         # Detect and drop constant columns
-        constant_columns = FeaturesValidator.find_constant_features(fitting_X)
+        constant_columns = [
+            c
+            for c in FeaturesValidator.find_constant_features(fitting_X)
+            if self.fit_columns_renaming.get(c, c) not in self.id_columns
+        ]
         if len(constant_columns) > 0:
             self.logger.warning(f"Constant columns {constant_columns} will be dropped for metrics calculation")
             fitting_X = fitting_X.drop(columns=constant_columns, errors="ignore")
@@ -1619,7 +1625,7 @@ class FeaturesEnricher(TransformerMixin):
             fitting_X, y_sorted, search_keys, self.model_task_type, sort_all_columns=True, logger=self.logger
         )
         fitting_X = fitting_X[fitting_x_columns]
-        fitting_X = self._encode_id_columns(fitting_X, self.fit_columns_renaming)
+        fitting_X, _ = self._encode_id_columns(fitting_X, self.fit_columns_renaming)
         self.logger.info(f"Final sorted list of fitting X columns: {fitting_x_columns}")
         fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
         fitting_enriched_x_columns = sort_columns(
@@ -1631,7 +1637,7 @@ class FeaturesEnricher(TransformerMixin):
             logger=self.logger,
         )
         fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
-        fitting_enriched_X = self._encode_id_columns(fitting_enriched_X, self.fit_columns_renaming)
+        fitting_enriched_X, _ = self._encode_id_columns(fitting_enriched_X, self.fit_columns_renaming)
         self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
@@ -1659,8 +1665,11 @@ class FeaturesEnricher(TransformerMixin):
                         .astype(np.float64)
                     )
 
-            fitting_eval_X = self._encode_id_columns(fitting_eval_X, self.fit_columns_renaming)
-            fitting_enriched_eval_X = self._encode_id_columns(fitting_enriched_eval_X, self.fit_columns_renaming)
+            fitting_eval_X, unknown_dict = self._encode_id_columns(fitting_eval_X, self.fit_columns_renaming)
+            fitting_enriched_eval_X, _ = self._encode_id_columns(fitting_enriched_eval_X, self.fit_columns_renaming)
+
+            if len(unknown_dict) > 0:
+                print(self.bundle.get("unknown_id_column_value_in_eval_set").format(unknown_dict))
 
             fitting_eval_set_dict[idx] = (
                 fitting_eval_X,
@@ -3287,8 +3296,9 @@ if response.status_code == 200:
         self,
         X: pd.DataFrame,
         columns_renaming: Optional[Dict[str, str]] = None,
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Dict[str, List[Any]]]:
         columns_renaming = columns_renaming or {}
+        unknown_dict = {}
 
         if self.id_columns and self.id_columns_encoder is not None:
             inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
@@ -3296,11 +3306,18 @@ if response.status_code == 200:
                 inverse_columns_renaming.get(col, col) for col in self.id_columns_encoder.feature_names_in_
             ]
             self.logger.info(f"Convert id columns to int: {renamed_id_columns}")
-            X[renamed_id_columns] = self.id_columns_encoder.transform(
-                X[renamed_id_columns].rename(columns=columns_renaming)
-            )
+            encoded = self.id_columns_encoder.transform(X[renamed_id_columns].rename(columns=columns_renaming))
+            for i, c in enumerate(renamed_id_columns):
+                unknown_values = X[encoded[:, i] == -1][c].unique().tolist()
+                if len(unknown_values) > 0:
+                    unknown_dict[c] = unknown_values
+            X[renamed_id_columns] = encoded
+            X = X.loc[(X[renamed_id_columns] != -1).all(axis=1)]
 
-        return X
+            if len(unknown_dict) > 0:
+                self.logger.warning(f"Unknown values in id columns: {unknown_dict}")
+
+        return X, unknown_dict
 
     def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
         if isinstance(X, pd.DataFrame):
