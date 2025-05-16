@@ -929,12 +929,8 @@ class FeaturesEnricher(TransformerMixin):
             ):
                 raise ValidationError(self.bundle.get("metrics_unfitted_enricher"))
 
-            validated_X = self._validate_X(effective_X)
-            validated_y = self._validate_y(validated_X, effective_y)
-            validated_eval_set = (
-                [self._validate_eval_set_pair(validated_X, eval_pair) for eval_pair in effective_eval_set]
-                if effective_eval_set is not None
-                else None
+            validated_X, validated_y, validated_eval_set = self._validate_train_eval(
+                effective_X, effective_y, effective_eval_set
             )
 
             if self.X is None:
@@ -1500,14 +1496,8 @@ class FeaturesEnricher(TransformerMixin):
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
-        validated_X = self._validate_X(X)
-        validated_y = self._validate_y(validated_X, y)
         checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
-        validated_eval_set = (
-            [self._validate_eval_set_pair(validated_X, eval_set_pair) for eval_set_pair in checked_eval_set]
-            if checked_eval_set
-            else None
-        )
+        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set)
 
         sampled_data = self._sample_data_for_metrics(
             trace_id,
@@ -1671,10 +1661,6 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_y_sorted,
             )
 
-        fitting_X, fitting_enriched_X, fitting_eval_set_dict = self._convert_id_columns_to_int(
-            fitting_X, fitting_enriched_X, fitting_eval_set_dict, columns_renaming
-        )
-
         return (
             validated_X,
             fitting_X,
@@ -1687,38 +1673,6 @@ class FeaturesEnricher(TransformerMixin):
             cv,
             columns_renaming,
         )
-
-    def _convert_id_columns_to_int(
-        self,
-        fitting_X: pd.DataFrame,
-        fitting_enriched_X: pd.DataFrame,
-        fitting_eval_set_dict: Dict[int, Tuple[pd.DataFrame, pd.Series]],
-        columns_renaming: Dict[str, str] = {},
-    ) -> pd.DataFrame:
-        def _set_encoded(col_name: str, df: pd.DataFrame, slice: Tuple[int, int], combined_col: pd.Series):
-            df[col_name] = combined_col.iloc[slice[0] : slice[1]]
-            return slice[1]
-
-        inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
-
-        if self.id_columns:
-            self.logger.info(f"Convert id columns to int: {self.id_columns}")
-            for col in self.id_columns:
-                col = inverse_columns_renaming.get(col, col)
-                combined_col = pd.concat(
-                    [fitting_X[col], fitting_enriched_X[col]]
-                    + [eval_set_pair[0][col] for eval_set_pair in fitting_eval_set_dict.values()]
-                )
-                combined_col = combined_col.astype("category").cat.codes
-                slice_end = _set_encoded(col, fitting_X, (0, len(fitting_X)), combined_col)
-                slice_end = _set_encoded(
-                    col, fitting_enriched_X, (slice_end, slice_end + len(fitting_enriched_X)), combined_col
-                )
-                for eval_set_pair in fitting_eval_set_dict.values():
-                    slice_end = _set_encoded(
-                        col, eval_set_pair[0], (slice_end, slice_end + len(eval_set_pair[0])), combined_col
-                    )
-        return fitting_X, fitting_enriched_X, fitting_eval_set_dict
 
     @dataclass
     class _SampledDataForMetrics:
@@ -2054,17 +2008,17 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __combine_train_and_eval_sets(
-        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]]
+        self, X: pd.DataFrame, y: pd.Series, eval_set: Optional[List[tuple]]
     ) -> pd.DataFrame:
-        df = validated_X.copy()
-        df[TARGET] = validated_y
+        df = X.copy()
+        df[TARGET] = y
         if eval_set is None:
             return df
 
         df[EVAL_SET_INDEX] = 0
 
         for idx, eval_pair in enumerate(eval_set):
-            eval_x, eval_y = self._validate_eval_set_pair(validated_X, eval_pair)
+            eval_x, eval_y = eval_pair
             eval_df_with_index = eval_x.copy()
             eval_df_with_index[TARGET] = eval_y
             eval_df_with_index[EVAL_SET_INDEX] = idx + 1
@@ -2323,13 +2277,8 @@ if response.status_code == 200:
         with MDC(trace_id=trace_id, search_id=search_id):
             self.logger.info("Start transform")
 
-            validated_X = self._validate_X(X, is_transform=True)
-            if y is not None:
-                validated_y = self._validate_y(validated_X, y)
-                df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set=None)
-            else:
-                validated_y = None
-                df = validated_X
+            validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set=None)
+            df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
 
             validated_Xy = df.copy()
 
@@ -2838,13 +2787,8 @@ if response.status_code == 200:
         self.fit_dropped_features = set()
         self.fit_generated_features = []
 
-        validated_X = self._validate_X(X)
-        validated_y = self._validate_y(validated_X, y)
-        validated_eval_set = (
-            [self._validate_eval_set_pair(validated_X, eval_pair) for eval_pair in eval_set]
-            if eval_set is not None
-            else None
-        )
+        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set)
+
         is_demo_dataset = hash_input(validated_X, validated_y, validated_eval_set) in DEMO_DATASET_HASHES
         if is_demo_dataset:
             msg = self.bundle.get("demo_dataset_info")
@@ -3319,6 +3263,41 @@ if response.status_code == 200:
         search_keys_with_autodetection = {**self.search_keys, **self.autodetected_search_keys}
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
+    def _validate_train_eval(
+        self, X: pd.DataFrame, y: pd.Series, eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]]
+    ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
+        validated_X = self._validate_X(X)
+        validated_y = self._validate_y(X, y)
+        validated_eval_set = self._validate_eval_set(X, eval_set)
+        validated_X, validated_eval_set = self._convert_id_columns_to_int(validated_X, validated_eval_set)
+        return validated_X, validated_y, validated_eval_set
+
+    def _convert_id_columns_to_int(
+        self,
+        X: pd.DataFrame,
+        eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]],
+        columns_renaming: Dict[str, str] = {},
+    ) -> Tuple[pd.DataFrame, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
+        def _set_encoded(col_name: str, df: pd.DataFrame, slice: Tuple[int, int], combined_col: pd.Series):
+            if not pd.api.types.is_numeric_dtype(df[col_name].dtype):
+                df[col_name] = combined_col.iloc[slice[0] : slice[1]]
+            return slice[1]
+
+        inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
+
+        if self.id_columns:
+            self.logger.info(f"Convert id columns to int: {self.id_columns}")
+            for col in self.id_columns:
+                col = inverse_columns_renaming.get(col, col)
+                combined_col = pd.concat([X[col]] + [eval_set_pair[0][col] for eval_set_pair in eval_set])
+                combined_col = combined_col.astype("category").cat.codes
+                slice_end = _set_encoded(col, X, (0, len(X)), combined_col)
+                for _, eval_set_pair in enumerate(eval_set):
+                    slice_end = _set_encoded(
+                        col, eval_set_pair[0], (slice_end, slice_end + len(eval_set_pair[0])), combined_col
+                    )
+        return X, eval_set
+
     def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
         if isinstance(X, pd.DataFrame):
             if isinstance(X.columns, pd.MultiIndex) or isinstance(X.index, pd.MultiIndex):
@@ -3360,7 +3339,9 @@ if response.status_code == 200:
 
         return validated_X
 
-    def _validate_y(self, X: pd.DataFrame, y) -> pd.Series:
+    def _validate_y(self, X: pd.DataFrame, y) -> Optional[pd.Series]:
+        if y is None:
+            return None
         if (
             not isinstance(y, pd.Series)
             and not isinstance(y, pd.DataFrame)
@@ -3406,6 +3387,11 @@ if response.status_code == 200:
             raise ValidationError(self.bundle.get("binary_target_unique_count_not_2").format(y_nunique))
 
         return validated_y
+
+    def _validate_eval_set(self, X: pd.DataFrame, eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]]):
+        if eval_set is None:
+            return None
+        return [self._validate_eval_set_pair(X, eval_pair) for eval_pair in eval_set]
 
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
