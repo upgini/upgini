@@ -3903,6 +3903,19 @@ def test_adjusting_cv():
     # enricher._FeaturesEnricher__adjust_cv(df)
 
 
+def test_eval_x_intersection_with_x():
+    X = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    intersecting_eval_set_X = pd.DataFrame({"a": [3, 4, 5], "b": [6, 7, 8]})
+    non_intersecting_eval_set_X = pd.DataFrame({"a": [10, 11, 12], "b": [13, 14, 15]})
+    eval_set_y = pd.Series([1, 0, 1])
+    enricher = FeaturesEnricher(search_keys={"a": SearchKey.CUSTOM_KEY})
+
+    enricher._validate_eval_set_pair(X, (non_intersecting_eval_set_X, eval_set_y))
+
+    with pytest.raises(ValidationError, match="Eval set X has rows that are present in train set X"):
+        enricher._validate_eval_set_pair(X, (intersecting_eval_set_X, eval_set_y))
+
+
 class DataFrameWrapper:
     def __init__(self):
         self.df: Optional[pd.DataFrame] = None

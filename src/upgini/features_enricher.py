@@ -3450,6 +3450,11 @@ if response.status_code == 200:
         if self.model_task_type == ModelTaskType.BINARY and eval_y_nunique != 2:
             raise ValidationError(self.bundle.get("binary_target_eval_unique_count_not_2").format(eval_y_nunique))
 
+        # Check for duplicates between train and eval sets by comparing all values
+        train_eval_intersection = pd.merge(X, validated_eval_X, how='inner')
+        if len(train_eval_intersection) > 0:
+            raise ValidationError(self.bundle.get("eval_x_has_train_samples"))
+
         return validated_eval_X, validated_eval_y
 
     def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[List[Tuple]]):
