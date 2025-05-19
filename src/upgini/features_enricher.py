@@ -7,7 +7,6 @@ import json
 import logging
 import numbers
 import os
-import pickle
 import sys
 import tempfile
 import time
@@ -4574,60 +4573,52 @@ if response.status_code == 200:
         y: Union[pd.DataFrame, pd.Series, None] = None,
         eval_set: Union[Tuple, None] = None,
     ):
-        def dump_task():
+        def dump_task(X_, y_, eval_set_):
             try:
-                random_state = 42
-                rnd = np.random.RandomState(random_state)
-                if _num_samples(X) > 0:
-                    xy_sample_index = rnd.randint(0, _num_samples(X), size=1000)
-                else:
-                    xy_sample_index = []
+                if isinstance(X_, pd.Series):
+                    X_ = X_.to_frame()
 
-                def sample(inp, sample_index):
-                    if _num_samples(inp) <= 1000:
-                        return inp
-                    if isinstance(inp, (pd.DataFrame, pd.Series)):
-                        return inp.sample(n=1000, random_state=random_state)
-                    if isinstance(inp, np.ndarray):
-                        return inp[sample_index]
-                    if isinstance(inp, list):
-                        return inp[sample_index]
+                # TODO check that this file was already uploaded
 
                 with tempfile.TemporaryDirectory() as tmp_dir:
-                    with open(f"{tmp_dir}/x.pickle", "wb") as x_file:
-                        pickle.dump(sample(X, xy_sample_index), x_file)
-                    if y is not None:
-                        with open(f"{tmp_dir}/y.pickle", "wb") as y_file:
-                            pickle.dump(sample(y, xy_sample_index), y_file)
-                        if eval_set and _num_samples(eval_set[0][0]) > 0:
-                            eval_xy_sample_index = rnd.randint(0, _num_samples(eval_set[0][0]), size=1000)
-                            with open(f"{tmp_dir}/eval_x.pickle", "wb") as eval_x_file:
-                                pickle.dump(sample(eval_set[0][0], eval_xy_sample_index), eval_x_file)
-                            with open(f"{tmp_dir}/eval_y.pickle", "wb") as eval_y_file:
-                                pickle.dump(sample(eval_set[0][1], eval_xy_sample_index), eval_y_file)
+                    X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
+
+                    if y_ is not None:
+                        if isinstance(y_, pd.Series):
+                            y_ = y_.to_frame()
+                        y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
+                        if eval_set_ and _num_samples(eval_set_[0][0]) > 0:
+                            eval_x_ = eval_set_[0][0]
+                            eval_y_ = eval_set_[0][1]
+                            if isinstance(eval_x_, pd.Series):
+                                eval_x_ = eval_x_.to_frame()
+                            eval_x_.to_parquet(f"{tmp_dir}/eval_x.parquet", compression="zstd")
+                            if isinstance(eval_y_, pd.Series):
+                                eval_y_ = eval_y_.to_frame()
+                            eval_y_.to_parquet(f"{tmp_dir}/eval_y.parquet", compression="zstd")
                             self.rest_client.dump_input_files(
                                 trace_id,
-                                f"{tmp_dir}/x.pickle",
-                                f"{tmp_dir}/y.pickle",
-                                f"{tmp_dir}/eval_x.pickle",
-                                f"{tmp_dir}/eval_y.pickle",
+                                f"{tmp_dir}/x.parquet",
+                                f"{tmp_dir}/y.parquet",
+                                f"{tmp_dir}/eval_x.parquet",
+                                f"{tmp_dir}/eval_y.parquet",
                             )
                         else:
                             self.rest_client.dump_input_files(
                                 trace_id,
-                                f"{tmp_dir}/x.pickle",
-                                f"{tmp_dir}/y.pickle",
+                                f"{tmp_dir}/x.parquet",
+                                f"{tmp_dir}/y.parquet",
                             )
                     else:
                         self.rest_client.dump_input_files(
                             trace_id,
-                            f"{tmp_dir}/x.pickle",
+                            f"{tmp_dir}/x.parquet",
                         )
             except Exception:
                 self.logger.warning("Failed to dump input files", exc_info=True)
 
         try:
-            Thread(target=dump_task, daemon=True).start()
+            Thread(target=dump_task, args=(X, y, eval_set), daemon=True).start()
         except Exception:
             self.logger.warning("Failed to dump input files", exc_info=True)
 

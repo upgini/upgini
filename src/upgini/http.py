@@ -252,6 +252,7 @@ class _RestClient:
 
     # V2
     CHECK_UPLOADED_FILE_URL_FMT_V2 = SERVICE_ROOT_V2 + "search/check-file?fileUploadId={0}"
+    IS_FILE_UPLOADED_URL_FMT_V2 = SERVICE_ROOT_V2 + "search/files/exists?digest={0}"
     INITIAL_SEARCH_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/initial"
     INITIAL_SEARCH_WITHOUT_UPLOAD_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/initial-without-upload?fileUploadId={0}"
     VALIDATION_SEARCH_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/validation?initialSearchTaskId={0}"
@@ -272,6 +273,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
     SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
+    SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file"
     TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
@@ -410,32 +412,29 @@ class _RestClient:
         eval_x_path: Optional[str] = None,
         eval_y_path: Optional[str] = None,
     ):
-        api_path = self.SEARCH_DUMP_INPUT_FMT_V2
-        files = {}
-        with open(x_path, "rb") as x_file:
-            files["x"] = ("x.pickle", x_file, "application/octet-stream")
-            if y_path:
-                with open(y_path, "rb") as y_file:
-                    files["y"] = ("y.pickle", y_file, "application/octet-stream")
-                    if eval_x_path and eval_y_path:
-                        with open(eval_x_path, "rb") as eval_x_file, open(eval_y_path, "rb") as eval_y_file:
-                            files["eval_x"] = ("eval_x.pickle", eval_x_file, "application/octet-stream")
-                            files["eval_y"] = ("eval_y.pickle", eval_y_file, "application/octet-stream")
-                            self._with_unauth_retry(
-                                lambda: self._send_post_file_req_v2(
-                                    api_path, files, trace_id=trace_id, need_json_response=False
-                                )
-                            )
-                    else:
-                        self._with_unauth_retry(
-                            lambda: self._send_post_file_req_v2(
-                                api_path, files, trace_id=trace_id, need_json_response=False
-                            )
-                        )
+        api_path = self.SEARCH_DUMP_INPUT_FILE_FMT
+
+        def upload_with_check(path: str, file_name: str):
+            digest_sha256 = self.compute_file_digest(path)
+            if self.is_file_uploaded(trace_id, digest_sha256):
+                # print(f"File {path} was already uploaded with digest {digest_sha256}, skipping")
+                return
             else:
-                self._with_unauth_retry(
-                    lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
-                )
+                with open(path, "rb") as file:
+                    files = {"file": (file_name, file, "application/octet-stream")}
+                    self._with_unauth_retry(
+                        lambda: self._send_post_file_req_v2(
+                            api_path, files, trace_id=trace_id, need_json_response=False
+                        )
+                    )
+
+        upload_with_check(x_path, "x.parquet")
+        if y_path:
+            upload_with_check(y_path, "y.parquet")
+        if eval_x_path:
+            upload_with_check(eval_x_path, "eval_x.parquet")
+        if eval_y_path:
+            upload_with_check(eval_y_path, "eval_y.parquet")
 
     @staticmethod
     def compute_file_digest(filepath: str, algorithm="sha256", chunk_size=4096) -> str:
@@ -512,6 +511,11 @@ class _RestClient:
         response = self._with_unauth_retry(
             lambda: self._send_post_req(api_path, trace_id, pydantic_json_method(metadata)(exclude_none=True))
         )
+        return bool(response)
+
+    def is_file_uploaded(self, trace_id: str, digest: str) -> bool:
+        api_path = self.IS_FILE_UPLOADED_URL_FMT_V2.format(digest)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return bool(response)
 
     def initial_search_without_upload_v2(

@@ -35,7 +35,7 @@ class OnlineUploadingType(Enum):
 class DataSourcePublisher:
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
     ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Annually"]
-    DEFAULT_GENERATE_EMBEDDINGS = []
+    DEFAULT_GENERATE_EMBEDDINGS = dict()
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):
         self._rest_client = get_rest_client(endpoint, api_key)
@@ -60,7 +60,7 @@ class DataSourcePublisher:
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
         join_date_abs_limit_days: Optional[int] = None,
-        features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
+        features_for_embeddings: Optional[Dict[str, str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
         keep_features: Optional[List[str]] = None,
         date_features: Optional[List[str]] = None,
