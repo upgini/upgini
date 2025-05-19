@@ -1247,7 +1247,8 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
 
                     if updating_shaps is not None:
-                        self._update_shap_values(trace_id, fitting_X, updating_shaps, silent=not internal_call)
+                        decoded_X = self._decode_id_columns(fitting_X, columns_renaming)
+                        self._update_shap_values(trace_id, decoded_X, updating_shaps, silent=not internal_call)
 
                     metrics_df = pd.DataFrame(metrics)
                     mean_target_hdr = self.bundle.get("quality_metrics_mean_target_header")
@@ -3318,6 +3319,18 @@ if response.status_code == 200:
                 self.logger.warning(f"Unknown values in id columns: {unknown_dict}")
 
         return X, unknown_dict
+
+    def _decode_id_columns(self, X: pd.DataFrame, columns_renaming: Dict[str, str]):
+        columns_renaming = columns_renaming or {}
+        if self.id_columns and self.id_columns_encoder is not None:
+            inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
+            renamed_id_columns = [
+                inverse_columns_renaming.get(col, col) for col in self.id_columns_encoder.feature_names_in_
+            ]
+            decoded = self.id_columns_encoder.inverse_transform(X[renamed_id_columns].rename(columns=columns_renaming))
+            X[renamed_id_columns] = decoded
+
+        return X
 
     def _validate_X(self, X, is_transform=False) -> pd.DataFrame:
         if isinstance(X, pd.DataFrame):
