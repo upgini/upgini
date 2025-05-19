@@ -3058,7 +3058,17 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
     initial_train_df = pd.read_parquet(train_path)
 
     initial_eval1_df = pd.read_parquet(eval1_path)
+    initial_eval1_df = initial_eval1_df[
+        ~initial_eval1_df.set_index(["phone_num", "rep_date", "target"]).index.isin(
+            initial_train_df.set_index(["phone_num", "rep_date", "target"]).index
+        )
+    ]
     initial_eval2_df = pd.read_parquet(eval2_path)
+    initial_eval2_df = initial_eval2_df[
+        ~initial_eval2_df.set_index(["phone_num", "rep_date", "target"]).index.isin(
+            initial_train_df.set_index(["phone_num", "rep_date", "target"]).index
+        )
+    ]
 
     default_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
     Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 1_000
