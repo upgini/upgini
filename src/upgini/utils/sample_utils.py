@@ -92,12 +92,13 @@ def sample(
         fit_sample_rows = sample_config.fit_sample_rows
 
     if cv_type is not None and cv_type.is_time_series():
-        return sample_time_series_trunc(
+        return sample_time_series_train_eval(
             df,
-            sample_columns.ids,
-            sample_columns.date,
+            sample_columns,
             sample_config.fit_sample_rows_ts,
-            random_state,
+            trim_threshold=fit_sample_threshold,
+            max_rows=fit_sample_rows,
+            random_state=random_state,
             logger=logger,
             **kwargs,
         )
@@ -124,6 +125,68 @@ def sample(
         )
         df = df.sample(n=fit_sample_rows, random_state=random_state)
         logger.info(f"Shape after threshold resampling: {df.shape}")
+
+    return df
+
+
+def sample_time_series_train_eval(
+    df: pd.DataFrame,
+    sample_columns: SampleColumns,
+    sample_size: int,
+    trim_threshold: int,
+    max_rows: int,
+    random_state: int = 42,
+    logger: Optional[logging.Logger] = None,
+    bundle: Optional[ResourceBundle] = None,
+    **kwargs,
+):
+    if sample_columns.eval_set_index in df.columns:
+        train_df = df[df[sample_columns.eval_set_index] == 0]
+        eval_df = df[df[sample_columns.eval_set_index] > 0]
+    else:
+        train_df = df
+        eval_df = None
+
+    train_df = sample_time_series_trunc(
+        train_df, sample_columns.ids, sample_columns.date, sample_size, random_state, logger=logger, **kwargs
+    )
+    if sample_columns.ids and eval_df is not None:
+        missing_ids = (
+            eval_df[~eval_df[sample_columns.ids].isin(np.unique(train_df[sample_columns.ids]))][sample_columns.ids]
+            .dropna()
+            .drop_duplicates()
+            .values.tolist()
+        )
+        if missing_ids:
+            bundle = bundle or get_custom_bundle()
+            print(bundle.get("missing_ids_in_eval_set").format(missing_ids))
+            eval_df = eval_df.merge(train_df[sample_columns.ids].drop_duplicates())
+
+    if eval_df is not None:
+        if len(eval_df) > trim_threshold - len(train_df):
+            eval_df = sample_time_series_trunc(
+                eval_df,
+                sample_columns.ids,
+                sample_columns.date,
+                max_rows - len(train_df),
+                random_state,
+                logger=logger,
+                **kwargs,
+            )
+        df = pd.concat([train_df, eval_df])
+
+    elif len(train_df) > max_rows:
+        df = sample_time_series_trunc(
+            train_df,
+            sample_columns.ids,
+            sample_columns.date,
+            max_rows,
+            random_state,
+            logger=logger,
+            **kwargs,
+        )
+    else:
+        df = train_df
 
     return df
 
@@ -242,9 +305,7 @@ def sample_time_series(
 
 def balance_undersample_forced(
     df: pd.DataFrame,
-    target_column: str,
-    id_columns: Optional[List[str]],
-    date_column: str,
+    sample_columns: SampleColumns,
     task_type: ModelTaskType,
     cv_type: Optional[CVType],
     random_state: int,
@@ -268,7 +329,7 @@ def balance_undersample_forced(
     if warning_callback is not None:
         warning_callback(msg)
 
-    target = df[target_column].copy()
+    target = df[sample_columns.target].copy()
 
     vc = target.value_counts()
     max_class_value = vc.index[0]
@@ -280,11 +341,12 @@ def balance_undersample_forced(
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
     if cv_type is not None and cv_type.is_time_series():
         logger.warning(f"Sampling time series dataset from {len(df)} to {sample_size}")
-        resampled_data = sample_time_series_trunc(
+        resampled_data = sample_time_series_train_eval(
             df,
-            id_columns=id_columns,
-            date_column=date_column,
+            sample_columns=sample_columns,
             sample_size=sample_size,
+            trim_threshold=sample_size,
+            max_rows=sample_size,
             random_state=random_state,
             logger=logger,
         )
@@ -296,8 +358,8 @@ def balance_undersample_forced(
         logger.warning(msg)
 
         # fill up to min_sample_threshold by majority class
-        minority_class = df[df[target_column] == min_class_value]
-        majority_class = df[df[target_column] != min_class_value]
+        minority_class = df[df[sample_columns.target] == min_class_value]
+        majority_class = df[df[sample_columns.target] != min_class_value]
         logger.info(
             f"Min class count: {min_class_count}. Max class count: {max_class_count}."
             f" Rebalance sample size: {sample_size}"
