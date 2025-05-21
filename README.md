@@ -762,6 +762,15 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y, remove_outliers_calc_metrics=False)
 ```
 
+## Turn off generating features on search keys
+Upgini tries to generate features on email, date and datetime search keys. By default this generation is enabled. To disable it use parameter `generate_search_key_features` of FeaturesEnricher constructor:
+
+```python
+enricher = FeaturesEnricher(
+  search_keys={"date": SearchKey.DATE},
+  generate_search_key_features=False,
+)
+
 ## 🔑 Open up all capabilities of Upgini
 
 [Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features: 600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses

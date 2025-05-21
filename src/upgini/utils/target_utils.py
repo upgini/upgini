@@ -220,6 +220,7 @@ def calculate_psi(expected: pd.Series, actual: pd.Series) -> Union[float, Except
         test_distribution = actual.value_counts(bins=bins, normalize=True).sort_index().values
 
         # Calculate the PSI
-        return np.sum((train_distribution - test_distribution) * np.log(train_distribution / test_distribution))
+        ratio = np.where(test_distribution > 0, train_distribution / test_distribution, 1)
+        return np.sum((train_distribution - test_distribution) * np.log(ratio))
     except Exception as e:
         return e

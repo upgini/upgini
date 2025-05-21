@@ -5,6 +5,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional, Union
 
+import pandas as pd
+
 from upgini.errors import HttpError, ValidationError
 from upgini.http import LoggerFactory, get_rest_client
 from upgini.mdc import MDC
@@ -33,7 +35,7 @@ class OnlineUploadingType(Enum):
 class DataSourcePublisher:
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
     ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Annually"]
-    DEFAULT_GENERATE_EMBEDDINGS = []
+    DEFAULT_GENERATE_EMBEDDINGS = dict()
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):
         self._rest_client = get_rest_client(endpoint, api_key)
@@ -58,7 +60,7 @@ class DataSourcePublisher:
         hash_feature_names=False,
         snapshot_frequency_days: Optional[int] = None,
         join_date_abs_limit_days: Optional[int] = None,
-        features_for_embeddings: Optional[List[str]] = DEFAULT_GENERATE_EMBEDDINGS,
+        features_for_embeddings: Optional[Dict[str, str]] = DEFAULT_GENERATE_EMBEDDINGS,
         data_table_id_to_replace: Optional[str] = None,
         keep_features: Optional[List[str]] = None,
         date_features: Optional[List[str]] = None,
@@ -136,6 +138,25 @@ class DataSourcePublisher:
                     or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}
                 ) and not date_format:
                     raise ValidationError("date_format argument is required for PHONE+DATE and HEM+DATE search keys")
+
+                if secondary_search_keys:
+                    response = self._rest_client.get_active_ads_definitions()
+                    definitions = pd.DataFrame(response["adsDefinitions"])
+                    prod_secondary_definitions = definitions.query(
+                        "(secondarySearchKeys.astype('string') != '[]') & (adsDefinitionAccessType == 'PROD')"
+                    )[["name", "searchKeys", "secondarySearchKeys"]]
+                    for _, row in prod_secondary_definitions.iterrows():
+                        existing_secondary_keys = {item for sublist in row["secondarySearchKeys"] for item in sublist}
+                        if existing_secondary_keys == {v.value.name for v in secondary_search_keys.values()}:
+                            existing_search_keys = {item for sublist in row["searchKeys"] for item in sublist}
+                            if (
+                                existing_search_keys == {v.value.name for v in search_keys.values()}
+                                or ("IP" in str(existing_search_keys) and "IP" in str(search_keys.values()))
+                            ):
+                                raise ValidationError(
+                                    "ADS with the same PRIMARY_KEYS -> SECONDARY_KEYS mapping "
+                                    f"already exists: {row['name']}"
+                                )
 
                 request = {
                     "dataTableUri": data_table_uri,

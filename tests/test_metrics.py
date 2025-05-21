@@ -187,6 +187,9 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
     enricher.y = train["target1"]
 
     test = pd.read_parquet(os.path.join(BASE_DIR, "real_test_df.parquet"))
+    test = test[
+        ~test.set_index(["request_date", "target1"]).index.isin(train.set_index(["request_date", "target1"]).index)
+    ]
     enricher.eval_set = [(test.drop(columns=["system_record_id", "target1"]), test["target1"])]
 
     enriched_X = train.drop(columns="target1")
