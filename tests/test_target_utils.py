@@ -12,10 +12,9 @@ from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
 from upgini.utils.target_utils import (
     balance_undersample,
-    balance_undersample_time_series,
-    balance_undersample_time_series_trunc,
     define_task,
 )
+from upgini.utils.sample_utils import sample_time_series_trunc, sample_time_series
 
 
 def test_invalid_target():
@@ -154,7 +153,7 @@ def test_balance_undersampling_time_series_trim_ids():
     )
 
     # Test basic sampling with enough different IDs
-    balanced_df = balance_undersample_time_series(
+    balanced_df = sample_time_series(
         df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3
     )
     assert len(balanced_df) == 6
@@ -182,7 +181,7 @@ def test_balance_undersampling_time_series_trim_dates():
         }
     )
 
-    balanced_df = balance_undersample_time_series(
+    balanced_df = sample_time_series(
         df=df, id_columns=["id"], date_column="date", sample_size=4, min_different_ids_ratio=1.0
     )
     assert len(balanced_df) == 4
@@ -199,7 +198,7 @@ def test_balance_undersampling_time_series_multiple_ids():
         }
     )
 
-    balanced_df = balance_undersample_time_series(
+    balanced_df = sample_time_series(
         df=df, id_columns=["id1", "id2"], date_column="date", sample_size=4, min_different_ids_ratio=1.0
     )
     assert len(balanced_df) == 4
@@ -223,7 +222,7 @@ def test_balance_undersampling_time_series_no_ids():
             ],
         }
     )
-    balanced_df = balance_undersample_time_series(
+    balanced_df = sample_time_series(
         df=df, id_columns=[], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3
     )
     assert len(balanced_df) == 6
@@ -249,7 +248,7 @@ def test_balance_undersampling_time_series_shifted_dates():
         }
     )
 
-    balanced_df = balance_undersample_time_series(
+    balanced_df = sample_time_series(
         df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3
     )
     assert len(balanced_df) == 6
@@ -276,10 +275,10 @@ def test_balance_undersampling_time_series_random_seed():
         }
     )
 
-    balanced_df_1 = balance_undersample_time_series(
+    balanced_df_1 = sample_time_series(
         df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3, random_state=42
     )
-    balanced_df_2 = balance_undersample_time_series(
+    balanced_df_2 = sample_time_series(
         df=df, id_columns=["id"], date_column="date", sample_size=6, min_different_ids_ratio=2 / 3, random_state=24
     )
 
@@ -308,7 +307,7 @@ def test_balance_undersampling_time_series_without_recent_dates():
             ],
         }
     )
-    balanced_df_1 = balance_undersample_time_series(
+    balanced_df_1 = sample_time_series(
         df=df,
         id_columns=["id"],
         date_column="date",
@@ -317,7 +316,7 @@ def test_balance_undersampling_time_series_without_recent_dates():
         random_state=42,
         prefer_recent_dates=False,
     )
-    balanced_df_2 = balance_undersample_time_series(
+    balanced_df_2 = sample_time_series(
         df=df,
         id_columns=["id"],
         date_column="date",
@@ -358,7 +357,7 @@ def test_balance_undersampling_time_series_trunc():
     )
 
     # Test high frequency truncation
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df,
         id_columns=["id"],
         date_column="date",
@@ -372,7 +371,7 @@ def test_balance_undersampling_time_series_trunc():
     assert unique_dates(sampled_df) == ["2020-01-02", "2020-01-03"]
 
     # Test highfreq truncation with second choice
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df,
         id_columns=["id"],
         date_column="date",
@@ -386,7 +385,7 @@ def test_balance_undersampling_time_series_trunc():
     assert unique_dates(sampled_df) == ["2020-01-03"]
 
     # Test highfreq id truncation
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df,
         id_columns=["id"],
         date_column="date",
@@ -410,7 +409,7 @@ def test_balance_undersampling_time_series_trunc():
         }
     )
 
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df_lowfreq,
         id_columns=["id"],
         date_column="date",
@@ -424,7 +423,7 @@ def test_balance_undersampling_time_series_trunc():
     assert unique_dates(sampled_df) == ["2020-03-01", "2020-07-01"]
 
     # Test truncation with second choice
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df_lowfreq,
         id_columns=["id"],
         date_column="date",
@@ -438,7 +437,7 @@ def test_balance_undersampling_time_series_trunc():
     assert unique_dates(sampled_df) == ["2020-07-01"]
 
     # Test lowfreq id truncation
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df_lowfreq,
         id_columns=["id"],
         date_column="date",
@@ -452,7 +451,7 @@ def test_balance_undersampling_time_series_trunc():
     assert unique_dates(sampled_df) == ["2020-07-01"]
 
     # Test empty id_columns
-    sampled_df = balance_undersample_time_series_trunc(
+    sampled_df = sample_time_series_trunc(
         df=df,
         id_columns=None,
         date_column="date",

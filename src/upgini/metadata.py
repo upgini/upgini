@@ -159,6 +159,9 @@ class ModelTaskType(Enum):
     REGRESSION = "REGRESSION"
     TIMESERIES = "TIMESERIES"
 
+    def is_classification(self) -> bool:
+        return self in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
+
 
 class ModelLabelType(Enum):
     GINI = "gini"

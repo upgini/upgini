@@ -120,9 +120,9 @@ except Exception:
         CustomFallbackProgressBar as ProgressBar,
     )
 
+from upgini.utils.sample_utils import SampleColumns, SampleConfig, _num_samples, sample
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import (
-    balance_undersample_forced,
     calculate_psi,
     define_task,
 )
@@ -362,10 +362,8 @@ class FeaturesEnricher(TransformerMixin):
         self.columns_for_online_api = columns_for_online_api
         if columns_for_online_api is not None:
             self.runtime_parameters.properties["columns_for_online_api"] = ",".join(columns_for_online_api)
-        maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
-        if maybe_downsampling_limit is not None:
-            Dataset.FIT_SAMPLE_THRESHOLD = int(maybe_downsampling_limit)
-            Dataset.FIT_SAMPLE_ROWS = int(maybe_downsampling_limit)
+
+        self.sample_config = self._get_sample_config()
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
@@ -377,6 +375,19 @@ class FeaturesEnricher(TransformerMixin):
         self.data_sources_display_handle = None
         self.autofe_features_display_handle = None
         self.report_button_handle = None
+
+    def _get_sample_config(self):
+        maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
+        if maybe_downsampling_limit is not None:
+            return SampleConfig(
+                force_sample_size=Dataset.FORCE_SAMPLE_SIZE,
+                fit_sample_rows=int(maybe_downsampling_limit),
+                fit_sample_threshold=int(maybe_downsampling_limit),
+            )
+
+        return SampleConfig(
+            force_sample_size=Dataset.FORCE_SAMPLE_SIZE,
+        )
 
     def _get_api_key(self):
         return self._api_key
@@ -1505,7 +1516,7 @@ class FeaturesEnricher(TransformerMixin):
         checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
         validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set)
 
-        sampled_data = self._sample_data_for_metrics(
+        sampled_data = self._get_enriched_for_metrics(
             trace_id,
             validated_X,
             validated_y,
@@ -1693,7 +1704,7 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     @dataclass
-    class _SampledDataForMetrics:
+    class _EnrichedDataForMetrics:
         X_sampled: pd.DataFrame
         y_sampled: pd.Series
         enriched_X: pd.DataFrame
@@ -1701,7 +1712,7 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: Dict[str, SearchKey]
         columns_renaming: Dict[str, str]
 
-    def _sample_data_for_metrics(
+    def _get_enriched_for_metrics(
         self,
         trace_id: str,
         validated_X: Union[pd.DataFrame, pd.Series, np.ndarray, None],
@@ -1713,7 +1724,7 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: Optional[bool],
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
         cached_sampled_datasets = self.__cached_sampled_datasets.get(datasets_hash)
         if cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
@@ -1721,7 +1732,7 @@ class FeaturesEnricher(TransformerMixin):
             return self.__get_sampled_cached_enriched(datasets_hash, exclude_features_sources)
         elif len(self.feature_importances_) == 0:
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
-            return self.__sample_only_input(validated_X, validated_y, eval_set, is_demo_dataset)
+            return self.__get_enriched_as_input(validated_X, validated_y, eval_set, is_demo_dataset)
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
         elif (
             not self.imbalanced
@@ -1730,14 +1741,14 @@ class FeaturesEnricher(TransformerMixin):
             and self.df_with_original_index is not None
         ):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
-            return self.__sample_balanced(eval_set, trace_id, remove_outliers_calc_metrics)
+            return self.__get_enriched_from_fit(eval_set, trace_id, remove_outliers_calc_metrics)
         else:
             self.logger.info(
                 "Dataset is imbalanced or exclude_features_sources or X was passed or this is saved search."
                 " Run transform"
             )
             print(self.bundle.get("prepare_data_for_metrics"))
-            return self.__sample_imbalanced(
+            return self.__get_enriched_from_transform(
                 validated_X,
                 validated_y,
                 eval_set,
@@ -1749,7 +1760,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __get_sampled_cached_enriched(
         self, datasets_hash: str, exclude_features_sources: Optional[List[str]]
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming = (
             self.__cached_sampled_datasets[datasets_hash]
         )
@@ -1766,9 +1777,9 @@ class FeaturesEnricher(TransformerMixin):
             search_keys,
         )
 
-    def __sample_only_input(
+    def __get_enriched_as_input(
         self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[List[tuple]], is_demo_dataset: bool
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
 
         df = validated_X.copy()
@@ -1810,24 +1821,13 @@ class FeaturesEnricher(TransformerMixin):
         normalizer = Normalizer(self.bundle, self.logger)
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
-        # columns_renaming = {c: c for c in df.columns}
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
-
-        num_samples = _num_samples(df)
-        sample_threshold, sample_rows = (
-            (Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD, Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS)
-            if eval_set is not None
-            else (Dataset.FIT_SAMPLE_THRESHOLD, Dataset.FIT_SAMPLE_ROWS)
-        )
-
         df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID, TARGET, columns_renaming, silent=True)
+
         # Sample after sorting by system_record_id for idempotency
         df.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
-
-        if num_samples > sample_threshold:
-            self.logger.info(f"Downsampling from {num_samples} to {sample_rows}")
-            df = df.sample(n=sample_rows, random_state=self.random_state)
+        df = self.__downsample_for_metrics(df)
 
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -1856,12 +1856,12 @@ class FeaturesEnricher(TransformerMixin):
             search_keys,
         )
 
-    def __sample_balanced(
+    def __get_enriched_from_fit(
         self,
         eval_set: Optional[List[tuple]],
         trace_id: str,
         remove_outliers_calc_metrics: Optional[bool],
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
         search_keys = self.fit_search_keys
 
@@ -1960,7 +1960,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys,
         )
 
-    def __sample_imbalanced(
+    def __get_enriched_from_transform(
         self,
         validated_X: pd.DataFrame,
         validated_y: pd.Series,
@@ -1969,7 +1969,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id: str,
         progress_bar: Optional[ProgressBar],
         progress_callback: Optional[Callable[[SearchProgress], Any]],
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
         self.logger.info(f"Transform {'with' if has_eval_set else 'without'} eval_set")
@@ -2045,41 +2045,36 @@ class FeaturesEnricher(TransformerMixin):
         return df
 
     def __downsample_for_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        force_downsampling = self.__use_force_downsampling(df)
+
+        sample_columns = SampleColumns(
+            ids=self.id_columns,
+            date=self._get_date_column(self.search_keys),
+            target=TARGET,
+            eval_set_index=EVAL_SET_INDEX,
+        )
+
+        return sample(
+            df,
+            self.model_task_type,
+            self.cv,
+            self.sample_config,
+            sample_columns,
+            self.random_state,
+            force_downsampling=force_downsampling,
+            balance=False,
+            logger=self.logger,
+            bundle=self.bundle,
+            warning_callback=self.__log_warning,
+        )
+
+    def __use_force_downsampling(self, df: pd.DataFrame) -> bool:
         num_samples = _num_samples(df)
-        force_downsampling = (
+        return (
             not self.disable_force_downsampling
             and self.columns_for_online_api is not None
             and num_samples > Dataset.FORCE_SAMPLE_SIZE
         )
-
-        if force_downsampling:
-            self.logger.info(f"Force downsampling from {num_samples} to {Dataset.FORCE_SAMPLE_SIZE}")
-            return balance_undersample_forced(
-                df=df,
-                target_column=TARGET,
-                id_columns=self.id_columns,
-                date_column=self._get_date_column(self.search_keys),
-                task_type=self.model_task_type,
-                cv_type=self.cv,
-                random_state=self.random_state,
-                sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                logger=self.logger,
-                bundle=self.bundle,
-                warning_callback=self.__log_warning,
-            )
-        elif num_samples > Dataset.FIT_SAMPLE_THRESHOLD:
-            if EVAL_SET_INDEX in df.columns:
-                threshold = Dataset.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
-                sample_size = Dataset.FIT_SAMPLE_WITH_EVAL_SET_ROWS
-            else:
-                threshold = Dataset.FIT_SAMPLE_THRESHOLD
-                sample_size = Dataset.FIT_SAMPLE_ROWS
-
-            if num_samples > threshold:
-                self.logger.info(f"Downsampling from {num_samples} to {sample_size}")
-                return df.sample(n=sample_size, random_state=self.random_state)
-
-        return df
 
     def __extract_train_data(
         self, enriched_df: pd.DataFrame, x_columns: List[str]
@@ -2116,7 +2111,7 @@ class FeaturesEnricher(TransformerMixin):
         eval_set_sampled_dict: Dict[int, Tuple],
         columns_renaming: Dict[str, str],
         search_keys: Dict[str, SearchKey],
-    ) -> _SampledDataForMetrics:
+    ) -> _EnrichedDataForMetrics:
 
         self.__cached_sampled_datasets[datasets_hash] = (
             X_sampled,
@@ -2147,7 +2142,7 @@ class FeaturesEnricher(TransformerMixin):
             for k, v in search_keys.items()
             if reversed_renaming.get(k, k) in X_sampled.columns.to_list()
         }
-        return FeaturesEnricher._SampledDataForMetrics(
+        return FeaturesEnricher._EnrichedDataForMetrics(
             X_sampled=X_sampled,
             y_sampled=y_sampled,
             enriched_X=enriched_X,
@@ -2556,6 +2551,7 @@ if response.status_code == 200:
                 id_columns=self.__get_renamed_id_columns(columns_renaming),
                 date_column=self._get_date_column(search_keys),
                 date_format=self.date_format,
+                sample_config=self.sample_config,
                 rest_client=self.rest_client,
                 logger=self.logger,
                 bundle=self.bundle,
@@ -2854,7 +2850,7 @@ if response.status_code == 200:
         )
 
         df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
-        self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns])
+        self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns or []])
 
         self.fit_search_keys = self.search_keys.copy()
         df = self.__handle_index_search_keys(df, self.fit_search_keys)
@@ -3017,11 +3013,7 @@ if response.status_code == 200:
         runtime_parameters = self._get_copy_of_runtime_parameters()
 
         # Force downsampling to 7000 for API features generation
-        force_downsampling = (
-            not self.disable_force_downsampling
-            and self.columns_for_online_api is not None
-            and len(df) > Dataset.FORCE_SAMPLE_SIZE
-        )
+        force_downsampling = self.__use_force_downsampling(df)
         if force_downsampling:
             runtime_parameters.properties["fast_fit"] = True
 
@@ -3041,6 +3033,7 @@ if response.status_code == 200:
             logger=self.logger,
             bundle=self.bundle,
             warning_callback=self.__log_warning,
+            sample_config=self.sample_config,
         )
         dataset.columns_renaming = self.fit_columns_renaming
 
@@ -4681,35 +4674,6 @@ if response.status_code == 200:
             Thread(target=dump_task, daemon=True).start()
         except Exception:
             self.logger.warning("Failed to dump input files", exc_info=True)
-
-
-def _num_samples(x):
-    """Return number of samples in array-like x."""
-    if x is None:
-        return 0
-    message = "Expected sequence or array-like, got %s" % type(x)
-    if hasattr(x, "fit") and callable(x.fit):
-        # Don't get num_samples from an ensembles length!
-        raise TypeError(message)
-
-    if not hasattr(x, "__len__") and not hasattr(x, "shape"):
-        if hasattr(x, "__array__"):
-            x = np.asarray(x)
-        else:
-            raise TypeError(message)
-
-    if hasattr(x, "shape") and x.shape is not None:
-        if len(x.shape) == 0:
-            raise TypeError("Singleton array %r cannot be considered a valid collection." % x)
-        # Check that shape is returning an integer or default to len
-        # Dask dataframes may not return numeric shape[0] value
-        if isinstance(x.shape[0], numbers.Integral):
-            return x.shape[0]
-
-    try:
-        return len(x)
-    except TypeError as type_error:
-        raise TypeError(message) from type_error
 
 
 def is_frames_equal(first, second, bundle: ResourceBundle) -> bool:
