@@ -1,10 +1,9 @@
-from dataclasses import Field, dataclass, field
+from dataclasses import dataclass, field
 import logging
 import numbers
 from typing import Callable, List, Optional
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
 
 from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
@@ -31,7 +30,7 @@ FIT_SAMPLE_THRESHOLD_WITH_EVAL_SET = 200_000
 
 @dataclass
 class SampleConfig:
-    force_sample_size: int
+    force_sample_size: int = 7000
     ts_min_different_ids_ratio: float = TS_MIN_DIFFERENT_IDS_RATIO
     ts_default_high_freq_trunc_lengths: List[pd.DateOffset] = field(
         default_factory=TS_DEFAULT_HIGH_FREQ_TRUNC_LENGTHS.copy
@@ -144,8 +143,11 @@ def sample_time_series_trunc(
     if id_columns is None:
         id_columns = []
     # Convert date column to datetime
-    dates_df = df[id_columns + [date_column]].copy()
-    dates_df[date_column] = pd.to_datetime(dates_df[date_column], unit="ms")
+    dates_df = df[id_columns + [date_column]].copy().reset_index(drop=True)
+    if pd.api.types.is_numeric_dtype(dates_df[date_column]):
+        dates_df[date_column] = pd.to_datetime(dates_df[date_column], unit="ms")
+    else:
+        dates_df[date_column] = pd.to_datetime(dates_df[date_column])
 
     time_unit = get_most_frequent_time_unit(dates_df, id_columns, date_column)
     if logger is not None:
@@ -175,7 +177,7 @@ def sample_time_series_trunc(
                 sampled_df, id_columns, date_column, sample_size, random_state, logger=logger, **kwargs
             )
 
-    return df.loc[sampled_df.index]
+    return df.iloc[sampled_df.index]
 
 
 def sample_time_series(

@@ -243,6 +243,7 @@ class FeaturesEnricher(TransformerMixin):
         disable_force_downsampling: bool = False,
         id_columns: Optional[List[str]] = None,
         generate_search_key_features: bool = True,
+        sample_config: Optional[SampleConfig] = None,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -362,7 +363,7 @@ class FeaturesEnricher(TransformerMixin):
         if columns_for_online_api is not None:
             self.runtime_parameters.properties["columns_for_online_api"] = ",".join(columns_for_online_api)
 
-        self.sample_config = self._get_sample_config()
+        self.sample_config = self._get_sample_config(sample_config)
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
@@ -375,18 +376,15 @@ class FeaturesEnricher(TransformerMixin):
         self.autofe_features_display_handle = None
         self.report_button_handle = None
 
-    def _get_sample_config(self):
+    def _get_sample_config(self, sample_config: Optional[SampleConfig] = None):
+        sample_config = sample_config or SampleConfig(force_sample_size=Dataset.FORCE_SAMPLE_SIZE)
+
         maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
         if maybe_downsampling_limit is not None:
-            return SampleConfig(
-                force_sample_size=Dataset.FORCE_SAMPLE_SIZE,
-                fit_sample_rows=int(maybe_downsampling_limit),
-                fit_sample_threshold=int(maybe_downsampling_limit),
-            )
+            sample_config.fit_sample_rows = int(maybe_downsampling_limit)
+            sample_config.fit_sample_threshold = int(maybe_downsampling_limit)
 
-        return SampleConfig(
-            force_sample_size=Dataset.FORCE_SAMPLE_SIZE,
-        )
+        return sample_config
 
     def _get_api_key(self):
         return self._api_key
@@ -948,7 +946,7 @@ class FeaturesEnricher(TransformerMixin):
             if self.X is None:
                 self.X = X
                 self.id_columns_encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1).fit(
-                    X[self.id_columns]
+                    X[self.id_columns or []]
                 )
             if self.y is None:
                 self.y = y
@@ -1592,7 +1590,7 @@ class FeaturesEnricher(TransformerMixin):
         constant_columns = [
             c
             for c in FeaturesValidator.find_constant_features(fitting_X)
-            if self.fit_columns_renaming.get(c, c) not in self.id_columns
+            if self.fit_columns_renaming.get(c, c) not in (self.id_columns or [])
         ]
         if len(constant_columns) > 0:
             self.logger.warning(f"Constant columns {constant_columns} will be dropped for metrics calculation")
@@ -2025,11 +2023,12 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __combine_train_and_eval_sets(
-        self, X: pd.DataFrame, y: pd.Series, eval_set: Optional[List[tuple]]
+        self, X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[List[tuple]] = None
     ) -> pd.DataFrame:
         df = X.copy()
-        df[TARGET] = y
-        if eval_set is None:
+        if y is not None:
+            df[TARGET] = y
+        if not eval_set:
             return df
 
         df[EVAL_SET_INDEX] = 0
@@ -2037,7 +2036,8 @@ class FeaturesEnricher(TransformerMixin):
         for idx, eval_pair in enumerate(eval_set):
             eval_x, eval_y = eval_pair
             eval_df_with_index = eval_x.copy()
-            eval_df_with_index[TARGET] = eval_y
+            if eval_y is not None:
+                eval_df_with_index[TARGET] = eval_y
             eval_df_with_index[EVAL_SET_INDEX] = idx + 1
             df = pd.concat([df, eval_df_with_index])
 
@@ -3276,13 +3276,13 @@ if response.status_code == 200:
     def _validate_train_eval(
         self,
         X: pd.DataFrame,
-        y: pd.Series,
-        eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]],
+        y: Optional[pd.Series] = None,
+        eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]] = None,
         is_transform: bool = False,
     ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
         validated_X = self._validate_X(X, is_transform)
-        validated_y = self._validate_y(X, y)
-        validated_eval_set = self._validate_eval_set(X, eval_set)
+        validated_y = self._validate_y(validated_X, y)
+        validated_eval_set = self._validate_eval_set(validated_X, eval_set)
         return validated_X, validated_y, validated_eval_set
 
     def _encode_id_columns(
@@ -3499,7 +3499,7 @@ if response.status_code == 200:
             raise ValidationError(self.bundle.get("binary_target_eval_unique_count_not_2").format(eval_y_nunique))
 
         # Check for duplicates between train and eval sets by comparing all values
-        train_eval_intersection = pd.merge(X, validated_eval_X, how='inner')
+        train_eval_intersection = pd.merge(X, validated_eval_X, how="inner")
         if len(train_eval_intersection) > 0:
             raise ValidationError(self.bundle.get("eval_x_has_train_samples"))
 
@@ -4029,7 +4029,7 @@ if response.status_code == 200:
         if features_meta is None:
             raise Exception(self.bundle.get("missing_features_meta"))
 
-        return [f.name for f in features_meta if f.type == "categorical" and f.name not in self.id_columns]
+        return [f.name for f in features_meta if f.type == "categorical" and f.name not in (self.id_columns or [])]
 
     def __prepare_feature_importances(
         self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
