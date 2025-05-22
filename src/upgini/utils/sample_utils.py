@@ -173,6 +173,7 @@ def sample_time_series_train_eval(
                 logger=logger,
                 **kwargs,
             )
+        logger.info(f"Eval set size: {len(eval_df)}")
         df = pd.concat([train_df, eval_df])
 
     elif len(train_df) > max_rows:
@@ -187,6 +188,8 @@ def sample_time_series_train_eval(
         )
     else:
         df = train_df
+
+    logger.info(f"Train set size: {len(df)}")
 
     return df
 
