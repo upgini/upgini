@@ -302,7 +302,7 @@ class FeaturesEnricher(TransformerMixin):
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
-        self.zero_shap_client_features = []
+        self.external_source_feature_names = []
         self.feature_importances_ = []
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
@@ -981,7 +981,7 @@ class FeaturesEnricher(TransformerMixin):
                 client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
-                if self.id_columns_encoder is not None:
+                if self.id_columns and self.id_columns_encoder is not None:
                     if cat_features_from_backend:
                         cat_features_from_backend = [
                             c
@@ -2359,7 +2359,9 @@ if response.status_code == 200:
 
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
-            columns_to_drop = [c for c in df.columns if c in self.feature_names_ and c not in (self.id_columns or [])]
+            columns_to_drop = [
+                c for c in df.columns if c in self.feature_names_ and c in self.external_source_feature_names
+            ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
                 self.logger.warning(msg)
@@ -2667,7 +2669,7 @@ if response.status_code == 200:
             selecting_columns = [
                 c
                 for c in itertools.chain(validated_Xy.columns.tolist(), selected_generated_features)
-                if c not in self.zero_shap_client_features or c in (self.id_columns or [])
+                if c not in self.external_source_feature_names or c in (self.id_columns or [])
             ]
             selecting_columns.extend(c for c in result.columns if c in filtered_columns and c not in selecting_columns)
             if add_fit_system_record_id:
@@ -4061,7 +4063,7 @@ if response.status_code == 200:
         df = df.rename(columns=original_names_dict)
 
         self.feature_names_ = []
-        self.zero_shap_client_features = []
+        self.external_source_feature_names = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
@@ -4092,10 +4094,11 @@ if response.status_code == 200:
             original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
             is_client_feature = original_name in df.columns
 
+            if not is_client_feature:
+                self.external_source_feature_names.append(original_name)
+
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
-                if is_client_feature and self.fit_select_features:
-                    self.zero_shap_client_features.append(original_name)
                 continue
 
             # Use only important features
