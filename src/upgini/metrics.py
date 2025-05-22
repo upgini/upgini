@@ -815,7 +815,7 @@ class CatBoostWrapper(EstimatorWrapper):
                 else:
                     encoded = cat_encoder.transform(x[self.cat_features])
                     cat_features = encoded.columns.to_list()
-                x[self.cat_features] = encoded
+                x.loc[:, self.cat_features] = encoded
             else:
                 cat_features = self.cat_features
 
