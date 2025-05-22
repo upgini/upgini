@@ -252,6 +252,7 @@ def sample_time_series(
     min_different_ids_ratio: float = TS_MIN_DIFFERENT_IDS_RATIO,
     prefer_recent_dates: bool = True,
     logger: Optional[logging.Logger] = None,
+    **kwargs,
 ):
     def ensure_tuple(x):
         return tuple([x]) if not isinstance(x, tuple) else x
