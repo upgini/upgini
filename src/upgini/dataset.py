@@ -576,8 +576,8 @@ class Dataset:  # (pd.DataFrame):
     def _set_sample_size(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
         if runtime_parameters is not None and runtime_parameters.properties is not None:
             if self.cv_type is not None and self.cv_type.is_time_series():
-                runtime_parameters.properties["sample_size"] = self.FIT_SAMPLE_ROWS_TS
-                runtime_parameters.properties["iter0_sample_size"] = self.FIT_SAMPLE_ROWS_TS
+                runtime_parameters.properties["sample_size"] = self.sample_config.fit_sample_rows_ts
+                runtime_parameters.properties["iter0_sample_size"] = self.sample_config.fit_sample_rows_ts
         return runtime_parameters
 
     def _clean_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
