@@ -303,6 +303,7 @@ class FeaturesEnricher(TransformerMixin):
         self.metrics: Optional[pd.DataFrame] = None
         self.feature_names_ = []
         self.external_source_feature_names = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
@@ -2360,7 +2361,10 @@ if response.status_code == 200:
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
             columns_to_drop = [
-                c for c in df.columns if c in self.feature_names_ and c in self.external_source_feature_names
+                c
+                for c in df.columns
+                if c in self.feature_names_
+                and (c in self.external_source_feature_names or c in self.zero_shap_client_features)
             ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
@@ -2669,7 +2673,7 @@ if response.status_code == 200:
             selecting_columns = [
                 c
                 for c in itertools.chain(validated_Xy.columns.tolist(), selected_generated_features)
-                if c not in self.external_source_feature_names or c in (self.id_columns or [])
+                if c not in self.zero_shap_client_features or c in (self.id_columns or [])
             ]
             selecting_columns.extend(c for c in result.columns if c in filtered_columns and c not in selecting_columns)
             if add_fit_system_record_id:
@@ -4064,6 +4068,7 @@ if response.status_code == 200:
 
         self.feature_names_ = []
         self.external_source_feature_names = []
+        self.zero_shap_client_features = []
         self.feature_importances_ = []
         features_info = []
         features_info_without_links = []
@@ -4099,6 +4104,8 @@ if response.status_code == 200:
 
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
+                if is_client_feature and self.fit_select_features:
+                    self.zero_shap_client_features.append(original_name)
                 continue
 
             # Use only important features
