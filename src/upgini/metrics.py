@@ -332,7 +332,7 @@ class EstimatorWrapper:
         self.groups = groups
         self.text_features = text_features
         self.logger = logger or logging.getLogger()
-        self.droped_features = []
+        self.dropped_features = []
         self.converted_to_int = []
         self.converted_to_str = []
         self.converted_to_numeric = []
@@ -381,10 +381,11 @@ class EstimatorWrapper:
         x, y, groups = self._prepare_data(x, y, groups=self.groups)
 
         self.logger.info(f"Before preparing data columns: {x.columns.to_list()}")
-        self.droped_features = []
+        self.dropped_features = []
         self.converted_to_int = []
         self.converted_to_str = []
         self.converted_to_numeric = []
+
         for c in x.columns:
 
             if _get_unique_count(x[c]) < 2:
@@ -392,7 +393,7 @@ class EstimatorWrapper:
                 if c in self.cat_features:
                     self.cat_features.remove(c)
                 x.drop(columns=[c], inplace=True)
-                self.droped_features.append(c)
+                self.dropped_features.append(c)
             elif self.text_features is not None and c in self.text_features:
                 x[c] = x[c].astype(str)
                 self.converted_to_str.append(c)
@@ -427,16 +428,16 @@ class EstimatorWrapper:
                     except (ValueError, TypeError):
                         self.logger.warning(f"Remove feature {c} because it is not numeric and not in cat_features")
                         x.drop(columns=[c], inplace=True)
-                        self.droped_features.append(c)
+                        self.dropped_features.append(c)
 
         return x, y, groups, {}
 
     def _prepare_to_calculate(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, np.ndarray, dict]:
         x, y, _ = self._prepare_data(x, y)
 
-        if self.droped_features:
-            self.logger.info(f"Drop features on calculate metrics: {self.droped_features}")
-            x = x.drop(columns=self.droped_features)
+        if self.dropped_features:
+            self.logger.info(f"Drop features on calculate metrics: {self.dropped_features}")
+            x = x.drop(columns=self.dropped_features)
 
         if self.converted_to_int:
             self.logger.info(f"Convert to int features on calculate metrics: {self.converted_to_int}")
@@ -797,7 +798,7 @@ class CatBoostWrapper(EstimatorWrapper):
                     )
                 for f in high_cardinality_features:
                     self.text_features.remove(f)
-                    self.droped_features.append(f)
+                    self.dropped_features.append(f)
                     x = x.drop(columns=f, errors="ignore")
                 return super().cross_val_predict(x, y, baseline_score_column)
             else:
@@ -814,7 +815,7 @@ class CatBoostWrapper(EstimatorWrapper):
                 else:
                     encoded = cat_encoder.transform(x[self.cat_features])
                     cat_features = encoded.columns.to_list()
-                x[self.cat_features] = encoded
+                x.loc[:, self.cat_features] = encoded
             else:
                 cat_features = self.cat_features
 
@@ -897,7 +898,7 @@ class LightGBMWrapper(EstimatorWrapper):
         for c in x.columns:
             if x[c].dtype not in ["category", "int64", "float64", "bool"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
-                self.droped_features.append(c)
+                self.dropped_features.append(c)
                 x = x.drop(columns=c, errors="ignore")
         return x, y_numpy, groups, params
 
@@ -988,7 +989,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
         for c in x.columns:
             if x[c].dtype not in ["category", "int64", "float64", "bool"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
-                self.droped_features.append(c)
+                self.dropped_features.append(c)
                 x = x.drop(columns=c, errors="ignore")
         return x, y_numpy, groups, params
 

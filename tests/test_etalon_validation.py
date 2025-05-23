@@ -18,6 +18,7 @@ from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
+from upgini.utils.sample_utils import SampleConfig
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -101,9 +102,9 @@ def test_string_ip_to_bytes_conversion():
     assert isinstance(df["ip_prefix"].iloc[0], str)
     assert df["ip_binary"].isnull().sum() == 2
     assert df["ip_prefix"].isnull().sum() == 2
-    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
+    assert df["ip_binary"].iloc[0] == b"\xc0\xa8\x01\x01"
     assert df["ip_prefix"].iloc[0] == "192.168"
-    assert df["ip_binary"].iloc[1] == b'\x10P\x00\x00\x00\x00\x00\x00\x00\x05\x06\x000\x0c2k'
+    assert df["ip_binary"].iloc[1] == b"\x10P\x00\x00\x00\x00\x00\x00\x00\x05\x06\x000\x0c2k"
     assert df["ip_prefix"].iloc[1] == "1050:0000"
 
 
@@ -123,7 +124,7 @@ def test_python_ip_to_bytes_conversion():
     assert columns_renaming == {"ip_binary": "original_ip", "ip_prefix": "original_ip"}
     assert isinstance(df["ip_binary"].iloc[0], bytes)
     assert isinstance(df["ip_prefix"].iloc[0], str)
-    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
+    assert df["ip_binary"].iloc[0] == b"\xc0\xa8\x01\x01"
     assert df["ip_prefix"].iloc[0] == "192.168"
 
 
@@ -145,11 +146,11 @@ def test_ip_v6_conversion():
 
     assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
     assert isinstance(df["ip_binary"].iloc[0], bytes)
-    assert df["ip_binary"].iloc[0] == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR['
-    assert df["ip_binary"].iloc[1] == b'(\x06\x02\xf0\x92\xc0\xff\xa40\xebI\x82\x0bN\x8a\x97'
-    assert df["ip_binary"].iloc[2] == b'$\x01I\x00?\xc2,\xe6\x00\x00\x00\x00\x0c4\x81t'
-    assert df["ip_binary"].iloc[3] == b'$\t@\x81\x0e\x14\xcfu\x00\x00\x00\x00\xf4\n\x0b\x0f'
-    assert df["ip_binary"].iloc[4] == b'$\x02\x81\x00!\x02\xae-\x00\x00\x00\x00<\xe0\xe3Q'
+    assert df["ip_binary"].iloc[0] == b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR["
+    assert df["ip_binary"].iloc[1] == b"(\x06\x02\xf0\x92\xc0\xff\xa40\xebI\x82\x0bN\x8a\x97"
+    assert df["ip_binary"].iloc[2] == b"$\x01I\x00?\xc2,\xe6\x00\x00\x00\x00\x0c4\x81t"
+    assert df["ip_binary"].iloc[3] == b"$\t@\x81\x0e\x14\xcfu\x00\x00\x00\x00\xf4\n\x0b\x0f"
+    assert df["ip_binary"].iloc[4] == b"$\x02\x81\x00!\x02\xae-\x00\x00\x00\x00<\xe0\xe3Q"
     assert df["ip_prefix"].iloc[0] == "0000:0000"
     assert df["ip_prefix"].iloc[1] == "2806:02f0"
     assert df["ip_prefix"].iloc[2] == "2401:4900"
@@ -165,8 +166,8 @@ def test_int_ip_to_bytes_conversion():
     converter = IpSearchKeyConverter("ip", {"ip": SearchKey.IP}, columns_renaming, [])
     df = converter.convert(df)
 
-    assert df["ip_binary"].iloc[0] == b'\xc0\xa8\x01\x01'
-    assert df["ip_binary"].iloc[1] == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR['
+    assert df["ip_binary"].iloc[0] == b"\xc0\xa8\x01\x01"
+    assert df["ip_binary"].iloc[1] == b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xcf\xbe\xfeR["
     assert df["ip_prefix"].iloc[0] == "192.168"
     assert df["ip_prefix"].iloc[1] == "0000:0000"
 
@@ -308,7 +309,7 @@ def test_imbalanced_target():
         "target": FileColumnMeaningType.TARGET,
     }
     dataset.task_type = ModelTaskType.MULTICLASS
-    dataset.MULTICLASS_MIN_SAMPLE_THRESHOLD = 1000
+    dataset.sample_config = SampleConfig(force_sample_size=7000, multiclass_min_sample_threshold=1000)
     dataset._Dataset__resample()
     assert len(dataset) == 1600
     value_counts = dataset.data["target"].value_counts()
@@ -640,27 +641,19 @@ def test_downsampling_binary():
     }
     dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.BINARY
+    dataset.sample_config = SampleConfig(
+        force_sample_size=7000,
+        binary_min_sample_threshold=3,
+        fit_sample_threshold=1,
+        fit_sample_rows=1,
+        fit_sample_rows_with_eval_set=1,
+        fit_sample_threshold_with_eval_set=1,
+    )
+    dataset.MIN_TARGET_CLASS_ROWS = 1
+    dataset.IMBALANCE_THESHOLD = 0.6
 
-    old_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
-    old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
-    old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
-    old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
-    old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
-    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 3
-    Dataset.MIN_TARGET_CLASS_ROWS = 1
-    Dataset.IMBALANCE_THESHOLD = 0.6
-    Dataset.FIT_SAMPLE_THRESHOLD = 1
-    Dataset.FIT_SAMPLE_ROWS = 1
-
-    try:
-        dataset._Dataset__resample()
-        assert len(dataset.data) == 1
-    finally:
-        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
-        Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
-        Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
-        Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
-        Dataset.FIT_SAMPLE_ROWS = old_fit_sample_rows
+    dataset._Dataset__resample()
+    assert len(dataset.data) == 1
 
 
 def test_downsampling_multiclass():
@@ -684,23 +677,16 @@ def test_downsampling_multiclass():
     dataset = Dataset("tds", df=df, meaning_types=meaning_types, search_keys=[("date",)])
     dataset.task_type = ModelTaskType.MULTICLASS
 
-    old_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
-    old_min_target_class_rows = Dataset.MIN_TARGET_CLASS_ROWS
-    old_imbalance_threshold = Dataset.IMBALANCE_THESHOLD
-    old_fit_sample_threshold = Dataset.FIT_SAMPLE_THRESHOLD
-    old_fit_sample_rows = Dataset.FIT_SAMPLE_ROWS
-    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 3
-    Dataset.MIN_TARGET_CLASS_ROWS = 1
-    Dataset.IMBALANCE_THESHOLD = 0.8
-    Dataset.FIT_SAMPLE_THRESHOLD = 1
-    Dataset.FIT_SAMPLE_ROWS = 1
+    dataset.sample_config = SampleConfig(
+        force_sample_size=7000,
+        multiclass_min_sample_threshold=3,
+        fit_sample_threshold=1,
+        fit_sample_rows=1,
+        fit_sample_rows_with_eval_set=1,
+        fit_sample_threshold_with_eval_set=1,
+    )
+    dataset.MIN_TARGET_CLASS_ROWS = 1
+    dataset.IMBALANCE_THESHOLD = 0.8
 
-    try:
-        dataset._Dataset__resample()
-        assert len(dataset.data) == 1
-    finally:
-        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = old_min_sample_threshold
-        Dataset.MIN_TARGET_CLASS_ROWS = old_min_target_class_rows
-        Dataset.IMBALANCE_THESHOLD = old_imbalance_threshold
-        Dataset.FIT_SAMPLE_THRESHOLD = old_fit_sample_threshold
-        Dataset.FIT_SAMPLE_ROWS = old_fit_sample_rows
+    dataset._Dataset__resample()
+    assert len(dataset.data) == 1
