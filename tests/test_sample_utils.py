@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from typing import List
 from upgini.utils.sample_utils import sample_time_series_trunc, sample_time_series, sample_time_series_train_eval
