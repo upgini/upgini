@@ -190,3 +190,11 @@ class Bin(PandasOperator):
         if isinstance(value, str):
             return json.loads(value)
         return value
+
+
+class Cluster(PandasOperator):
+    name: str = "cluster"
+    is_unary: bool = True
+    input_type: Optional[str] = "vector"
+    output_type: Optional[str] = "category"
+    is_categorical: bool = True
