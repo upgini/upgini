@@ -2049,8 +2049,7 @@ class FeaturesEnricher(TransformerMixin):
         for idx, eval_pair in enumerate(eval_set):
             eval_x, eval_y = eval_pair
             eval_df_with_index = eval_x.copy()
-            if eval_y is not None:
-                eval_df_with_index[TARGET] = eval_y
+            eval_df_with_index[TARGET] = eval_y
             eval_df_with_index[EVAL_SET_INDEX] = idx + 1
             df = pd.concat([df, eval_df_with_index])
 
@@ -3299,7 +3298,7 @@ if response.status_code == 200:
         is_transform: bool = False,
     ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
         validated_X = self._validate_X(X, is_transform)
-        validated_y = self._validate_y(validated_X, y)
+        validated_y = self._validate_y(validated_X, y, enforce_y=not is_transform)
         validated_eval_set = self._validate_eval_set(validated_X, eval_set)
         return validated_X, validated_y, validated_eval_set
 
@@ -3383,8 +3382,8 @@ if response.status_code == 200:
 
         return validated_X
 
-    def _validate_y(self, X: pd.DataFrame, y) -> Optional[pd.Series]:
-        if y is None:
+    def _validate_y(self, X: pd.DataFrame, y, enforce_y: bool = True) -> Optional[pd.Series]:
+        if y is None and not enforce_y:
             return None
         if (
             not isinstance(y, pd.Series)
