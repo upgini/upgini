@@ -38,11 +38,7 @@ from upgini.metadata import (
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.target_utils import (
-    balance_undersample,
-    balance_undersample_forced,
-    balance_undersample_time_series_trunc,
-)
+from upgini.utils.sample_utils import SampleColumns, SampleConfig, sample
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -52,20 +48,10 @@ except Exception:
     )
 
 
-class Dataset:  # (pd.DataFrame):
+class Dataset:
     MIN_ROWS_COUNT = 100
     MAX_ROWS = 200_000
-    FIT_SAMPLE_ROWS = 200_000
-    FIT_SAMPLE_THRESHOLD = 200_000
-    FIT_SAMPLE_WITH_EVAL_SET_ROWS = 200_000
-    FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD = 200_000
-    FIT_SAMPLE_THRESHOLD_TS = 54_000
-    FIT_SAMPLE_ROWS_TS = 54_000
-    BINARY_MIN_SAMPLE_THRESHOLD = 5_000
-    MULTICLASS_MIN_SAMPLE_THRESHOLD = 25_000
     IMBALANCE_THESHOLD = 0.6
-    BINARY_BOOTSTRAP_LOOPS = 5
-    MULTICLASS_BOOTSTRAP_LOOPS = 2
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
@@ -88,6 +74,7 @@ class Dataset:  # (pd.DataFrame):
         date_column: Optional[str] = None,
         id_columns: Optional[List[str]] = None,
         random_state: Optional[int] = None,
+        sample_config: Optional[SampleConfig] = None,
         rest_client: Optional[_RestClient] = None,
         logger: Optional[logging.Logger] = None,
         bundle: Optional[ResourceBundle] = None,
@@ -95,6 +82,7 @@ class Dataset:  # (pd.DataFrame):
         **kwargs,
     ):
         self.bundle = bundle or get_custom_bundle()
+        self.sample_config = sample_config or SampleConfig(force_sample_size=self.FORCE_SAMPLE_SIZE)
         if df is not None:
             data = df.copy()
         elif path is not None:
@@ -233,109 +221,70 @@ class Dataset:  # (pd.DataFrame):
                     raise ValidationError(self.bundle.get("dataset_invalid_timeseries_target").format(target.dtype))
 
     def __resample(self, force_downsampling=False):
-        # self.logger.info("Resampling etalon")
-        # Resample imbalanced target. Only train segment (without eval_set)
-        if force_downsampling:
-            target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
-            self.data = balance_undersample_forced(
-                df=self.data,
-                target_column=target_column,
-                task_type=self.task_type,
-                cv_type=self.cv_type,
-                date_column=self.date_column,
-                id_columns=self.id_columns,
-                random_state=self.random_state,
-                sample_size=self.FORCE_SAMPLE_SIZE,
-                logger=self.logger,
-                bundle=self.bundle,
-                warning_callback=self.warning_callback,
-            )
-            return
 
-        if EVAL_SET_INDEX in self.data.columns:
+        if EVAL_SET_INDEX in self.data.columns and not force_downsampling:
             train_segment = self.data[self.data[EVAL_SET_INDEX] == 0]
         else:
             train_segment = self.data
 
-        if self.task_type == ModelTaskType.MULTICLASS or (
-            self.task_type == ModelTaskType.BINARY and len(train_segment) > self.BINARY_MIN_SAMPLE_THRESHOLD
-        ):
-            count = len(train_segment)
-            target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
-            target = train_segment[target_column]
-            target_classes_count = target.nunique()
+        self.imbalanced = self.__is_imbalanced(train_segment)
 
-            if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
-                msg = self.bundle.get("dataset_to_many_multiclass_targets").format(
-                    target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
-                )
-                self.logger.warning(msg)
-                raise ValidationError(msg)
+        sample_columns = SampleColumns(
+            ids=self.id_columns,
+            date=self.date_column,
+            target=self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET),
+            eval_set_index=EVAL_SET_INDEX,
+        )
 
-            vc = target.value_counts()
-            min_class_value = vc.index[len(vc) - 1]
-            min_class_count = vc[min_class_value]
+        self.data = sample(
+            train_segment if self.imbalanced else self.data,  # for imbalanced data we will be doing transform anyway
+            self.task_type,
+            self.cv_type,
+            self.sample_config,
+            sample_columns,
+            self.random_state,
+            balance=self.imbalanced,
+            force_downsampling=force_downsampling,
+            logger=self.logger,
+            bundle=self.bundle,
+            warning_callback=self.warning_callback,
+        )
 
-            if min_class_count < self.MIN_TARGET_CLASS_ROWS:
-                msg = self.bundle.get("dataset_rarest_class_less_min").format(
-                    min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
-                )
-                self.logger.warning(msg)
-                raise ValidationError(msg)
+    def __is_imbalanced(self, data: pd.DataFrame) -> bool:
+        if self.task_type is None or not self.task_type.is_classification():
+            return False
 
-            min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
-            min_class_threshold = min_class_percent * count
+        if self.task_type == ModelTaskType.BINARY and len(data) <= self.sample_config.binary_min_sample_threshold:
+            return False
 
-            # If min class count less than 30% for binary or (60 / classes_count)% for multiclass
-            if min_class_count < min_class_threshold:
-                self.imbalanced = True
-                self.data = balance_undersample(
-                    df=train_segment,
-                    target_column=target_column,
-                    task_type=self.task_type,
-                    random_state=self.random_state,
-                    binary_min_sample_threshold=self.BINARY_MIN_SAMPLE_THRESHOLD,
-                    multiclass_min_sample_threshold=self.MULTICLASS_MIN_SAMPLE_THRESHOLD,
-                    binary_bootstrap_loops=self.BINARY_BOOTSTRAP_LOOPS,
-                    multiclass_bootstrap_loops=self.MULTICLASS_BOOTSTRAP_LOOPS,
-                    logger=self.logger,
-                    bundle=self.bundle,
-                    warning_callback=self.warning_callback,
-                )
+        count = len(data)
+        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
+        target = data[target_column]
+        target_classes_count = target.nunique()
 
-        # Resample over fit threshold
-        if self.cv_type is not None and self.cv_type.is_time_series():
-            sample_threshold = self.FIT_SAMPLE_THRESHOLD_TS
-            sample_rows = self.FIT_SAMPLE_ROWS_TS
-        elif not self.imbalanced and EVAL_SET_INDEX in self.data.columns:
-            sample_threshold = self.FIT_SAMPLE_WITH_EVAL_SET_THRESHOLD
-            sample_rows = self.FIT_SAMPLE_WITH_EVAL_SET_ROWS
-        else:
-            sample_threshold = self.FIT_SAMPLE_THRESHOLD
-            sample_rows = self.FIT_SAMPLE_ROWS
-
-        if len(self.data) > sample_threshold:
-            self.logger.info(
-                f"Etalon has size {len(self.data)} more than threshold {sample_threshold} "
-                f"and will be downsampled to {sample_rows}"
+        if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
+            msg = self.bundle.get("dataset_to_many_multiclass_targets").format(
+                target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
             )
-            if self.cv_type is not None and self.cv_type.is_time_series():
-                resampled_data = balance_undersample_time_series_trunc(
-                    df=self.data,
-                    id_columns=self.id_columns,
-                    date_column=next(
-                        k
-                        for k, v in self.meaning_types.items()
-                        if v in [FileColumnMeaningType.DATE, FileColumnMeaningType.DATETIME]
-                    ),
-                    sample_size=sample_rows,
-                    random_state=self.random_state,
-                    logger=self.logger,
-                )
-            else:
-                resampled_data = self.data.sample(n=sample_rows, random_state=self.random_state)
-            self.data = resampled_data
-            self.logger.info(f"Shape after threshold resampling: {self.data.shape}")
+            self.logger.warning(msg)
+            raise ValidationError(msg)
+
+        vc = target.value_counts()
+        min_class_value = vc.index[len(vc) - 1]
+        min_class_count = vc[min_class_value]
+
+        if min_class_count < self.MIN_TARGET_CLASS_ROWS:
+            msg = self.bundle.get("dataset_rarest_class_less_min").format(
+                min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
+            )
+            self.logger.warning(msg)
+            raise ValidationError(msg)
+
+        min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
+        min_class_threshold = min_class_percent * count
+
+        # If min class count less than 30% for binary or (60 / classes_count)% for multiclass
+        return bool(min_class_count < min_class_threshold)
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
@@ -617,8 +566,8 @@ class Dataset:  # (pd.DataFrame):
     def _set_sample_size(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:
         if runtime_parameters is not None and runtime_parameters.properties is not None:
             if self.cv_type is not None and self.cv_type.is_time_series():
-                runtime_parameters.properties["sample_size"] = self.FIT_SAMPLE_ROWS_TS
-                runtime_parameters.properties["iter0_sample_size"] = self.FIT_SAMPLE_ROWS_TS
+                runtime_parameters.properties["sample_size"] = self.sample_config.fit_sample_rows_ts
+                runtime_parameters.properties["iter0_sample_size"] = self.sample_config.fit_sample_rows_ts
         return runtime_parameters
 
     def _clean_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:

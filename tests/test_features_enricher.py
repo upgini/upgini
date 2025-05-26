@@ -28,6 +28,7 @@ from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.sample_utils import SampleConfig
 
 from .utils import (
     mock_default_requests,
@@ -3009,9 +3010,6 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"]
 
-    default_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
-    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 7_000
-
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
         search_keys=search_keys,
@@ -3019,30 +3017,26 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
         logs_enabled=False,
+        sample_config=SampleConfig(binary_min_sample_threshold=7_000),
     )
 
-    try:
-        enricher.fit(train_features, train_target, calculate_metrics=False, select_features=False)
+    enricher.fit(train_features, train_target, calculate_metrics=False, select_features=False)
 
-        metrics = enricher.calculate_metrics()
-        assert metrics is not None
+    metrics = enricher.calculate_metrics()
+    assert metrics is not None
 
-        if update_metrics_flag:
-            metrics.to_csv(
-                os.path.join(
-                    FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv"
-                ),
-                index=False,
-            )
-
-        expected_metrics = pd.read_csv(
+    if update_metrics_flag:
+        metrics.to_csv(
             os.path.join(
                 FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv"
-            )
+            ),
+            index=False,
         )
-        assert_frame_equal(expected_metrics, metrics, atol=1e-6)
-    finally:
-        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv")
+    )
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
@@ -3070,9 +3064,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
         )
     ]
 
-    default_min_sample_threshold = Dataset.BINARY_MIN_SAMPLE_THRESHOLD
-    Dataset.BINARY_MIN_SAMPLE_THRESHOLD = 1_000
-
     search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
         search_keys=search_keys,
@@ -3080,6 +3071,7 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
         api_key="fake_api_key",
         date_format="%Y-%m-%d",
         logs_enabled=False,
+        sample_config=SampleConfig(binary_min_sample_threshold=1000),
     )
 
     result_wrapper = DataFrameWrapper()
@@ -3139,7 +3131,6 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
             test(i, expected_result_df)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
-        Dataset.BINARY_MIN_SAMPLE_THRESHOLD = default_min_sample_threshold
 
 
 def test_email_search_key(requests_mock: Mocker):

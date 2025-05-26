@@ -221,5 +221,3 @@ def test_validate_dates_distribution():
     )
     is_valid = is_dates_distribution_valid(df, {"date1": SearchKey.DATE})
     assert not is_valid
-
-
