@@ -2359,10 +2359,7 @@ if response.status_code == 200:
             is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
             columns_to_drop = [
-                c
-                for c in df.columns
-                if c in self.feature_names_
-                and (c in self.external_source_feature_names or c in self.zero_shap_client_features)
+                c for c in df.columns if c in self.feature_names_ and c in self.external_source_feature_names
             ]
             if len(columns_to_drop) > 0:
                 msg = self.bundle.get("x_contains_enriching_columns").format(columns_to_drop)
