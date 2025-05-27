@@ -155,7 +155,7 @@ def _get_internal_source(feature_meta: FeaturesMetadataV2, is_client_feature: bo
             and not feature_meta.name.endswith("_postal_code")
             and not is_client_feature
             else ""
-            )
+        )
 
 
 def _list_or_single(lst: List[str], single: str):
@@ -179,7 +179,7 @@ def _make_links(names: List[str], links: List[str]) -> str:
 
 
 def _round_shap_value(shap: float) -> float:
-    if shap > 0.0 and shap < 0.0001:
+    if shap >= 0.0 and shap < 0.0001:
         return 0.0001
     else:
         return round(shap, 4)
