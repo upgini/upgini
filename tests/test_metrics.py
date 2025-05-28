@@ -506,7 +506,7 @@ def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: b
     assert_frame_equal(metrics_df, expected_metrics)
 
 
-def test_default_metric_binary_with_outliers(requests_mock: Mocker, update_metrics_flag: bool):
+def test_default_metric_regression_with_outliers(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
@@ -587,11 +587,11 @@ def test_default_metric_binary_with_outliers(requests_mock: Mocker, update_metri
 
     if update_metrics_flag:
         metrics_df.to_csv(
-            os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary_with_outliers.csv"), index=False
+            os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_regression_with_outliers.csv"), index=False
         )
 
     expected_metrics = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary_with_outliers.csv")
+        os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_regression_with_outliers.csv")
     )
     assert_frame_equal(metrics_df, expected_metrics)
 

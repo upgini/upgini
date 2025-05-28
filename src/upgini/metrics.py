@@ -1078,7 +1078,7 @@ def define_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None
         elif target_type == ModelTaskType.MULTICLASS:
             scoring = "accuracy"
         elif target_type == ModelTaskType.REGRESSION:
-            scoring = "mean_squared_error"
+            scoring = "mean_absolute_percentage_error"
         else:
             raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
 
