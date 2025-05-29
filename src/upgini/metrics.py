@@ -1037,13 +1037,20 @@ def _get_scorer_by_name(scoring: str) -> Tuple[Callable, str, int]:
     metric_name = scoring
     multiplier = 1
     if metric_name == "mean_squared_log_error" or metric_name == "MSLE" or metric_name == "msle":
+        metric_name = "MSLE"
         scoring = make_scorer(_ext_mean_squared_log_error, greater_is_better=False)
         multiplier = -1
     elif "root_mean_squared_log_error" in metric_name or metric_name == "RMSLE" or metric_name == "rmsle":
+        metric_name = "RMSLE"
         scoring = make_scorer(_ext_root_mean_squared_log_error, greater_is_better=False)
         multiplier = -1
     elif metric_name == "root_mean_squared_error" or metric_name == "RMSE" or metric_name == "rmse":
+        metric_name = "RMSE"
         scoring = get_scorer("neg_root_mean_squared_error")
+        multiplier = -1
+    elif metric_name == "mean_absolute_percentage_error" or metric_name == "MAPE" or metric_name == "mape":
+        metric_name = "MAPE"
+        scoring = get_scorer("neg_mean_absolute_percentage_error")
         multiplier = -1
     elif scoring in available_scorers:
         scoring = get_scorer(scoring)
@@ -1078,7 +1085,7 @@ def define_scorer(target_type: ModelTaskType, scoring: Union[Callable, str, None
         elif target_type == ModelTaskType.MULTICLASS:
             scoring = "accuracy"
         elif target_type == ModelTaskType.REGRESSION:
-            scoring = "mean_absolute_percentage_error"
+            scoring = "MAPE"
         else:
             raise Exception(bundle.get("metrics_unsupported_target_type").format(target_type))
 

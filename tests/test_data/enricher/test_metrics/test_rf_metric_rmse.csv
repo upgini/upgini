@@ -1,4 +1,4 @@
-Dataset type,Rows,Mean target,Baseline rmse,Enriched rmse,Uplift
+Dataset type,Rows,Mean target,Baseline RMSE,Enriched RMSE,Uplift
 Train,500,0.51,0.685 ± 0.019,0.680 ± 0.046,0.005653369314983836
 Eval 1,250,0.452,0.718 ± 0.012,0.731 ± 0.013,-0.013229797439255342
 Eval 2,250,0.536,0.682 ± 0.010,0.712 ± 0.009,-0.0298562322324184
