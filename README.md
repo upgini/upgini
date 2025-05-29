@@ -740,12 +740,12 @@ enricher.transform(X, exclude_features_sources=(trial_features + paid_features))
 
 ### Turn off autodetection for search key columns
 Upgini has autodetection of search keys on by default.
-To turn off use `detect_missing_search_keys=False`:
+To turn off use `autodetect_search_keys=False`:
 
 ```python
 enricher = FeaturesEnricher(
    search_keys={"date": SearchKey.DATE},
-   detect_missing_search_keys=False,
+   autodetect_search_keys=False,
 )
 
 enricher.fit(X, y)

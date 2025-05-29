@@ -83,12 +83,14 @@ def run_search(
         api_key="fake_api_key",
         endpoint="http://fake_url",
         generate_features=generate_features,
-        runtime_parameters=RuntimeParameters(
-            properties={"excludeAdsDefinitions": ",".join(exclude_ads_definitions_by_company[company].values())}
-        )
-        if company in exclude_ads_definitions_by_company
-        else None,
-        detect_missing_search_keys=False,
+        runtime_parameters=(
+            RuntimeParameters(
+                properties={"excludeAdsDefinitions": ",".join(exclude_ads_definitions_by_company[company].values())}
+            )
+            if company in exclude_ads_definitions_by_company
+            else None
+        ),
+        autodetect_search_keys=False,
         raise_validation_error=True,
     )
     enricher.fit(df.drop(columns=target_column), df[target_column], calculate_metrics=False)

@@ -120,10 +120,7 @@ except Exception:
 
 from upgini.utils.sample_utils import SampleColumns, SampleConfig, _num_samples, sample
 from upgini.utils.sort import sort_columns
-from upgini.utils.target_utils import (
-    calculate_psi,
-    define_task,
-)
+from upgini.utils.target_utils import calculate_psi, define_task
 from upgini.utils.warning_counter import WarningCounter
 from upgini.version_validator import validate_version
 
@@ -227,7 +224,7 @@ class FeaturesEnricher(TransformerMixin):
         random_state: int = 42,
         cv: Optional[CVType] = None,
         loss: Optional[str] = None,
-        detect_missing_search_keys: bool = True,
+        autodetect_search_keys: bool = True,
         generate_features: Optional[List[str]] = None,
         columns_for_online_api: Optional[List[str]] = None,
         round_embeddings: Optional[int] = None,
@@ -336,7 +333,7 @@ class FeaturesEnricher(TransformerMixin):
         self.runtime_parameters.properties["feature_generation_params.hash_index"] = True
         self.date_format = date_format
         self.random_state = random_state
-        self.detect_missing_search_keys = detect_missing_search_keys
+        self.autodetect_search_keys = autodetect_search_keys
         self.cv = cv
         if cv is not None:
             self.runtime_parameters.properties["cv_type"] = cv.name
@@ -3630,7 +3627,7 @@ if response.status_code == 200:
                 f"Random state: {self.random_state}\n"
                 f"Generate features: {self.generate_features}\n"
                 f"Round embeddings: {self.round_embeddings}\n"
-                f"Detect missing search keys: {self.detect_missing_search_keys}\n"
+                f"Detect missing search keys: {self.autodetect_search_keys}\n"
                 f"Exclude columns: {self.exclude_columns}\n"
                 f"Exclude features sources: {exclude_features_sources}\n"
                 f"Calculate metrics: {calculate_metrics}\n"
@@ -4342,7 +4339,7 @@ if response.status_code == 200:
                 ):
                     raise ValidationError(self.bundle.get("empty_search_key").format(column_name))
 
-        if self.detect_missing_search_keys and (
+        if self.autodetect_search_keys and (
             not is_transform or set(valid_search_keys.values()) != set(self.fit_search_keys.values())
         ):
             valid_search_keys = self.__detect_missing_search_keys(
