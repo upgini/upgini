@@ -45,21 +45,8 @@ from .utils import (
     mock_validation_summary,
 )
 
-segment_header = bundle.get("quality_metrics_segment_header")
-train_segment = bundle.get("quality_metrics_train_segment")
-eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
-eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
-match_rate_header = bundle.get("quality_metrics_match_rate_header")
-rows_header = bundle.get("quality_metrics_rows_header")
-target_mean_header = bundle.get("quality_metrics_mean_target_header")
-baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
-enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
-baseline_gini = bundle.get("quality_metrics_baseline_header").format("GINI")
-enriched_gini = bundle.get("quality_metrics_enriched_header").format("GINI")
-uplift = bundle.get("quality_metrics_uplift_header")
 feature_name_header = bundle.get("features_info_name")
 shap_value_header = bundle.get("features_info_shap")
-hitrate_header = bundle.get("features_info_hitrate")
 
 SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0

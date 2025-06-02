@@ -24,8 +24,11 @@ from upgini.metadata import (
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils import find_numbers_with_decimal_comma
+from upgini.utils.country_utils import CountrySearchKeyConverter
 from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyConverter
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
 
 
 class Normalizer:
@@ -64,6 +67,12 @@ class Normalizer:
         df = self._correct_decimal_comma(df)
 
         df = self._convert_phone_numbers(df)
+
+        df = self._convert_ip_addresses(df)
+
+        df = self._convert_postal_codes(df)
+
+        df = self._convert_countries(df)
 
         df = self.__convert_features_types(df)
 
@@ -189,6 +198,22 @@ class Normalizer:
         for phone_col in SearchKey.find_all_keys(self.search_keys, SearchKey.PHONE):
             converter = PhoneSearchKeyConverter(phone_col, maybe_country_col)
             df = converter.convert(df)
+        return df
+
+    def _convert_ip_addresses(self, df: pd.DataFrame) -> pd.DataFrame:
+        for ip_col in SearchKey.find_all_keys(self.search_keys, SearchKey.IP):
+            df[ip_col] = df[ip_col].apply(IpSearchKeyConverter.safe_ip_parse)
+        return df
+
+    def _convert_postal_codes(self, df: pd.DataFrame) -> pd.DataFrame:
+        for postal_code_col in SearchKey.find_all_keys(self.search_keys, SearchKey.POSTAL_CODE):
+            df = PostalCodeSearchKeyConverter(postal_code_col).convert(df)
+        return df
+
+    def _convert_countries(self, df: pd.DataFrame) -> pd.DataFrame:
+        maybe_country_col = SearchKey.find_key(self.search_keys, SearchKey.COUNTRY)
+        if maybe_country_col:
+            df = CountrySearchKeyConverter(maybe_country_col).convert(df)
         return df
 
     def __convert_features_types(self, df: pd.DataFrame):
