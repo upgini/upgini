@@ -71,10 +71,7 @@ from upgini.search_task import SearchTask
 from upgini.spinner import Spinner
 from upgini.utils import combine_search_keys, find_numbers_with_decimal_comma
 from upgini.utils.blocked_time_series import BlockedTimeSeriesSplit
-from upgini.utils.country_utils import (
-    CountrySearchKeyConverter,
-    CountrySearchKeyDetector,
-)
+from upgini.utils.country_utils import CountrySearchKeyDetector
 from upgini.utils.custom_loss_utils import (
     get_additional_params_custom_loss,
     get_runtime_params_custom_loss,
@@ -105,11 +102,8 @@ from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.ip_utils import IpSearchKeyConverter
-from upgini.utils.phone_utils import PhoneSearchKeyConverter, PhoneSearchKeyDetector
-from upgini.utils.postal_code_utils import (
-    PostalCodeSearchKeyConverter,
-    PostalCodeSearchKeyDetector,
-)
+from upgini.utils.phone_utils import PhoneSearchKeyDetector
+from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -1122,6 +1116,7 @@ class FeaturesEnricher(TransformerMixin):
                     # and calculate final metric (and uplift)
                     enriched_metric = None
                     uplift = None
+                    uplift_perc = None
                     enriched_estimator = None
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
                         self.logger.info(
@@ -1153,6 +1148,7 @@ class FeaturesEnricher(TransformerMixin):
                             self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
                         if baseline_metric is not None and enriched_metric is not None:
                             uplift = (enriched_cv_result.metric - baseline_cv_result.metric) * multiplier
+                            uplift_perc = uplift / abs(baseline_cv_result.metric) * 100
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1179,7 +1175,10 @@ class FeaturesEnricher(TransformerMixin):
                             enriched_metric
                         )
                     if uplift is not None:
-                        train_metrics[self.bundle.get("quality_metrics_uplift_header")] = uplift
+                        train_metrics[self.bundle.get("quality_metrics_uplift_header")] = round(uplift, 3)
+                        train_metrics[self.bundle.get("quality_metrics_uplift_perc_header")] = (
+                            f"{round(uplift_perc, 1)}%"
+                        )
                     metrics = [train_metrics]
 
                     # 3 If eval_set is presented - fit final model on train enriched data and score each
@@ -1228,8 +1227,10 @@ class FeaturesEnricher(TransformerMixin):
 
                             if etalon_eval_metric is not None and enriched_eval_metric is not None:
                                 eval_uplift = (enriched_eval_results.metric - etalon_eval_results.metric) * multiplier
+                                eval_uplift_perc = eval_uplift / abs(etalon_eval_results.metric) * 100
                             else:
                                 eval_uplift = None
+                                eval_uplift_perc = None
 
                             eval_metrics = {
                                 self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1260,7 +1261,10 @@ class FeaturesEnricher(TransformerMixin):
                                     enriched_eval_metric
                                 )
                             if eval_uplift is not None:
-                                eval_metrics[self.bundle.get("quality_metrics_uplift_header")] = eval_uplift
+                                eval_metrics[self.bundle.get("quality_metrics_uplift_header")] = round(eval_uplift, 3)
+                                eval_metrics[self.bundle.get("quality_metrics_uplift_perc_header")] = (
+                                    f"{round(eval_uplift_perc, 1)}%"
+                                )
 
                             metrics.append(eval_metrics)
 
@@ -2495,21 +2499,6 @@ if response.status_code == 200:
                 )
                 df = converter.convert(df)
 
-            phone_column = self._get_phone_column(search_keys)
-            country_column = self._get_country_column(search_keys)
-            if phone_column:
-                converter = PhoneSearchKeyConverter(phone_column, country_column)
-                df = converter.convert(df)
-
-            if country_column:
-                converter = CountrySearchKeyConverter(country_column)
-                df = converter.convert(df)
-
-            postal_code = self._get_postal_column(search_keys)
-            if postal_code:
-                converter = PostalCodeSearchKeyConverter(postal_code)
-                df = converter.convert(df)
-
             meaning_types = {}
             meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
@@ -2904,6 +2893,7 @@ if response.status_code == 200:
             self.fit_generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
+            # TODO remove when this logic will be implemented on the back
             if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
 
@@ -2934,6 +2924,26 @@ if response.status_code == 200:
         self.fit_columns_renaming = normalizer.columns_renaming
         if normalizer.removed_features:
             self.__log_warning(self.bundle.get("dataset_date_features").format(normalizer.removed_features))
+
+        non_feature_columns = [
+            self.TARGET_NAME,
+            EVAL_SET_INDEX,
+        ] + list(self.fit_search_keys.keys())
+        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
+
+        features_columns = [c for c in df.columns if c not in non_feature_columns]
+
+        features_to_drop, feature_validator_warnings = FeaturesValidator(self.logger).validate(
+            df, features_columns, self.generate_features, self.fit_columns_renaming
+        )
+        if feature_validator_warnings:
+            for warning in feature_validator_warnings:
+                self.__log_warning(warning)
+        self.fit_dropped_features.update(features_to_drop)
+        df = df.drop(columns=features_to_drop)
+
+        self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
         self.__adjust_cv(df)
 
@@ -2974,6 +2984,7 @@ if response.status_code == 200:
         # Convert EMAIL to HEM etc after unnesting to do it only with one column
         df = self.__convert_unnestable_keys(df, unnest_search_keys)
 
+        # refresh features columns
         non_feature_columns = [
             self.TARGET_NAME,
             EVAL_SET_INDEX,
@@ -2984,17 +2995,6 @@ if response.status_code == 200:
             non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
-
-        features_to_drop, feature_validator_warnings = FeaturesValidator(self.logger).validate(
-            df, features_columns, self.generate_features, self.fit_columns_renaming
-        )
-        if feature_validator_warnings:
-            for warning in feature_validator_warnings:
-                self.__log_warning(warning)
-        self.fit_dropped_features.update(features_to_drop)
-        df = df.drop(columns=features_to_drop)
-
-        self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
         meaning_types = {
             **{col: key.value for col, key in self.fit_search_keys.items()},
@@ -3224,20 +3224,6 @@ if response.status_code == 200:
                 self.bundle,
                 self.logger,
             )
-            df = converter.convert(df)
-        phone_column = self._get_phone_column(self.fit_search_keys)
-        country_column = self._get_country_column(self.fit_search_keys)
-        if phone_column:
-            converter = PhoneSearchKeyConverter(phone_column, country_column)
-            df = converter.convert(df)
-
-        if country_column:
-            converter = CountrySearchKeyConverter(country_column)
-            df = converter.convert(df)
-
-        postal_code = self._get_postal_column(self.fit_search_keys)
-        if postal_code:
-            converter = PostalCodeSearchKeyConverter(postal_code)
             df = converter.convert(df)
 
         return df
@@ -4642,42 +4628,59 @@ if response.status_code == 200:
                 if isinstance(X_, pd.Series):
                     X_ = X_.to_frame()
 
-                # TODO check that this file was already uploaded
-
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
+                    x_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/x.parquet")
+                    if self.rest_client.is_file_uploaded(trace_id, x_digest_sha256):
+                        self.logger.info(f"File x.parquet was already uploaded with digest {x_digest_sha256}, skipping")
+                    else:
+                        self.rest_client.dump_input_file(trace_id, f"{tmp_dir}/x.parquet", "x.parquet")
 
                     if y_ is not None:
                         if isinstance(y_, pd.Series):
                             y_ = y_.to_frame()
                         y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
-                        if eval_set_ and _num_samples(eval_set_[0][0]) > 0:
-                            eval_x_ = eval_set_[0][0]
-                            eval_y_ = eval_set_[0][1]
-                            if isinstance(eval_x_, pd.Series):
-                                eval_x_ = eval_x_.to_frame()
-                            eval_x_.to_parquet(f"{tmp_dir}/eval_x.parquet", compression="zstd")
-                            if isinstance(eval_y_, pd.Series):
-                                eval_y_ = eval_y_.to_frame()
-                            eval_y_.to_parquet(f"{tmp_dir}/eval_y.parquet", compression="zstd")
-                            self.rest_client.dump_input_files(
-                                trace_id,
-                                f"{tmp_dir}/x.parquet",
-                                f"{tmp_dir}/y.parquet",
-                                f"{tmp_dir}/eval_x.parquet",
-                                f"{tmp_dir}/eval_y.parquet",
+                        y_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/y.parquet")
+                        if self.rest_client.is_file_uploaded(trace_id, y_digest_sha256):
+                            self.logger.info(
+                                f"File y.parquet was already uploaded with digest {y_digest_sha256}, skipping"
                             )
                         else:
-                            self.rest_client.dump_input_files(
-                                trace_id,
-                                f"{tmp_dir}/x.parquet",
-                                f"{tmp_dir}/y.parquet",
-                            )
-                    else:
-                        self.rest_client.dump_input_files(
-                            trace_id,
-                            f"{tmp_dir}/x.parquet",
-                        )
+                            self.rest_client.dump_input_file(trace_id, f"{tmp_dir}/y.parquet", "y.parquet")
+
+                        if eval_set_ is not None and len(eval_set_) > 0:
+                            for idx, (eval_x_, eval_y_) in enumerate(eval_set_):
+                                if isinstance(eval_x_, pd.Series):
+                                    eval_x_ = eval_x_.to_frame()
+                                eval_x_.to_parquet(f"{tmp_dir}/eval_x_{idx}.parquet", compression="zstd")
+                                eval_x_digest_sha256 = self.rest_client.compute_file_digest(
+                                    f"{tmp_dir}/eval_x_{idx}.parquet"
+                                )
+                                if self.rest_client.is_file_uploaded(trace_id, eval_x_digest_sha256):
+                                    self.logger.info(
+                                        f"File eval_x_{idx}.parquet was already uploaded with"
+                                        f" digest {eval_x_digest_sha256}, skipping"
+                                    )
+                                else:
+                                    self.rest_client.dump_input_file(
+                                        trace_id, f"{tmp_dir}/eval_x_{idx}.parquet", f"eval_x_{idx}.parquet"
+                                    )
+
+                                if isinstance(eval_y_, pd.Series):
+                                    eval_y_ = eval_y_.to_frame()
+                                eval_y_.to_parquet(f"{tmp_dir}/eval_y_{idx}.parquet", compression="zstd")
+                                eval_y_digest_sha256 = self.rest_client.compute_file_digest(
+                                    f"{tmp_dir}/eval_y_{idx}.parquet"
+                                )
+                                if self.rest_client.is_file_uploaded(trace_id, eval_y_digest_sha256):
+                                    self.logger.info(
+                                        f"File eval_y_{idx}.parquet was already uploaded"
+                                        f" with digest {eval_y_digest_sha256}, skipping"
+                                    )
+                                else:
+                                    self.rest_client.dump_input_file(
+                                        trace_id, f"{tmp_dir}/eval_y_{idx}.parquet", f"eval_y_{idx}.parquet"
+                                    )
             except Exception:
                 self.logger.warning("Failed to dump input files", exc_info=True)
 

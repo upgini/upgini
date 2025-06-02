@@ -58,25 +58,6 @@ FIXTURE_DIR = os.path.join(
     "test_data/enricher/",
 )
 
-segment_header = bundle.get("quality_metrics_segment_header")
-train_segment = bundle.get("quality_metrics_train_segment")
-eval_1_segment = bundle.get("quality_metrics_eval_segment").format(1)
-eval_2_segment = bundle.get("quality_metrics_eval_segment").format(2)
-rows_header = bundle.get("quality_metrics_rows_header")
-target_mean_header = bundle.get("quality_metrics_mean_target_header")
-match_rate_header = bundle.get("quality_metrics_match_rate_header")
-baseline_rocauc = bundle.get("quality_metrics_baseline_header").format("roc_auc")
-enriched_rocauc = bundle.get("quality_metrics_enriched_header").format("roc_auc")
-baseline_gini = bundle.get("quality_metrics_baseline_header").format("GINI")
-enriched_gini = bundle.get("quality_metrics_enriched_header").format("GINI")
-baseline_rmse = bundle.get("quality_metrics_baseline_header").format("rmse")
-enriched_rmse = bundle.get("quality_metrics_enriched_header").format("rmse")
-baseline_RMSLE = bundle.get("quality_metrics_baseline_header").format("RMSLE")
-enriched_RMSLE = bundle.get("quality_metrics_enriched_header").format("RMSLE")
-baseline_mae = bundle.get("quality_metrics_baseline_header").format("mean_absolute_error")
-enriched_mae = bundle.get("quality_metrics_enriched_header").format("mean_absolute_error")
-uplift = bundle.get("quality_metrics_uplift_header")
-
 SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0
 
