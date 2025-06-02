@@ -12,6 +12,7 @@ from enum import Enum
 from functools import lru_cache
 from http.client import HTTPConnection
 from json import dumps
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
@@ -292,6 +293,7 @@ class _RestClient:
     UPLOAD_ONLINE_URI = "private/api/v2/ads/upload-online"
     STOP_ADS_MANAGEMENT_TASK_URI_FMT = "private/api/v2/ads/management-task/{0}/stop"
     UNION_SEARCH_TASKS_URI_FMT = SERVICE_ROOT_V2 + "search/merge"
+    UPLOAD_AUTOFE_MODEL_URI_FMT = "private/api/v2/autofe/model/upload"
 
     ACCESS_TOKEN_HEADER_NAME = "Authorization"
     CONTENT_TYPE_HEADER_NAME = "Content-Type"
@@ -810,6 +812,17 @@ class _RestClient:
     def union_search_tasks(self, request: dict, trace_id: str):
         api_path = self.UNION_SEARCH_TASKS_URI_FMT
         return self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+
+    def upload_autofe_model(self, file_path: str, metadata: dict, trace_id: str):
+        api_path = self.UPLOAD_AUTOFE_MODEL_URI_FMT
+        with open(file_path, "rb") as file:
+            files = {
+                "meta": ("metadata.json", dumps(metadata).encode(), "application/json"),
+                "model": (Path(file_path).name, file, "application/octet-stream"),
+            }
+            return self._with_unauth_retry(
+                lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
+            )
 
     # ---
 
