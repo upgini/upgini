@@ -404,6 +404,16 @@ class _RestClient:
         meaning_types = [_RestClient.meaning_type_by_name(name, metadata) for name in search_key_names]
         return [meaning_type.value for meaning_type in meaning_types if meaning_type is not None]
 
+    def dump_input_file(self, trace_id: str, path: str, file_name: str):
+        api_path = self.SEARCH_DUMP_INPUT_FILE_FMT
+        with open(path, "rb") as file:
+            files = {"file": (file_name, file, "application/octet-stream")}
+            self._with_unauth_retry(
+                lambda: self._send_post_file_req_v2(
+                    api_path, files, trace_id=trace_id, need_json_response=False
+                )
+            )
+
     def dump_input_files(
         self,
         trace_id: str,
