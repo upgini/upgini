@@ -83,33 +83,19 @@ class Normalizer:
         new_columns = []
         dup_counter = 0
         for column in df.columns:
-            if (
-                column
-                in [
-                    TARGET,
-                    EVAL_SET_INDEX,
-                    SYSTEM_RECORD_ID,
-                    ENTITY_SYSTEM_RECORD_ID,
-                    SEARCH_KEY_UNNEST,
-                    DateTimeSearchKeyConverter.DATETIME_COL,
-                ]
-            ):
+            if column in [
+                TARGET,
+                EVAL_SET_INDEX,
+                SYSTEM_RECORD_ID,
+                ENTITY_SYSTEM_RECORD_ID,
+                SEARCH_KEY_UNNEST,
+                DateTimeSearchKeyConverter.DATETIME_COL,
+            ]:
                 self.columns_renaming[column] = column
                 new_columns.append(column)
                 continue
 
-            new_column = str(column)
-            suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
-            if len(new_column) == 0:
-                raise ValidationError(self.bundle.get("dataset_empty_column_names"))
-            # db limit for column length
-            if len(new_column) > 250:
-                new_column = new_column[:250]
-
-            # make column name unique relative to server features
-            new_column = f"{new_column}_{suffix}"
-
-            new_column = new_column.lower()
+            new_column = add_hash_suffix(column, self.bundle)
 
             # if column starts with non alphabetic symbol then add "a" to the beginning of string
             if ord(new_column[0]) not in range(ord("a"), ord("z") + 1):
@@ -223,3 +209,19 @@ class Normalizer:
             if not is_numeric_dtype(df[f]):
                 df[f] = df[f].astype("string")
         return df
+
+
+def add_hash_suffix(column: str, bundle: ResourceBundle | None = None) -> str:
+    new_column = str(column)
+    suffix = hashlib.sha256(new_column.encode()).hexdigest()[:6]
+    if bundle is not None and len(new_column) == 0:
+        raise ValidationError(bundle.get("dataset_empty_column_names"))
+    # db limit for column length
+    if len(new_column) > 250:
+        new_column = new_column[:250]
+
+    # make column name unique relative to server features
+    new_column = f"{new_column}_{suffix}"
+
+    new_column = new_column.lower()
+    return new_column
