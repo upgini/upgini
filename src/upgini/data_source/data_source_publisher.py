@@ -149,9 +149,8 @@ class DataSourcePublisher:
                         existing_secondary_keys = {item for sublist in row["secondarySearchKeys"] for item in sublist}
                         if existing_secondary_keys == {v.value.name for v in secondary_search_keys.values()}:
                             existing_search_keys = {item for sublist in row["searchKeys"] for item in sublist}
-                            if (
-                                existing_search_keys == {v.value.name for v in search_keys.values()}
-                                or ("IP" in str(existing_search_keys) and "IP" in str(search_keys.values()))
+                            if existing_search_keys == {v.value.name for v in search_keys.values()} or (
+                                "IP" in str(existing_search_keys) and "IP" in str(search_keys.values())
                             ):
                                 raise ValidationError(
                                     "ADS with the same PRIMARY_KEYS -> SECONDARY_KEYS mapping "
@@ -494,3 +493,21 @@ class DataSourcePublisher:
                     raise Exception("Failed to reannounce all ADS: " + status_response["errorMessage"])
             except Exception:
                 self.logger.exception("Failed to reannounce all ADS-es")
+
+    def upload_autofe_model(
+        self, file_path: str, name: str, model_type: Optional[Literal["ONNX"]] = None, description: str = ""
+    ):
+        if model_type is not None and model_type not in ["ONNX"]:
+            raise ValueError(f"Invalid model type: {model_type}. Available values: ONNX")
+        metadata = {
+            "modelName": name,
+            "modelType": model_type or "ONNX",
+            "description": description,
+        }
+        trace_id = str(uuid.uuid4())
+        with MDC(trace_id=trace_id):
+            try:
+                self._rest_client.upload_autofe_model(file_path, metadata, trace_id)
+            except Exception:
+                self.logger.exception("Failed to upload autofe model")
+                raise

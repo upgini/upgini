@@ -79,7 +79,7 @@ class IpSearchKeyConverter:
             pass
 
     @staticmethod
-    def _safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address]) -> Optional[_BaseAddress]:
+    def safe_ip_parse(ip: Union[str, int, IPv4Address, IPv6Address, bytes]) -> Optional[_BaseAddress]:
         try:
             return ip_address(ip)
         except ValueError:
@@ -110,7 +110,7 @@ class IpSearchKeyConverter:
         self.logger.info("Convert ip address to int")
         original_ip = self.columns_renaming[self.ip_column]
 
-        df[self.ip_column] = df[self.ip_column].apply(self._safe_ip_parse)
+        df[self.ip_column] = df[self.ip_column].apply(self.safe_ip_parse)
         if df[self.ip_column].isnull().all():
             raise ValidationError(self.bundle.get("invalid_ip").format(self.ip_column))
 
