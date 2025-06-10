@@ -198,3 +198,21 @@ class Cluster(PandasOperator):
     input_type: Optional[str] = "vector"
     output_type: Optional[str] = "category"
     is_categorical: bool = True
+
+
+class OutlierDistance(PandasOperator):
+    name: str = "outlier_dist"
+    is_unary: bool = True
+    input_type: Optional[str] = "vector"
+    output_type: Optional[str] = "float"
+    centroid: Optional[List[float]] = None
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        if self.centroid is not None:
+            res.update(
+                {
+                    "centroid": json.dumps(self.centroid),
+                }
+            )
+        return res
