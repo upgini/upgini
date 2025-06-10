@@ -1,4 +1,3 @@
-import json
 from upgini.autofe.unary import OutlierDistance
 
 
@@ -25,22 +24,3 @@ def test_outlier_distance_formula_conversion():
 
     # Test invalid formula
     assert OutlierDistance.from_formula("invalid_formula") is None
-
-
-def test_outlier_distance_get_params():
-    # Test with centroid and class value
-    centroid = [1.0, 2.0, 3.0]
-    class_value = "positive"
-    op = OutlierDistance(centroid=centroid, class_value=class_value)
-
-    # Test get_params
-    params = op.get_params()
-    assert params == {
-        "alias": None,
-        "centroid": "[1.0, 2.0, 3.0]",
-    }
-
-    # Test with no centroid
-    op = OutlierDistance(class_value="negative")
-    params = op.get_params()
-    assert "centroid" not in params

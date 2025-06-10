@@ -205,7 +205,6 @@ class OutlierDistance(PandasOperator, ParametrizedOperator):
     is_unary: bool = True
     input_type: Optional[str] = "vector"
     output_type: Optional[str] = "float"
-    centroid: Optional[List[float]] = None
     class_value: Optional[str] = None
 
     def to_formula(self) -> str:
@@ -218,18 +217,5 @@ class OutlierDistance(PandasOperator, ParametrizedOperator):
             return cls(class_value=None if class_value == "all" else class_value)
         return None
 
-    @pydantic_validator("centroid", mode="before")
-    def parse_centroid(cls, value):
-        if isinstance(value, str):
-            return json.loads(value)
-        return value
-
-    def get_params(self) -> Dict[str, Optional[str]]:
-        res = super().get_params()
-        if self.centroid is not None:
-            res.update(
-                {
-                    "centroid": json.dumps(self.centroid),
-                }
-            )
-        return res
+    def get_centroid(self) -> np.ndarray:
+        pass
