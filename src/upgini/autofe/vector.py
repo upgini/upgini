@@ -37,29 +37,9 @@ class OnnxModel(PandasOperator, metaclass=OperatorRegistry):
     name: str = "onnx"
     is_vector: bool = True
     output_type: Optional[str] = "float"
-    model_name: str = ""
-
-    def get_params(self) -> Dict[str, Optional[str]]:
-        res = super().get_params()
-        res.update(
-            {
-                "model_name": self.model_name,
-            }
-        )
-        return res
 
 
 class CatboostModel(PandasOperator, metaclass=OperatorRegistry):
     name: str = "catboost"
     is_vector: bool = True
     output_type: Optional[str] = "float"
-    model_name: str = ""
-
-    def get_params(self) -> Dict[str, Optional[str]]:
-        res = super().get_params()
-        res.update(
-            {
-                "model_name": self.model_name,
-            }
-        )
-        return res
