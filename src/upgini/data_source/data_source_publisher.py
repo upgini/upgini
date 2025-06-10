@@ -495,15 +495,24 @@ class DataSourcePublisher:
                 self.logger.exception("Failed to reannounce all ADS-es")
 
     def upload_autofe_model(
-        self, file_path: str, name: str, model_type: Optional[Literal["ONNX"]] = None, description: str = ""
+        self,
+        file_path: str,
+        name: str,
+        input_names: List[str],
+        search_id: str,
+        model_type: Optional[Literal["ONNX", "CATBOOST"]] = None,
+        description: str = "",
     ):
-        if model_type is not None and model_type not in ["ONNX"]:
+        if model_type is not None and model_type not in ["ONNX", "CATBOOST"]:
             raise ValueError(f"Invalid model type: {model_type}. Available values: ONNX")
         metadata = {
             "modelName": name,
+            "inputNames": input_names,
+            "searchTaskId": search_id,
             "modelType": model_type or "ONNX",
             "description": description,
         }
+
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
