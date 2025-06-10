@@ -212,6 +212,9 @@ class OutlierDistance(PandasOperator, ParametrizedOperator):
 
     @classmethod
     def from_formula(cls, formula: str) -> Optional["OutlierDistance"]:
+        if formula == "outlier_dist":
+            return cls()
+
         if formula.startswith("outlier_dist_"):
             class_value = formula.split("_")[-1]
             return cls(class_value=None if class_value == "all" else class_value)

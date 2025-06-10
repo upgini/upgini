@@ -8,6 +8,10 @@ def test_outlier_distance_formula_conversion():
     assert formula == "outlier_dist_all"
 
     # Test from_formula with no class value
+    new_op = OutlierDistance.from_formula("outlier_dist")
+    assert new_op is not None
+    assert new_op.class_value is None
+
     new_op = OutlierDistance.from_formula(formula)
     assert new_op is not None
     assert new_op.class_value is None
