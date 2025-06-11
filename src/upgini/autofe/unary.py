@@ -219,6 +219,3 @@ class OutlierDistance(PandasOperator, ParametrizedOperator):
             class_value = formula.split("_")[-1]
             return cls(class_value=None if class_value == "all" else class_value)
         return None
-
-    def get_centroid(self) -> np.ndarray:
-        pass
