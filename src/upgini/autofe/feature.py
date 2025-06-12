@@ -21,7 +21,7 @@ class Column:
     def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
         return self.name
 
-    def set_op_params(self, params: Dict[str, str]) -> "Column":
+    def set_op_params(self, params: Dict[str, str], **kwargs) -> "Column":
         return self
 
     def get_op_params(self, **kwargs):
@@ -81,7 +81,7 @@ class Feature:
         self.cached_display_name = cached_display_name
         self.alias = alias
 
-    def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
+    def set_op_params(self, params: Optional[Dict[str, str]], **kwargs) -> "Feature":
         obj_dict = pydantic_dump_method(self.op)().copy()
         obj_dict.update(params or {})
         self.op = pydantic_parse_method(self.op.__class__)(obj_dict)
@@ -89,13 +89,13 @@ class Feature:
 
         for child in self.children:
             child_params = {
-                k[len(child.get_display_name()) + 1 :]: v
+                k[len(child.get_display_name(**kwargs)) + 1 :]: v
                 for k, v in params.items()
-                if k.startswith(child.get_display_name())
+                if k.startswith(child.get_display_name(**kwargs))
             }
             if not child_params:
                 child_params = params
-            child.set_op_params(child_params)
+            child.set_op_params(child_params, **kwargs)
         return self
 
     def get_op_params(self, **kwargs) -> Dict[str, str]:
