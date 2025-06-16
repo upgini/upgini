@@ -399,14 +399,14 @@ class EstimatorWrapper:
                 self.converted_to_str.append(c)
             elif c in self.cat_features:
                 if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
-                    x[c] = x[c].astype(np.int64)
+                    x[c] = x[c].astype(pd.Int64Dtype())
                     self.converted_to_int.append(c)
                 elif x[c].dtype == "category" and is_integer_dtype(x[c].cat.categories):
                     self.logger.info(
                         f"Convert categorical feature {c} with integer categories"
                         " to int64 and remove from cat_features"
                     )
-                    x[c] = x[c].astype(np.int64)
+                    x[c] = x[c].astype(pd.Int64Dtype())
                     self.converted_to_int.append(c)
                     self.cat_features.remove(c)
                 elif is_float_dtype(x[c]) or (x[c].dtype == "category" and is_float_dtype(x[c].cat.categories)):
@@ -419,7 +419,7 @@ class EstimatorWrapper:
             else:
                 if x[c].dtype == "bool" or (x[c].dtype == "category" and x[c].cat.categories.dtype == "bool"):
                     self.logger.info(f"Convert bool feature {c} to int64")
-                    x[c] = x[c].astype(np.int64)
+                    x[c] = x[c].astype(pd.Int64Dtype())
                     self.converted_to_int.append(c)
                 elif not is_valid_numeric_array_data(x[c]) and not is_numeric_dtype(x[c]):
                     try:
@@ -442,7 +442,7 @@ class EstimatorWrapper:
         if self.converted_to_int:
             self.logger.info(f"Convert to int features on calculate metrics: {self.converted_to_int}")
             for c in self.converted_to_int:
-                x[c] = x[c].astype(np.int64)
+                x[c] = x[c].astype(pd.Int64Dtype())
 
         if self.converted_to_str:
             self.logger.info(f"Convert to str features on calculate metrics: {self.converted_to_str}")
@@ -896,7 +896,7 @@ class LightGBMWrapper(EstimatorWrapper):
                     x[c] = x[c].astype("category")
 
         for c in x.columns:
-            if x[c].dtype not in ["category", "int64", "float64", "bool"]:
+            if x[c].dtype not in ["category", "int64", "float64", "bool", "Int64"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
                 self.dropped_features.append(c)
                 x = x.drop(columns=c, errors="ignore")
@@ -987,7 +987,7 @@ class OtherEstimatorWrapper(EstimatorWrapper):
                     x[c] = x[c].astype("category")
             params["cat_features"] = self.cat_features
         for c in x.columns:
-            if x[c].dtype not in ["category", "int64", "float64", "bool"]:
+            if x[c].dtype not in ["category", "int64", "float64", "bool", "Int64"]:
                 self.logger.warning(f"Feature {c} is not numeric and will be dropped")
                 self.dropped_features.append(c)
                 x = x.drop(columns=c, errors="ignore")
