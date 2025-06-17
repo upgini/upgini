@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from upgini.autofe.operator import PandasOperator, VectorizableMixin
+from upgini.autofe.operator import PandasOperator, ParametrizedOperator, VectorizableMixin
 from upgini.autofe.utils import pydantic_validator
 
 
@@ -198,3 +198,24 @@ class Cluster(PandasOperator):
     input_type: Optional[str] = "vector"
     output_type: Optional[str] = "category"
     is_categorical: bool = True
+
+
+class OutlierDistance(PandasOperator, ParametrizedOperator):
+    name: str = "outlier_dist"
+    is_unary: bool = True
+    input_type: Optional[str] = "vector"
+    output_type: Optional[str] = "float"
+    class_value: Optional[str] = None
+
+    def to_formula(self) -> str:
+        return f"outlier_dist_{self.class_value if self.class_value is not None else 'all'}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["OutlierDistance"]:
+        if formula == "outlier_dist":
+            return cls()
+
+        if formula.startswith("outlier_dist_"):
+            class_value = formula.split("_")[-1]
+            return cls(class_value=None if class_value == "all" else class_value)
+        return None

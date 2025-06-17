@@ -4174,7 +4174,7 @@ if response.status_code == 200:
 
                 description = {}
 
-                feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True))
+                feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True, unhash=True))
                 if feature_meta is None:
                     self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue

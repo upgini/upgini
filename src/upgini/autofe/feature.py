@@ -18,10 +18,7 @@ class Column:
         self.data = data
         self.calculate_all = calculate_all
 
-    def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
-        return self.name
-
-    def set_op_params(self, params: Dict[str, str]) -> "Column":
+    def set_op_params(self, params: Dict[str, str], **kwargs) -> "Column":
         return self
 
     def get_op_params(self, **kwargs):
@@ -37,8 +34,21 @@ class Column:
     def get_column_nodes(self) -> List["Column"]:
         return [self]
 
-    def get_columns(self, **kwargs) -> List[str]:
-        return [self.name]
+    def get_columns(self, unhash=False, **kwargs):
+        name = self.name
+        return [self._unhash(name) if unhash else name]
+
+    def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
+        return self.get_columns(**kwargs)[0]
+
+    def _unhash(self, feature_name: str) -> str:
+        last_component_idx = feature_name.rfind("_")
+        if not feature_name.startswith("f_"):
+            return feature_name  # etalon feature
+        elif last_component_idx == 1:
+            return feature_name[2:]  # fully hashed name, cannot unhash
+        else:
+            return feature_name[2:last_component_idx]
 
     @property
     def children(self) -> List[Union["Feature", "Column"]]:
@@ -81,7 +91,7 @@ class Feature:
         self.cached_display_name = cached_display_name
         self.alias = alias
 
-    def set_op_params(self, params: Optional[Dict[str, str]]) -> "Feature":
+    def set_op_params(self, params: Optional[Dict[str, str]], **kwargs) -> "Feature":
         obj_dict = pydantic_dump_method(self.op)().copy()
         obj_dict.update(params or {})
         self.op = pydantic_parse_method(self.op.__class__)(obj_dict)
@@ -89,13 +99,13 @@ class Feature:
 
         for child in self.children:
             child_params = {
-                k[len(child.get_display_name()) + 1 :]: v
+                k[len(child.get_display_name(**kwargs)) + 1 :]: v
                 for k, v in params.items()
-                if k.startswith(child.get_display_name())
+                if k.startswith(child.get_display_name(**kwargs))
             }
             if not child_params:
                 child_params = params
-            child.set_op_params(child_params)
+            child.set_op_params(child_params, **kwargs)
         return self
 
     def get_op_params(self, **kwargs) -> Dict[str, str]:
