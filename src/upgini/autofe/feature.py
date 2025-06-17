@@ -1,5 +1,6 @@
 import hashlib
 import itertools
+import logging
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -350,6 +351,13 @@ class Feature:
                     op = find_op(string[: p1 - 1])
                 base_features.reverse()
                 return Feature(op, base_features)
+
+    def set_logger(self, logger: logging.Logger):
+        self.op.set_logger(logger)
+        for child in self.children:
+            if hasattr(child, "set_logger"):
+                child.set_logger(logger)
+        return self
 
 
 class FeatureGroup:
