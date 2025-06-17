@@ -1,9 +1,10 @@
 import abc
+import logging
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 
 class OperatorRegistry(type(BaseModel)):
@@ -64,6 +65,8 @@ class Operator(BaseModel, metaclass=OperatorRegistry):
     is_distribution_dependent: bool = False
     params: Optional[Dict[str, str]] = None
 
+    _logger: logging.Logger = PrivateAttr(default=logging.getLogger(__name__))
+
     def set_params(self, params: Dict[str, str]):
         self.params = params
         return self
@@ -78,6 +81,10 @@ class Operator(BaseModel, metaclass=OperatorRegistry):
 
     def get_hash_component(self) -> str:
         return self.to_formula()
+
+    def set_logger(self, logger: logging.Logger):
+        self._logger = logger
+        return self
 
 
 class ParametrizedOperator(Operator, abc.ABC):
