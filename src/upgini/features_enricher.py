@@ -4481,7 +4481,9 @@ if response.status_code == 200:
         sample = df.head(100)
 
         def check_need_detect(search_key: SearchKey):
-            return not is_transform or search_key in self.fit_search_keys.values()
+            return not is_transform or (
+                search_key in self.fit_search_keys.values() and search_key not in search_keys.values()
+            )
 
         # if SearchKey.POSTAL_CODE not in search_keys.values() and check_need_detect(SearchKey.POSTAL_CODE):
         if check_need_detect(SearchKey.POSTAL_CODE):
