@@ -3420,6 +3420,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         Dataset.search = original_search
         Dataset.MIN_ROWS_COUNT = original_min_count
 
+    assert enricher._get_group_columns(df, enricher.fit_search_keys) == ["phone_45569d"]
+
     df["country"] = "GB"
     # enricher.search_id = search_task_id
 
