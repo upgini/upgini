@@ -3708,6 +3708,11 @@ if response.status_code == 200:
 
     @staticmethod
     def _get_group_columns(df: pd.DataFrame, search_keys: Dict[str, SearchKey]) -> List[str]:
+        search_key_priority = [SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP]
+        for key_type in search_key_priority:
+            if key_type in search_keys.values():
+                return [col for col, t in search_keys.items() if t == key_type]
+
         return [
             col
             for col, t in search_keys.items()
