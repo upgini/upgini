@@ -152,10 +152,6 @@ def make_html_report(
     email: Optional[str] = None,
     search_keys: Optional[List[str]] = None,
 ) -> str:
-    # relevant_features_df = relevant_features_df.copy()
-    # relevant_features_df["Feature name"] = relevant_features_df["Feature name"].apply(
-    #     lambda x: "*" + x if x.contains("_autofe_") else x
-    # )
     relevant_datasources_df = relevant_datasources_df.copy()
     relevant_datasources_df["action"] = (
         f"""<a href="https://upgini.com/request-a-quote?search-id={search_id}">"""

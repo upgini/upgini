@@ -500,6 +500,7 @@ class DataSourcePublisher:
         name: str,
         input_names: List[str],
         search_id: str,
+        date_column: Optional[str] = None,
         model_type: Optional[Literal["ONNX", "CATBOOST"]] = None,
         description: str = "",
     ):
@@ -508,6 +509,7 @@ class DataSourcePublisher:
         metadata = {
             "modelName": name,
             "inputNames": input_names,
+            "dateColumn": date_column,
             "searchTaskId": search_id,
             "modelType": model_type or "ONNX",
             "description": description,
