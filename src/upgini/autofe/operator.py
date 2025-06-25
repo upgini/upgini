@@ -86,6 +86,9 @@ class Operator(BaseModel, metaclass=OperatorRegistry):
         self._logger = logger
         return self
 
+    def delete_data(self):
+        pass
+
 
 class ParametrizedOperator(Operator, abc.ABC):
 
