@@ -164,6 +164,7 @@ class Feature:
 
     def delete_data(self):
         self.data = None
+        self.op.delete_data()
         for child in self.children:
             child.delete_data()
 
