@@ -501,6 +501,7 @@ class DataSourcePublisher:
         input_names: List[str],
         search_id: str,
         date_column: Optional[str] = None,
+        score_name: Optional[str] = None,
         model_type: Optional[Literal["ONNX", "CATBOOST"]] = None,
         description: str = "",
     ):
@@ -510,6 +511,7 @@ class DataSourcePublisher:
             "modelName": name,
             "inputNames": input_names,
             "dateColumn": date_column,
+            "scoreName": score_name,
             "searchTaskId": search_id,
             "modelType": model_type or "ONNX",
             "description": description,
