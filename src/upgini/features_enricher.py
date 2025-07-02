@@ -2837,6 +2837,8 @@ if response.status_code == 200:
 
         validate_scoring_argument(scoring)
 
+        self._validate_baseline_score(validated_X, validated_eval_set)
+
         self.__log_debug_information(
             validated_X,
             validated_y,
