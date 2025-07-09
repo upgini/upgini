@@ -68,6 +68,7 @@ class DataSourcePublisher:
         date_features_format: Optional[str] = None,
         generate_runtime_embeddings: Optional[List[str]] = None,
         exclude_raw: Optional[List[str]] = None,
+        force_percentile_generation: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
     ) -> str:
@@ -196,6 +197,8 @@ class DataSourcePublisher:
                     request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
                 if exclude_raw is not None:
                     request["excludeRaw"] = exclude_raw
+                if force_percentile_generation is not None:
+                    request["forcePercentileGeneration"] = force_percentile_generation
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -229,19 +232,28 @@ class DataSourcePublisher:
 
                         def on_button_clicked(b):
                             self.place(
-                                data_table_uri,
-                                search_keys,
-                                secondary_search_keys,
-                                sort_column,
-                                date_format,
-                                exclude_columns,
-                                hash_feature_names,
-                                snapshot_frequency_days,
-                                features_for_embeddings,
-                                data_table_id_to_replace,
-                                exclude_from_autofe_generation,
-                                True,
-                                _silent,
+                                data_table_uri=data_table_uri,
+                                search_keys=search_keys,
+                                update_frequency=update_frequency,
+                                exclude_from_autofe_generation=exclude_from_autofe_generation,
+                                secondary_search_keys=secondary_search_keys,
+                                sort_column=sort_column,
+                                date_format=date_format,
+                                exclude_columns=exclude_columns,
+                                hash_feature_names=hash_feature_names,
+                                snapshot_frequency_days=snapshot_frequency_days,
+                                join_date_abs_limit_days=join_date_abs_limit_days,
+                                features_for_embeddings=features_for_embeddings,
+                                data_table_id_to_replace=data_table_id_to_replace,
+                                keep_features=keep_features,
+                                date_features=date_features,
+                                date_vector_features=date_vector_features,
+                                date_features_format=date_features_format,
+                                generate_runtime_embeddings=generate_runtime_embeddings,
+                                exclude_raw=exclude_raw,
+                                force_percentile_generation=force_percentile_generation,
+                                _force_generation=True,
+                                _silent=_silent,
                             )
 
                         button.on_click(on_button_clicked)
@@ -255,7 +267,8 @@ class DataSourcePublisher:
                 print(msg)
                 if "warnings" in status_response and status_response["warnings"]:
                     self.logger.warning(status_response["warnings"])
-                    print(status_response["warnings"])
+                    for warning in status_response["warnings"]:
+                        print(warning)
                 return data_table_id
             except KeyboardInterrupt:
                 if task_id is not None:
