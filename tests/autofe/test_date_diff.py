@@ -27,15 +27,15 @@ def test_date_diff():
     )
 
     operand = DateDiff(right_unit="s")
-    expected_result = pd.Series([10531, -365.0, 20454, None, None, None, None])
+    expected_result = pd.Series([10531, -365.0, 20454, None, None, None, None], dtype=float)
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
     operand = DateDiff(right_unit="s", replace_negative=True)
-    expected_result = pd.Series([10531, None, 20454, None, None, None, None])
+    expected_result = pd.Series([10531, None, 20454, None, None, None, None], dtype=float)
     assert_series_equal(operand.calculate_binary(df.date1, df.date2), expected_result)
 
     operand = DateDiff(right_unit="s")
-    expected_result = pd.Series([None, None, None, None, None, None, None])
+    expected_result = pd.Series([None, None, None, None, None, None, None], dtype=float)
     assert_series_equal(operand.calculate_binary(df.date1, df.date3), expected_result)
 
 
