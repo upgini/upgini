@@ -66,7 +66,7 @@ class DateDiff(PandasOperator, DateDiffMixin):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         if left.isna().all() or right.isna().all():
-            return pd.Series([None] * len(left))
+            return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
@@ -147,7 +147,7 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
 
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         if left.isna().all() or right.isna().all():
-            return pd.Series([None] * len(left), dtype=np.float64)
+            return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
         left = self._convert_to_date(left, self.left_unit)
         right_mask = right.apply(lambda x: len(x) > 0)
