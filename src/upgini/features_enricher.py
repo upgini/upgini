@@ -208,7 +208,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         search_keys: Optional[Dict[str, SearchKey]] = None,
         country_code: Optional[str] = None,
-        model_task_type: Optional[ModelTaskType] = None,
+        model_task_type: Optional[Union[ModelTaskType, str]] = None,
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         search_id: Optional[str] = None,
@@ -282,6 +282,8 @@ class FeaturesEnricher(TransformerMixin):
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
 
+        if model_task_type is not None:
+            self.model_task_type = ModelTaskType.parse(model_task_type)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: Optional[SearchTask] = None

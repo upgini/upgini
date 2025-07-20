@@ -162,6 +162,15 @@ class ModelTaskType(Enum):
     def is_classification(self) -> bool:
         return self in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
 
+    @staticmethod
+    def parse(task_type: Any) -> "ModelTaskType":
+        if isinstance(task_type, ModelTaskType):
+            return task_type
+        elif isinstance(task_type, str):
+            return ModelTaskType(task_type.upper())
+        else:
+            raise ValueError(f"Invalid task type: {task_type}")
+
 
 class ModelLabelType(Enum):
     GINI = "gini"
