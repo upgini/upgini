@@ -234,6 +234,7 @@ class FeaturesEnricher(TransformerMixin):
         id_columns: Optional[List[str]] = None,
         generate_search_key_features: bool = True,
         sample_config: Optional[SampleConfig] = None,
+        print_trace_id: bool = False,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -305,6 +306,8 @@ class FeaturesEnricher(TransformerMixin):
 
             print(self.bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
+            if self.print_trace_id:
+                print(f"@trace_id:{trace_id}")
             with MDC(trace_id=trace_id):
                 try:
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
@@ -368,6 +371,7 @@ class FeaturesEnricher(TransformerMixin):
         self.data_sources_display_handle = None
         self.autofe_features_display_handle = None
         self.report_button_handle = None
+        self.print_trace_id = print_trace_id
 
     def _get_sample_config(self, sample_config: Optional[SampleConfig] = None):
         sample_config = sample_config or SampleConfig(force_sample_size=Dataset.FORCE_SAMPLE_SIZE)
@@ -463,6 +467,8 @@ class FeaturesEnricher(TransformerMixin):
             Otherwise, return all features from input and only selected features from data sources.
         """
         trace_id = str(uuid.uuid4())
+        if self.print_trace_id:
+            print(f"@trace_id:{trace_id}")
         start_time = time.time()
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
@@ -621,6 +627,8 @@ class FeaturesEnricher(TransformerMixin):
         self.warning_counter.reset()
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         trace_id = str(uuid.uuid4())
+        if self.print_trace_id:
+            print(f"@trace_id:{trace_id}")
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
@@ -4635,65 +4643,78 @@ if response.status_code == 200:
         eval_set: Union[Tuple, None] = None,
     ):
         def dump_task(X_, y_, eval_set_):
-            try:
-                if isinstance(X_, pd.Series):
-                    X_ = X_.to_frame()
+            with MDC(trace_id=trace_id):
+                try:
+                    if isinstance(X_, pd.Series):
+                        X_ = X_.to_frame()
 
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
-                    x_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/x.parquet")
-                    if self.rest_client.is_file_uploaded(trace_id, x_digest_sha256):
-                        self.logger.info(f"File x.parquet was already uploaded with digest {x_digest_sha256}, skipping")
-                    else:
-                        self.rest_client.dump_input_file(trace_id, f"{tmp_dir}/x.parquet", "x.parquet")
-
-                    if y_ is not None:
-                        if isinstance(y_, pd.Series):
-                            y_ = y_.to_frame()
-                        y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
-                        y_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/y.parquet")
-                        if self.rest_client.is_file_uploaded(trace_id, y_digest_sha256):
+                    with tempfile.TemporaryDirectory() as tmp_dir:
+                        X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
+                        x_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/x.parquet")
+                        if self.rest_client.is_file_uploaded(trace_id, x_digest_sha256):
                             self.logger.info(
-                                f"File y.parquet was already uploaded with digest {y_digest_sha256}, skipping"
+                                f"File x.parquet was already uploaded with digest {x_digest_sha256}, skipping"
                             )
                         else:
-                            self.rest_client.dump_input_file(trace_id, f"{tmp_dir}/y.parquet", "y.parquet")
+                            self.rest_client.dump_input_file(
+                                trace_id, f"{tmp_dir}/x.parquet", "x.parquet", x_digest_sha256
+                            )
 
-                        if eval_set_ is not None and len(eval_set_) > 0:
-                            for idx, (eval_x_, eval_y_) in enumerate(eval_set_):
-                                if isinstance(eval_x_, pd.Series):
-                                    eval_x_ = eval_x_.to_frame()
-                                eval_x_.to_parquet(f"{tmp_dir}/eval_x_{idx}.parquet", compression="zstd")
-                                eval_x_digest_sha256 = self.rest_client.compute_file_digest(
-                                    f"{tmp_dir}/eval_x_{idx}.parquet"
+                        if y_ is not None:
+                            if isinstance(y_, pd.Series):
+                                y_ = y_.to_frame()
+                            y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
+                            y_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/y.parquet")
+                            if self.rest_client.is_file_uploaded(trace_id, y_digest_sha256):
+                                self.logger.info(
+                                    f"File y.parquet was already uploaded with digest {y_digest_sha256}, skipping"
                                 )
-                                if self.rest_client.is_file_uploaded(trace_id, eval_x_digest_sha256):
-                                    self.logger.info(
-                                        f"File eval_x_{idx}.parquet was already uploaded with"
-                                        f" digest {eval_x_digest_sha256}, skipping"
-                                    )
-                                else:
-                                    self.rest_client.dump_input_file(
-                                        trace_id, f"{tmp_dir}/eval_x_{idx}.parquet", f"eval_x_{idx}.parquet"
-                                    )
+                            else:
+                                self.rest_client.dump_input_file(
+                                    trace_id, f"{tmp_dir}/y.parquet", "y.parquet", y_digest_sha256
+                                )
 
-                                if isinstance(eval_y_, pd.Series):
-                                    eval_y_ = eval_y_.to_frame()
-                                eval_y_.to_parquet(f"{tmp_dir}/eval_y_{idx}.parquet", compression="zstd")
-                                eval_y_digest_sha256 = self.rest_client.compute_file_digest(
-                                    f"{tmp_dir}/eval_y_{idx}.parquet"
-                                )
-                                if self.rest_client.is_file_uploaded(trace_id, eval_y_digest_sha256):
-                                    self.logger.info(
-                                        f"File eval_y_{idx}.parquet was already uploaded"
-                                        f" with digest {eval_y_digest_sha256}, skipping"
+                            if eval_set_ is not None and len(eval_set_) > 0:
+                                for idx, (eval_x_, eval_y_) in enumerate(eval_set_):
+                                    if isinstance(eval_x_, pd.Series):
+                                        eval_x_ = eval_x_.to_frame()
+                                    eval_x_.to_parquet(f"{tmp_dir}/eval_x_{idx}.parquet", compression="zstd")
+                                    eval_x_digest_sha256 = self.rest_client.compute_file_digest(
+                                        f"{tmp_dir}/eval_x_{idx}.parquet"
                                     )
-                                else:
-                                    self.rest_client.dump_input_file(
-                                        trace_id, f"{tmp_dir}/eval_y_{idx}.parquet", f"eval_y_{idx}.parquet"
+                                    if self.rest_client.is_file_uploaded(trace_id, eval_x_digest_sha256):
+                                        self.logger.info(
+                                            f"File eval_x_{idx}.parquet was already uploaded with"
+                                            f" digest {eval_x_digest_sha256}, skipping"
+                                        )
+                                    else:
+                                        self.rest_client.dump_input_file(
+                                            trace_id,
+                                            f"{tmp_dir}/eval_x_{idx}.parquet",
+                                            f"eval_x_{idx}.parquet",
+                                            eval_x_digest_sha256,
+                                        )
+
+                                    if isinstance(eval_y_, pd.Series):
+                                        eval_y_ = eval_y_.to_frame()
+                                    eval_y_.to_parquet(f"{tmp_dir}/eval_y_{idx}.parquet", compression="zstd")
+                                    eval_y_digest_sha256 = self.rest_client.compute_file_digest(
+                                        f"{tmp_dir}/eval_y_{idx}.parquet"
                                     )
-            except Exception:
-                self.logger.warning("Failed to dump input files", exc_info=True)
+                                    if self.rest_client.is_file_uploaded(trace_id, eval_y_digest_sha256):
+                                        self.logger.info(
+                                            f"File eval_y_{idx}.parquet was already uploaded"
+                                            f" with digest {eval_y_digest_sha256}, skipping"
+                                        )
+                                    else:
+                                        self.rest_client.dump_input_file(
+                                            trace_id,
+                                            f"{tmp_dir}/eval_y_{idx}.parquet",
+                                            f"eval_y_{idx}.parquet",
+                                            eval_y_digest_sha256,
+                                        )
+                except Exception:
+                    self.logger.warning("Failed to dump input files", exc_info=True)
 
         try:
             Thread(target=dump_task, args=(X, y, eval_set), daemon=True).start()

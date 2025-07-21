@@ -274,7 +274,7 @@ class _RestClient:
     SEARCH_FILE_METADATA_URI_FMT_V2 = SERVICE_ROOT_V2 + "search/{0}/metadata"
     SEARCH_TASK_METADATA_FMT_V3 = SERVICE_ROOT_V2 + "search/metadata-v2/{0}"
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
-    SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file"
+    SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file?digest={0}"
     TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
@@ -406,8 +406,8 @@ class _RestClient:
         meaning_types = [_RestClient.meaning_type_by_name(name, metadata) for name in search_key_names]
         return [meaning_type.value for meaning_type in meaning_types if meaning_type is not None]
 
-    def dump_input_file(self, trace_id: str, path: str, file_name: str):
-        api_path = self.SEARCH_DUMP_INPUT_FILE_FMT
+    def dump_input_file(self, trace_id: str, path: str, file_name: str, digest: str):
+        api_path = self.SEARCH_DUMP_INPUT_FILE_FMT.format(digest)
         with open(path, "rb") as file:
             files = {"file": (file_name, file, "application/octet-stream")}
             self._with_unauth_retry(
