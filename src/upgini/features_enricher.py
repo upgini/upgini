@@ -307,7 +307,7 @@ class FeaturesEnricher(TransformerMixin):
             print(self.bundle.get("search_by_task_id_start"))
             trace_id = str(uuid.uuid4())
             if self.print_trace_id:
-                print(f"@trace_id:{trace_id}")
+                print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
             with MDC(trace_id=trace_id):
                 try:
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
@@ -468,7 +468,7 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = str(uuid.uuid4())
         if self.print_trace_id:
-            print(f"@trace_id:{trace_id}")
+            print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
         start_time = time.time()
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
@@ -628,7 +628,7 @@ class FeaturesEnricher(TransformerMixin):
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         trace_id = str(uuid.uuid4())
         if self.print_trace_id:
-            print(f"@trace_id:{trace_id}")
+            print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
         start_time = time.time()
         with MDC(trace_id=trace_id):
             if len(args) > 0:
