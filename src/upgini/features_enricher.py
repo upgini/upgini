@@ -300,6 +300,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_importances_ = []
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
+        self.print_trace_id = print_trace_id
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -371,7 +372,6 @@ class FeaturesEnricher(TransformerMixin):
         self.data_sources_display_handle = None
         self.autofe_features_display_handle = None
         self.report_button_handle = None
-        self.print_trace_id = print_trace_id
 
     def _get_sample_config(self, sample_config: Optional[SampleConfig] = None):
         sample_config = sample_config or SampleConfig(force_sample_size=Dataset.FORCE_SAMPLE_SIZE)
