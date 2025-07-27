@@ -2804,6 +2804,7 @@ if response.status_code == 200:
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         search_id_callback: Optional[Callable[[str], Any]] = None,
     ):
+        self._search_task = None
         self.warning_counter.reset()
         self.df_with_original_index = None
         self.__cached_sampled_datasets = dict()
