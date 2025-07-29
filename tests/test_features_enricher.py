@@ -3026,6 +3026,87 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
+def test_imbalanced_with_oot(requests_mock: Mocker, update_metrics_flag: bool):
+    pd.set_option("display.max_columns", 1000)
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    url = "http://fake_url2"
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(requests_mock, url, search_task_id)
+
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="ads_feature", type="numeric", source="ads", hit_rate=100.0, shap_value=0.9),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=8000, max_hit_count=8000, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+            eval_set_metrics=[],
+        ),
+    )
+    path_to_mock_features = os.path.join(
+        base_dir, "test_data/binary/features_imbalanced_with_entity_system_record_id.parquet"
+    )
+
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path_to_mock_features_validation = os.path.join(
+        base_dir, "test_data/binary/features_imbalanced_with_entity_system_record_id_validation.parquet"
+    )
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
+    mock_validation_raw_features(
+        requests_mock, url, validation_search_task_id, path_to_mock_features_validation, metrics_calculation=True
+    )
+
+    train_path = os.path.join(base_dir, "test_data/binary/initial_train_imbalanced.parquet")
+    train_df = pd.read_parquet(train_path)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    oot = pd.read_parquet(os.path.join(base_dir, "test_data/binary/initial_oot_imbalanced.parquet"))
+
+    search_keys = {"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE}
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        logs_enabled=False,
+        sample_config=SampleConfig(binary_min_sample_threshold=7_000),
+    )
+
+    enricher.fit(train_features, train_target, oot=oot, calculate_metrics=False, select_features=False)
+
+    metrics = enricher.calculate_metrics()
+    assert metrics is not None
+
+    if update_metrics_flag:
+        metrics.to_csv(
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_imbalanced_with_oot_metrics.csv"
+            ),
+            index=False,
+        )
+
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_imbalanced_with_oot_metrics.csv")
+    )
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     pd.set_option("display.max_columns", 1000)
     url = "http://fake_url2"
@@ -3146,6 +3227,7 @@ def test_email_search_key(requests_mock: Mocker):
         assert set(columns) == {
             "system_record_id",
             "entity_system_record_id",
+            "eval_set_index",
             "target",
             "email_822444",
             "email_822444_hem",
@@ -3201,6 +3283,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         assert set(self.columns.to_list()) == {
             "system_record_id",
             "entity_system_record_id",
+            "eval_set_index",
             "country_aff64e",
             "postal_code_13534a",
             "current_date_b993c4",
@@ -3377,6 +3460,7 @@ def test_search_keys_autodetection(requests_mock: Mocker):
         assert columns == {
             "system_record_id",
             "entity_system_record_id",
+            "eval_set_index",
             "postal_code_13534a",
             "phone_45569d",
             "date_0e8763",

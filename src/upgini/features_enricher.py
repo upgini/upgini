@@ -415,6 +415,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.Series, np.ndarray, List],
         eval_set: Optional[Union[List[tuple], tuple]] = None,
         *args,
+        oot: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
         estimator: Optional[Any] = None,
@@ -442,6 +443,9 @@ class FeaturesEnricher(TransformerMixin):
 
         eval_set: List[tuple], optional (default=None)
             List of pairs (X, y) for validation.
+
+        oot: pandas.DataFrame of shape (n_samples, n_features)
+            Out of time data.
 
         importance_threshold: float, optional (default=None)
             Minimum SHAP value to select a feature. Default value is 0.0.
@@ -508,7 +512,8 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     self.eval_set,
-                    progress_bar,
+                    oot=oot,
+                    progress_bar=progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
@@ -563,6 +568,7 @@ class FeaturesEnricher(TransformerMixin):
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List],
         eval_set: Optional[Union[List[tuple], tuple]] = None,
         *args,
+        oot: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         exclude_features_sources: Optional[List[str]] = None,
         keep_input: bool = True,
         importance_threshold: Optional[float] = None,
@@ -667,7 +673,8 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y,
                     self.eval_set,
-                    progress_bar,
+                    oot=oot,
+                    progress_bar=progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
                     calculate_metrics=calculate_metrics,
@@ -940,7 +947,7 @@ class FeaturesEnricher(TransformerMixin):
             ):
                 raise ValidationError(self.bundle.get("metrics_unfitted_enricher"))
 
-            validated_X, validated_y, validated_eval_set = self._validate_train_eval(
+            validated_X, validated_y, validated_eval_set, _ = self._validate_train_eval(
                 effective_X, effective_y, effective_eval_set
             )
 
@@ -1168,14 +1175,16 @@ class FeaturesEnricher(TransformerMixin):
                         # Show actually used for metrics dataset size
                         self.bundle.get("quality_metrics_rows_header"): _num_samples(fitting_X),
                     }
-                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                        y_sorted
-                    ):
-                        train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                            # np.mean(validated_y), 4
-                            np.mean(y_sorted),
-                            4,
-                        )
+                    if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                        try:
+                            train_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
+                                # np.mean(validated_y), 4
+                                np.mean(y_sorted),
+                                4,
+                            )
+                        except Exception:
+                            pass
+
                     if baseline_metric is not None:
                         train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
                             baseline_metric
@@ -1253,15 +1262,16 @@ class FeaturesEnricher(TransformerMixin):
                                 ),
                                 # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
-                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
-                                eval_y_sorted
-                            ):
-                                eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                                    # np.mean(validated_eval_set[idx][1]), 4
-                                    # Use actually used for metrics dataset
-                                    np.mean(eval_y_sorted),
-                                    4,
-                                )
+                            if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION]:
+                                try:
+                                    eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
+                                        # np.mean(validated_eval_set[idx][1]), 4
+                                        # Use actually used for metrics dataset
+                                        np.mean(eval_y_sorted),
+                                        4,
+                                    )
+                                except Exception:
+                                    pass
                             if etalon_eval_metric is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
                                     etalon_eval_metric
@@ -1535,7 +1545,7 @@ class FeaturesEnricher(TransformerMixin):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
-        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set)
+        validated_X, validated_y, validated_eval_set, _ = self._validate_train_eval(X, y, checked_eval_set)
 
         sampled_data = self._get_enriched_for_metrics(
             trace_id,
@@ -1931,13 +1941,10 @@ class FeaturesEnricher(TransformerMixin):
         )
 
         # Handle eval sets extraction based on EVAL_SET_INDEX
-        if EVAL_SET_INDEX in enriched_Xy.columns:
-            eval_set_indices = list(enriched_Xy[EVAL_SET_INDEX].unique())
-            if 0 in eval_set_indices:
-                eval_set_indices.remove(0)
-            for eval_set_index in eval_set_indices:
+        if EVAL_SET_INDEX in enriched_Xy.columns and eval_set is not None:
+            for eval_set_index in range(0, len(eval_set)):
                 enriched_eval_sets[eval_set_index] = enriched_Xy.loc[
-                    enriched_Xy[EVAL_SET_INDEX] == eval_set_index
+                    enriched_Xy[EVAL_SET_INDEX] == eval_set_index + 1
                 ].copy()
             enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
@@ -1958,9 +1965,9 @@ class FeaturesEnricher(TransformerMixin):
                 )
 
             for idx in range(len(eval_set)):
-                eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
-                eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
-                enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
+                eval_X_sampled = enriched_eval_sets[idx][x_columns].copy()
+                eval_y_sampled = enriched_eval_sets[idx][TARGET].copy()
+                enriched_eval_X = enriched_eval_sets[idx][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         reversed_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
@@ -2047,12 +2054,16 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __combine_train_and_eval_sets(
-        self, X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[List[tuple]] = None
+        self,
+        X: pd.DataFrame,
+        y: Optional[pd.Series] = None,
+        eval_set: Optional[List[tuple]] = None,
+        oot: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         df = X.copy()
         if y is not None:
             df[TARGET] = y
-        if not eval_set:
+        if eval_set is None and oot is None:
             return df
 
         df[EVAL_SET_INDEX] = 0
@@ -2063,6 +2074,24 @@ class FeaturesEnricher(TransformerMixin):
             eval_df_with_index[TARGET] = eval_y
             eval_df_with_index[EVAL_SET_INDEX] = idx + 1
             df = pd.concat([df, eval_df_with_index])
+
+        if oot is not None:
+            oot = oot.sample(n=min(100_000, len(oot)), random_state=self.random_state)
+        else:
+            # Get 100k random sample from train set as OOT
+            oot = X.sample(n=min(100_000, len(X)), random_state=self.random_state)
+        oot_df_with_index = oot.copy()
+        oot_df_with_index[TARGET] = None
+        oot_df_with_index[EVAL_SET_INDEX] = -1
+        target_dtype = df[TARGET].dtype
+        df = pd.concat([df, oot_df_with_index])
+        if target_dtype != df[TARGET].dtype:
+            if target_dtype == "int64":
+                df[TARGET] = df[TARGET].astype("Int64")
+            elif target_dtype == "float64":
+                df[TARGET] = df[TARGET].astype("Float64")
+            else:
+                self.logger.warning(f"Target dtype changed after adding OOT from {target_dtype} to {df[TARGET].dtype}")
 
         return df
 
@@ -2115,12 +2144,12 @@ class FeaturesEnricher(TransformerMixin):
     ) -> Dict[int, Tuple]:
         eval_set_sampled_dict = {}
 
-        for idx in range(eval_set_len):
-            enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx + 1}")
+        for idx in range(1, eval_set_len + 1):
+            enriched_eval_xy = enriched_df.query(f"{EVAL_SET_INDEX} == {idx}")
             eval_x_sampled = enriched_eval_xy[x_columns].copy()
             eval_y_sampled = enriched_eval_xy[TARGET].copy()
             enriched_eval_x = enriched_eval_xy[enriched_X_columns].copy()
-            eval_set_sampled_dict[idx] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
+            eval_set_sampled_dict[idx - 1] = (eval_x_sampled, enriched_eval_x, eval_y_sampled)
 
         return eval_set_sampled_dict
 
@@ -2312,10 +2341,8 @@ if response.status_code == 200:
         with MDC(trace_id=trace_id, search_id=search_id):
             self.logger.info("Start transform")
 
-            validated_X, validated_y, validated_eval_set = self._validate_train_eval(
-                X, y, eval_set=None, is_transform=True
-            )
-            df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
+            validated_X, validated_y, _, _ = self._validate_train_eval(X, y, is_transform=True)
+            df = self.__combine_train_and_eval_sets(validated_X, validated_y)
 
             validated_Xy = df.copy()
 
@@ -2790,9 +2817,10 @@ if response.status_code == 200:
         X: Union[pd.DataFrame, pd.Series, np.ndarray],
         y: Union[pd.DataFrame, pd.Series, np.ndarray, List, None],
         eval_set: Optional[List[tuple]],
+        *,
+        oot: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         progress_bar: Optional[ProgressBar],
         start_time: int,
-        *,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool],
         scoring: Union[Callable, str, None],
@@ -2813,7 +2841,7 @@ if response.status_code == 200:
         self.fit_dropped_features = set()
         self.fit_generated_features = []
 
-        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set)
+        validated_X, validated_y, validated_eval_set, validated_oot = self._validate_train_eval(X, y, eval_set, oot)
 
         is_demo_dataset = hash_input(validated_X, validated_y, validated_eval_set) in DEMO_DATASET_HASHES
         if is_demo_dataset:
@@ -2854,6 +2882,7 @@ if response.status_code == 200:
             validated_X,
             validated_y,
             validated_eval_set,
+            validated_oot,
             exclude_features_sources=exclude_features_sources,
             calculate_metrics=calculate_metrics,
             scoring=scoring,
@@ -2861,7 +2890,7 @@ if response.status_code == 200:
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
         )
 
-        df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set)
+        df = self.__combine_train_and_eval_sets(validated_X, validated_y, validated_eval_set, validated_oot)
         self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns or []])
 
         self.fit_search_keys = self.search_keys.copy()
@@ -3288,12 +3317,14 @@ if response.status_code == 200:
         X: pd.DataFrame,
         y: Optional[pd.Series] = None,
         eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]] = None,
+        oot: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
         is_transform: bool = False,
     ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
         validated_X = self._validate_X(X, is_transform)
         validated_y = self._validate_y(validated_X, y, enforce_y=not is_transform)
         validated_eval_set = self._validate_eval_set(validated_X, eval_set)
-        return validated_X, validated_y, validated_eval_set
+        validated_oot = self._validate_oot(validated_X, oot)
+        return validated_X, validated_y, validated_eval_set, validated_oot
 
     def _encode_id_columns(
         self,
@@ -3428,6 +3459,44 @@ if response.status_code == 200:
         if eval_set is None:
             return None
         return [self._validate_eval_set_pair(X, eval_pair) for eval_pair in eval_set]
+
+    def _validate_oot(self, X: pd.DataFrame, oot: Union[pd.DataFrame, pd.Series, np.ndarray, None]):
+        if oot is None:
+            return None
+
+        if _num_samples(oot) == 0:
+            raise ValidationError(self.bundle.get("oot_is_empty"))
+        if isinstance(oot, pd.DataFrame):
+            if isinstance(oot.columns, pd.MultiIndex) or isinstance(oot.index, pd.MultiIndex):
+                raise ValidationError(self.bundle.get("oot_multiindex_unsupported"))
+            validated_oot = oot.copy()
+        elif isinstance(oot, pd.Series):
+            validated_oot = oot.to_frame()
+        elif isinstance(oot, (list, np.ndarray)):
+            validated_oot = pd.DataFrame(oot)
+            renaming = {c: str(c) for c in validated_oot.columns}
+            validated_oot = validated_oot.rename(columns=renaming)
+        else:
+            raise ValidationError(self.bundle.get("unsupported_type_oot").format(type(oot)))
+
+        if not validated_oot.index.is_unique:
+            raise ValidationError(self.bundle.get("non_unique_index_oot"))
+
+        if self.exclude_columns is not None:
+            validated_oot = validated_oot.drop(columns=self.exclude_columns, errors="ignore")
+
+        if self.baseline_score_column:
+            validated_oot[self.baseline_score_column] = validated_oot[self.baseline_score_column].astype(
+                "float64", errors="ignore"
+            )
+
+        if validated_oot.columns.to_list() != X.columns.to_list():
+            if set(validated_oot.columns.to_list()) == set(X.columns.to_list()):
+                validated_oot = validated_oot[X.columns.to_list()]
+            else:
+                raise ValidationError(self.bundle.get("oot_and_x_diff_shape"))
+
+        return validated_oot
 
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
@@ -3600,6 +3669,7 @@ if response.status_code == 200:
         X: pd.DataFrame,
         y: Union[pd.Series, np.ndarray, list, None] = None,
         eval_set: Optional[List[tuple]] = None,
+        oot: Optional[pd.DataFrame] = None,
         exclude_features_sources: Optional[List[str]] = None,
         calculate_metrics: Optional[bool] = None,
         cv: Optional[Any] = None,
@@ -3668,6 +3738,8 @@ if response.status_code == 200:
                         self.logger.info(
                             f"First 10 rows of the eval_y_{idx} with shape {_num_samples(eval_y)}:\n{sample(eval_y)}"
                         )
+                if oot is not None:
+                    self.logger.info(f"First 10 rows of the oot with shape {oot.shape}:\n{sample(oot)}")
 
             do_without_pandas_limits(print_datasets_sample)
 
@@ -3850,7 +3922,6 @@ if response.status_code == 200:
         sort_exclude_columns.append(date_column)
         columns_to_sort = [date_column] if date_column is not None else []
 
-        do_sorting = True
         if self.id_columns and self.cv.is_time_series():
             # Check duplicates by date and id_columns
             reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
@@ -3876,38 +3947,74 @@ if response.status_code == 200:
             columns_to_hash = sort_columns(
                 df, target_name, search_keys, self.model_task_type, sort_exclude_columns, logger=self.logger
             )
-        if do_sorting:
-            search_keys_hash = "search_keys_hash"
-            if len(columns_to_hash) > 0:
-                factorized_df = df.copy()
-                for col in columns_to_hash:
-                    if col not in search_keys and not is_numeric_dtype(factorized_df[col]):
-                        factorized_df[col] = factorized_df[col].factorize(sort=True)[0]
-                df[search_keys_hash] = pd.util.hash_pandas_object(factorized_df[columns_to_hash], index=False)
-                columns_to_sort.append(search_keys_hash)
 
+        search_keys_hash = "search_keys_hash"
+        if len(columns_to_hash) > 0:
+            factorized_df = df.copy()
+            for col in columns_to_hash:
+                if col not in search_keys and not is_numeric_dtype(factorized_df[col]):
+                    factorized_df[col] = factorized_df[col].factorize(sort=True)[0]
+            df[search_keys_hash] = pd.util.hash_pandas_object(factorized_df[columns_to_hash], index=False)
+            columns_to_sort.append(search_keys_hash)
+
+        # Check if we need to separate train/eval_set and OOT parts
+        if EVAL_SET_INDEX in df.columns and (df[EVAL_SET_INDEX] == -1).any():
+            # Separate train+eval_set part (eval_set_index >= 0) and OOT part (eval_set_index == -1)
+            train_eval_mask = df[EVAL_SET_INDEX] >= 0
+            oot_mask = df[EVAL_SET_INDEX] == -1
+
+            train_eval_part = df[train_eval_mask].copy()
+            oot_part = df[oot_mask].copy()
+
+            # Process train+eval_set part
+            if not train_eval_part.empty:
+                train_eval_part = train_eval_part.sort_values(by=columns_to_sort)
+
+                train_eval_part = train_eval_part.reset_index(drop=True).reset_index()
+                # system_record_id saves correct order for fit
+                train_eval_part = train_eval_part.rename(columns={DEFAULT_INDEX: id_name})
+
+            # Process OOT part
+            if not oot_part.empty:
+                oot_part = oot_part.sort_values(by=columns_to_sort)
+
+                oot_part = oot_part.reset_index(drop=True).reset_index()
+
+                oot_part = oot_part.rename(columns={DEFAULT_INDEX: id_name})
+                # Continue index from max train_eval_part id + 1
+                if not train_eval_part.empty:
+                    max_train_eval_id = train_eval_part[id_name].max()
+                    oot_part[id_name] = oot_part[id_name] + max_train_eval_id + 1
+
+            # Combine parts back together
+            if not train_eval_part.empty and not oot_part.empty:
+                df = pd.concat([train_eval_part, oot_part], ignore_index=True)
+            elif not train_eval_part.empty:
+                df = train_eval_part
+            elif not oot_part.empty:
+                df = oot_part
+        else:
+            # Original logic when no EVAL_SET_INDEX column
             df = df.sort_values(by=columns_to_sort)
 
-            if search_keys_hash in df.columns:
-                df.drop(columns=search_keys_hash, inplace=True)
+            df = df.reset_index(drop=True).reset_index()
+            # system_record_id saves correct order for fit
+            df = df.rename(columns={DEFAULT_INDEX: id_name})
 
-        df = df.reset_index(drop=True).reset_index()
-        # system_record_id saves correct order for fit
-        df = df.rename(columns={DEFAULT_INDEX: id_name})
+        if search_keys_hash in df.columns:
+            df.drop(columns=search_keys_hash, inplace=True)
 
         # return original order
         df = df.set_index(ORIGINAL_INDEX)
         df.index.name = original_index_name
         df = df.sort_values(by=original_order_name).drop(columns=original_order_name)
 
-        # meaning_types[id_name] = (
-        #     FileColumnMeaningType.SYSTEM_RECORD_ID
-        #     if id_name == SYSTEM_RECORD_ID
-        #     else FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
-        # )
         return df
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
+        if EVAL_SET_INDEX in df.columns:
+            df = df.query(f"{EVAL_SET_INDEX} != -1")
+
         target = df[self.TARGET_NAME]
         if is_string_dtype(target) or is_object_dtype(target):
             maybe_numeric_target = pd.to_numeric(target, errors="coerce")
@@ -4577,7 +4684,7 @@ if response.status_code == 200:
             print(msg)
 
     def _validate_PSI(self, df: pd.DataFrame):
-        if EVAL_SET_INDEX in df.columns:
+        if EVAL_SET_INDEX in df.columns and (df[EVAL_SET_INDEX] == 1).any():
             train = df.query(f"{EVAL_SET_INDEX} == 0")
             eval1 = df.query(f"{EVAL_SET_INDEX} == 1")
         else:

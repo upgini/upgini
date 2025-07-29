@@ -53,9 +53,14 @@ def remove_fintech_duplicates(
     # Splitting into train and eval_set parts
     if EVAL_SET_INDEX in df.columns:
         train_df = df[df[EVAL_SET_INDEX] == 0]
-        eval_dfs = [df[df[EVAL_SET_INDEX] == idx] for idx in df[EVAL_SET_INDEX].unique() if idx != 0]
+        oot_df = df[df[EVAL_SET_INDEX] == -1]
     else:
         train_df = df
+        oot_df = None
+
+    if EVAL_SET_INDEX in df.columns and (df[EVAL_SET_INDEX] >= 1).any():
+        eval_dfs = [df[df[EVAL_SET_INDEX] == idx] for idx in df[EVAL_SET_INDEX].unique() if idx > 0]
+    else:
         eval_dfs = []
 
     warning_messages = []
@@ -149,6 +154,8 @@ def remove_fintech_duplicates(
         df = pd.concat([train_df] + new_eval_dfs)
     else:
         df = train_df
+    if oot_df is not None:
+        df = pd.concat([df, oot_df])
     logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
 
     return df, warning_messages
@@ -177,6 +184,12 @@ def clean_full_duplicates(
     if EVAL_SET_INDEX in unique_columns:
         unique_columns.remove(EVAL_SET_INDEX)
 
+    if EVAL_SET_INDEX in df.columns:
+        oot = df.query(f"{EVAL_SET_INDEX} == -1")
+        df = df.query(f"{EVAL_SET_INDEX} != -1")
+    else:
+        oot = None
+
     logger.info(f"Dataset shape before clean duplicates: {df.shape}")
     # Train segment goes first so if duplicates are found in train and eval set
     # then we keep unique rows in train segment
@@ -200,6 +213,9 @@ def clean_full_duplicates(
             msg = bundle.get("dataset_diff_target_duplicates").format(share_tgt_dedup, num_dup_rows, dups_indices)
             df = df.drop_duplicates(subset=unique_columns, keep=False)
             logger.info(f"Dataset shape after clean invalid target duplicates: {df.shape}")
+
+    if oot is not None:
+        df = pd.concat([df, oot])
 
     return df, msg
 
