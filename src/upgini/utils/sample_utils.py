@@ -5,7 +5,7 @@ from typing import Callable, List, Optional
 import numpy as np
 import pandas as pd
 
-from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
+from upgini.metadata import EVAL_SET_INDEX, SYSTEM_RECORD_ID, CVType, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.target_utils import balance_undersample
 from upgini.utils.ts_utils import get_most_frequent_time_unit, trunc_datetime
@@ -70,8 +70,15 @@ def sample(
     logger: Optional[logging.Logger] = None,
     **kwargs,
 ) -> pd.DataFrame:
+    # Don't sample OOT
+    if EVAL_SET_INDEX in df.columns and (df[EVAL_SET_INDEX] == -1).any():
+        oot = df.query(f"{EVAL_SET_INDEX} == -1")
+        df = df.query(f"{EVAL_SET_INDEX} != -1")
+    else:
+        oot = None
+
     if force_downsampling:
-        return balance_undersample_forced(
+        rebalanced = balance_undersample_forced(
             df,
             sample_columns.target,
             sample_columns.ids,
@@ -83,6 +90,10 @@ def sample(
             logger=logger,
             **kwargs,
         )
+        if oot is not None:
+            rebalanced = pd.concat([rebalanced, oot])
+
+        return rebalanced
 
     if sample_columns.eval_set_index in df.columns:
         fit_sample_threshold = sample_config.fit_sample_threshold_with_eval_set
@@ -92,7 +103,7 @@ def sample(
         fit_sample_rows = sample_config.fit_sample_rows
 
     if cv_type is not None and cv_type.is_time_series():
-        return sample_time_series_train_eval(
+        resampled = sample_time_series_train_eval(
             df,
             sample_columns,
             sample_config.fit_sample_rows_ts,
@@ -102,6 +113,10 @@ def sample(
             logger=logger,
             **kwargs,
         )
+
+        if oot is not None:
+            resampled = pd.concat([resampled, oot])
+        return resampled
 
     if task_type is not None and task_type.is_classification() and balance:
         df = balance_undersample(
@@ -125,6 +140,9 @@ def sample(
         )
         df = df.sample(n=fit_sample_rows, random_state=random_state)
         logger.info(f"Shape after threshold resampling: {df.shape}")
+
+    if oot is not None:
+        df = pd.concat([df, oot])
 
     return df
 

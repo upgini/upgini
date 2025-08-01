@@ -224,6 +224,8 @@ class Dataset:
 
         if EVAL_SET_INDEX in self.data.columns and not force_downsampling:
             train_segment = self.data[self.data[EVAL_SET_INDEX] == 0]
+        elif EVAL_SET_INDEX in self.data.columns and (self.data[EVAL_SET_INDEX] == -1).any():
+            train_segment = self.data[self.data[EVAL_SET_INDEX] >= 0]
         else:
             train_segment = self.data
 

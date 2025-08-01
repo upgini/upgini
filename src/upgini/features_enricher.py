@@ -2068,23 +2068,31 @@ class FeaturesEnricher(TransformerMixin):
 
         df[EVAL_SET_INDEX] = 0
 
-        for idx, eval_pair in enumerate(eval_set):
-            eval_x, eval_y = eval_pair
-            eval_df_with_index = eval_x.copy()
-            eval_df_with_index[TARGET] = eval_y
-            eval_df_with_index[EVAL_SET_INDEX] = idx + 1
-            df = pd.concat([df, eval_df_with_index])
+        if eval_set is not None:
+            for idx, eval_pair in enumerate(eval_set):
+                eval_x, eval_y = eval_pair
+                eval_df_with_index = eval_x.copy()
+                eval_df_with_index[TARGET] = eval_y
+                eval_df_with_index[EVAL_SET_INDEX] = idx + 1
+                df = pd.concat([df, eval_df_with_index])
 
         if oot is not None:
-            oot = oot.sample(n=min(100_000, len(oot)), random_state=self.random_state)
+            oot_sample_size = min(100_000, len(oot))
+            self.logger.info(f"Use sampled to {oot_sample_size} OOT")
+            oot = oot.sample(n=oot_sample_size, random_state=self.random_state)
         else:
             # Get 100k random sample from train set as OOT
-            oot = X.sample(n=min(100_000, len(X)), random_state=self.random_state)
+            oot_sample_size = min(100_000, len(X))
+            self.logger.info(f"Use sampled to {oot_sample_size} train as OOT")
+            oot = X.sample(n=oot_sample_size, random_state=self.random_state)
         oot_df_with_index = oot.copy()
         oot_df_with_index[TARGET] = None
         oot_df_with_index[EVAL_SET_INDEX] = -1
         target_dtype = df[TARGET].dtype
-        df = pd.concat([df, oot_df_with_index])
+
+        # Check if oot_df_with_index is not empty before concat to avoid FutureWarning
+        if not oot_df_with_index.empty:
+            df = pd.concat([df, oot_df_with_index])
         if target_dtype != df[TARGET].dtype:
             if target_dtype == "int64":
                 df[TARGET] = df[TARGET].astype("Int64")
