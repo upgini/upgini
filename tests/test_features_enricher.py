@@ -240,7 +240,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
-    metrics = enricher.calculate_metrics()
+    metrics = enricher.calculate_metrics(internal_call=True)
 
     if update_metrics_flag:
         metrics.to_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher.csv"), index=False)
@@ -280,7 +280,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         select_features=False,
     )
 
-    metrics = enricher.calculate_metrics()
+    metrics = enricher.calculate_metrics(internal_call=True)
     logging.warning(metrics)
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
@@ -3800,7 +3800,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
     )
     assert enriched_train_features.shape == (10000, 6)
 
-    metrics = enricher.calculate_metrics()
+    metrics = enricher.calculate_metrics(internal_call=True)
     assert metrics is not None
 
     if update_metrics_flag:
@@ -3835,7 +3835,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
     assert enriched_train_features.shape == (10000, 3)
     assert "client_feature" not in enriched_train_features.columns
 
-    metrics = enricher.calculate_metrics()
+    metrics = enricher.calculate_metrics(internal_call=True)
     assert metrics is not None
 
     if update_metrics_flag:

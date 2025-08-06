@@ -112,6 +112,7 @@ except Exception:
         CustomFallbackProgressBar as ProgressBar,
     )
 
+from upgini.utils.psi import calculate_features_psi
 from upgini.utils.sample_utils import SampleColumns, SampleConfig, _num_samples, sample
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import calculate_psi, define_task
@@ -298,6 +299,7 @@ class FeaturesEnricher(TransformerMixin):
         self.external_source_feature_names = []
         self.zero_shap_client_features = []
         self.feature_importances_ = []
+        self.psi_values: Optional[Dict[str, float]] = None
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
@@ -398,13 +400,26 @@ class FeaturesEnricher(TransformerMixin):
     @staticmethod
     def _check_eval_set(eval_set, X, bundle: ResourceBundle):
         checked_eval_set = []
-        if eval_set is not None and isinstance(eval_set, tuple):
+        if eval_set is None:
+            return checked_eval_set
+        if isinstance(eval_set, tuple):
             eval_set = [eval_set]
-        if eval_set is not None and not isinstance(eval_set, list):
+        if not isinstance(eval_set, list):
             raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
         for eval_pair in eval_set or []:
+            # Handle OOT
+            if isinstance(eval_pair, pd.DataFrame):
+                empty_target = pd.Series([np.nan] * len(eval_pair), index=eval_pair.index)
+                eval_pair = (eval_pair, empty_target)
+            elif isinstance(eval_pair, tuple) and len(eval_pair) == 1:
+                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
+                eval_pair = (eval_pair[0], empty_target)
+
             if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
                 raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
+            if eval_pair[1] is None:
+                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
+                eval_pair = (eval_pair[0], empty_target)
             if not is_frames_equal(X, eval_pair[0], bundle):
                 checked_eval_set.append(eval_pair)
         return checked_eval_set
@@ -426,6 +441,7 @@ class FeaturesEnricher(TransformerMixin):
         search_id_callback: Optional[Callable[[str], Any]] = None,
         select_features: bool = True,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
+        stability_threshold: float = 0.15,
         **kwargs,
     ):
         """Fit to data.
@@ -515,6 +531,7 @@ class FeaturesEnricher(TransformerMixin):
                     estimator=estimator,
                     scoring=scoring,
                     importance_threshold=importance_threshold,
+                    stability_threshold=stability_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     auto_fe_parameters=auto_fe_parameters,
@@ -574,6 +591,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         select_features: bool = True,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
+        stability_threshold: float = 0.15,
         **kwargs,
     ) -> pd.DataFrame:
         """Fit to data, then transform it.
@@ -617,6 +635,10 @@ class FeaturesEnricher(TransformerMixin):
         select_features: bool, optional (default=False)
             If True, return only selected features both from input and data sources.
             Otherwise, return all features from input and only selected features from data sources.
+
+        stability_threshold: float, optional (default=0.15)
+            Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
+            then feature will be dropped.
 
         Returns
         -------
@@ -674,6 +696,7 @@ class FeaturesEnricher(TransformerMixin):
                     scoring=scoring,
                     estimator=estimator,
                     importance_threshold=importance_threshold,
+                    stability_threshold=stability_threshold,
                     max_features=max_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     auto_fe_parameters=auto_fe_parameters,
@@ -868,6 +891,7 @@ class FeaturesEnricher(TransformerMixin):
         internal_call: bool = False,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        stability_threshold: float = 0.15,
         **kwargs,
     ) -> Optional[pd.DataFrame]:
         """Calculate metrics
@@ -1033,6 +1057,7 @@ class FeaturesEnricher(TransformerMixin):
                     groups,
                     _cv,
                     columns_renaming,
+                    eval_set_dates,
                 ) = prepared_data
 
                 # rename cat_features
@@ -1074,9 +1099,43 @@ class FeaturesEnricher(TransformerMixin):
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
                     has_date = self._get_date_column(search_keys) is not None
-                    has_time = has_date and isinstance(_cv, TimeSeriesSplit) or isinstance(_cv, BlockedTimeSeriesSplit)
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
                     cat_features = list(set(client_cat_features + cat_features_from_backend))
+
+                    # Drop unstable features
+                    if internal_call and has_date and len(validated_eval_set) > 0:
+                        unstable_features = self._check_stability(
+                            validated_X,
+                            validated_eval_set,
+                            fitting_eval_set_dict,
+                            eval_set_dates,
+                            stability_threshold,
+                            cat_features,
+                            model_task_type,
+                        )
+                        if unstable_features:
+                            msg = f"Some features are unstable: {unstable_features} and will be dropped"
+                            self.logger.warning(msg)
+                            print(msg)
+                            fitting_X = fitting_X.drop(columns=unstable_features, errors="ignore")
+                            fitting_enriched_X = fitting_enriched_X.drop(columns=unstable_features, errors="ignore")
+                            msg = f"Threre are {len(fitting_enriched_X.columns)} stable selected features left"
+                            self.logger.info(msg)
+                            print(msg)
+                            for idx, (
+                                eval_X,
+                                eval_y,
+                                eval_enriched_X,
+                                eval_enriched_y,
+                            ) in fitting_eval_set_dict.items():
+                                eval_X = eval_X.drop(columns=unstable_features, errors="ignore")
+                                eval_enriched_X = eval_enriched_X.drop(columns=unstable_features, errors="ignore")
+                                fitting_eval_set_dict[idx] = (eval_X, eval_y, eval_enriched_X, eval_enriched_y)
+
+                        decoded_X = self._decode_id_columns(fitting_X, columns_renaming)
+                        self._update_report_psi(trace_id, decoded_X)
+
+                    has_time = has_date and isinstance(_cv, TimeSeriesSplit) or isinstance(_cv, BlockedTimeSeriesSplit)
                     baseline_cat_features = [f for f in cat_features if f in fitting_X.columns]
                     enriched_cat_features = [f for f in cat_features if f in fitting_enriched_X.columns]
                     if len(enriched_cat_features) < len(cat_features):
@@ -1196,14 +1255,16 @@ class FeaturesEnricher(TransformerMixin):
                     # max_initial_eval_set_hit_rate = self._search_task.get_max_initial_eval_set_hit_rate_v2()
                     if len(fitting_eval_set_dict) > 0:
                         for idx in fitting_eval_set_dict.keys():
-                            # eval_hit_rate = max_initial_eval_set_hit_rate[idx + 1]
-
                             (
                                 eval_X_sorted,
                                 eval_y_sorted,
                                 enriched_eval_X_sorted,
                                 enriched_eval_y_sorted,
                             ) = fitting_eval_set_dict[idx]
+
+                            if eval_y_sorted.isna().all():
+                                # Skip OOT eval set
+                                continue
 
                             if baseline_estimator is not None:
                                 self.logger.info(
@@ -1247,17 +1308,14 @@ class FeaturesEnricher(TransformerMixin):
                                     "quality_metrics_eval_segment"
                                 ).format(idx + 1),
                                 self.bundle.get("quality_metrics_rows_header"): _num_samples(
-                                    # effective_eval_set[idx][0]
                                     # Use actually used for metrics dataset
                                     eval_X_sorted
                                 ),
-                                # self.bundle.get("quality_metrics_match_rate_header"): eval_hit_rate,
                             }
                             if model_task_type in [ModelTaskType.BINARY, ModelTaskType.REGRESSION] and is_numeric_dtype(
                                 eval_y_sorted
                             ):
                                 eval_metrics[self.bundle.get("quality_metrics_mean_target_header")] = round(
-                                    # np.mean(validated_eval_set[idx][1]), 4
                                     # Use actually used for metrics dataset
                                     np.mean(eval_y_sorted),
                                     4,
@@ -1330,6 +1388,72 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
+    def _check_stability(
+        self,
+        X: pd.DataFrame,
+        eval_set: List[Tuple[pd.DataFrame, pd.Series]],
+        enriched_eval_set: Dict,
+        eval_set_dates: Dict[int, pd.Series],
+        stability_threshold: float,
+        cat_features: List[str],
+        model_task_type: ModelTaskType,
+    ) -> List[str]:
+        # Find latest eval set or earliest if all eval sets are before train set
+        date_column = self._get_date_column(self.search_keys)
+
+        if (
+            date_column is None
+            or not eval_set
+            or not eval_set_dates
+            or (self.cv is not None and self.cv.is_time_series())
+        ):
+            return []
+
+        # Get minimum date from main dataset X
+        main_min_date = X[date_column].min()
+
+        # Find minimum date for each eval_set and compare with main dataset
+        eval_dates = []
+        for i, (eval_x, _) in enumerate(eval_set):
+            if date_column in eval_x.columns:
+                eval_min_date = eval_x[date_column].min()
+                eval_max_date = eval_x[date_column].max()
+                eval_dates.append((i, eval_min_date, eval_max_date))
+
+        if not eval_dates:
+            return []
+
+        # Check if any eval_set has minimum date >= main dataset minimum date
+        later_eval_sets = [(i, min_date, max_date) for i, min_date, max_date in eval_dates if min_date >= main_min_date]
+
+        if later_eval_sets:
+            # If there are eval_sets with date >= main date, choose the one with highest maximum date
+            selected_eval_set_idx = max(later_eval_sets, key=lambda x: x[2])[0]
+        else:
+            # If all eval_sets have dates < main date, choose the one with lowest minimux date
+            selected_eval_set_idx = max(eval_dates, key=lambda x: x[1])[0]
+
+        checking_eval_set = enriched_eval_set[selected_eval_set_idx]
+
+        checking_eval_set_df = (
+            checking_eval_set[2]
+            if checking_eval_set[1] is None or checking_eval_set[1].isna().all()
+            else pd.concat([checking_eval_set[2], checking_eval_set[1].to_frame(TARGET)], axis=1)
+        )
+        checking_eval_set_df = checking_eval_set_df.copy()
+
+        checking_eval_set_df[date_column] = eval_set_dates[selected_eval_set_idx]
+
+        psi_values = calculate_features_psi(
+            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
+        )
+
+        self.psi_values = {
+            feature: psi_value for feature, psi_value in psi_values.items() if psi_value <= stability_threshold
+        }
+
+        return [feature for feature, psi in psi_values.items() if psi > stability_threshold]
+
     def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
         self.logger.info(f"Updating SHAP values: {new_shaps}")
@@ -1382,6 +1506,22 @@ class FeaturesEnricher(TransformerMixin):
                 _ = get_ipython()  # type: ignore
 
                 self.__show_report_button(display_handle=self.report_button_handle)
+            except (ImportError, NameError):
+                pass
+
+    def _update_report_psi(self, trace_id: str, df: pd.DataFrame):
+        self.__prepare_feature_importances(trace_id, df)
+
+        if self.features_info_display_handle is not None:
+            try:
+                _ = get_ipython()  # type: ignore
+
+                display_html_dataframe(
+                    self.features_info,
+                    self._features_info_without_links,
+                    self.bundle.get("relevant_features_header"),
+                    display_handle=self.features_info_display_handle,
+                )
             except (ImportError, NameError):
                 pass
 
@@ -1535,7 +1675,7 @@ class FeaturesEnricher(TransformerMixin):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
         checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
-        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set)
+        validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set, silent=True)
 
         sampled_data = self._get_enriched_for_metrics(
             trace_id,
@@ -1549,8 +1689,8 @@ class FeaturesEnricher(TransformerMixin):
             progress_bar,
             progress_callback,
         )
-        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming = dataclasses.astuple(
-            sampled_data
+        (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming) = (
+            dataclasses.astuple(sampled_data)
         )
 
         excluding_search_keys = list(search_keys.keys())
@@ -1672,12 +1812,16 @@ class FeaturesEnricher(TransformerMixin):
         fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
         fitting_enriched_X, _ = self._encode_id_columns(fitting_enriched_X, self.fit_columns_renaming)
         self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
+        date_column = self._get_date_column(search_keys)
+        eval_set_dates = {}
         for idx, eval_tuple in eval_set_sampled_dict.items():
             eval_X_sampled, enriched_eval_X, eval_y_sampled = eval_tuple
             eval_X_sorted, eval_y_sorted = self._sort_by_system_record_id(eval_X_sampled, eval_y_sampled, self.cv)
             enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_system_record_id(
                 enriched_eval_X, eval_y_sampled, self.cv
             )
+            if date_column is not None:
+                eval_set_dates[idx] = eval_X_sorted[date_column]
             fitting_eval_X = eval_X_sorted[fitting_x_columns].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[fitting_enriched_x_columns].copy()
 
@@ -1722,6 +1866,7 @@ class FeaturesEnricher(TransformerMixin):
             groups,
             cv,
             columns_renaming,
+            eval_set_dates,
         )
 
     @dataclass
@@ -2112,7 +2257,7 @@ class FeaturesEnricher(TransformerMixin):
 
     def __extract_eval_data(
         self, enriched_df: pd.DataFrame, x_columns: List[str], enriched_X_columns: List[str], eval_set_len: int
-    ) -> Dict[int, Tuple]:
+    ) -> Tuple[Dict[int, Tuple], Dict[int, pd.Series]]:
         eval_set_sampled_dict = {}
 
         for idx in range(eval_set_len):
@@ -2415,7 +2560,7 @@ if response.status_code == 200:
             else:
                 self.logger.info("Input dataset hasn't date column")
                 if self.__should_add_date_column():
-                    df = self._add_current_date_as_key(df, search_keys, self.logger, self.bundle)
+                    df = self._add_current_date_as_key(df, search_keys, self.bundle, silent=True)
 
             email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
             if email_columns and self.generate_search_key_features:
@@ -2798,6 +2943,7 @@ if response.status_code == 200:
         scoring: Union[Callable, str, None],
         estimator: Optional[Any],
         importance_threshold: Optional[float],
+        stability_threshold: float,
         max_features: Optional[int],
         remove_outliers_calc_metrics: Optional[bool],
         auto_fe_parameters: AutoFEParameters,
@@ -2812,6 +2958,7 @@ if response.status_code == 200:
         self.fit_columns_renaming = None
         self.fit_dropped_features = set()
         self.fit_generated_features = []
+        self.psi_values = None
 
         validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set)
 
@@ -2908,7 +3055,7 @@ if response.status_code == 200:
             self.logger.info("Input dataset hasn't date column")
             # TODO remove when this logic will be implemented on the back
             if self.__should_add_date_column():
-                df = self._add_current_date_as_key(df, self.fit_search_keys, self.logger, self.bundle)
+                df = self._add_current_date_as_key(df, self.fit_search_keys, self.bundle)
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
         if email_columns and self.generate_search_key_features:
@@ -2923,10 +3070,13 @@ if response.status_code == 200:
         except Exception:
             self.logger.exception("Failed to check dates distribution validity")
 
+        self.__adjust_cv(df)
+
         if (
             is_numeric_dtype(df[self.TARGET_NAME])
             and self.model_task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
             and has_date
+            and not self.cv.is_time_series()
         ):
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
@@ -2958,8 +3108,9 @@ if response.status_code == 200:
 
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
+        # Group columns should have normalized names
+        self.cv = None
         self.__adjust_cv(df)
-
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
             id_columns = self.__get_renamed_id_columns()
             if id_columns:
@@ -3170,7 +3321,8 @@ if response.status_code == 200:
                     self.logger.warning(msg)
                     self.__display_support_link(msg)
             else:
-                if (scoring is not None or estimator is not None) and calculate_metrics is None:
+                has_oot = len(validated_eval_set) > 0
+                if (scoring is not None or estimator is not None or has_oot) and calculate_metrics is None:
                     calculate_metrics = True
 
                 if calculate_metrics is None:
@@ -3200,6 +3352,7 @@ if response.status_code == 200:
                             trace_id,
                             progress_bar,
                             progress_callback,
+                            stability_threshold,
                         )
                     except Exception:
                         self.report_button_handle = self.__show_report_button(
@@ -3289,10 +3442,11 @@ if response.status_code == 200:
         y: Optional[pd.Series] = None,
         eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]] = None,
         is_transform: bool = False,
+        silent: bool = False,
     ) -> Tuple[pd.DataFrame, pd.Series, Optional[List[Tuple[pd.DataFrame, pd.Series]]]]:
         validated_X = self._validate_X(X, is_transform)
         validated_y = self._validate_y(validated_X, y, enforce_y=not is_transform)
-        validated_eval_set = self._validate_eval_set(validated_X, eval_set)
+        validated_eval_set = self._validate_eval_set(validated_X, eval_set, silent=True)
         return validated_X, validated_y, validated_eval_set
 
     def _encode_id_columns(
@@ -3424,10 +3578,30 @@ if response.status_code == 200:
 
         return validated_y
 
-    def _validate_eval_set(self, X: pd.DataFrame, eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]]):
+    def _validate_eval_set(
+        self, X: pd.DataFrame, eval_set: Optional[List[Tuple[pd.DataFrame, pd.Series]]], silent: bool = False
+    ):
         if eval_set is None:
             return None
-        return [self._validate_eval_set_pair(X, eval_pair) for eval_pair in eval_set]
+        validated_eval_set = []
+        has_date = self._get_date_column(self.search_keys) is not None
+        for idx, eval_pair in enumerate(eval_set):
+            validated_pair = self._validate_eval_set_pair(X, eval_pair)
+            if validated_pair[1].isna().all():
+                if not has_date:
+                    msg = self.bundle.get("oot_without_date_not_supported").format(idx + 1)
+                elif self.columns_for_online_api:
+                    msg = self.bundle.get("oot_with_online_sources_not_supported").format(idx + 1)
+                else:
+                    msg = None
+                if msg:
+                    if not silent:
+                        print(msg)
+                        self.logger.warning(msg)
+                    continue
+            validated_eval_set.append(validated_pair)
+
+        return validated_eval_set
 
     def _validate_eval_set_pair(self, X: pd.DataFrame, eval_pair: Tuple) -> Tuple[pd.DataFrame, pd.Series]:
         if len(eval_pair) != 2:
@@ -3502,16 +3676,18 @@ if response.status_code == 200:
             raise ValidationError(self.bundle.get("unsupported_y_type_eval_set").format(type(eval_y)))
 
         eval_y_nunique = validated_eval_y.nunique()
-        if eval_y_nunique < 2:
+        is_oot = validated_eval_y.isna().all()
+        if not is_oot and eval_y_nunique < 2:
             raise ValidationError(self.bundle.get("y_is_constant_eval_set"))
 
-        if self.model_task_type == ModelTaskType.BINARY and eval_y_nunique != 2:
+        if not is_oot and self.model_task_type == ModelTaskType.BINARY and eval_y_nunique != 2:
             raise ValidationError(self.bundle.get("binary_target_eval_unique_count_not_2").format(eval_y_nunique))
 
-        # Check for duplicates between train and eval sets by comparing all values
-        train_eval_intersection = pd.merge(X, validated_eval_X, how="inner")
-        if len(train_eval_intersection) > 0:
-            raise ValidationError(self.bundle.get("eval_x_has_train_samples"))
+        if not is_oot:
+            # Check for duplicates between train and eval sets by comparing all values
+            train_eval_intersection = pd.merge(X, validated_eval_X, how="inner")
+            if len(train_eval_intersection) > 0:
+                raise ValidationError(self.bundle.get("eval_x_has_train_samples"))
 
         return validated_eval_X, validated_eval_y
 
@@ -3527,10 +3703,12 @@ if response.status_code == 200:
                 if isinstance(eval_set, tuple):
                     eval_set = [eval_set]
                 for eval in eval_set:
-                    if self.baseline_score_column not in eval[0].columns:
-                        raise ValidationError(self.bundle.get("baseline_score_column_not_exists"))
-                    if eval[0][self.baseline_score_column].isna().any():
-                        raise ValidationError(self.bundle.get("baseline_score_column_has_na"))
+                    is_oot = eval[1].isna().all()
+                    if not is_oot:
+                        if self.baseline_score_column not in eval[0].columns:
+                            raise ValidationError(self.bundle.get("baseline_score_column_not_exists"))
+                        if eval[0][self.baseline_score_column].isna().any():
+                            raise ValidationError(self.bundle.get("baseline_score_column_has_na"))
 
     @staticmethod
     def _sample_X_and_y(X: pd.DataFrame, y: pd.Series, enriched_X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
@@ -3704,7 +3882,7 @@ if response.status_code == 200:
         return df
 
     def _add_current_date_as_key(
-        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], logger: logging.Logger, bundle: ResourceBundle
+        self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], bundle: ResourceBundle, silent: bool = False
     ) -> pd.DataFrame:
         if (
             set(search_keys.values()) == {SearchKey.PHONE}
@@ -3712,7 +3890,8 @@ if response.status_code == 200:
             or set(search_keys.values()) == {SearchKey.HEM}
             or set(search_keys.values()) == {SearchKey.COUNTRY, SearchKey.POSTAL_CODE}
         ):
-            self.__log_warning(bundle.get("current_date_added"))
+            if not silent:
+                self.__log_warning(bundle.get("current_date_added"))
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
             converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
@@ -4047,7 +4226,11 @@ if response.status_code == 200:
         return [f.name for f in features_meta if f.type == "categorical" and f.name not in (self.id_columns or [])]
 
     def __prepare_feature_importances(
-        self, trace_id: str, df: pd.DataFrame, updated_shaps: Optional[Dict[str, float]] = None, silent=False
+        self,
+        trace_id: str,
+        df: pd.DataFrame,
+        updated_shaps: Optional[Dict[str, float]] = None,
+        silent=False,
     ):
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -4098,6 +4281,12 @@ if response.status_code == 200:
             if not is_client_feature:
                 self.external_source_feature_names.append(original_name)
 
+            if self.psi_values is not None:
+                if original_name in self.psi_values:
+                    feature_meta.psi_value = self.psi_values[original_name]
+                else:
+                    continue
+
             # TODO make a decision about selected features based on special flag from mlb
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
                 if is_client_feature and self.fit_select_features:
@@ -4130,6 +4319,8 @@ if response.status_code == 200:
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
+            if self.features_info[self.bundle.get("features_info_psi")].isna().all():
+                self.features_info.drop(columns=[self.bundle.get("features_info_psi")], inplace=True)
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
             if not silent:
@@ -4397,6 +4588,7 @@ if response.status_code == 200:
         trace_id: str,
         progress_bar: Optional[ProgressBar] = None,
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        stability_threshold: float = 0.15,
     ):
         self.metrics = self.calculate_metrics(
             scoring=scoring,
@@ -4408,6 +4600,7 @@ if response.status_code == 200:
             internal_call=True,
             progress_bar=progress_bar,
             progress_callback=progress_callback,
+            stability_threshold=stability_threshold,
         )
         if self.metrics is not None:
             msg = self.bundle.get("quality_metrics_header")
