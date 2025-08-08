@@ -1,6 +1,7 @@
 """
 Base class for the under-sampling method.
 """
+
 # Authors: Guillaume Lemaitre <g.lemaitre58@gmail.com>
 # License: MIT
 
@@ -12,6 +13,7 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import label_binarize
 from sklearn.utils.multiclass import check_classification_targets
+from sklearn.utils.validation import check_X_y
 
 from .utils import ArraysTransformer, check_sampling_strategy, check_target_type
 
@@ -125,7 +127,7 @@ class BaseSampler(SamplerMixin):
         if accept_sparse is None:
             accept_sparse = ["csr", "csc"]
         y, binarize_y = check_target_type(y, indicate_one_vs_all=True)
-        X, y = self._validate_data(X, y, reset=True, accept_sparse=accept_sparse)
+        X, y = check_X_y(X, y, accept_sparse=accept_sparse, dtype=None, ensure_all_finite=False)
         return X, y, binarize_y
 
     def _more_tags(self):

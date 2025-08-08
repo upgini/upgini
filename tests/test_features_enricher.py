@@ -240,7 +240,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
 
-    metrics = enricher.calculate_metrics(internal_call=True)
+    metrics = enricher.calculate_metrics()
 
     if update_metrics_flag:
         metrics.to_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher.csv"), index=False)
@@ -280,7 +280,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         select_features=False,
     )
 
-    metrics = enricher.calculate_metrics(internal_call=True)
+    metrics = enricher.calculate_metrics()
     logging.warning(metrics)
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
@@ -1221,11 +1221,18 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     )
     assert enriched_train_features.shape == (10000, 5)
 
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv"),
+            index=False,
+        )
+
     expected_features_info = pd.read_csv(
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv")
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
-    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
     assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
 
@@ -2845,6 +2852,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         select_features=False,
+        stability_threshold=0.2,
     )
     assert enriched_train_features.shape == (10000, 11)
 
@@ -3800,7 +3808,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
     )
     assert enriched_train_features.shape == (10000, 6)
 
-    metrics = enricher.calculate_metrics(internal_call=True)
+    metrics = enricher.calculate_metrics()
     assert metrics is not None
 
     if update_metrics_flag:
@@ -3829,13 +3837,12 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=True,
     )
     assert enriched_train_features.shape == (10000, 3)
     assert "client_feature" not in enriched_train_features.columns
 
-    metrics = enricher.calculate_metrics(internal_call=True)
+    metrics = enricher.calculate_metrics()
     assert metrics is not None
 
     if update_metrics_flag:

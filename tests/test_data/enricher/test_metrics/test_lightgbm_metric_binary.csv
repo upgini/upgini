@@ -1,4 +1,4 @@
-Dataset type,Rows,Mean target,Baseline mean_absolute_error,Enriched mean_absolute_error,"Uplift, abs","Uplift, %"
-Train,500,0.51,0.492 ± 0.042,0.550 ± 0.024,-0.058,-11.8%
-Eval 1,250,0.452,0.510 ± 0.031,0.550 ± 0.014,-0.04,-7.8%
-Eval 2,250,0.536,0.484 ± 0.027,0.478 ± 0.029,0.006,1.2%
+Dataset type,Rows,Mean target,Enriched mean_absolute_error
+Train,500,0.51,0.502 ± 0.058
+Eval 1,250,0.452,0.531 ± 0.012
+Eval 2,250,0.536,0.484 ± 0.020

@@ -2,7 +2,7 @@ import itertools
 import logging
 import operator
 from functools import reduce
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
 import more_itertools
 import numpy as np
@@ -50,7 +50,7 @@ def calculate_features_psi(
     model_task_type: ModelTaskType,
     psi_features_params: StabilityParams = DEFAULT_FEATURES_PARAMS,
     psi_target_params: StabilityParams = DEFAULT_TARGET_PARAMS,
-) -> pd.Series:
+) -> Dict[str, float]:
     empty_res = pd.Series(index=df.columns, data=0)
 
     if not is_numeric_dtype(df[date_column]):
