@@ -1376,9 +1376,16 @@ class FeaturesEnricher(TransformerMixin):
         if isinstance(X, np.ndarray):
             search_keys = {str(k): v for k, v in search_keys.items()}
 
-        has_date = self._get_date_column(search_keys) is not None
-        if not has_date or not validated_eval_set:
-            self.logger.info("No date column or eval set for OOT psi calculation")
+        date_column = self._get_date_column(search_keys)
+        has_date = date_column is not None
+        if not has_date:
+            self.logger.info("No date column for OOT PSI calculation")
+            return
+        if not validated_eval_set:
+            self.logger.info("No eval set for OOT PSI calculation")
+            return
+        if validated_X[date_column].nunique() <= 1:
+            self.logger.warning("Constant date for OOT PSI calculation")
             return
 
         cat_features_from_backend = self.__get_categorical_features()
