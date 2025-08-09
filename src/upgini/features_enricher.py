@@ -1059,23 +1059,8 @@ class FeaturesEnricher(TransformerMixin):
                     groups,
                     _cv,
                     columns_renaming,
-                    eval_set_dates,
+                    _,
                 ) = prepared_data
-
-                # rename cat_features
-                if client_cat_features:
-                    for new_c, old_c in columns_renaming.items():
-                        if old_c in client_cat_features:
-                            client_cat_features.remove(old_c)
-                            client_cat_features.append(new_c)
-                    for cat_feature in client_cat_features:
-                        if cat_feature not in fitting_X.columns:
-                            self.logger.error(
-                                f"Client cat_feature `{cat_feature}` not found in"
-                                f" x columns: {fitting_X.columns.to_list()}"
-                            )
-                else:
-                    client_cat_features = []
 
                 # rename baseline_score_column
                 reversed_renaming = {v: k for k, v in columns_renaming.items()}
@@ -1305,7 +1290,7 @@ class FeaturesEnricher(TransformerMixin):
                             metrics.append(eval_metrics)
 
                     if updating_shaps is not None:
-                        decoded_X = self._decode_id_columns(fitting_X, columns_renaming)
+                        decoded_X = self._decode_id_columns(fitting_X)
                         self._update_shap_values(trace_id, decoded_X, updating_shaps, silent=not internal_call)
 
                     metrics_df = pd.DataFrame(metrics)
@@ -1387,8 +1372,12 @@ class FeaturesEnricher(TransformerMixin):
         if validated_X[date_column].nunique() <= 1:
             self.logger.warning("Constant date for OOT PSI calculation")
             return
+        if self.cv is not None and self.cv.is_time_series():
+            self.logger.warning("Time series CV is not supported for OOT PSI calculation")
+            return
 
         cat_features_from_backend = self.__get_categorical_features()
+        cat_features_from_backend = [self.fit_columns_renaming.get(c, c) for c in cat_features_from_backend]
         client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
             estimator, validated_X, search_keys
         )
@@ -1397,13 +1386,13 @@ class FeaturesEnricher(TransformerMixin):
                 cat_features_from_backend = [
                     c
                     for c in cat_features_from_backend
-                    if self.fit_columns_renaming.get(c, c) not in self.id_columns_encoder.feature_names_in_
+                    if c not in self.id_columns_encoder.feature_names_in_
                 ]
             if client_cat_features:
                 client_cat_features = [
                     c
                     for c in client_cat_features
-                    if self.fit_columns_renaming.get(c, c) not in self.id_columns_encoder.feature_names_in_
+                    if c not in self.id_columns_encoder.feature_names_in_
                 ]
 
         prepared_data = self._prepare_data_for_metrics(
@@ -1437,20 +1426,6 @@ class FeaturesEnricher(TransformerMixin):
             columns_renaming,
             eval_set_dates,
         ) = prepared_data
-
-        # rename cat_features
-        if client_cat_features:
-            for new_c, old_c in columns_renaming.items():
-                if old_c in client_cat_features:
-                    client_cat_features.remove(old_c)
-                    client_cat_features.append(new_c)
-            for cat_feature in client_cat_features:
-                if cat_feature not in fitting_X.columns:
-                    self.logger.error(
-                        f"Client cat_feature `{cat_feature}` not found in" f" x columns: {fitting_X.columns.to_list()}"
-                    )
-        else:
-            client_cat_features = []
 
         model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
         cat_features = list(set(client_cat_features + cat_features_from_backend))
@@ -1502,14 +1477,6 @@ class FeaturesEnricher(TransformerMixin):
     ) -> List[str]:
         # Find latest eval set or earliest if all eval sets are before train set
         date_column = self._get_date_column(search_keys)
-
-        if (
-            date_column is None
-            or not eval_set
-            or not eval_set_dates
-            or (self.cv is not None and self.cv.is_time_series())
-        ):
-            return []
 
         # Get minimum date from main dataset X
         main_min_date = X[date_column].min()
@@ -1764,7 +1731,7 @@ class FeaturesEnricher(TransformerMixin):
     def _get_and_validate_client_cat_features(
         self, estimator: Optional[Any], X: pd.DataFrame, search_keys: Dict[str, SearchKey]
     ) -> Tuple[Optional[List[str]], List[str]]:
-        cat_features = None
+        cat_features = []
         search_keys_for_metrics = []
         if (
             estimator is not None
@@ -1933,7 +1900,7 @@ class FeaturesEnricher(TransformerMixin):
             fitting_X, y_sorted, search_keys, self.model_task_type, sort_all_columns=True, logger=self.logger
         )
         fitting_X = fitting_X[fitting_x_columns]
-        fitting_X, _ = self._encode_id_columns(fitting_X, self.fit_columns_renaming)
+        fitting_X, _ = self._encode_id_columns(fitting_X)
         self.logger.info(f"Final sorted list of fitting X columns: {fitting_x_columns}")
         fitting_enriched_x_columns = fitting_enriched_X.columns.to_list()
         fitting_enriched_x_columns = sort_columns(
@@ -1945,7 +1912,7 @@ class FeaturesEnricher(TransformerMixin):
             logger=self.logger,
         )
         fitting_enriched_X = fitting_enriched_X[fitting_enriched_x_columns]
-        fitting_enriched_X, _ = self._encode_id_columns(fitting_enriched_X, self.fit_columns_renaming)
+        fitting_enriched_X, _ = self._encode_id_columns(fitting_enriched_X)
         self.logger.info(f"Final sorted list of fitting enriched X columns: {fitting_enriched_x_columns}")
         date_column = self._get_date_column(search_keys)
         eval_set_dates = {}
@@ -1977,8 +1944,8 @@ class FeaturesEnricher(TransformerMixin):
                         .astype(np.float64)
                     )
 
-            fitting_eval_X, unknown_dict = self._encode_id_columns(fitting_eval_X, self.fit_columns_renaming)
-            fitting_enriched_eval_X, _ = self._encode_id_columns(fitting_enriched_eval_X, self.fit_columns_renaming)
+            fitting_eval_X, unknown_dict = self._encode_id_columns(fitting_eval_X)
+            fitting_enriched_eval_X, _ = self._encode_id_columns(fitting_enriched_eval_X)
 
             if len(unknown_dict) > 0:
                 print(self.bundle.get("unknown_id_column_value_in_eval_set").format(unknown_dict))
@@ -3212,7 +3179,7 @@ if response.status_code == 200:
             is_numeric_dtype(df[self.TARGET_NAME])
             and self.model_task_type in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
             and has_date
-            and not self.cv.is_time_series()
+            and (self.cv is None or not self.cv.is_time_series())
         ):
             self._validate_PSI(df.sort_values(by=maybe_date_column))
 
@@ -3245,8 +3212,7 @@ if response.status_code == 200:
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
         # Group columns should have normalized names
-        self.cv = None
-        self.__adjust_cv(df)
+        self.__adjust_cv(df, force=True)
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
             id_columns = self.__get_renamed_id_columns()
             if id_columns:
@@ -3551,19 +3517,21 @@ if response.status_code == 200:
         reverse_renaming = {v: k for k, v in renaming.items()}
         return None if self.id_columns is None else [reverse_renaming.get(c) or c for c in self.id_columns]
 
-    def __adjust_cv(self, df: pd.DataFrame):
+    def __adjust_cv(self, df: pd.DataFrame, force: bool = False):
+        if self.cv is not None and not force:
+            return
+
         date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
         # Check Multivariate time series
         if (
-            self.cv is None
-            and date_column
+            date_column
             and self.model_task_type == ModelTaskType.REGRESSION
             and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
             and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
         ):
             msg = self.bundle.get("multivariate_timeseries_detected")
             self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
-        elif self.cv is None and self.model_task_type != ModelTaskType.REGRESSION:
+        elif self.model_task_type != ModelTaskType.REGRESSION:
             msg = self.bundle.get("group_k_fold_in_classification")
             self.__override_cv(CVType.group_k_fold, msg, print_warning=self.cv is not None)
             group_columns = self._get_group_columns(df, self.fit_search_keys)
@@ -3601,39 +3569,32 @@ if response.status_code == 200:
     def _encode_id_columns(
         self,
         X: pd.DataFrame,
-        columns_renaming: Optional[Dict[str, str]] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, List[Any]]]:
-        columns_renaming = columns_renaming or {}
         unknown_dict = {}
 
         if self.id_columns and self.id_columns_encoder is not None:
-            inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
-            renamed_id_columns = [
-                inverse_columns_renaming.get(col, col) for col in self.id_columns_encoder.feature_names_in_
-            ]
-            self.logger.info(f"Convert id columns to int: {renamed_id_columns}")
-            encoded = self.id_columns_encoder.transform(X[renamed_id_columns].rename(columns=columns_renaming))
-            for i, c in enumerate(renamed_id_columns):
-                unknown_values = X[encoded[:, i] == -1][c].unique().tolist()
-                if len(unknown_values) > 0:
-                    unknown_dict[c] = unknown_values
-            X[renamed_id_columns] = encoded
-            X = X.loc[(X[renamed_id_columns] != -1).all(axis=1)]
+            encoding_id_columns = [c for c in self.id_columns if c in X.columns]
+            if len(encoding_id_columns) > 0:
+                self.logger.info(f"Convert id columns to int: {encoding_id_columns}")
+                encoded = self.id_columns_encoder.transform(X[encoding_id_columns])
+                for i, c in enumerate(encoding_id_columns):
+                    unknown_values = X[encoded[:, i] == -1][c].unique().tolist()
+                    if len(unknown_values) > 0:
+                        unknown_dict[c] = unknown_values
+                X[encoding_id_columns] = encoded
+                X = X.loc[(X[encoding_id_columns] != -1).all(axis=1)]
 
-            if len(unknown_dict) > 0:
-                self.logger.warning(f"Unknown values in id columns: {unknown_dict}")
+                if len(unknown_dict) > 0:
+                    self.logger.warning(f"Unknown values in id columns: {unknown_dict}")
 
         return X, unknown_dict
 
-    def _decode_id_columns(self, X: pd.DataFrame, columns_renaming: Dict[str, str]):
-        columns_renaming = columns_renaming or {}
+    def _decode_id_columns(self, X: pd.DataFrame):
         if self.id_columns and self.id_columns_encoder is not None:
-            inverse_columns_renaming = {v: k for k, v in columns_renaming.items()}
-            renamed_id_columns = [
-                inverse_columns_renaming.get(col, col) for col in self.id_columns_encoder.feature_names_in_
-            ]
-            decoded = self.id_columns_encoder.inverse_transform(X[renamed_id_columns].rename(columns=columns_renaming))
-            X[renamed_id_columns] = decoded
+            decoding_id_columns = [c for c in self.id_columns if c in X.columns]
+            if len(decoding_id_columns) > 0:
+                decoded = self.id_columns_encoder.inverse_transform(X[self.id_columns])
+                X[self.id_columns] = decoded
 
         return X
 
@@ -4179,7 +4140,7 @@ if response.status_code == 200:
         columns_to_sort = [date_column] if date_column is not None else []
 
         do_sorting = True
-        if self.id_columns and self.cv.is_time_series():
+        if self.id_columns and self.cv is not None and self.cv.is_time_series():
             # Check duplicates by date and id_columns
             reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
             renamed_id_columns = [reversed_columns_renaming.get(c, c) for c in self.id_columns]
