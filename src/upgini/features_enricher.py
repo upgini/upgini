@@ -1003,29 +1003,31 @@ class FeaturesEnricher(TransformerMixin):
                     return None
 
                 cat_features_from_backend = self.__get_categorical_features()
+                # Convert to original names
+                cat_features_from_backend = [self.fit_columns_renaming.get(c, c) for c in cat_features_from_backend]
                 client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
                     estimator, validated_X, self.search_keys
                 )
+                # Exclude id columns from cat_features
                 if self.id_columns and self.id_columns_encoder is not None:
                     if cat_features_from_backend:
                         cat_features_from_backend = [
                             c
                             for c in cat_features_from_backend
-                            if self.fit_columns_renaming.get(c, c) not in self.id_columns_encoder.feature_names_in_
+                            if c not in self.id_columns_encoder.feature_names_in_
                         ]
                     if client_cat_features:
                         client_cat_features = [
                             c
                             for c in client_cat_features
-                            if self.fit_columns_renaming.get(c, c) not in self.id_columns_encoder.feature_names_in_
+                            if c not in self.id_columns_encoder.feature_names_in_
                         ]
                 for cat_feature in cat_features_from_backend:
-                    original_cat_feature = self.fit_columns_renaming.get(cat_feature)
-                    if original_cat_feature in self.search_keys:
-                        if self.search_keys[original_cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
-                            search_keys_for_metrics.append(original_cat_feature)
+                    if cat_feature in self.search_keys:
+                        if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                            search_keys_for_metrics.append(cat_feature)
                         else:
-                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(original_cat_feature))
+                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
                 search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
                 self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
