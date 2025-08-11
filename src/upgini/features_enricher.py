@@ -112,7 +112,7 @@ except Exception:
         CustomFallbackProgressBar as ProgressBar,
     )
 
-from upgini.utils.psi import calculate_features_psi
+from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
 from upgini.utils.sample_utils import SampleColumns, SampleConfig, _num_samples, sample
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import calculate_psi, define_task
@@ -1513,15 +1513,29 @@ class FeaturesEnricher(TransformerMixin):
 
         checking_eval_set_df[date_column] = eval_set_dates[selected_eval_set_idx]
 
+        psi_values_sparse = calculate_sparsity_psi(
+            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
+        )
+
+        unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
+        if unstable_by_sparsity:
+            self.logger.info(f"Unstable by sparsity features: {sorted(unstable_by_sparsity)}")
+
         psi_values = calculate_features_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
         )
+
+        unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
+        if unstable_by_value:
+            self.logger.info(f"Unstable by value features: {sorted(unstable_by_value)}")
 
         self.psi_values = {
             feature: psi_value for feature, psi_value in psi_values.items() if psi_value <= stability_threshold
         }
 
-        return [feature for feature, psi in psi_values.items() if psi > stability_threshold]
+        total_unstable_features = sorted(set(unstable_by_sparsity + unstable_by_value))
+
+        return total_unstable_features
 
     def _update_shap_values(self, trace_id: str, df: pd.DataFrame, new_shaps: Dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
@@ -2273,13 +2287,7 @@ class FeaturesEnricher(TransformerMixin):
             enriched_df, x_columns, enriched_X.columns.tolist(), len(eval_set) if has_eval_set else 0
         )
 
-        # Add hash-suffixes because output of transform has original names
-        reversed_renaming = {v: k for k, v in columns_renaming.items()}
-        X_sampled.rename(columns=reversed_renaming, inplace=True)
-        enriched_X.rename(columns=reversed_renaming, inplace=True)
-        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
-            eval_X_sampled.rename(columns=reversed_renaming, inplace=True)
-            enriched_eval_X.rename(columns=reversed_renaming, inplace=True)
+        search_keys = {columns_renaming.get(k, k): v for k, v in search_keys.items()}
 
         # Cache and return results
         datasets_hash = hash_input(validated_X, validated_y, eval_set)

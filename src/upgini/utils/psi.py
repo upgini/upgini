@@ -42,6 +42,32 @@ DEFAULT_FEATURES_PARAMS = StabilityParams(
 )
 
 
+def calculate_sparsity_psi(
+    df: pd.DataFrame,
+    cat_features: list[str],
+    date_column: str,
+    logger: logging.Logger,
+    model_task_type: ModelTaskType,
+    psi_features_params: StabilityParams = DEFAULT_FEATURES_PARAMS,
+    psi_target_params: StabilityParams = DEFAULT_TARGET_PARAMS,
+) -> Dict[str, float]:
+    sparse_features = df.columns[df.isna().sum() > 0].to_list()
+    if len(sparse_features) > 0:
+        logger.info(f"Calculating sparsity stability for {len(sparse_features)} sparse features")
+        sparse_df = df[sparse_features].notna()
+        sparse_df[date_column] = df[date_column]
+        return calculate_features_psi(
+            sparse_df,
+            cat_features,
+            date_column,
+            logger,
+            model_task_type,
+            psi_target_params,
+            psi_features_params,
+        )
+    return {}
+
+
 def calculate_features_psi(
     df: pd.DataFrame,
     cat_features: list[str],
