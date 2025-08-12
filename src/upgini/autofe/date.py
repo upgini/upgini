@@ -244,7 +244,8 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperator):
 
 class DatePercentileBase(PandasOperator, abc.ABC):
     is_binary: bool = True
-    output_type: Optional[str] = "float"
+    is_categorical: bool = True
+    output_type: Optional[str] = "category"
 
     date_unit: Optional[str] = None
 
@@ -254,7 +255,12 @@ class DatePercentileBase(PandasOperator, abc.ABC):
 
         bounds = self._get_bounds(left)
 
-        return right.index.to_series().apply(lambda i: self._perc(right[i], bounds[i]))
+        return (
+            right.index.to_series()
+            .apply(lambda i: self._perc(right[i], bounds[i]))
+            .astype(pd.Int64Dtype())
+            .astype("category")
+        )
 
     @abc.abstractmethod
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
