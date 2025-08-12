@@ -1012,15 +1012,11 @@ class FeaturesEnricher(TransformerMixin):
                 if self.id_columns and self.id_columns_encoder is not None:
                     if cat_features_from_backend:
                         cat_features_from_backend = [
-                            c
-                            for c in cat_features_from_backend
-                            if c not in self.id_columns_encoder.feature_names_in_
+                            c for c in cat_features_from_backend if c not in self.id_columns_encoder.feature_names_in_
                         ]
                     if client_cat_features:
                         client_cat_features = [
-                            c
-                            for c in client_cat_features
-                            if c not in self.id_columns_encoder.feature_names_in_
+                            c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                         ]
                 for cat_feature in cat_features_from_backend:
                     if cat_feature in self.search_keys:
@@ -1384,15 +1380,11 @@ class FeaturesEnricher(TransformerMixin):
         if self.id_columns and self.id_columns_encoder is not None:
             if cat_features_from_backend:
                 cat_features_from_backend = [
-                    c
-                    for c in cat_features_from_backend
-                    if c not in self.id_columns_encoder.feature_names_in_
+                    c for c in cat_features_from_backend if c not in self.id_columns_encoder.feature_names_in_
                 ]
             if client_cat_features:
                 client_cat_features = [
-                    c
-                    for c in client_cat_features
-                    if c not in self.id_columns_encoder.feature_names_in_
+                    c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                 ]
 
         prepared_data = self._prepare_data_for_metrics(
@@ -1829,7 +1821,8 @@ class FeaturesEnricher(TransformerMixin):
                 or c in set(self.feature_names_).union(self.id_columns or [])
                 or (self.fit_columns_renaming or {}).get(c, c) in set(self.feature_names_).union(self.id_columns or [])
             )
-            and c not in (
+            and c
+            not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
@@ -3220,7 +3213,15 @@ if response.status_code == 200:
         self.fit_generated_features = [f for f in self.fit_generated_features if f not in self.fit_dropped_features]
 
         # Group columns should have normalized names
-        self.__adjust_cv(df, force=True)
+        if self.runtime_parameters.properties.get("cv_params.group_columns") is not None:
+            original_to_hash = {v: k for k, v in self.fit_columns_renaming.items()}
+            self.runtime_parameters.properties["cv_params.group_columns"] = ",".join(
+                [
+                    original_to_hash.get(c, c)
+                    for c in self.runtime_parameters.properties["cv_params.group_columns"].split(",")
+                ]
+            )
+
         if self.id_columns is not None and self.cv is not None and self.cv.is_time_series():
             id_columns = self.__get_renamed_id_columns()
             if id_columns:
@@ -3525,23 +3526,24 @@ if response.status_code == 200:
         reverse_renaming = {v: k for k, v in renaming.items()}
         return None if self.id_columns is None else [reverse_renaming.get(c) or c for c in self.id_columns]
 
-    def __adjust_cv(self, df: pd.DataFrame, force: bool = False):
-        if self.cv is not None and not force:
-            return
+    def __adjust_cv(self, df: pd.DataFrame):
+        if self.cv is None:
+            date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
+            # Check Multivariate time series
+            if (
+                date_column
+                and self.model_task_type == ModelTaskType.REGRESSION
+                and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys()))
+                == 0
+                and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
+            ):
+                msg = self.bundle.get("multivariate_timeseries_detected")
+                self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
+            elif self.model_task_type != ModelTaskType.REGRESSION:
+                msg = self.bundle.get("group_k_fold_in_classification")
+                self.__override_cv(CVType.group_k_fold, msg, print_warning=self.cv is not None)
 
-        date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
-        # Check Multivariate time series
-        if (
-            date_column
-            and self.model_task_type == ModelTaskType.REGRESSION
-            and len({SearchKey.PHONE, SearchKey.EMAIL, SearchKey.HEM}.intersection(self.fit_search_keys.keys())) == 0
-            and is_blocked_time_series(df, date_column, list(self.fit_search_keys.keys()) + [TARGET])
-        ):
-            msg = self.bundle.get("multivariate_timeseries_detected")
-            self.__override_cv(CVType.blocked_time_series, msg, print_warning=False)
-        elif self.model_task_type != ModelTaskType.REGRESSION:
-            msg = self.bundle.get("group_k_fold_in_classification")
-            self.__override_cv(CVType.group_k_fold, msg, print_warning=self.cv is not None)
+        if self.cv == CVType.group_k_fold:
             group_columns = self._get_group_columns(df, self.fit_search_keys)
             self.runtime_parameters.properties["cv_params.group_columns"] = ",".join(group_columns)
             self.runtime_parameters.properties["cv_params.shuffle_kfold"] = "True"

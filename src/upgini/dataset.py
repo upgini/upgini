@@ -343,7 +343,9 @@ class Dataset:
             if col in mandatory_columns:
                 self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]
 
-            invalid_values = list(set(self.data.loc[self.data[f"{col}_is_valid"] == 0, col].head().values))
+            # Use stable pandas API across versions: Series.unique keeps order
+            # and collapses multiple NaNs into a single NaN
+            invalid_values = self.data.loc[self.data[f"{col}_is_valid"] == 0, col].unique().tolist()[:5]
             valid_share = self.data[f"{col}_is_valid"].sum() / nrows
             original_col_name = self.columns_renaming[col]
             validation_stats[original_col_name] = {}
