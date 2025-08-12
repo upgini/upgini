@@ -1,4 +1,4 @@
-Dataset type,Rows,Baseline accuracy,Enriched accuracy,"Uplift, abs","Uplift, %"
-Train,500,0.360 ± 0.032,0.344 ± 0.055,-0.016,-4.4%
-Eval 1,250,0.322 ± 0.026,0.326 ± 0.046,0.005,1.5%
-Eval 2,250,0.308 ± 0.029,0.333 ± 0.007,0.025,8.1%
+Dataset type,Rows,Enriched accuracy
+Train,500,0.340 ± 0.033
+Eval 1,250,0.402 ± 0.055
+Eval 2,250,0.328 ± 0.008

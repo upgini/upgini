@@ -895,7 +895,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
 
     assert len(enriched_X) == len(X)
 
-    metrics_df = enricher.calculate_metrics(scoring="RMSLE")
+    metrics_df = enricher.calculate_metrics(scoring="RMSLE", inner_call=True)
     assert metrics_df is not None
 
     if update_metrics_flag:

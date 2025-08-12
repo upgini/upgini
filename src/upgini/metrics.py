@@ -1175,7 +1175,10 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     >>> mean_squared_log_error(y_true, y_pred, multioutput=[0.3, 0.7])
     0.060...
     """
-    _, y_true, y_pred, multioutput = _check_reg_targets(y_true, y_pred, multioutput)
+    try:
+        _, y_true, y_pred, multioutput = _check_reg_targets(y_true, y_pred, multioutput)
+    except TypeError:
+        _, y_true, y_pred, sample_weight, multioutput = _check_reg_targets(y_true, y_pred, sample_weight, multioutput)
     check_consistent_length(y_true, y_pred, sample_weight)
 
     if (y_true < 0).any():

@@ -80,14 +80,24 @@ RandomUnderSampler # doctest: +NORMALIZE_WHITESPACE
 
     def _check_X_y(self, X, y):
         y, binarize_y = check_target_type(y, indicate_one_vs_all=True)
-        X, y = self._validate_data(
-            X,
-            y,
-            reset=True,
-            accept_sparse=["csr", "csc"],
-            dtype=None,
-            force_all_finite=False,
-        )
+        try:
+            X, y = self._validate_data(
+                X,
+                y,
+                reset=True,
+                accept_sparse=["csr", "csc"],
+                dtype=None,
+                force_all_finite=False,
+            )
+        except AttributeError:
+            from sklearn.utils.validation import check_X_y
+            X, y = check_X_y(
+                X,
+                y,
+                accept_sparse=["csr", "csc"],
+                dtype=None,
+                ensure_all_finite=False,
+            )
         return X, y, binarize_y
 
     def _fit_resample(self, X, y):
