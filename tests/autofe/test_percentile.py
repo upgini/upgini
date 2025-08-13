@@ -1,9 +1,7 @@
 import pandas as pd
 from pandas.testing import assert_series_equal
 
-from upgini.autofe.date import (
-    DatePercentile,
-)
+from upgini.autofe.date import DatePercentile
 from upgini.autofe.utils import pydantic_parse_method
 
 
@@ -32,10 +30,11 @@ def test_date_percentile():
         " 33.92, 33.96]",
     )
 
-    expected_values = pd.Series([None, 1, 100, 51, 100, None])
+    expected_values = pd.Series([None, 1, 100, 51, 100, None], dtype="Int64").astype("category")
     assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)
     assert_series_equal(
-        operand.calculate(left=data.date, right=data.feature2), pd.Series([None] * len(data), dtype=float)
+        operand.calculate(left=data.date, right=data.feature2),
+        pd.Series([None] * len(data), dtype="Int64").astype("category"),
     )
 
 
