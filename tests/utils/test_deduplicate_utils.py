@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
@@ -229,4 +230,27 @@ def test_clean_full_duplicates_silent_mode():
     expected = pd.DataFrame({"col1": [2], "col2": ["b"], TARGET: [0]})
 
     assert_frame_equal(result_df.reset_index(drop=True), expected.reset_index(drop=True))
+    assert isinstance(warning, str)  # Should have warning about duplicates with different targets
+
+
+def test_clean_full_duplicates_oot():
+    df = pd.DataFrame({
+        "index":        [0, 1, 2,   0, 1, 2,   0,      1,      2,      3],
+        "col1":         [1, 2, 3,   1, 2, 5,   2,      6,      7,      3],
+        TARGET:         [0, 1, 0,   0, 0, 1,   np.nan, np.nan, np.nan, np.nan],
+        EVAL_SET_INDEX: [0, 0, 0,   1, 1, 1,   2,      2,      2,      2],
+    })
+    df.set_index("index", inplace=True)
+
+    expected = pd.DataFrame({
+        "index":        [0, 2,   2,   0,      1,      2],
+        "col1":         [1, 3,   5,   2,      6,      7],
+        TARGET:         [0, 0,   1,   np.nan, np.nan, np.nan],
+        EVAL_SET_INDEX: [0, 0,   1,   2,      2,      2],
+    })
+    expected.set_index("index", inplace=True)
+
+    cleaned_df, warning = clean_full_duplicates(df)
+
+    assert_frame_equal(cleaned_df, expected)
     assert isinstance(warning, str)  # Should have warning about duplicates with different targets

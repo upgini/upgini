@@ -398,16 +398,15 @@ class FeaturesEnricher(TransformerMixin):
 
     api_key = property(_get_api_key, _set_api_key)
 
-    @staticmethod
-    def _check_eval_set(eval_set, X, bundle: ResourceBundle):
+    def _check_eval_set(self, eval_set, X):
         checked_eval_set = []
         if eval_set is None:
             return checked_eval_set
         if isinstance(eval_set, tuple):
             eval_set = [eval_set]
         if not isinstance(eval_set, list):
-            raise ValidationError(bundle.get("unsupported_type_eval_set").format(type(eval_set)))
-        for eval_pair in eval_set or []:
+            raise ValidationError(self.bundle.get("unsupported_type_eval_set").format(type(eval_set)))
+        for i, eval_pair in enumerate(eval_set or [], 1):
             # Handle OOT
             if isinstance(eval_pair, pd.DataFrame):
                 empty_target = pd.Series([np.nan] * len(eval_pair), index=eval_pair.index)
@@ -417,12 +416,17 @@ class FeaturesEnricher(TransformerMixin):
                 eval_pair = (eval_pair[0], empty_target)
 
             if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
-                raise ValidationError(bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
+                raise ValidationError(self.bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
             if eval_pair[1] is None:
                 empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
                 eval_pair = (eval_pair[0], empty_target)
-            if not is_frames_equal(X, eval_pair[0], bundle):
+
+            if not is_frames_equal(X, eval_pair[0], self.bundle):
                 checked_eval_set.append(eval_pair)
+            else:
+                msg = f"Eval set {i} is equal to train set and will be ignored"
+                self.logger.warning(msg)
+                print(msg)
         return checked_eval_set
 
     def fit(
@@ -517,7 +521,7 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.dump_input(trace_id, X, y, self.eval_set)
                 self.__set_select_features(select_features)
                 self.__inner_fit(
@@ -678,7 +682,7 @@ class FeaturesEnricher(TransformerMixin):
             try:
                 self.X = X
                 self.y = y
-                self.eval_set = self._check_eval_set(eval_set, X, self.bundle)
+                self.eval_set = self._check_eval_set(eval_set, X)
                 self.__set_select_features(select_features)
                 self.dump_input(trace_id, X, y, self.eval_set)
 
@@ -953,7 +957,7 @@ class FeaturesEnricher(TransformerMixin):
             effective_X = X if X is not None else self.X
             effective_y = y if y is not None else self.y
             effective_eval_set = eval_set if eval_set is not None else self.eval_set
-            effective_eval_set = self._check_eval_set(effective_eval_set, effective_X, self.bundle)
+            effective_eval_set = self._check_eval_set(effective_eval_set, effective_X)
 
             if (
                 self._search_task is None
@@ -1471,14 +1475,17 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
 
         # Get minimum date from main dataset X
-        main_min_date = X[date_column].min()
+        main_min_date = X[date_column].dropna().min()
 
         # Find minimum date for each eval_set and compare with main dataset
         eval_dates = []
         for i, (eval_x, _) in enumerate(eval_set):
             if date_column in eval_x.columns:
-                eval_min_date = eval_x[date_column].min()
-                eval_max_date = eval_x[date_column].max()
+                if len(eval_x) < 1000:
+                    self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
+                    continue
+                eval_min_date = eval_x[date_column].dropna().min()
+                eval_max_date = eval_x[date_column].dropna().max()
                 eval_dates.append((i, eval_min_date, eval_max_date))
 
         if not eval_dates:
@@ -1509,6 +1516,8 @@ class FeaturesEnricher(TransformerMixin):
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
         )
 
+        self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
+
         unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
         if unstable_by_sparsity:
             self.logger.info(f"Unstable by sparsity features: {sorted(unstable_by_sparsity)}")
@@ -1516,6 +1525,8 @@ class FeaturesEnricher(TransformerMixin):
         psi_values = calculate_features_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
         )
+
+        self.logger.info(f"PSI values by value: {psi_values}")
 
         unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
         if unstable_by_value:
@@ -1679,7 +1690,7 @@ class FeaturesEnricher(TransformerMixin):
         if X is None:
             return True, self.X, self.y, self.eval_set
 
-        checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
+        checked_eval_set = self._check_eval_set(eval_set, X)
 
         if (
             X is self.X
@@ -1783,7 +1794,7 @@ class FeaturesEnricher(TransformerMixin):
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
-        checked_eval_set = self._check_eval_set(eval_set, X, self.bundle)
+        checked_eval_set = self._check_eval_set(eval_set, X)
         validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, checked_eval_set, silent=True)
 
         sampled_data = self._get_enriched_for_metrics(
@@ -3246,6 +3257,15 @@ if response.status_code == 200:
             else:
                 self.__log_warning(full_duplicates_warning)
 
+        # Check if OOT eval set still more than 1000 rows
+        if EVAL_SET_INDEX in df.columns:
+            for eval_set_index in df[EVAL_SET_INDEX].unique():
+                if eval_set_index == 0:
+                    continue
+                eval_set_df = df[df[EVAL_SET_INDEX] == eval_set_index]
+                if np.all(pd.isna(eval_set_df[TARGET])) and len(eval_set_df) < 1000:
+                    self.__log_warning(self.bundle.get("oot_eval_set_too_small_after_dedup").format(eval_set_index + 1))
+
         # Explode multiple search keys
         df = self.__add_fit_system_record_id(
             df, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID, TARGET, self.fit_columns_renaming
@@ -3823,7 +3843,7 @@ if response.status_code == 200:
                 if isinstance(eval_set, tuple):
                     eval_set = [eval_set]
                 for eval in eval_set:
-                    is_oot = eval[1].isna().all()
+                    is_oot = np.all(pd.isna(eval[1]))
                     if not is_oot:
                         if self.baseline_score_column not in eval[0].columns:
                             raise ValidationError(self.bundle.get("baseline_score_column_not_exists"))

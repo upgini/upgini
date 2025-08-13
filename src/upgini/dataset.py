@@ -50,7 +50,7 @@ except Exception:
 
 class Dataset:
     MIN_ROWS_COUNT = 100
-    MAX_ROWS = 100_000
+    MAX_ROWS = 200_000
     IMBALANCE_THESHOLD = 0.6
     MIN_TARGET_CLASS_ROWS = 100
     MAX_MULTICLASS_CLASS_COUNT = 100
@@ -184,7 +184,19 @@ class Dataset:
     def __validate_target(self):
         # self.logger.info("Validating target")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-        target = self.data[target_column]
+
+        oot_indices = []
+        if EVAL_SET_INDEX in self.data.columns:
+            for eval_set_index in self.data[EVAL_SET_INDEX].unique():
+                eval_set = self.data[self.data[EVAL_SET_INDEX] == eval_set_index]
+                if eval_set[target_column].isna().all():
+                    oot_indices.append(eval_set_index)
+
+        df_to_check = self.data.copy()
+        if oot_indices:
+            df_to_check = df_to_check[~df_to_check[EVAL_SET_INDEX].isin(oot_indices)]
+
+        target = df_to_check[target_column]
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -201,7 +213,7 @@ class Dataset:
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target):
                 try:
-                    target = self.data[target_column].astype("category").cat.codes
+                    target = target.astype("category").cat.codes
                 except Exception:
                     self.logger.exception("Failed to cast target to category codes for multiclass task type")
                     raise ValidationError(self.bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
@@ -335,10 +347,30 @@ class Dataset:
         all_valid_message = self.bundle.get("validation_all_valid_message")
         invalid_message = self.bundle.get("validation_invalid_message")
 
+        oot_indices = []
+        if EVAL_SET_INDEX in self.data.columns:
+            for eval_set_index in self.data[EVAL_SET_INDEX].unique():
+                eval_set = self.data[self.data[EVAL_SET_INDEX] == eval_set_index]
+                if eval_set[target].isna().all():
+                    oot_indices.append(eval_set_index)
+
         for col in columns_to_validate:
-            self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
             if validate_target and target is not None and col == target:
-                self.data.loc[self.data[target] == np.inf, f"{col}_is_valid"] = False
+                if oot_indices:
+                    mask_not_oot = ~self.data[EVAL_SET_INDEX].isin(oot_indices)
+                    invalid_target_mask = (
+                        self.data[col].isnull() | (self.data[col] == np.inf) | (self.data[col] == -np.inf)
+                    )
+                    # Initialize as valid and mark invalid only for non-OOT rows with NaN or +/-inf
+                    self.data[f"{col}_is_valid"] = True
+                    self.data.loc[mask_not_oot & invalid_target_mask, f"{col}_is_valid"] = False
+                else:
+                    # No OOT: mark invalid where target is NaN or +/-inf
+                    self.data[f"{col}_is_valid"] = ~(
+                        self.data[col].isnull() | (self.data[col] == np.inf) | (self.data[col] == -np.inf)
+                    )
+            else:
+                self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
 
             if col in mandatory_columns:
                 self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]

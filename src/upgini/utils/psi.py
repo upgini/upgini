@@ -77,7 +77,7 @@ def calculate_features_psi(
     psi_features_params: StabilityParams = DEFAULT_FEATURES_PARAMS,
     psi_target_params: StabilityParams = DEFAULT_TARGET_PARAMS,
 ) -> Dict[str, float]:
-    empty_res = pd.Series(index=df.columns, data=0)
+    empty_res = {col: 0.0 for col in df.columns if col not in [TARGET, date_column]}
 
     if not is_numeric_dtype(df[date_column]):
         df[date_column] = pd.to_datetime(df[date_column]).dt.floor("D").astype(np.int64) / 10**6
@@ -113,9 +113,9 @@ def calculate_features_psi(
             cat_top_pct=psi_target_params.cat_top_pct,
             agg_func=target_agg_func,
         )
-        if target_psi is None:
+        if target_psi is None or np.isnan(target_psi):
             logger.info("Cannot determine target PSI. Skip feature PSI check")
-            return pd.Series(index=df.columns, data=0)
+            return empty_res
 
         if target_psi > psi_target_params.threshold:
             logger.info(

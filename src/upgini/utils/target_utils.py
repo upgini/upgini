@@ -6,7 +6,7 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
+from upgini.metadata import EVAL_SET_INDEX, SYSTEM_RECORD_ID, ModelTaskType
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle, bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
 
@@ -131,6 +131,11 @@ def balance_undersample(
     bundle = bundle or get_custom_bundle()
     if SYSTEM_RECORD_ID not in df.columns:
         raise Exception("System record id must be presented for undersampling")
+
+    # Rebalance and send to server only train data
+    # because eval set data will be sent separately in transform for metrics
+    if EVAL_SET_INDEX in df.columns:
+        df = df[df[EVAL_SET_INDEX] == 0]
 
     target = df[target_column].copy()
 

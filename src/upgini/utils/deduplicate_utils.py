@@ -134,10 +134,12 @@ def remove_fintech_duplicates(
     logger.info(f"Train dataset shape after clean fintech duplicates: {train_df.shape}")
 
     # Process each eval_set part separately
+    oot_eval_dfs = []
     new_eval_dfs = []
     for i, eval_df in enumerate(eval_dfs, 1):
         # Skip OOT
         if eval_df[TARGET].isna().all():
+            oot_eval_dfs.append(eval_df)
             continue
         logger.info(f"Eval {i} dataset shape before clean fintech duplicates: {eval_df.shape}")
         cleaned_eval_df, eval_warning = process_df(eval_df, i)
@@ -148,8 +150,8 @@ def remove_fintech_duplicates(
 
     # Combine the processed train and eval parts back into one dataset
     logger.info(f"Dataset shape before clean fintech duplicates: {df.shape}")
-    if new_eval_dfs:
-        df = pd.concat([train_df] + new_eval_dfs)
+    if new_eval_dfs or oot_eval_dfs:
+        df = pd.concat([train_df] + new_eval_dfs + oot_eval_dfs, ignore_index=False)
     else:
         df = train_df
     logger.info(f"Dataset shape after clean fintech duplicates: {df.shape}")
@@ -196,30 +198,30 @@ def clean_full_duplicates(
 
         # Separate rows to exclude from deduplication:
         # for each eval_set_index != 0 check separately, all TARGET values are NaN
-        excluded_from_dedup = pd.DataFrame()
         df_for_dedup = df
+        oot_df = None
 
         if EVAL_SET_INDEX in df.columns:
-            excluded_parts = []
-            # Get all unique eval_set_index values, except 0
-            unique_eval_indices = df[df[EVAL_SET_INDEX] != 0][EVAL_SET_INDEX].unique()
-
-            for eval_idx in unique_eval_indices:
+            oot_eval_dfs = []
+            other_dfs = []
+            for eval_idx in df[EVAL_SET_INDEX].unique():
                 eval_subset = df[df[EVAL_SET_INDEX] == eval_idx]
                 # Check that all TARGET values for this specific eval_set_index are NaN
-                if len(eval_subset) > 0 and eval_subset[TARGET].isna().all():
-                    excluded_parts.append(eval_subset)
+                if eval_idx != 0 and eval_subset[TARGET].isna().all():
+                    oot_eval_dfs.append(eval_subset)
                     logger.info(
                         f"Excluded {len(eval_subset)} rows from deduplication "
                         f"(eval_set_index={eval_idx} and all TARGET values are NaN)"
                     )
+                else:
+                    other_dfs.append(eval_subset)
 
-            # Combine all excluded parts
-            if excluded_parts:
-                excluded_from_dedup = pd.concat(excluded_parts, ignore_index=False)
-                # Remove excluded rows from dataframe for deduplication
-                excluded_indices = excluded_from_dedup.index
-                df_for_dedup = df[~df.index.isin(excluded_indices)]
+            if oot_eval_dfs:
+                oot_df = pd.concat(oot_eval_dfs, ignore_index=False)
+                df_for_dedup = pd.concat(other_dfs, ignore_index=False)
+            else:
+                df_for_dedup = df
+
         marked_duplicates = df_for_dedup.duplicated(subset=unique_columns, keep=False)
         if marked_duplicates.sum() > 0:
             dups_indices = df_for_dedup[marked_duplicates].index.to_list()[:100]
@@ -231,8 +233,18 @@ def clean_full_duplicates(
             df_for_dedup = df_for_dedup.drop_duplicates(subset=unique_columns, keep=False)
             logger.info(f"Dataset shape after clean invalid target duplicates: {df_for_dedup.shape}")
         # Combine back excluded rows
-        if len(excluded_from_dedup) > 0:
-            df = pd.concat([df_for_dedup, excluded_from_dedup], ignore_index=False)
+        if oot_df is not None:
+            df = pd.concat([df_for_dedup, oot_df], ignore_index=False)
+            marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
+            if marked_duplicates.sum() > 0:
+                dups_indices = df[marked_duplicates].index.to_list()[:100]
+                nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns, keep=False))
+                num_dup_rows = len(df) - nrows_after_tgt_dedup
+                share_tgt_dedup = 100 * num_dup_rows / len(df)
+                msg = bundle.get("dataset_diff_target_duplicates_oot").format(
+                    share_tgt_dedup, num_dup_rows, dups_indices
+                )
+                df = df.drop_duplicates(subset=unique_columns, keep="first")
             logger.info(f"Final dataset shape after adding back excluded rows: {df.shape}")
         else:
             df = df_for_dedup
