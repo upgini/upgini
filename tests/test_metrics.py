@@ -12,6 +12,7 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold, TimeSeriesSplit
 
+from upgini.autofe.utils import pydantic_parse_method
 from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.metadata import (
@@ -222,7 +223,7 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
     requests_mock.get(url + f"/public/api/v2/search/{search_task_id}/metadata", json=file_meta)
     with open(os.path.join(BASE_DIR, "provider_meta.json"), "rb") as f:
         provider_meta_json = json.load(f)
-        provider_meta = ProviderTaskMetadataV2.parse_obj(provider_meta_json)
+        provider_meta = pydantic_parse_method(ProviderTaskMetadataV2)(provider_meta_json)
     mock_get_task_metadata_v2(requests_mock, url, ads_search_task_id, provider_meta)
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(BASE_DIR, "x_enriched.parquet"))
 

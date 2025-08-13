@@ -4277,6 +4277,17 @@ if response.status_code == 200:
 
         # TODO drop system_record_id before merge
         # Merge with result features
+        # Align dtypes for join key to avoid int/float merge warnings
+        if ENTITY_SYSTEM_RECORD_ID in input_df.columns and ENTITY_SYSTEM_RECORD_ID in result_features.columns:
+            input_is_float = pd.api.types.is_float_dtype(input_df[ENTITY_SYSTEM_RECORD_ID])
+            result_is_float = pd.api.types.is_float_dtype(result_features[ENTITY_SYSTEM_RECORD_ID])
+            if input_is_float or result_is_float:
+                input_df[ENTITY_SYSTEM_RECORD_ID] = pd.to_numeric(
+                    input_df[ENTITY_SYSTEM_RECORD_ID], errors="coerce"
+                ).astype("float64")
+                result_features[ENTITY_SYSTEM_RECORD_ID] = pd.to_numeric(
+                    result_features[ENTITY_SYSTEM_RECORD_ID], errors="coerce"
+                ).astype("float64")
         result_features = pd.merge(
             input_df,
             result_features,
