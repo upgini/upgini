@@ -101,6 +101,7 @@ from upgini.utils.email_utils import (
 from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
+from upgini.utils.hash_utils import file_hash
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
@@ -2109,7 +2110,18 @@ class FeaturesEnricher(TransformerMixin):
         columns_renaming = normalizer.columns_renaming
 
         df, _ = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
-        df = self.__add_fit_system_record_id(df, search_keys, SYSTEM_RECORD_ID, TARGET, columns_renaming, silent=True)
+        df = self._add_fit_system_record_id(
+            df,
+            search_keys,
+            SYSTEM_RECORD_ID,
+            TARGET,
+            columns_renaming,
+            self.id_columns,
+            self.cv,
+            self.model_task_type,
+            self.logger,
+            self.bundle,
+        )
 
         # Sample after sorting by system_record_id for idempotency
         df.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
@@ -2721,13 +2733,17 @@ if response.status_code == 200:
 
             features_not_to_pass = []
             if add_fit_system_record_id:
-                df = self.__add_fit_system_record_id(
+                df = self._add_fit_system_record_id(
                     df,
                     search_keys,
                     SYSTEM_RECORD_ID,
                     TARGET,
                     columns_renaming,
-                    silent=True,
+                    self.id_columns,
+                    self.cv,
+                    self.model_task_type,
+                    self.logger,
+                    self.bundle,
                 )
                 df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
                 features_not_to_pass.append(SORT_ID)
@@ -3267,8 +3283,17 @@ if response.status_code == 200:
                     self.__log_warning(self.bundle.get("oot_eval_set_too_small_after_dedup").format(eval_set_index + 1))
 
         # Explode multiple search keys
-        df = self.__add_fit_system_record_id(
-            df, self.fit_search_keys, ENTITY_SYSTEM_RECORD_ID, TARGET, self.fit_columns_renaming
+        df = self._add_fit_system_record_id(
+            df,
+            self.fit_search_keys,
+            ENTITY_SYSTEM_RECORD_ID,
+            TARGET,
+            self.fit_columns_renaming,
+            self.id_columns,
+            self.cv,
+            self.model_task_type,
+            self.logger,
+            self.bundle,
         )
 
         # TODO check that this is correct for enrichment
@@ -3302,8 +3327,17 @@ if response.status_code == 200:
         if eval_set is not None and len(eval_set) > 0:
             meaning_types[EVAL_SET_INDEX] = FileColumnMeaningType.EVAL_SET_INDEX
 
-        df = self.__add_fit_system_record_id(
-            df, self.fit_search_keys, SYSTEM_RECORD_ID, TARGET, self.fit_columns_renaming, silent=True
+        df = self._add_fit_system_record_id(
+            df,
+            self.fit_search_keys,
+            SYSTEM_RECORD_ID,
+            TARGET,
+            self.fit_columns_renaming,
+            self.id_columns,
+            self.cv,
+            self.model_task_type,
+            self.logger,
+            self.bundle,
         )
 
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
@@ -4134,14 +4168,18 @@ if response.status_code == 200:
         self.logger.info(f"Finished explosion. Size after: {len(df)}")
         return df, unnest_search_keys
 
-    def __add_fit_system_record_id(
-        self,
+    @staticmethod
+    def _add_fit_system_record_id(
         df: pd.DataFrame,
         search_keys: Dict[str, SearchKey],
         id_name: str,
         target_name: str,
         columns_renaming: Dict[str, str],
-        silent: bool = False,
+        id_columns: Optional[List[str]],
+        cv: Optional[CVType],
+        model_task_type: ModelTaskType,
+        logger: Optional[logging.Logger] = None,
+        bundle: ResourceBundle = bundle,
     ) -> pd.DataFrame:
         original_index_name = df.index.name
         index_name = df.index.name or DEFAULT_INDEX
@@ -4170,32 +4208,33 @@ if response.status_code == 200:
         columns_to_sort = [date_column] if date_column is not None else []
 
         do_sorting = True
-        if self.id_columns and self.cv is not None and self.cv.is_time_series():
+        if id_columns and cv is not None and cv.is_time_series():
             # Check duplicates by date and id_columns
             reversed_columns_renaming = {v: k for k, v in columns_renaming.items()}
-            renamed_id_columns = [reversed_columns_renaming.get(c, c) for c in self.id_columns]
+            renamed_id_columns = [reversed_columns_renaming.get(c, c) for c in id_columns]
             duplicate_check_columns = [c for c in renamed_id_columns if c in df.columns]
             if date_column is not None:
                 duplicate_check_columns.append(date_column)
 
             duplicates = df.duplicated(subset=duplicate_check_columns, keep=False)
             if duplicates.any():
-                raise ValueError(self.bundle.get("date_and_id_columns_duplicates").format(duplicates.sum()))
+                raise ValueError(bundle.get("date_and_id_columns_duplicates").format(duplicates.sum()))
             else:
                 columns_to_hash = list(set(list(search_keys.keys()) + renamed_id_columns + [target_name]))
                 columns_to_hash = sort_columns(
                     df[columns_to_hash],
                     target_name,
                     search_keys,
-                    self.model_task_type,
+                    model_task_type,
                     sort_exclude_columns,
-                    logger=self.logger,
+                    logger=logger,
                 )
         else:
             columns_to_hash = sort_columns(
-                df, target_name, search_keys, self.model_task_type, sort_exclude_columns, logger=self.logger
+                df, target_name, search_keys, model_task_type, sort_exclude_columns, logger=logger
             )
-        if do_sorting:
+
+        def sort_df(df: pd.DataFrame) -> pd.DataFrame:
             search_keys_hash = "search_keys_hash"
             if len(columns_to_hash) > 0:
                 factorized_df = df.copy()
@@ -4209,6 +4248,24 @@ if response.status_code == 200:
 
             if search_keys_hash in df.columns:
                 df.drop(columns=search_keys_hash, inplace=True)
+            return df
+
+        if do_sorting:
+            sorted_dfs = []
+            if EVAL_SET_INDEX in df.columns:
+                # Sort train and eval sets separately
+                train = df[df[EVAL_SET_INDEX] == 0].copy()
+                sorted_dfs.append(sort_df(train))
+
+                for eval_set_index in df[EVAL_SET_INDEX].unique():
+                    if eval_set_index == 0:
+                        continue
+                    eval_set_df = df[df[EVAL_SET_INDEX] == eval_set_index].copy()
+                    sorted_dfs.append(sort_df(eval_set_df))
+
+                df = pd.concat(sorted_dfs)
+            else:
+                df = sort_df(df)
 
         df = df.reset_index(drop=True).reset_index()
         # system_record_id saves correct order for fit
@@ -4219,11 +4276,6 @@ if response.status_code == 200:
         df.index.name = original_index_name
         df = df.sort_values(by=original_order_name).drop(columns=original_order_name)
 
-        # meaning_types[id_name] = (
-        #     FileColumnMeaningType.SYSTEM_RECORD_ID
-        #     if id_name == SYSTEM_RECORD_ID
-        #     else FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
-        # )
         return df
 
     def __correct_target(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -4997,7 +5049,7 @@ if response.status_code == 200:
 
                     with tempfile.TemporaryDirectory() as tmp_dir:
                         X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
-                        x_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/x.parquet")
+                        x_digest_sha256 = file_hash(f"{tmp_dir}/x.parquet")
                         if self.rest_client.is_file_uploaded(trace_id, x_digest_sha256):
                             self.logger.info(
                                 f"File x.parquet was already uploaded with digest {x_digest_sha256}, skipping"
@@ -5011,7 +5063,7 @@ if response.status_code == 200:
                             if isinstance(y_, pd.Series):
                                 y_ = y_.to_frame()
                             y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
-                            y_digest_sha256 = self.rest_client.compute_file_digest(f"{tmp_dir}/y.parquet")
+                            y_digest_sha256 = file_hash(f"{tmp_dir}/y.parquet")
                             if self.rest_client.is_file_uploaded(trace_id, y_digest_sha256):
                                 self.logger.info(
                                     f"File y.parquet was already uploaded with digest {y_digest_sha256}, skipping"
@@ -5026,9 +5078,7 @@ if response.status_code == 200:
                                     if isinstance(eval_x_, pd.Series):
                                         eval_x_ = eval_x_.to_frame()
                                     eval_x_.to_parquet(f"{tmp_dir}/eval_x_{idx}.parquet", compression="zstd")
-                                    eval_x_digest_sha256 = self.rest_client.compute_file_digest(
-                                        f"{tmp_dir}/eval_x_{idx}.parquet"
-                                    )
+                                    eval_x_digest_sha256 = file_hash(f"{tmp_dir}/eval_x_{idx}.parquet")
                                     if self.rest_client.is_file_uploaded(trace_id, eval_x_digest_sha256):
                                         self.logger.info(
                                             f"File eval_x_{idx}.parquet was already uploaded with"
@@ -5045,9 +5095,7 @@ if response.status_code == 200:
                                     if isinstance(eval_y_, pd.Series):
                                         eval_y_ = eval_y_.to_frame()
                                     eval_y_.to_parquet(f"{tmp_dir}/eval_y_{idx}.parquet", compression="zstd")
-                                    eval_y_digest_sha256 = self.rest_client.compute_file_digest(
-                                        f"{tmp_dir}/eval_y_{idx}.parquet"
-                                    )
+                                    eval_y_digest_sha256 = file_hash(f"{tmp_dir}/eval_y_{idx}.parquet")
                                     if self.rest_client.is_file_uploaded(trace_id, eval_y_digest_sha256):
                                         self.logger.info(
                                             f"File eval_y_{idx}.parquet was already uploaded"

@@ -15,6 +15,8 @@ from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.http import _RestClient
 from upgini.metadata import (
+    SYSTEM_RECORD_ID,
+    TARGET,
     CVType,
     FeaturesMetadataV2,
     HitRateMetrics,
@@ -3911,6 +3913,46 @@ def test_eval_x_intersection_with_x():
 
     with pytest.raises(ValidationError, match="Eval set X has rows that are present in train set X"):
         enricher._validate_eval_set_pair(X, (intersecting_eval_set_X, eval_set_y))
+
+
+def test_add_fit_system_record_id():
+    df = pd.DataFrame({
+        "index": [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        "date_renamed": ["2021-01-03", "2021-01-02", "2021-01-01", "2021-01-02", "2021-01-03", "2021-01-01", "2021-01-01", "2021-01-02", "2021-01-03"],  # noqa: E501
+        "phone_renamed": [4, 5, 6, 7, 8, 9, 10, 11, 12],
+        "target": [0, 1, 0, 1, 0, 1, 0, 1, 0],
+        "eval_set_index": [0, 0, 0, 1, 1, 1, 2, 2, 2],
+    })
+    df.set_index("index", inplace=True)
+    fit_search_keys = {"date_renamed": SearchKey.DATE, "phone_renamed": SearchKey.PHONE}
+    fit_columns_renaming = {"date_renamed": "date", "phone_renamed": "phone"}
+    id_columns = ["phone_renamed"]
+    cv = None  # CVType.time_series
+    model_task_type = ModelTaskType.BINARY
+    logger = logging.getLogger(__name__)
+    df = FeaturesEnricher._add_fit_system_record_id(
+        df,
+        fit_search_keys,
+        SYSTEM_RECORD_ID,
+        TARGET,
+        fit_columns_renaming,
+        id_columns,
+        cv,
+        model_task_type,
+        logger,
+    )
+
+    expected_df = pd.DataFrame({
+        "index": [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        "system_record_id": [2, 1, 0, 4, 5, 3, 6, 7, 8],
+        "date_renamed": ["2021-01-03", "2021-01-02", "2021-01-01", "2021-01-02", "2021-01-03", "2021-01-01", "2021-01-01", "2021-01-02", "2021-01-03"],  # noqa: E501
+        "phone_renamed": [4, 5, 6, 7, 8, 9, 10, 11, 12],
+        "target": [0, 1, 0, 1, 0, 1, 0, 1, 0],
+        "eval_set_index": [0, 0, 0, 1, 1, 1, 2, 2, 2],
+    })
+    expected_df.set_index("index", inplace=True)
+
+    assert_frame_equal(df, expected_df)
 
 
 class DataFrameWrapper:
