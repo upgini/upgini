@@ -1,9 +1,13 @@
+import hashlib
 import os
 import platform
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 
 def file_hash(path: str | os.PathLike, algo: str = "sha256") -> str:
@@ -135,3 +139,21 @@ def _parse_hash_output(output: str, tool: str) -> Optional[str]:
             if all(c in "0123456789abcdefABCDEF" for c in token) and len(token) >= 32:
                 return token
     return None
+
+
+def hash_input(X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[List[Tuple]] = None) -> str:
+    hashed_objects = []
+    try:
+        hashed_objects.append(pd.util.hash_pandas_object(X, index=False).values)
+        if y is not None:
+            hashed_objects.append(pd.util.hash_pandas_object(y, index=False).values)
+        if eval_set is not None:
+            if isinstance(eval_set, tuple):
+                eval_set = [eval_set]
+            for eval_X, eval_y in eval_set:
+                hashed_objects.append(pd.util.hash_pandas_object(eval_X, index=False).values)
+                hashed_objects.append(pd.util.hash_pandas_object(eval_y, index=False).values)
+        common_hash = hashlib.sha256(np.concatenate(hashed_objects)).hexdigest()
+        return common_hash
+    except Exception:
+        return ""

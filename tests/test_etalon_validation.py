@@ -19,6 +19,7 @@ from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
 from upgini.utils.sample_utils import SampleConfig
+from upgini.utils.target_utils import is_imbalanced
 
 
 def test_etalon_validation(etalon: Dataset):
@@ -301,7 +302,7 @@ def test_imbalanced_target():
             "target": ["a"] * 100 + ["b"] * 400 + ["c"] * 500 + ["d"] * 1000,
         }
     )
-    dataset = Dataset("test123", df=df)  # type: ignore
+    dataset = Dataset("test123", df=df, is_imbalanced=True)
     dataset.meaning_types = {
         "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
         "phone": FileColumnMeaningType.MSISDN,
@@ -329,16 +330,9 @@ def test_fail_on_small_class_observations():
             "target": ["a"] + ["b"] * 4 + ["c"] * 5 + ["d"] * 10,
         }
     )
-    dataset = Dataset("test123", df=df)
-    dataset.meaning_types = {
-        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
-        "phone": FileColumnMeaningType.MSISDN,
-        "f": FileColumnMeaningType.FEATURE,
-        "target": FileColumnMeaningType.TARGET,
-    }
-    dataset.task_type = ModelTaskType.MULTICLASS
+
     with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
-        dataset._Dataset__resample()
+        is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
 
 
 def test_fail_on_too_many_classes():
@@ -350,16 +344,9 @@ def test_fail_on_too_many_classes():
             "target": range(200),
         }
     )
-    dataset = Dataset("test123", df=df)  # type: ignore
-    dataset.meaning_types = {
-        "system_record_id": FileColumnMeaningType.SYSTEM_RECORD_ID,
-        "phone": FileColumnMeaningType.MSISDN,
-        "f": FileColumnMeaningType.FEATURE,
-        "target": FileColumnMeaningType.TARGET,
-    }
-    dataset.task_type = ModelTaskType.MULTICLASS
+
     with pytest.raises(ValidationError, match=r".*The number of target classes .+ exceeds the allowed threshold.*"):
-        dataset._Dataset__resample()
+        is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
 
 
 def test_iso_code_normalization():

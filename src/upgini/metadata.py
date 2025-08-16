@@ -327,13 +327,6 @@ class ProviderTaskMetadataV2(BaseModel):
     generated_features: Optional[List[GeneratedFeatureMetadata]] = None
 
 
-class FeaturesFilter(BaseModel):
-    minImportance: Optional[float] = None
-    maxPSI: Optional[float] = None
-    maxCount: Optional[int] = None
-    selectedFeatures: Optional[List[str]] = None
-
-
 class RuntimeParameters(BaseModel):
     properties: Dict[str, Any] = {}
 
@@ -343,11 +336,8 @@ class AutoFEParameters(BaseModel):
 
 
 class SearchCustomization(BaseModel):
-    featuresFilter: Optional[FeaturesFilter] = None
     extractFeatures: Optional[bool] = None
     accurateModel: Optional[bool] = None
-    importanceThreshold: Optional[float] = None
-    maxFeatures: Optional[int] = None
     returnScores: Optional[bool] = None
     runtimeParameters: Optional[RuntimeParameters] = None
     metricsCalculation: Optional[bool] = None

@@ -1,4 +1,4 @@
 Dataset type,Rows,Mean target,Enriched mean_absolute_error
-Train,500,0.51,0.502 ± 0.058
-Eval 1,250,0.452,0.531 ± 0.012
-Eval 2,250,0.536,0.484 ± 0.020
+Train,500,0.51,0.522 ± 0.048
+Eval 1,250,0.452,0.531 ± 0.021
+Eval 2,250,0.536,0.485 ± 0.032

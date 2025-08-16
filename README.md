@@ -723,20 +723,6 @@ enricher = FeaturesEnricher(
 enriched_dataframe.fit(X, y)
 ```
 
-### Return initial dataframe enriched with TOP external features by importance
-
-`transform` and `fit_transform` methods of `FeaturesEnricher` can be used with two additional parameters:
-- `importance_threshold`: float = 0 - only features with *importance >= threshold* will be added to the output dataframe
-- `max_features`: int  - only first TOP N features by importance will be returned, where *N = max_features*  
-
-And `keep_input=True` will keep all initial columns from search dataset X:  
-```python
-enricher = FeaturesEnricher(
-	search_keys={"subscription_activation_date": SearchKey.DATE}
-)
-enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
-```
-
 ### Exclude premium data sources from fit, transform and metrics calculation
 
 `fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with parameter `exclude_features_sources` that allows to exclude Trial or Paid features from Premium data sources:

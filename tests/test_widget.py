@@ -11,11 +11,13 @@ from requests_mock import Mocker
 from tests.utils import (
     mock_default_requests,
     mock_get_metadata,
+    mock_get_selected_features,
     mock_get_task_metadata_v2,
     mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_set_selected_features,
 )
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import (
@@ -343,6 +345,28 @@ def test_widget(requests_mock: Mocker):
             ),
             eval_set_metrics=[],
         ),
+    )
+    mock_get_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        [
+            "f_events_date_month_sin4_81a273ac",
+            "f_ip_company_name_emb145_e56eb2a3",
+            "f_ip_company_name_emb54_805ee5b8",
+            "f_ip_operator_5d5fc3f3",
+        ],
+    )
+    mock_set_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        [
+            "f_events_date_month_sin4_81a273ac",
+            "f_ip_company_name_emb145_e56eb2a3",
+            "f_ip_company_name_emb54_805ee5b8",
+            "f_ip_operator_5d5fc3f3",
+        ],
     )
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "test_data/widget/features.parquet"

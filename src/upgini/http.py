@@ -277,6 +277,7 @@ class _RestClient:
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
     SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file?digest={0}"
     TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
+    SEARCH_SELECTED_FEATURES_URI_FMT = SERVICE_ROOT_V2 + "search/{0}/selected-features"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -713,6 +714,16 @@ class _RestClient:
             )
         )
         return TransformUsage(response)
+
+    def update_selected_features(self, trace_id: str, search_task_id: str, selected_features: list[str]):
+        api_path = self.SEARCH_SELECTED_FEATURES_URI_FMT.format(search_task_id)
+        request = {"features": selected_features}
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+
+    def get_selected_features(self, trace_id: str, search_task_id: str) -> list[str] | None:
+        api_path = self.SEARCH_SELECTED_FEATURES_URI_FMT.format(search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return response.get("features")
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI

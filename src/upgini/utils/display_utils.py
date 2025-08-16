@@ -137,7 +137,7 @@ def display_html_dataframe(
             {table_html}
         </div>
         """
-    if display_handle:
+    if display_handle is not None:
         return display_handle.update(HTML(result_html))
     else:
         return display(HTML(result_html), display_id=display_id)

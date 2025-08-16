@@ -48,6 +48,7 @@ def calculate_sparsity_psi(
     date_column: str,
     logger: logging.Logger,
     model_task_type: ModelTaskType,
+    stability_agg_func: str | None = None,
     psi_features_params: StabilityParams = DEFAULT_FEATURES_PARAMS,
     psi_target_params: StabilityParams = DEFAULT_TARGET_PARAMS,
 ) -> Dict[str, float]:
@@ -62,6 +63,7 @@ def calculate_sparsity_psi(
             date_column,
             logger,
             model_task_type,
+            stability_agg_func,
             psi_target_params,
             psi_features_params,
         )
@@ -74,13 +76,17 @@ def calculate_features_psi(
     date_column: str,
     logger: logging.Logger,
     model_task_type: ModelTaskType,
+    stability_agg_func: str | None = None,
     psi_features_params: StabilityParams = DEFAULT_FEATURES_PARAMS,
     psi_target_params: StabilityParams = DEFAULT_TARGET_PARAMS,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     empty_res = {col: 0.0 for col in df.columns if col not in [TARGET, date_column]}
 
     if not is_numeric_dtype(df[date_column]):
         df[date_column] = pd.to_datetime(df[date_column]).dt.floor("D").astype(np.int64) / 10**6
+
+    # Filter out rows with missing dates
+    df = df[df[date_column].notna()].copy()
 
     n_months = pd.to_datetime(df[date_column], unit="ms").dt.month.nunique()
 
@@ -102,7 +108,7 @@ def calculate_features_psi(
             )
             return empty_res
 
-        target_agg_func = _get_agg_func(psi_target_params.agg)
+        target_agg_func = _get_agg_func(stability_agg_func or psi_target_params.agg)
         logger.info(f"Calculating target PSI with agg function {target_agg_func}")
         target_psi = _stability_agg(
             [df[TARGET][cur] for cur in current_masks],
@@ -130,7 +136,7 @@ def calculate_features_psi(
 
     logger.info(f"Calculating PSI for {len(df.columns)} features")
     reference_mask, current_masks = _split_intervals(df, date_column, psi_features_params.n_intervals, logger)
-    features_agg_func = _get_agg_func(psi_features_params.agg)
+    features_agg_func = _get_agg_func(stability_agg_func or psi_features_params.agg)
     logger.info(f"Calculating features PSI with agg function {features_agg_func}")
     psi_values = [
         _stability_agg(
@@ -221,7 +227,7 @@ def _stability_agg(
 
     psi_value = agg_func([_psi(reference, c) for c in current])
 
-    return psi_value
+    return float(psi_value)
 
 
 def _get_binned_data(

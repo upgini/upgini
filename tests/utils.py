@@ -112,30 +112,50 @@ def mock_get_metadata(
         metadata_columns = [
             {
                 "index": 0,
-                "name": "systemrecordid_473310000",
-                "originalName": "SystemRecordId_473310000",
-                "dataType": "STRING",
-                "meaningType": "FEATURE",
-            },
-            {
-                "index": 1,
-                "name": "phone_num",
+                "name": "phone_num_a54a33",
                 "originalName": "phone_num",
                 "dataType": "STRING",
                 "meaningType": "MSISDN",
             },
-            {"index": 2, "name": "rep_date", "originalName": "rep_date", "dataType": "INT", "meaningType": "DATE"},
-            {"index": 3, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
             {
-                "index": 4,
+                "index": 1,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {"index": 2, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
+            {
+                "index": 3,
                 "name": "system_record_id",
                 "originalName": "system_record_id",
                 "dataType": "INT",
                 "meaningType": "SYSTEM_RECORD_ID",
             },
+            {
+                "index": 4,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 6,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
         ]
     if search_keys is None:
-        search_keys = ["phone_num", "rep_date"]
+        search_keys = ["phone_num_a54a33", "rep_date_f5d6bb"]
     combined_search_keys = []
     for L in range(1, len(search_keys) + 1):
         for subset in itertools.combinations(search_keys, L):
@@ -162,10 +182,13 @@ def mock_get_task_metadata_v2(requests_mock: Mocker, url: str, ads_search_task_i
     )
 
 
-def mock_get_task_metadata_v2_from_file(requests_mock: Mocker, url: str, ads_search_task_id: str, meta_path: str):
+def mock_get_task_metadata_v2_from_file(
+    requests_mock: Mocker, url: str, ads_search_task_id: str, meta_path: str
+) -> dict:
     with open(meta_path, "r") as f:
         meta = json.load(f)
         requests_mock.get(url + "/public/api/v2/search/metadata-v2/" + ads_search_task_id, json=meta)
+        return meta
 
 
 def mock_raw_features(
@@ -553,3 +576,15 @@ def mock_target_outliers_file(requests_mock: Mocker, url: str, outlier_id: str, 
         raise Exception(
             f"Unsupported type of mock target outliers: {type(outliers)}. Supported only string (path) or DataFrame"
         )
+
+
+def mock_get_selected_features(requests_mock: Mocker, url: str, search_task_id: str, selected_features: List[str]):
+    requests_mock.get(
+        f"{url}/public/api/v2/search/{search_task_id}/selected-features", json={"features": selected_features}
+    )
+
+
+def mock_set_selected_features(requests_mock: Mocker, url: str, search_task_id: str, selected_features: List[str]):
+    requests_mock.post(
+        f"{url}/public/api/v2/search/{search_task_id}/selected-features", json={"features": selected_features}
+    )
