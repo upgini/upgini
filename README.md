@@ -703,6 +703,36 @@ enricher.fit(
 )
 ```
 
+### Control feature stability with PSI parameters
+
+`FeaturesEnricher` supports Population Stability Index (PSI) calculation on eval_set to evaluate feature stability over time. You can control this behavior using stability parameters in `fit` and `fit_transform` methods:
+
+```python
+enricher = FeaturesEnricher(
+    search_keys={"registration_date": SearchKey.DATE}
+)
+
+# Control feature stability during fit
+enricher.fit(
+    X, y, 
+    stability_threshold=0.2,  # PSI threshold: features with PSI above this value will be dropped
+    stability_agg_func="max"  # Aggregation function for stability values: "max", "min", "mean"
+)
+
+# Same parameters work for fit_transform
+enriched_df = enricher.fit_transform(
+    X, y,
+    stability_threshold=0.1,   # Stricter threshold for more stable features
+    stability_agg_func="mean"  # Use mean aggregation instead of max
+)
+```
+
+**Stability parameters:**
+- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI below this threshold will be excluded from the final feature set. Lower values mean stricter stability requirements.
+- `stability_agg_func` (str, default="max"): Function to aggregate PSI values across time intervals. Options: "max" (most conservative), "min" (least conservative), "mean" (balanced approach).
+
+**PSI (Population Stability Index)** measures how much feature distribution changes over time. Lower PSI values indicate more stable features, which are generally more reliable for production ML models.
+
 ### Use custom loss function in feature selection & metrics calculation
 
 `FeaturesEnricher` can be initialized with additional string parameter `loss`. 

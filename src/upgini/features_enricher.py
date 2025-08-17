@@ -443,7 +443,7 @@ class FeaturesEnricher(TransformerMixin):
         search_id_callback: Optional[Callable[[str], Any]] = None,
         select_features: bool = True,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
-        stability_threshold: float = 0.15,
+        stability_threshold: float = 0.2,
         stability_agg_func: str = "max",
         **kwargs,
     ):
@@ -479,7 +479,7 @@ class FeaturesEnricher(TransformerMixin):
             If True, return only selected features both from input and data sources.
             Otherwise, return all features from input and only selected features from data sources.
 
-        stability_threshold: float, optional (default=0.15)
+        stability_threshold: float, optional (default=0.2)
             Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
             then feature will be dropped.
 
@@ -592,7 +592,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
         select_features: bool = True,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
-        stability_threshold: float = 0.15,
+        stability_threshold: float = 0.2,
         stability_agg_func: str = "max",
         **kwargs,
     ) -> pd.DataFrame:
@@ -629,7 +629,7 @@ class FeaturesEnricher(TransformerMixin):
             If True, return only selected features both from input and data sources.
             Otherwise, return all features from input and only selected features from data sources.
 
-        stability_threshold: float, optional (default=0.15)
+        stability_threshold: float, optional (default=0.2)
             Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
             then feature will be dropped.
 
