@@ -12,7 +12,7 @@ from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
 from threading import Thread
-from typing import Any, Callable, Optional, Set, Union
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -207,34 +207,34 @@ class FeaturesEnricher(TransformerMixin):
 
     def __init__(
         self,
-        search_keys: Optional[dict[str, SearchKey]] = None,
-        country_code: Optional[str] = None,
-        model_task_type: Optional[Union[ModelTaskType, str]] = None,
-        api_key: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        search_id: Optional[str] = None,
-        shared_datasets: Optional[list[str]] = None,
-        runtime_parameters: Optional[RuntimeParameters] = None,
-        date_format: Optional[str] = None,
+        search_keys: dict[str, SearchKey] | None = None,
+        country_code: str | None = None,
+        model_task_type: ModelTaskType | str | None = None,
+        api_key: str | None = None,
+        endpoint: str | None = None,
+        search_id: str | None = None,
+        shared_datasets: list[str] | None = None,
+        runtime_parameters: RuntimeParameters | None = None,
+        date_format: str | None = None,
         random_state: int = 42,
-        cv: Optional[CVType] = None,
-        loss: Optional[str] = None,
+        cv: CVType | None = None,
+        loss: str | None = None,
         autodetect_search_keys: bool = True,
-        generate_features: Optional[list[str]] = None,
-        columns_for_online_api: Optional[list[str]] = None,
-        round_embeddings: Optional[int] = None,
+        generate_features: list[str] | None = None,
+        columns_for_online_api: list[str] | None = None,
+        round_embeddings: int | None = None,
         logs_enabled: bool = True,
         raise_validation_error: bool = True,
-        exclude_columns: Optional[list[str]] = None,
-        baseline_score_column: Optional[Any] = None,
-        client_ip: Optional[str] = None,
-        client_visitorid: Optional[str] = None,
-        custom_bundle_config: Optional[str] = None,
+        exclude_columns: list[str] | None = None,
+        baseline_score_column: Any | None = None,
+        client_ip: str | None = None,
+        client_visitorid: str | None = None,
+        custom_bundle_config: str | None = None,
         add_date_if_missing: bool = True,
         disable_force_downsampling: bool = False,
-        id_columns: Optional[list[str]] = None,
+        id_columns: list[str] | None = None,
         generate_search_key_features: bool = True,
-        sample_config: Optional[SampleConfig] = None,
+        sample_config: SampleConfig | None = None,
         print_trace_id: bool = False,
         **kwargs,
     ):
@@ -259,16 +259,16 @@ class FeaturesEnricher(TransformerMixin):
             print(msg)
 
         self.passed_features: list[str] = []
-        self.df_with_original_index: Optional[pd.DataFrame] = None
-        self.fit_columns_renaming: Optional[dict[str, str]] = None
+        self.df_with_original_index: pd.DataFrame | None = None
+        self.fit_columns_renaming: dict[str, str] | None = None
         self.country_added = False
         self.fit_generated_features: list[str] = []
-        self.fit_dropped_features: Set[str] = set()
+        self.fit_dropped_features: set[str] = set()
         self.fit_search_keys = search_keys
         self.warning_counter = WarningCounter()
-        self.X: Optional[pd.DataFrame] = None
-        self.y: Optional[pd.Series] = None
-        self.eval_set: Optional[list[tuple]] = None
+        self.X: pd.DataFrame | None = None
+        self.y: pd.Series | None = None
+        self.eval_set: list[tuple] | None = None
         self.autodetected_search_keys: dict[str, SearchKey] = {}
         self.imbalanced = False
         self.fit_select_features = True
@@ -288,17 +288,17 @@ class FeaturesEnricher(TransformerMixin):
             self.model_task_type = ModelTaskType.parse(model_task_type)
         self.model_task_type = model_task_type
         self.endpoint = endpoint
-        self._search_task: Optional[SearchTask] = None
+        self._search_task: SearchTask | None = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._features_info_without_links: pd.DataFrame = self.EMPTY_FEATURES_INFO
         self._internal_features_info: pd.DataFrame = self.EMPTY_INTERNAL_FEATURES_INFO
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
-        self.metrics: Optional[pd.DataFrame] = None
+        self.metrics: pd.DataFrame | None = None
         self.feature_names_ = []
         self.external_source_feature_names = []
         self.feature_importances_ = []
-        self.psi_values: Optional[dict[str, float]] = None
+        self.psi_values: dict[str, float] | None = None
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
@@ -375,7 +375,7 @@ class FeaturesEnricher(TransformerMixin):
         self.autofe_features_display_handle = None
         self.report_button_handle = None
 
-    def _get_sample_config(self, sample_config: Optional[SampleConfig] = None):
+    def _get_sample_config(self, sample_config: SampleConfig | None = None):
         sample_config = sample_config or SampleConfig(force_sample_size=Dataset.FORCE_SAMPLE_SIZE)
 
         maybe_downsampling_limit = self.runtime_parameters.properties.get("downsampling_limit")
@@ -430,19 +430,19 @@ class FeaturesEnricher(TransformerMixin):
 
     def fit(
         self,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray],
-        y: Union[pd.Series, np.ndarray, list],
-        eval_set: Optional[Union[list[tuple], tuple]] = None,
+        X: pd.DataFrame | pd.Series | np.ndarray,
+        y: pd.Series | np.ndarray | list,
+        eval_set: list[tuple] | tuple | None = None,
         *args,
-        exclude_features_sources: Optional[list[str]] = None,
-        calculate_metrics: Optional[bool] = None,
-        estimator: Optional[Any] = None,
-        scoring: Union[Callable, str, None] = None,
-        remove_outliers_calc_metrics: Optional[bool] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        search_id_callback: Optional[Callable[[str], Any]] = None,
+        exclude_features_sources: list[str] | None = None,
+        calculate_metrics: bool | None = None,
+        estimator: Any | None = None,
+        scoring: Callable | str | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
+        search_id_callback: Callable[[str], Any] | None = None,
         select_features: bool = True,
-        auto_fe_parameters: Optional[AutoFEParameters] = None,
+        auto_fe_parameters: AutoFEParameters | None = None,
         stability_threshold: float = 0.2,
         stability_agg_func: str = "max",
         **kwargs,
@@ -579,19 +579,19 @@ class FeaturesEnricher(TransformerMixin):
 
     def fit_transform(
         self,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray],
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list],
-        eval_set: Optional[Union[list[tuple], tuple]] = None,
+        X: pd.DataFrame | pd.Series | np.ndarray,
+        y: pd.DataFrame | pd.Series | np.ndarray | list,
+        eval_set: list[tuple] | tuple | None = None,
         *args,
-        exclude_features_sources: Optional[list[str]] = None,
-        keep_input: bool = True,
-        calculate_metrics: Optional[bool] = None,
-        scoring: Union[Callable, str, None] = None,
-        estimator: Optional[Any] = None,
-        remove_outliers_calc_metrics: Optional[bool] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        exclude_features_sources: list[str] | None | None = None,
+        keep_input: bool | None = None,
+        calculate_metrics: bool | None = None,
+        scoring: Callable | str | None = None,
+        estimator: Any | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
         select_features: bool = True,
-        auto_fe_parameters: Optional[AutoFEParameters] = None,
+        auto_fe_parameters: AutoFEParameters | None = None,
         stability_threshold: float = 0.2,
         stability_agg_func: str = "max",
         **kwargs,
@@ -599,7 +599,6 @@ class FeaturesEnricher(TransformerMixin):
         """Fit to data, then transform it.
 
         Fits transformer to `X` and `y` and returns a transformed version of `X`.
-        If keep_input is True, then all input columns are copied to the output dataframe.
 
         Parameters
         ----------
@@ -613,7 +612,10 @@ class FeaturesEnricher(TransformerMixin):
             list of pairs (X, y) for validation.
 
         keep_input: bool, optional (default=True)
+            keep_input: bool, optional (default=None)
             If True, copy original input columns to the output dataframe.
+            If False, then only enriched columns are returned.
+            If None, then all search keys, ID columns, selected client features and enriched columns will be returned.
 
         estimator: sklearn-compatible estimator, optional (default=None)
             Custom estimator for metrics calculation.
@@ -747,28 +749,29 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: pd.DataFrame,
         *args,
-        y: Optional[pd.Series] = None,
-        exclude_features_sources: Optional[list[str]] = None,
-        keep_input: bool = True,
-        trace_id: Optional[str] = None,
+        y: pd.Series | None = None,
+        exclude_features_sources: list[str] | None = None,
+        keep_input: bool | None = None,
+        trace_id: str | None = None,
         metrics_calculation: bool = False,
         silent_mode=False,
-        progress_bar: Optional[ProgressBar] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        progress_bar: ProgressBar | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Transform `X`.
 
         Returns a transformed version of `X`.
-        If keep_input is True, then all input columns are copied to the output dataframe.
 
         Parameters
         ----------
         X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
 
-        keep_input: bool, optional (default=True)
+        keep_input: bool, optional (default=None)
             If True, copy original input columns to the output dataframe.
+            If False, then only enriched columns are returned.
+            If None, then all search keys, ID columns, selected client features and enriched columns will be returned.
 
         Returns
         -------
@@ -809,6 +812,7 @@ class FeaturesEnricher(TransformerMixin):
                     metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
                     progress_bar=progress_bar,
+                    keep_input=keep_input,
                 )
                 self.logger.info("Transform finished successfully")
                 search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
@@ -850,30 +854,26 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
-
-            if result is not None:
-                if keep_input:
-                    return result
-                else:
-                    return result.drop(columns=X.columns, errors="ignore")
+            
+            return result
 
     def calculate_metrics(
         self,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list, None] = None,
-        eval_set: Optional[Union[list[tuple], tuple]] = None,
+        X: pd.DataFrame | pd.Series | np.ndarray | None = None,
+        y: pd.DataFrame | pd.Series | np.ndarray | list | None = None,
+        eval_set: list[tuple] | tuple | None = None,
         *args,
-        scoring: Union[Callable, str, None] = None,
-        cv: Union[BaseCrossValidator, CVType, None] = None,
+        scoring: Callable | str | None = None,
+        cv: BaseCrossValidator | CVType | str | None = None,
         estimator=None,
-        exclude_features_sources: Optional[list[str]] = None,
-        remove_outliers_calc_metrics: Optional[bool] = None,
-        trace_id: Optional[str] = None,
+        exclude_features_sources: list[str] | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
+        trace_id: str | None = None,
         internal_call: bool = False,
-        progress_bar: Optional[ProgressBar] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        progress_bar: ProgressBar | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
         **kwargs,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Calculate metrics
 
         Parameters
@@ -1311,16 +1311,16 @@ class FeaturesEnricher(TransformerMixin):
     def _select_features_by_psi(
         self,
         trace_id: str,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray],
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list],
-        eval_set: Optional[Union[list[tuple], tuple]],
+        X: pd.DataFrame | pd.Series | np.ndarray,
+        y: pd.DataFrame | pd.Series | np.ndarray | list,
+        eval_set: list[tuple] | tuple | None,
         stability_threshold: float,
         stability_agg_func: Callable,
-        cv: Union[BaseCrossValidator, CVType, str, None] = None,
+        cv: BaseCrossValidator | CVType | str | None = None,
         estimator=None,
-        exclude_features_sources: Optional[list[str]] = None,
+        exclude_features_sources: list[str] | None = None,
         progress_bar: bool = True,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ):
         search_keys = self.search_keys.copy()
         validated_X, _, validated_eval_set = self._validate_train_eval(X, y, eval_set, silent=True)
@@ -1469,7 +1469,7 @@ class FeaturesEnricher(TransformerMixin):
 
         unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
         if unstable_by_sparsity:
-            self.logger.info(f"Unstable by sparsity features: {sorted(unstable_by_sparsity)}")
+            self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
         psi_values = calculate_features_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
@@ -1479,7 +1479,7 @@ class FeaturesEnricher(TransformerMixin):
 
         unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
         if unstable_by_value:
-            self.logger.info(f"Unstable by value features: {sorted(unstable_by_value)}")
+            self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
 
         self.psi_values = {
             feature: psi_value for feature, psi_value in psi_values.items() if psi_value <= stability_threshold
@@ -1557,12 +1557,12 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
 
     def _has_features_with_commercial_schema(
-        self, commercial_schema: str, exclude_features_sources: Optional[list[str]]
+        self, commercial_schema: str, exclude_features_sources: list[str] | None
     ) -> bool:
         return len(self._get_features_with_commercial_schema(commercial_schema, exclude_features_sources)) > 0
 
     def _get_features_with_commercial_schema(
-        self, commercial_schema: str, exclude_features_sources: Optional[list[str]]
+        self, commercial_schema: str, exclude_features_sources: list[str] | None
     ) -> list[str]:
         if exclude_features_sources:
             filtered_features_info = self._internal_features_info[
@@ -1577,14 +1577,14 @@ class FeaturesEnricher(TransformerMixin):
             ].values
         )
 
-    def _has_paid_features(self, exclude_features_sources: Optional[list[str]]) -> bool:
+    def _has_paid_features(self, exclude_features_sources: list[str] | None) -> bool:
         return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
 
     def _is_input_same_as_fit(
         self,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list, None] = None,
-        eval_set: Optional[list[tuple]] = None,
+        X: pd.DataFrame | pd.Series | np.ndarray | None = None,
+        y: pd.DataFrame | pd.Series | np.ndarray | list | None = None,
+        eval_set: list[tuple] | None = None,
     ) -> tuple:
         if X is None:
             return True, self.X, self.y, self.eval_set
@@ -1615,9 +1615,9 @@ class FeaturesEnricher(TransformerMixin):
     def _get_cv_and_groups(
         self,
         X: pd.DataFrame,
-        cv_override: Union[BaseCrossValidator, CVType, str, None],
+        cv_override: BaseCrossValidator | CVType | str | None,
         search_keys: dict[str, SearchKey],
-    ) -> tuple[BaseCrossValidator, Optional[np.ndarray]]:
+    ) -> tuple[BaseCrossValidator, np.ndarray] | None:
         _cv = cv_override or self.cv
         group_columns = sorted(self._get_group_columns(X, search_keys))
         groups = None
@@ -1645,8 +1645,8 @@ class FeaturesEnricher(TransformerMixin):
         return _cv, groups
 
     def _get_and_validate_client_cat_features(
-        self, estimator: Optional[Any], X: pd.DataFrame, search_keys: dict[str, SearchKey]
-    ) -> tuple[Optional[list[str]], list[str]]:
+        self, estimator: Any | None, X: pd.DataFrame, search_keys: dict[str, SearchKey]
+    ) -> tuple[list[str] | None, list[str]]:
         cat_features = []
         search_keys_for_metrics = []
         if (
@@ -1678,16 +1678,16 @@ class FeaturesEnricher(TransformerMixin):
     def _get_cached_enriched_data(
         self,
         trace_id: str,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray, None] = None,
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list, None] = None,
-        eval_set: Optional[Union[list[tuple], tuple]] = None,
-        exclude_features_sources: Optional[list[str]] = None,
-        remove_outliers_calc_metrics: Optional[bool] = None,
-        cv_override: Union[BaseCrossValidator, CVType, str, None] = None,
-        search_keys_for_metrics: Optional[list[str]] = None,
-        progress_bar: Optional[ProgressBar] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        client_cat_features: Optional[list[str]] = None,
+        X: pd.DataFrame | pd.Series | np.ndarray | None = None,
+        y: pd.DataFrame | pd.Series | np.ndarray | list | None = None,
+        eval_set: list[tuple] | tuple | None = None,
+        exclude_features_sources: list[str] | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
+        cv_override: BaseCrossValidator | CVType | str | None = None,
+        search_keys_for_metrics: list[str] | None = None,
+        progress_bar: ProgressBar | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
+        client_cat_features: list[str] | None = None,
         is_for_metrics: bool = False,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
@@ -1893,15 +1893,15 @@ class FeaturesEnricher(TransformerMixin):
     def _get_enriched_datasets(
         self,
         trace_id: str,
-        validated_X: Union[pd.DataFrame, pd.Series, np.ndarray, None],
-        validated_y: Union[pd.DataFrame, pd.Series, np.ndarray, list, None],
-        eval_set: Optional[list[tuple]],
-        exclude_features_sources: Optional[list[str]],
+        validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
+        validated_y: pd.DataFrame | pd.Series | np.ndarray | list | None,
+        eval_set: list[tuple] | None,
+        exclude_features_sources: list[str] | None,
         is_input_same_as_fit: bool,
         is_demo_dataset: bool,
-        remove_outliers_calc_metrics: Optional[bool],
-        progress_bar: Optional[ProgressBar],
-        progress_callback: Optional[Callable[[SearchProgress], Any]],
+        remove_outliers_calc_metrics: bool | None,
+        progress_bar: ProgressBar | None,
+        progress_callback: Callable[[SearchProgress], Any] | None,
         is_for_metrics: bool = False,
     ) -> _EnrichedDataForMetrics:
         datasets_hash = hash_input(validated_X, validated_y, eval_set)
@@ -1939,7 +1939,7 @@ class FeaturesEnricher(TransformerMixin):
             )
 
     def __get_sampled_cached_enriched(
-        self, datasets_hash: str, exclude_features_sources: Optional[list[str]]
+        self, datasets_hash: str, exclude_features_sources: list[str] | None
     ) -> _EnrichedDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features = (
             self.__cached_sampled_datasets[datasets_hash]
@@ -1959,7 +1959,7 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __get_enriched_as_input(
-        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: Optional[list[tuple]], is_demo_dataset: bool
+        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: list[tuple] | None, is_demo_dataset: bool
     ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
 
@@ -2055,9 +2055,9 @@ class FeaturesEnricher(TransformerMixin):
 
     def __get_enriched_from_fit(
         self,
-        eval_set: Optional[list[tuple]],
+        eval_set: list[tuple] | None,
         trace_id: str,
-        remove_outliers_calc_metrics: Optional[bool],
+        remove_outliers_calc_metrics: bool | None,
     ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
         search_keys = self.fit_search_keys.copy()
@@ -2163,11 +2163,11 @@ class FeaturesEnricher(TransformerMixin):
         self,
         validated_X: pd.DataFrame,
         validated_y: pd.Series,
-        eval_set: Optional[list[tuple]],
-        exclude_features_sources: Optional[list[str]],
+        eval_set: list[tuple] | None,
+        exclude_features_sources: list[str] | None,
         trace_id: str,
-        progress_bar: Optional[ProgressBar],
-        progress_callback: Optional[Callable[[SearchProgress], Any]],
+        progress_bar: ProgressBar | None,
+        progress_callback: Callable[[SearchProgress], Any] | None,
         is_for_metrics: bool = False,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
@@ -2231,7 +2231,7 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __combine_train_and_eval_sets(
-        self, X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optional[list[tuple]] = None
+        self, X: pd.DataFrame, y: pd.Series | None = None, eval_set: list[tuple] | None = None
     ) -> pd.DataFrame:
         df = X.copy()
         if y is not None:
@@ -2354,7 +2354,7 @@ class FeaturesEnricher(TransformerMixin):
             generated_features=generated_features,
         )
 
-    def get_search_id(self) -> Optional[str]:
+    def get_search_id(self) -> str | None:
         """Returns search_id of the fitted enricher. Not available before a successful fit."""
         return self._search_task.search_task_id if self._search_task else None
 
@@ -2367,7 +2367,7 @@ class FeaturesEnricher(TransformerMixin):
 
         return self.features_info
 
-    def get_progress(self, trace_id: Optional[str] = None, search_task: Optional[SearchTask] = None) -> SearchProgress:
+    def get_progress(self, trace_id: str | None = None, search_task: SearchTask | None = None) -> SearchProgress:
         search_task = search_task or self._search_task
         if search_task is not None:
             trace_id = trace_id or uuid.uuid4()
@@ -2475,13 +2475,14 @@ if response.status_code == 200:
         trace_id: str,
         X: pd.DataFrame,
         *,
-        y: Optional[pd.Series] = None,
-        exclude_features_sources: Optional[list[str]] = None,
+        y: pd.Series | None = None,
+        exclude_features_sources: list[str] | None = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
-        progress_bar: Optional[ProgressBar] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        progress_bar: ProgressBar | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
         add_fit_system_record_id: bool = False,
+        keep_input: bool | None = None,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -2775,7 +2776,7 @@ if response.status_code == 200:
                 progress_bar.progress = progress.to_progress_bar()
             if progress_callback is not None:
                 progress_callback(progress)
-            prev_progress: Optional[SearchProgress] = None
+            prev_progress: SearchProgress | None = None
             polling_period_seconds = 1
             try:
                 while progress.stage != ProgressStage.DOWNLOADING.value:
@@ -2833,18 +2834,25 @@ if response.status_code == 200:
             selected_generated_features = [
                 c for c in generated_features if not self.fit_select_features or c in self.feature_names_
             ]
-            selected_input_columns = [
-                c
-                for c in validated_Xy.columns
-                if not self.fit_select_features
-                or c in self.feature_names_
-                or c in self.search_keys
-                or c in (self.id_columns or [])
-                or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
-            ]
+            if keep_input is None:
+                selected_input_columns = [
+                    c
+                    for c in validated_Xy.columns
+                    if not self.fit_select_features
+                    or c in self.feature_names_
+                    or c in self.search_keys
+                    or c in (self.id_columns or [])
+                    or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
+                ]
+            elif keep_input is True:
+                selected_input_columns = validated_Xy.columns.to_list()
+            else:
+                selected_input_columns = []
+
             selecting_columns = selected_input_columns + selected_generated_features
             selecting_columns.extend(
-                c for c in result.columns if c in self.feature_names_ and c not in selecting_columns
+                c for c in result.columns
+                if c in self.feature_names_ and c not in selecting_columns and c not in validated_Xy.columns
             )
             if add_fit_system_record_id:
                 selecting_columns.append(SORT_ID)
@@ -2871,7 +2879,7 @@ if response.status_code == 200:
 
             return result, columns_renaming, generated_features, search_keys
 
-    def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: Optional[str] = None):
+    def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if search_id:
                 self.logger.debug(f"search_id {search_id} provided without search_keys")
@@ -2944,22 +2952,22 @@ if response.status_code == 200:
     def __inner_fit(
         self,
         trace_id: str,
-        X: Union[pd.DataFrame, pd.Series, np.ndarray],
-        y: Union[pd.DataFrame, pd.Series, np.ndarray, list, None],
-        eval_set: Optional[list[tuple]],
-        progress_bar: Optional[ProgressBar],
+        X: pd.DataFrame | pd.Series | np.ndarray,
+        y: pd.DataFrame | pd.Series | np.ndarray | list | None,
+        eval_set: list[tuple] | None,
+        progress_bar: ProgressBar | None,
         start_time: int,
         *,
-        exclude_features_sources: Optional[list[str]] = None,
-        calculate_metrics: Optional[bool],
-        scoring: Union[Callable, str, None],
-        estimator: Optional[Any],
+        exclude_features_sources: list[str] | None = None,
+        calculate_metrics: bool | None,
+        scoring: Callable | str | None,
+        estimator: Any | None,
         stability_threshold: float,
         stability_agg_func: str,
-        remove_outliers_calc_metrics: Optional[bool],
+        remove_outliers_calc_metrics: bool | None,
         auto_fe_parameters: AutoFEParameters,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
-        search_id_callback: Optional[Callable[[str], Any]] = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
+        search_id_callback: Callable[[str], Any] | None = None,
     ):
         self._search_task = None
         self.warning_counter.reset()
@@ -3378,16 +3386,6 @@ if response.status_code == 200:
 
             self.__show_selected_features()
 
-            autofe_description = self.get_autofe_features_description()
-            if autofe_description is not None and len(autofe_description) > 0:
-                self.logger.info(f"AutoFE descriptions: {autofe_description}")
-                self.autofe_features_display_handle = display_html_dataframe(
-                    df=autofe_description,
-                    internal_df=autofe_description,
-                    header=self.bundle.get("autofe_descriptions_header"),
-                    display_id=f"autofe_descriptions_{uuid.uuid4()}",
-                )
-
             if self._has_paid_features(exclude_features_sources):
                 if calculate_metrics is not None and calculate_metrics:
                     msg = self.bundle.get("metrics_with_paid_features")
@@ -3466,7 +3464,7 @@ if response.status_code == 200:
     def __should_add_date_column(self):
         return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
 
-    def __get_renamed_id_columns(self, renaming: Optional[dict[str, str]] = None):
+    def __get_renamed_id_columns(self, renaming: dict[str, str] | None = None):
         renaming = renaming or self.fit_columns_renaming
         reverse_renaming = {v: k for k, v in renaming.items()}
         return None if self.id_columns is None else [reverse_renaming.get(c) or c for c in self.id_columns]
@@ -3511,11 +3509,11 @@ if response.status_code == 200:
     def _validate_train_eval(
         self,
         X: pd.DataFrame,
-        y: Optional[pd.Series] = None,
-        eval_set: Optional[list[tuple[pd.DataFrame, pd.Series]]] = None,
+        y: pd.Series | None = None,
+        eval_set: list[tuple[pd.DataFrame, pd.Series]] | None = None,
         is_transform: bool = False,
         silent: bool = False,
-    ) -> tuple[pd.DataFrame, pd.Series, Optional[list[tuple[pd.DataFrame, pd.Series]]]]:
+    ) -> tuple[pd.DataFrame, pd.Series, list[tuple[pd.DataFrame, pd.Series]]] | None:
         validated_X = self._validate_X(X, is_transform)
         validated_y = self._validate_y(validated_X, y, enforce_y=not is_transform)
         validated_eval_set = self._validate_eval_set(validated_X, eval_set, silent=silent)
@@ -3594,7 +3592,7 @@ if response.status_code == 200:
 
         return validated_X
 
-    def _validate_y(self, X: pd.DataFrame, y, enforce_y: bool = True) -> Optional[pd.Series]:
+    def _validate_y(self, X: pd.DataFrame, y, enforce_y: bool = True) -> pd.Series | None:
         if y is None and not enforce_y:
             return None
         if (
@@ -3644,7 +3642,7 @@ if response.status_code == 200:
         return validated_y
 
     def _validate_eval_set(
-        self, X: pd.DataFrame, eval_set: Optional[list[tuple[pd.DataFrame, pd.Series]]], silent: bool = False
+        self, X: pd.DataFrame, eval_set: list[tuple[pd.DataFrame, pd.Series]] | None, silent: bool = False
     ):
         if eval_set is None:
             return None
@@ -3756,7 +3754,7 @@ if response.status_code == 200:
 
         return validated_eval_X, validated_eval_y
 
-    def _validate_baseline_score(self, X: pd.DataFrame, eval_set: Optional[list[tuple]]):
+    def _validate_baseline_score(self, X: pd.DataFrame, eval_set: list[tuple] | None):
         if self.baseline_score_column is not None:
             if self.baseline_score_column not in X.columns:
                 raise ValidationError(
@@ -3783,7 +3781,7 @@ if response.status_code == 200:
 
     @staticmethod
     def _sort_by_system_record_id(
-        X: pd.DataFrame, y: pd.Series, cv: Optional[CVType]
+        X: pd.DataFrame, y: pd.Series, cv: CVType | None
     ) -> tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
             record_id_column = ENTITY_SYSTEM_RECORD_ID if ENTITY_SYSTEM_RECORD_ID in X else SYSTEM_RECORD_ID
@@ -3801,7 +3799,7 @@ if response.status_code == 200:
     # Deprecated
     @staticmethod
     def _sort_by_keys(
-        X: pd.DataFrame, y: pd.Series, search_keys: dict[str, SearchKey], cv: Optional[CVType]
+        X: pd.DataFrame, y: pd.Series, search_keys: dict[str, SearchKey], cv: CVType | None
     ) -> tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
             if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
@@ -3841,14 +3839,14 @@ if response.status_code == 200:
     def __log_debug_information(
         self,
         X: pd.DataFrame,
-        y: Union[pd.Series, np.ndarray, list, None] = None,
-        eval_set: Optional[list[tuple]] = None,
-        exclude_features_sources: Optional[list[str]] = None,
-        calculate_metrics: Optional[bool] = None,
-        cv: Optional[Any] = None,
-        scoring: Optional[Any] = None,
-        estimator: Optional[Any] = None,
-        remove_outliers_calc_metrics: Optional[bool] = None,
+        y: pd.Series | np.ndarray | list | None = None,
+        eval_set: list[tuple] | None = None,
+        exclude_features_sources: list[str] | None = None,
+        calculate_metrics: bool | None = None,
+        cv: Any | None = None,
+        scoring: Any | None = None,
+        estimator: Any | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
     ):
         try:
             resolved_api_key = self.api_key or os.environ.get(UPGINI_API_KEY)
@@ -3973,7 +3971,7 @@ if response.status_code == 200:
         ]
 
     @staticmethod
-    def _get_email_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_email_column(search_keys: dict[str, SearchKey]) -> str | None:
         cols = [col for col, t in search_keys.items() if t == SearchKey.EMAIL]
         if len(cols) > 1:
             raise Exception("More than one email column found after unnest")
@@ -3981,7 +3979,7 @@ if response.status_code == 200:
             return cols[0]
 
     @staticmethod
-    def _get_hem_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_hem_column(search_keys: dict[str, SearchKey]) -> str | None:
         cols = [col for col, t in search_keys.items() if t == SearchKey.HEM]
         if len(cols) > 1:
             raise Exception("More than one hem column found after unnest")
@@ -3989,7 +3987,7 @@ if response.status_code == 200:
             return cols[0]
 
     @staticmethod
-    def _get_ip_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_ip_column(search_keys: dict[str, SearchKey]) -> str | None:
         cols = [col for col, t in search_keys.items() if t == SearchKey.IP]
         if len(cols) > 1:
             raise Exception("More than one ip column found after unnest")
@@ -3997,25 +3995,25 @@ if response.status_code == 200:
             return cols[0]
 
     @staticmethod
-    def _get_phone_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_phone_column(search_keys: dict[str, SearchKey]) -> str | None:
         for col, t in search_keys.items():
             if t == SearchKey.PHONE:
                 return col
 
     @staticmethod
-    def _get_country_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_country_column(search_keys: dict[str, SearchKey]) -> str | None:
         for col, t in search_keys.items():
             if t == SearchKey.COUNTRY:
                 return col
 
     @staticmethod
-    def _get_postal_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_postal_column(search_keys: dict[str, SearchKey]) -> str | None:
         for col, t in search_keys.items():
             if t == SearchKey.POSTAL_CODE:
                 return col
 
     @staticmethod
-    def _get_date_column(search_keys: dict[str, SearchKey]) -> Optional[str]:
+    def _get_date_column(search_keys: dict[str, SearchKey]) -> str | None:
         return SearchKey.find_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
 
     def _explode_multiple_search_keys(
@@ -4062,10 +4060,10 @@ if response.status_code == 200:
         id_name: str,
         target_name: str,
         columns_renaming: dict[str, str],
-        id_columns: Optional[list[str]],
-        cv: Optional[CVType],
+        id_columns: list[str] | None,
+        cv: CVType | None,
         model_task_type: ModelTaskType,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
         bundle: ResourceBundle = bundle,
     ) -> pd.DataFrame:
         original_index_name = df.index.name
@@ -4201,7 +4199,7 @@ if response.status_code == 200:
     def __enrich(
         self,
         input_df: pd.DataFrame,
-        result_features: Optional[pd.DataFrame],
+        result_features: pd.DataFrame | None,
         how: str = "inner",
         drop_system_record_id=True,
     ) -> pd.DataFrame:
@@ -4320,7 +4318,7 @@ if response.status_code == 200:
         self,
         trace_id: str,
         clients_features_df: pd.DataFrame,
-        updated_shaps: Optional[dict[str, float]] = None,
+        updated_shaps: dict[str, float] | None = None,
         update_selected_features: bool = True,
         silent=False,
     ):
@@ -4659,12 +4657,12 @@ if response.status_code == 200:
 
     def __show_metrics(
         self,
-        scoring: Union[Callable, str, None],
-        estimator: Optional[Any],
-        remove_outliers_calc_metrics: Optional[bool],
+        scoring: Callable | str | None,
+        estimator: Any | None,
+        remove_outliers_calc_metrics: bool | None,
         trace_id: str,
-        progress_bar: Optional[ProgressBar] = None,
-        progress_callback: Optional[Callable[[SearchProgress], Any]] = None,
+        progress_bar: ProgressBar | None = None,
+        progress_callback: Callable[[SearchProgress], Any] | None = None,
     ):
         self.metrics = self.calculate_metrics(
             scoring=scoring,
@@ -4698,13 +4696,23 @@ if response.status_code == 200:
                         self.bundle.get("relevant_data_sources_header"),
                         display_id=f"data_sources_{uuid.uuid4()}",
                     )
+
+                autofe_description = self.get_autofe_features_description()
+                if autofe_description is not None and len(autofe_description) > 0:
+                    self.logger.info(f"AutoFE descriptions: {autofe_description}")
+                    self.autofe_features_display_handle = display_html_dataframe(
+                        df=autofe_description,
+                        internal_df=autofe_description,
+                        header=self.bundle.get("autofe_descriptions_header"),
+                        display_id=f"autofe_descriptions_{uuid.uuid4()}",
+                    )
             else:
                 msg = self.bundle.get("features_info_zero_important_features")
                 self.__log_warning(msg, show_support_link=True)
         except (ImportError, NameError):
             print(self._internal_features_info)
 
-    def __show_report_button(self, display_id: Optional[str] = None, display_handle=None):
+    def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
             return prepare_and_show_report(
                 relevant_features_df=self._features_info_without_links,
@@ -4844,7 +4852,7 @@ if response.status_code == 200:
         except Exception:
             self.logger.exception("Failed to dump python libs")
 
-    def __display_support_link(self, link_text: Optional[str] = None):
+    def __display_support_link(self, link_text: str | None = None):
         support_link = self.bundle.get("support_link")
         link_text = link_text or self.bundle.get("support_text")
         try:
@@ -4871,9 +4879,9 @@ if response.status_code == 200:
     def dump_input(
         self,
         trace_id: str,
-        X: Union[pd.DataFrame, pd.Series],
-        y: Union[pd.DataFrame, pd.Series, None] = None,
-        eval_set: Union[tuple, None] = None,
+        X: pd.DataFrame | pd.Series,
+        y: pd.DataFrame | pd.Series | None = None,
+        eval_set: tuple | None = None,
     ):
         def dump_task(X_, y_, eval_set_):
             with MDC(trace_id=trace_id):
@@ -4964,7 +4972,7 @@ def is_frames_equal(first, second, bundle: ResourceBundle) -> bool:
         raise ValidationError(bundle.get("x_and_eval_x_diff_types").format(type(first), type(second)))
 
 
-def drop_duplicates(df: Union[pd.DataFrame, np.ndarray, Any]) -> pd.DataFrame:
+def drop_duplicates(df: pd.DataFrame | np.ndarray | Any) -> pd.DataFrame:
     if isinstance(df, pd.DataFrame):
         return df.drop_duplicates()
     elif isinstance(df, np.ndarray):

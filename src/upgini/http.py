@@ -413,42 +413,8 @@ class _RestClient:
         with open(path, "rb") as file:
             files = {"file": (file_name, file, "application/octet-stream")}
             self._with_unauth_retry(
-                lambda: self._send_post_file_req_v2(
-                    api_path, files, trace_id=trace_id, need_json_response=False
-                )
+                lambda: self._send_post_file_req_v2(api_path, files, trace_id=trace_id, need_json_response=False)
             )
-
-    def dump_input_files(
-        self,
-        trace_id: str,
-        x_path: str,
-        y_path: Optional[str] = None,
-        eval_x_path: Optional[str] = None,
-        eval_y_path: Optional[str] = None,
-    ):
-        api_path = self.SEARCH_DUMP_INPUT_FILE_FMT
-
-        def upload_with_check(path: str, file_name: str):
-            digest_sha256 = file_hash(path)
-            if self.is_file_uploaded(trace_id, digest_sha256):
-                # print(f"File {path} was already uploaded with digest {digest_sha256}, skipping")
-                return
-            else:
-                with open(path, "rb") as file:
-                    files = {"file": (file_name, file, "application/octet-stream")}
-                    self._with_unauth_retry(
-                        lambda: self._send_post_file_req_v2(
-                            api_path, files, trace_id=trace_id, need_json_response=False
-                        )
-                    )
-
-        upload_with_check(x_path, "x.parquet")
-        if y_path:
-            upload_with_check(y_path, "y.parquet")
-        if eval_x_path:
-            upload_with_check(eval_x_path, "eval_x.parquet")
-        if eval_y_path:
-            upload_with_check(eval_y_path, "eval_y.parquet")
 
     def initial_search_v2(
         self,
@@ -1080,6 +1046,7 @@ class LoggerFactory:
 
         upgini_logger = logging.getLogger(f"upgini.{hash(key)}")
         upgini_logger.handlers.clear()
+        upgini_logger.propagate = False  # Prevent duplicate logging in Jupyter notebooks
         rest_client = get_rest_client(backend_url, api_token, client_ip, client_visitorid)
         datadog_handler = BackendLogHandler(rest_client, client_ip, client_visitorid)
         json_formatter = jsonlogger.JsonFormatter(

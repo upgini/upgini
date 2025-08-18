@@ -754,7 +754,6 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
-    df.drop(columns=["SystemRecordId_473310000"], inplace=True)
     train_df = df.head(10000)
     train_features = train_df.drop(columns="target")
     train_target = train_df["target"].copy()
@@ -780,6 +779,21 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
     )
     logging.warning(enriched_train_features)
     assert enriched_train_features.shape == (10000, 4)
+
+    # Check keep_input=False
+    enriched_train_features = enricher.transform(
+        train_features, keep_input=False
+    )
+    assert enriched_train_features.shape == (10000, 1)
+
+    df_for_transform = train_features.copy()
+    df_for_transform["some_feature_on_transform"] = np.random.randint(0, 1000, size=len(train_features))
+
+    # Check keep_input=True
+    enriched_train_features = enricher.transform(
+        df_for_transform, keep_input=True
+    )
+    assert enriched_train_features.shape == (10000, 6)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
