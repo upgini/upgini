@@ -15,6 +15,8 @@ from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.http import _RestClient
 from upgini.metadata import (
+    SYSTEM_RECORD_ID,
+    TARGET,
     CVType,
     FeaturesMetadataV2,
     HitRateMetrics,
@@ -33,12 +35,14 @@ from upgini.utils.sample_utils import SampleConfig
 from .utils import (
     mock_default_requests,
     mock_get_metadata,
+    mock_get_selected_features,
     mock_get_task_metadata_v2,
     mock_initial_and_validation_summary,
     mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_set_selected_features,
     mock_validation_progress,
     mock_validation_raw_features,
     mock_validation_search,
@@ -81,6 +85,19 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
     )
 
     mock_default_requests(requests_mock, url)
@@ -130,14 +147,14 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -189,8 +206,10 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -333,14 +352,14 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -392,6 +411,8 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -494,14 +515,14 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -553,6 +574,8 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -722,6 +745,7 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features, metrics_calculation=True)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
     mock_validation_raw_features(
@@ -771,6 +795,8 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
 
     metrics = enricher.calculate_metrics(
         train_features,
@@ -835,6 +861,19 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
@@ -879,14 +918,14 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -938,6 +977,8 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -949,7 +990,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         validation_search_task_id,
     )
     mock_validation_progress(requests_mock, url, validation_search_task_id)
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -1073,6 +1114,19 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
@@ -1117,14 +1171,14 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1176,6 +1230,8 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1187,7 +1243,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         ads_search_task_id,
         validation_search_task_id,
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -1221,11 +1277,18 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     )
     assert enriched_train_features.shape == (10000, 5)
 
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv"),
+            index=False,
+        )
+
     expected_features_info = pd.read_csv(
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_features_info.csv")
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
-    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
     assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
 
@@ -1279,6 +1342,19 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
@@ -1323,14 +1399,14 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1382,6 +1458,8 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1393,7 +1471,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         ads_search_task_id,
         validation_search_task_id,
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -1496,6 +1574,19 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
@@ -1540,14 +1631,14 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1599,6 +1690,8 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -1610,7 +1703,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         ads_search_task_id,
         validation_search_task_id,
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -1770,6 +1863,8 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
             features_used_for_embeddings=["cos_3_freq_w_sun__0a6bf9"],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["f_feature123", "cos(3,freq=W-SUN)"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["f_feature123", "cos(3,freq=W-SUN)"])
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "test_data/complex_feature_name_features_with_entity_system_record_id.parquet",
@@ -1794,7 +1889,6 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
         train_features,
         train_target,
         calculate_metrics=False,
-        select_features=False,
     )
 
     if update_metrics_flag:
@@ -1914,6 +2008,19 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     mock_initial_progress(requests_mock, url, search_task_id)
@@ -1940,9 +2047,6 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
                     data_provider_link="https://upgini.com",
                     data_source="Community shared",
                     data_source_link="https://upgini.com",
-                ),
-                FeaturesMetadataV2(
-                    name="SystemRecordId_473310000", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=1.0
                 ),
                 FeaturesMetadataV2(
                     name="datetime_day_in_quarter_sin_65d4f7",
@@ -1980,6 +2084,18 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
             ],
         ),
     )
+    mock_get_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        ["feature", "datetime_day_in_quarter_sin", "datetime_day_in_quarter_cos"],
+    )
+    mock_set_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        ["feature", "datetime_day_in_quarter_sin", "datetime_day_in_quarter_cos"],
+    )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -2009,6 +2125,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
+        stability_threshold=10,
     )
 
     fit_req = None
@@ -2033,9 +2150,9 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
         ads_search_task_id,
         validation_search_task_id,
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
-    transformed = enricher.transform(train_features, keep_input=True)
+    transformed = enricher.transform(train_features)
 
     transform_req = None
     transform_url = url + "/public/api/v2/search/validation?initialSearchTaskId=" + search_task_id
@@ -2047,7 +2164,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
 
-    assert transformed.shape == (10000, 7)
+    assert transformed.shape == (10000, 5)
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
@@ -2109,6 +2226,8 @@ def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -2176,269 +2295,6 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
         enricher.fit_transform(df.drop(columns="target"), df.target)
 
 
-def test_filter_by_importance(requests_mock: Mocker, update_metrics_flag: bool):
-    url = "https://some.fake.url"
-
-    path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
-    )
-
-    mock_default_requests(requests_mock, url)
-
-    search_task_id = mock_initial_search(requests_mock, url)
-    mock_initial_progress(requests_mock, url, search_task_id)
-    ads_search_task_id = mock_initial_summary(
-        requests_mock,
-        url,
-        search_task_id,
-    )
-    mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_task_metadata_v2(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ProviderTaskMetadataV2(
-            features=[
-                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7),
-                FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_sin_65d4f7",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.15,
-                ),
-                FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_cos_eeb97a",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.2,
-                ),
-            ],
-            hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
-            ),
-            eval_set_metrics=[
-                ModelEvalSet(
-                    eval_set_index=1,
-                    hit_rate=1.0,
-                    hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
-                    ),
-                ),
-                ModelEvalSet(
-                    eval_set_index=2,
-                    hit_rate=0.99,
-                    hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
-                    ),
-                ),
-            ],
-        ),
-    )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-
-    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
-    df = pd.read_csv(path, sep=",")
-    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
-    train_df = df.head(10000)
-    print(train_df.head(10))
-    train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
-    eval1_df = df[10000:11000]
-    eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"]
-    eval2_df = df[11000:12000]
-    eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
-
-    enricher = FeaturesEnricher(
-        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-        date_format="%Y-%m-%d",
-        endpoint=url,
-        api_key="fake_api_key",
-        logs_enabled=False,
-    )
-
-    eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
-
-    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
-
-    metrics = enricher.calculate_metrics(importance_threshold=0.8)
-    assert metrics is not None
-
-    if update_metrics_flag:
-        metrics.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"),
-            index=False,
-        )
-
-    expected_metrics = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv")
-    )
-
-    assert_frame_equal(metrics, expected_metrics, atol=1e-6)
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_progress(requests_mock, url, validation_search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-    )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
-
-    train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=eval_set,
-        calculate_metrics=False,
-        keep_input=True,
-        importance_threshold=0.1,
-    )
-
-    assert train_features.shape == (10000, 5)
-
-    test_features = enricher.transform(eval1_features, keep_input=True, importance_threshold=0.5)
-
-    assert test_features.shape == (1000, 3)
-
-
-@pytest.mark.skip(reason="This functionality is deprecated")
-def test_filter_by_max_features(requests_mock: Mocker, update_metrics_flag: bool):
-    url = "https://some.fake.url"
-
-    path_to_mock_features = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
-    )
-
-    mock_default_requests(requests_mock, url)
-
-    search_task_id = mock_initial_search(requests_mock, url)
-    mock_initial_progress(requests_mock, url, search_task_id)
-    ads_search_task_id = mock_initial_summary(
-        requests_mock,
-        url,
-        search_task_id,
-    )
-    mock_get_metadata(requests_mock, url, search_task_id)
-    mock_get_task_metadata_v2(
-        requests_mock,
-        url,
-        ads_search_task_id,
-        ProviderTaskMetadataV2(
-            features=[
-                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=0.7),
-                FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_sin_65d4f7",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.15,
-                ),
-                FeaturesMetadataV2(
-                    name="datetime_day_in_quarter_cos_eeb97a",
-                    type="NUMERIC",
-                    source="etalon",
-                    hit_rate=100.0,
-                    shap_value=0.2,
-                ),
-            ],
-            hit_rate_metrics=HitRateMetrics(
-                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
-            ),
-            eval_set_metrics=[
-                ModelEvalSet(
-                    eval_set_index=1,
-                    hit_rate=1.0,
-                    hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
-                    ),
-                ),
-                ModelEvalSet(
-                    eval_set_index=2,
-                    hit_rate=0.99,
-                    hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
-                    ),
-                ),
-            ],
-        ),
-    )
-    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-
-    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
-    df = pd.read_csv(path, sep=",")
-    df.drop(columns=["SystemRecordId_473310000", "client_feature"], inplace=True)
-    train_df = df.head(10000)
-    train_features = train_df.drop(columns="target")
-    train_target = train_df["target"]
-    eval1_df = df[10000:11000]
-    eval1_features = eval1_df.drop(columns="target")
-    eval1_target = eval1_df["target"]
-    eval2_df = df[11000:12000]
-    eval2_features = eval2_df.drop(columns="target")
-    eval2_target = eval2_df["target"]
-
-    enricher = FeaturesEnricher(
-        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-        date_format="%Y-%m-%d",
-        endpoint=url,
-        api_key="fake_api_key",
-        logs_enabled=False,
-    )
-
-    eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
-
-    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, select_features=False)
-
-    metrics = enricher.calculate_metrics(max_features=0)
-    assert metrics is not None
-
-    if update_metrics_flag:
-        metrics.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv"),
-            index=False,
-        )
-
-    expected_metrics = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_filter_by_importance_metrics.csv")
-    )
-
-    assert_frame_equal(metrics, expected_metrics, atol=1e-6)
-
-    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
-    mock_validation_progress(requests_mock, url, validation_search_task_id)
-    mock_validation_summary(
-        requests_mock,
-        url,
-        search_task_id,
-        ads_search_task_id,
-        validation_search_task_id,
-    )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
-
-    train_features = enricher.fit_transform(
-        train_features,
-        train_target,
-        eval_set=eval_set,
-        calculate_metrics=False,
-        keep_input=True,
-        max_features=2,
-        select_features=False,
-    )
-
-    assert train_features.shape == (10000, 5)
-
-    test_features = enricher.transform(eval1_features, keep_input=True, max_features=0)
-
-    assert test_features.shape == (1000, 2)
-
-
 def test_validation_metrics_calculation(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
@@ -2459,7 +2315,7 @@ def test_validation_metrics_calculation(requests_mock: Mocker):
     enricher.y = y
     enricher._search_task = search_task
     datasets_hash = hash_input(X, y, (X, y))
-    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (X, y, X, dict(), search_keys)
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (X, y, X, dict(), search_keys, [])
 
     with pytest.raises(ValidationError, match=bundle.get("metrics_unfitted_enricher")):
         enricher.calculate_metrics()
@@ -2576,14 +2432,14 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -2619,6 +2475,8 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
             ),
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
@@ -2647,7 +2505,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
         logs_enabled=False,
     )
 
-    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False)
+    enricher.fit(train_features, train_target, eval_set=eval_set, calculate_metrics=False, stability_agg_func="min")
 
     df_with_eval_set_index = train_features.copy()
     df_with_eval_set_index["eval_set_index"] = 0
@@ -2691,6 +2549,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     print("Enriched X")
     print(enriched_X)
 
+    assert "feature" in enriched_X.columns
     assert not enriched_X["feature"].isna().any()
     assert not enriched_eval_X_1["feature"].isna().any()
     assert not enriched_eval_X_2["feature"].isna().any()
@@ -2708,6 +2567,19 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
     )
 
     mock_default_requests(requests_mock, url)
@@ -2805,6 +2677,8 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -2816,7 +2690,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         ads_search_task_id,
         validation_search_task_id,
     )
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data_with_time.parquet")
     df = pd.read_parquet(path)
@@ -2845,6 +2719,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
         select_features=False,
+        stability_threshold=0.2,
     )
     assert enriched_train_features.shape == (10000, 11)
 
@@ -2978,6 +2853,8 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
             eval_set_metrics=[],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature"])
     path_to_mock_features = os.path.join(
         base_dir, "test_data/binary/features_imbalanced_with_entity_system_record_id.parquet"
     )
@@ -3007,7 +2884,7 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
         sample_config=SampleConfig(binary_min_sample_threshold=7_000),
     )
 
-    enricher.fit(train_features, train_target, calculate_metrics=False, select_features=False)
+    enricher.fit(train_features, train_target, calculate_metrics=False)
 
     metrics = enricher.calculate_metrics()
     assert metrics is not None
@@ -3282,14 +3159,14 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -3341,6 +3218,8 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     path_to_mock_features = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
@@ -3582,7 +3461,9 @@ def test_unsupported_arguments(requests_mock: Mocker):
         ProviderTaskMetadataV2(
             features=[
                 FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
-                FeaturesMetadataV2(name="feature", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.1
+                ),
             ],
             hit_rate_metrics=HitRateMetrics(
                 etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
@@ -3605,6 +3486,8 @@ def test_unsupported_arguments(requests_mock: Mocker):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -3673,6 +3556,19 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         "test_data/binary/mock_features_with_entity_system_record_id.parquet",
     )
 
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
     mock_default_requests(requests_mock, url)
     search_task_id = mock_initial_search(requests_mock, url)
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -3720,14 +3616,14 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin",
+                "originalName": "datetime_day_in_quarter_sin_65d4f7",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos",
+                "originalName": "datetime_day_in_quarter_cos_eeb97a",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -3765,8 +3661,10 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
     df = pd.read_csv(path, sep=",")
@@ -3829,7 +3727,6 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=True,
     )
     assert enriched_train_features.shape == (10000, 3)
@@ -3904,6 +3801,70 @@ def test_eval_x_intersection_with_x():
 
     with pytest.raises(ValidationError, match="Eval set X has rows that are present in train set X"):
         enricher._validate_eval_set_pair(X, (intersecting_eval_set_X, eval_set_y))
+
+
+def test_add_fit_system_record_id():
+    df = pd.DataFrame(
+        {
+            "index": [0, 1, 2, 0, 1, 2, 0, 1, 2],
+            "date_renamed": [
+                "2021-01-03",
+                "2021-01-02",
+                "2021-01-01",
+                "2021-01-02",
+                "2021-01-03",
+                "2021-01-01",
+                "2021-01-01",
+                "2021-01-02",
+                "2021-01-03",
+            ],  # noqa: E501
+            "phone_renamed": [4, 5, 6, 7, 8, 9, 10, 11, 12],
+            "target": [0, 1, 0, 1, 0, 1, 0, 1, 0],
+            "eval_set_index": [0, 0, 0, 1, 1, 1, 2, 2, 2],
+        }
+    )
+    df.set_index("index", inplace=True)
+    fit_search_keys = {"date_renamed": SearchKey.DATE, "phone_renamed": SearchKey.PHONE}
+    fit_columns_renaming = {"date_renamed": "date", "phone_renamed": "phone"}
+    id_columns = ["phone_renamed"]
+    cv = None  # CVType.time_series
+    model_task_type = ModelTaskType.BINARY
+    logger = logging.getLogger(__name__)
+    df = FeaturesEnricher._add_fit_system_record_id(
+        df,
+        fit_search_keys,
+        SYSTEM_RECORD_ID,
+        TARGET,
+        fit_columns_renaming,
+        id_columns,
+        cv,
+        model_task_type,
+        logger,
+    )
+
+    expected_df = pd.DataFrame(
+        {
+            "index": [0, 1, 2, 0, 1, 2, 0, 1, 2],
+            "system_record_id": [2, 1, 0, 4, 5, 3, 6, 7, 8],
+            "date_renamed": [
+                "2021-01-03",
+                "2021-01-02",
+                "2021-01-01",
+                "2021-01-02",
+                "2021-01-03",
+                "2021-01-01",
+                "2021-01-01",
+                "2021-01-02",
+                "2021-01-03",
+            ],  # noqa: E501
+            "phone_renamed": [4, 5, 6, 7, 8, 9, 10, 11, 12],
+            "target": [0, 1, 0, 1, 0, 1, 0, 1, 0],
+            "eval_set_index": [0, 0, 0, 1, 1, 1, 2, 2, 2],
+        }
+    )
+    expected_df.set_index("index", inplace=True)
+
+    assert_frame_equal(df, expected_df)
 
 
 class DataFrameWrapper:

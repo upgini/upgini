@@ -45,6 +45,7 @@ from upgini.metadata import (
     SearchCustomization,
 )
 from upgini.resource_bundle import bundle
+from upgini.utils.hash_utils import file_hash
 from upgini.utils.track_info import get_track_metrics
 
 UPGINI_URL: str = "UPGINI_URL"
@@ -276,6 +277,7 @@ class _RestClient:
     SEARCH_DUMP_INPUT_FMT_V2 = SERVICE_ROOT_V2 + "search/dump-input"
     SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file?digest={0}"
     TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
+    SEARCH_SELECTED_FEATURES_URI_FMT = SERVICE_ROOT_V2 + "search/{0}/selected-features"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -427,7 +429,7 @@ class _RestClient:
         api_path = self.SEARCH_DUMP_INPUT_FILE_FMT
 
         def upload_with_check(path: str, file_name: str):
-            digest_sha256 = self.compute_file_digest(path)
+            digest_sha256 = file_hash(path)
             if self.is_file_uploaded(trace_id, digest_sha256):
                 # print(f"File {path} was already uploaded with digest {digest_sha256}, skipping")
                 return
@@ -447,16 +449,6 @@ class _RestClient:
             upload_with_check(eval_x_path, "eval_x.parquet")
         if eval_y_path:
             upload_with_check(eval_y_path, "eval_y.parquet")
-
-    @staticmethod
-    def compute_file_digest(filepath: str, algorithm="sha256", chunk_size=4096) -> str:
-        hash_func = getattr(hashlib, algorithm)()
-
-        with open(filepath, "rb") as f:
-            for chunk in iter(lambda: f.read(chunk_size), b""):
-                hash_func.update(chunk)
-
-        return hash_func.hexdigest()
 
     def initial_search_v2(
         self,
@@ -478,10 +470,7 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = pydantic_copy_method(metadata)(update={"checksumMD5": digest})
 
-            # digest_sha256 = hashlib.sha256(
-            #     pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
-            # ).hexdigest()
-            digest_sha256 = self.compute_file_digest(file_path)
+            digest_sha256 = file_hash(file_path)
             metadata_with_md5 = pydantic_copy_method(metadata_with_md5)(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -576,10 +565,7 @@ class _RestClient:
                 digest = md5_hash.hexdigest()
                 metadata_with_md5 = pydantic_copy_method(metadata)(update={"checksumMD5": digest})
 
-            # digest_sha256 = hashlib.sha256(
-            #     pd.util.hash_pandas_object(pd.read_parquet(file_path, engine="fastparquet")).values
-            # ).hexdigest()
-            digest_sha256 = self.compute_file_digest(file_path)
+            digest_sha256 = file_hash(file_path)
             metadata_with_md5 = pydantic_copy_method(metadata_with_md5)(update={"digest": digest_sha256})
 
             with open(file_path, "rb") as file:
@@ -728,6 +714,16 @@ class _RestClient:
             )
         )
         return TransformUsage(response)
+
+    def update_selected_features(self, trace_id: str, search_task_id: str, selected_features: list[str]):
+        api_path = self.SEARCH_SELECTED_FEATURES_URI_FMT.format(search_task_id)
+        request = {"features": selected_features}
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+
+    def get_selected_features(self, trace_id: str, search_task_id: str) -> list[str] | None:
+        api_path = self.SEARCH_SELECTED_FEATURES_URI_FMT.format(search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return response.get("features")
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI

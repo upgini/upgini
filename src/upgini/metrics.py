@@ -816,7 +816,8 @@ class CatBoostWrapper(EstimatorWrapper):
                 else:
                     encoded = cat_encoder.transform(x[self.cat_features])
                     cat_features = encoded.columns.to_list()
-                x.loc[:, self.cat_features] = encoded
+                x.drop(columns=encoded.columns, inplace=True, errors="ignore")
+                x[encoded.columns] = encoded
             else:
                 cat_features = self.cat_features
 
@@ -1175,7 +1176,10 @@ def _ext_mean_squared_log_error(y_true, y_pred, *, sample_weight=None, multioutp
     >>> mean_squared_log_error(y_true, y_pred, multioutput=[0.3, 0.7])
     0.060...
     """
-    _, y_true, y_pred, multioutput = _check_reg_targets(y_true, y_pred, multioutput)
+    try:
+        _, y_true, y_pred, multioutput = _check_reg_targets(y_true, y_pred, multioutput)
+    except TypeError:
+        _, y_true, y_pred, sample_weight, multioutput = _check_reg_targets(y_true, y_pred, sample_weight, multioutput)
     check_consistent_length(y_true, y_pred, sample_weight)
 
     if (y_true < 0).any():

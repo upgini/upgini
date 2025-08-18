@@ -6,9 +6,14 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import SYSTEM_RECORD_ID, ModelTaskType
-from upgini.resource_bundle import ResourceBundle, get_custom_bundle, bundle
+from upgini.metadata import EVAL_SET_INDEX, SYSTEM_RECORD_ID, TARGET, ModelTaskType
+from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.sampler.random_under_sampler import RandomUnderSampler
+from upgini.utils.config import SampleConfig
+
+MAX_MULTICLASS_CLASS_COUNT = 100
+MIN_TARGET_CLASS_ROWS = 100
+IMBALANCE_THESHOLD = 0.6
 
 
 def prepare_target(y: Union[pd.Series, np.ndarray], target_type: ModelTaskType) -> Union[pd.Series, np.ndarray]:
@@ -106,6 +111,47 @@ def define_task(
     return task
 
 
+def is_imbalanced(
+    data: pd.DataFrame,
+    task_type: ModelTaskType,
+    sample_config: SampleConfig,
+    bundle: ResourceBundle,
+) -> bool:
+    if task_type is None or not task_type.is_classification():
+        return False
+
+    data = data.drop_duplicates(keep="first")
+    columns_without_target = [col for col in data.columns if col != TARGET]
+    data = data.drop_duplicates(subset=columns_without_target, keep=False)
+
+    if task_type == ModelTaskType.BINARY and len(data) <= sample_config.binary_min_sample_threshold:
+        return False
+
+    count = len(data)
+    target = data[TARGET]
+    target_classes_count = target.nunique()
+
+    if target_classes_count > MAX_MULTICLASS_CLASS_COUNT:
+        msg = bundle.get("dataset_to_many_multiclass_targets").format(target_classes_count, MAX_MULTICLASS_CLASS_COUNT)
+        raise ValidationError(msg)
+
+    vc = target.value_counts()
+    min_class_value = vc.index[len(vc) - 1]
+    min_class_count = vc[min_class_value]
+
+    if min_class_count < MIN_TARGET_CLASS_ROWS:
+        msg = bundle.get("dataset_rarest_class_less_min").format(
+            min_class_value, min_class_count, MIN_TARGET_CLASS_ROWS
+        )
+        raise ValidationError(msg)
+
+    min_class_percent = IMBALANCE_THESHOLD / target_classes_count
+    min_class_threshold = min_class_percent * count
+
+    # If min class count less than 30% for binary or (60 / classes_count)% for multiclass
+    return bool(min_class_count < min_class_threshold)
+
+
 def is_int_encoding(unique_values):
     return set(unique_values) == set(range(len(unique_values))) or set(unique_values) == set(
         range(1, len(unique_values) + 1)
@@ -131,6 +177,11 @@ def balance_undersample(
     bundle = bundle or get_custom_bundle()
     if SYSTEM_RECORD_ID not in df.columns:
         raise Exception("System record id must be presented for undersampling")
+
+    # Rebalance and send to server only train data
+    # because eval set data will be sent separately in transform for metrics
+    if EVAL_SET_INDEX in df.columns:
+        df = df[df[EVAL_SET_INDEX] == 0]
 
     target = df[target_column].copy()
 

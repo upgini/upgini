@@ -25,7 +25,6 @@ from upgini.metadata import (
     AutoFEParameters,
     CVType,
     DataType,
-    FeaturesFilter,
     FileColumnMeaningType,
     FileColumnMetadata,
     FileMetadata,
@@ -37,8 +36,9 @@ from upgini.metadata import (
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
+from upgini.utils.config import SampleConfig
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.sample_utils import SampleColumns, SampleConfig, sample
+from upgini.utils.sample_utils import SampleColumns, sample
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -50,10 +50,7 @@ except Exception:
 
 class Dataset:
     MIN_ROWS_COUNT = 100
-    MAX_ROWS = 100_000
-    IMBALANCE_THESHOLD = 0.6
-    MIN_TARGET_CLASS_ROWS = 100
-    MAX_MULTICLASS_CLASS_COUNT = 100
+    MAX_ROWS = 200_000
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 3500
     MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
@@ -73,6 +70,7 @@ class Dataset:
         cv_type: Optional[CVType] = None,
         date_column: Optional[str] = None,
         id_columns: Optional[List[str]] = None,
+        is_imbalanced: bool = False,
         random_state: Optional[int] = None,
         sample_config: Optional[SampleConfig] = None,
         rest_client: Optional[_RestClient] = None,
@@ -117,8 +115,9 @@ class Dataset:
         self.rest_client = rest_client
         self.random_state = random_state
         self.columns_renaming: Dict[str, str] = {}
-        self.imbalanced: bool = False
+        self.is_imbalanced: bool = False
         self.id_columns = id_columns
+        self.is_imbalanced = is_imbalanced
         self.date_column = date_column
         if logger is not None:
             self.logger = logger
@@ -184,7 +183,19 @@ class Dataset:
     def __validate_target(self):
         # self.logger.info("Validating target")
         target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, "")
-        target = self.data[target_column]
+
+        oot_indices = []
+        if EVAL_SET_INDEX in self.data.columns:
+            for eval_set_index in self.data[EVAL_SET_INDEX].unique():
+                eval_set = self.data[self.data[EVAL_SET_INDEX] == eval_set_index]
+                if eval_set[target_column].isna().all():
+                    oot_indices.append(eval_set_index)
+
+        df_to_check = self.data.copy()
+        if oot_indices:
+            df_to_check = df_to_check[~df_to_check[EVAL_SET_INDEX].isin(oot_indices)]
+
+        target = df_to_check[target_column]
 
         if self.task_type == ModelTaskType.BINARY:
             if not is_integer_dtype(target):
@@ -201,7 +212,7 @@ class Dataset:
         elif self.task_type == ModelTaskType.MULTICLASS:
             if not is_integer_dtype(target):
                 try:
-                    target = self.data[target_column].astype("category").cat.codes
+                    target = target.astype("category").cat.codes
                 except Exception:
                     self.logger.exception("Failed to cast target to category codes for multiclass task type")
                     raise ValidationError(self.bundle.get("dataset_invalid_multiclass_target").format(target.dtype))
@@ -227,8 +238,6 @@ class Dataset:
         else:
             train_segment = self.data
 
-        self.imbalanced = self.__is_imbalanced(train_segment)
-
         sample_columns = SampleColumns(
             ids=self.id_columns,
             date=self.date_column,
@@ -237,54 +246,18 @@ class Dataset:
         )
 
         self.data = sample(
-            train_segment if self.imbalanced else self.data,  # for imbalanced data we will be doing transform anyway
+            train_segment if self.is_imbalanced else self.data,  # for imbalanced data we will be doing transform anyway
             self.task_type,
             self.cv_type,
             self.sample_config,
             sample_columns,
             self.random_state,
-            balance=self.imbalanced,
+            balance=self.is_imbalanced,
             force_downsampling=force_downsampling,
             logger=self.logger,
             bundle=self.bundle,
             warning_callback=self.warning_callback,
         )
-
-    def __is_imbalanced(self, data: pd.DataFrame) -> bool:
-        if self.task_type is None or not self.task_type.is_classification():
-            return False
-
-        if self.task_type == ModelTaskType.BINARY and len(data) <= self.sample_config.binary_min_sample_threshold:
-            return False
-
-        count = len(data)
-        target_column = self.etalon_def_checked.get(FileColumnMeaningType.TARGET.value, TARGET)
-        target = data[target_column]
-        target_classes_count = target.nunique()
-
-        if target_classes_count > self.MAX_MULTICLASS_CLASS_COUNT:
-            msg = self.bundle.get("dataset_to_many_multiclass_targets").format(
-                target_classes_count, self.MAX_MULTICLASS_CLASS_COUNT
-            )
-            self.logger.warning(msg)
-            raise ValidationError(msg)
-
-        vc = target.value_counts()
-        min_class_value = vc.index[len(vc) - 1]
-        min_class_count = vc[min_class_value]
-
-        if min_class_count < self.MIN_TARGET_CLASS_ROWS:
-            msg = self.bundle.get("dataset_rarest_class_less_min").format(
-                min_class_value, min_class_count, self.MIN_TARGET_CLASS_ROWS
-            )
-            self.logger.warning(msg)
-            raise ValidationError(msg)
-
-        min_class_percent = self.IMBALANCE_THESHOLD / target_classes_count
-        min_class_threshold = min_class_percent * count
-
-        # If min class count less than 30% for binary or (60 / classes_count)% for multiclass
-        return bool(min_class_count < min_class_threshold)
 
     def __validate_dataset(self, validate_target: bool, silent_mode: bool):
         """Validate DataSet"""
@@ -335,15 +308,37 @@ class Dataset:
         all_valid_message = self.bundle.get("validation_all_valid_message")
         invalid_message = self.bundle.get("validation_invalid_message")
 
+        oot_indices = []
+        if EVAL_SET_INDEX in self.data.columns:
+            for eval_set_index in self.data[EVAL_SET_INDEX].unique():
+                eval_set = self.data[self.data[EVAL_SET_INDEX] == eval_set_index]
+                if eval_set[target].isna().all():
+                    oot_indices.append(eval_set_index)
+
         for col in columns_to_validate:
-            self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
             if validate_target and target is not None and col == target:
-                self.data.loc[self.data[target] == np.inf, f"{col}_is_valid"] = False
+                if oot_indices:
+                    mask_not_oot = ~self.data[EVAL_SET_INDEX].isin(oot_indices)
+                    invalid_target_mask = (
+                        self.data[col].isnull() | (self.data[col] == np.inf) | (self.data[col] == -np.inf)
+                    )
+                    # Initialize as valid and mark invalid only for non-OOT rows with NaN or +/-inf
+                    self.data[f"{col}_is_valid"] = True
+                    self.data.loc[mask_not_oot & invalid_target_mask, f"{col}_is_valid"] = False
+                else:
+                    # No OOT: mark invalid where target is NaN or +/-inf
+                    self.data[f"{col}_is_valid"] = ~(
+                        self.data[col].isnull() | (self.data[col] == np.inf) | (self.data[col] == -np.inf)
+                    )
+            else:
+                self.data[f"{col}_is_valid"] = ~self.data[col].isnull()
 
             if col in mandatory_columns:
                 self.data["valid_mandatory"] = self.data["valid_mandatory"] & self.data[f"{col}_is_valid"]
 
-            invalid_values = list(set(self.data.loc[self.data[f"{col}_is_valid"] == 0, col].head().values))
+            # Use stable pandas API across versions: Series.unique keeps order
+            # and collapses multiple NaNs into a single NaN
+            invalid_values = self.data.loc[self.data[f"{col}_is_valid"] == 0, col].unique().tolist()[:5]
             valid_share = self.data[f"{col}_is_valid"].sum() / nrows
             original_col_name = self.columns_renaming[col]
             validation_stats[original_col_name] = {}
@@ -503,9 +498,6 @@ class Dataset:
         return_scores: bool,
         extract_features: bool,
         accurate_model: Optional[bool] = None,
-        importance_threshold: Optional[float] = None,
-        max_features: Optional[int] = None,
-        filter_features: Optional[dict] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         metrics_calculation: Optional[bool] = False,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
@@ -514,28 +506,12 @@ class Dataset:
         search_customization = SearchCustomization(
             extractFeatures=extract_features,
             accurateModel=accurate_model,
-            importanceThreshold=importance_threshold,
-            maxFeatures=max_features,
             returnScores=return_scores,
             runtimeParameters=runtime_parameters,
             metricsCalculation=metrics_calculation,
         )
-        if filter_features:
-            if [
-                key
-                for key in filter_features
-                if key not in {"min_importance", "max_psi", "max_count", "selected_features"}
-            ]:
-                raise ValidationError(self.bundle.get("dataset_invalid_filter"))
-            feature_filter = FeaturesFilter(
-                minImportance=filter_features.get("min_importance"),
-                maxPSI=filter_features.get("max_psi"),
-                maxCount=filter_features.get("max_count"),
-                selectedFeatures=filter_features.get("selected_features"),
-            )
-            search_customization.featuresFilter = feature_filter
 
-        search_customization.runtimeParameters.properties["etalon_imbalanced"] = self.imbalanced
+        search_customization.runtimeParameters.properties["etalon_imbalanced"] = self.is_imbalanced
         if auto_fe_parameters is not None:
             search_customization.runtimeParameters.properties["feature_generation_params.ts.gap_days"] = (
                 auto_fe_parameters.ts_gap_days
@@ -590,9 +566,6 @@ class Dataset:
         extract_features: bool = False,
         accurate_model: bool = False,
         exclude_features_sources: Optional[List[str]] = None,
-        importance_threshold: Optional[float] = None,  # deprecated
-        max_features: Optional[int] = None,  # deprecated
-        filter_features: Optional[dict] = None,  # deprecated
         runtime_parameters: Optional[RuntimeParameters] = None,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
         force_downsampling: bool = False,
@@ -609,9 +582,6 @@ class Dataset:
             return_scores=return_scores,
             extract_features=extract_features,
             accurate_model=accurate_model,
-            importance_threshold=importance_threshold,
-            max_features=max_features,
-            filter_features=filter_features,
             runtime_parameters=runtime_parameters,
             auto_fe_parameters=auto_fe_parameters,
         )

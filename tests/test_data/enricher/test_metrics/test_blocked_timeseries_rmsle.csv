@@ -1,4 +1,4 @@
-Dataset type,Rows,Mean target,Baseline RMSLE,Enriched RMSLE,"Uplift, abs","Uplift, %"
-Train,500,0.51,0.458 ± 0.043,0.472 ± 0.054,-0.014,-3.1%
-Eval 1,250,0.452,0.502 ± 0.005,0.494 ± 0.006,0.008,1.5%
-Eval 2,250,0.536,0.493 ± 0.005,0.497 ± 0.012,-0.005,-1.0%
+Dataset type,Rows,Mean target,Enriched RMSLE
+Train,500,0.51,0.464 ± 0.028
+Eval 1,250,0.452,0.490 ± 0.014
+Eval 2,250,0.536,0.503 ± 0.010

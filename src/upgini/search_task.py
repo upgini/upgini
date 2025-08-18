@@ -312,6 +312,12 @@ class SearchTask:
     def get_file_metadata(self, trace_id: str) -> FileMetadata:
         return self.rest_client.get_search_file_metadata(self.search_task_id, trace_id)
 
+    def update_selected_features(self, trace_id: str, selected_features: list[str]):
+        self.rest_client.update_selected_features(trace_id, self.search_task_id, selected_features)
+
+    def get_selected_features(self, trace_id: str) -> list[str] | None:
+        return self.rest_client.get_selected_features(trace_id, self.search_task_id)
+
 
 @lru_cache
 def _get_all_initial_raw_features_cached(

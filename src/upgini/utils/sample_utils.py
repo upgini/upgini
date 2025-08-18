@@ -1,53 +1,28 @@
-from dataclasses import dataclass, field
 import logging
 import numbers
+from dataclasses import dataclass
 from typing import Callable, List, Optional
+
 import numpy as np
 import pandas as pd
 
-from upgini.metadata import SYSTEM_RECORD_ID, CVType, ModelTaskType
+from upgini.metadata import (
+    EVAL_SET_INDEX,
+    SYSTEM_RECORD_ID,
+    TARGET,
+    CVType,
+    ModelTaskType,
+)
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
+from upgini.utils.config import (
+    TS_DEFAULT_HIGH_FREQ_TRUNC_LENGTHS,
+    TS_DEFAULT_LOW_FREQ_TRUNC_LENGTHS,
+    TS_DEFAULT_TIME_UNIT_THRESHOLD,
+    TS_MIN_DIFFERENT_IDS_RATIO,
+    SampleConfig,
+)
 from upgini.utils.target_utils import balance_undersample
 from upgini.utils.ts_utils import get_most_frequent_time_unit, trunc_datetime
-
-
-TS_MIN_DIFFERENT_IDS_RATIO = 0.2
-TS_DEFAULT_HIGH_FREQ_TRUNC_LENGTHS = [pd.DateOffset(years=2, months=6), pd.DateOffset(years=2, days=7)]
-TS_DEFAULT_LOW_FREQ_TRUNC_LENGTHS = [pd.DateOffset(years=7), pd.DateOffset(years=5)]
-TS_DEFAULT_TIME_UNIT_THRESHOLD = pd.Timedelta(weeks=4)
-FIT_SAMPLE_ROWS_TS = 100_000
-
-BINARY_MIN_SAMPLE_THRESHOLD = 5_000
-MULTICLASS_MIN_SAMPLE_THRESHOLD = 25_000
-BINARY_BOOTSTRAP_LOOPS = 5
-MULTICLASS_BOOTSTRAP_LOOPS = 2
-
-FIT_SAMPLE_THRESHOLD = 100_000
-FIT_SAMPLE_ROWS = 100_000
-FIT_SAMPLE_ROWS_WITH_EVAL_SET = 100_000
-FIT_SAMPLE_THRESHOLD_WITH_EVAL_SET = 100_000
-
-
-@dataclass
-class SampleConfig:
-    force_sample_size: int = 7000
-    ts_min_different_ids_ratio: float = TS_MIN_DIFFERENT_IDS_RATIO
-    ts_default_high_freq_trunc_lengths: List[pd.DateOffset] = field(
-        default_factory=TS_DEFAULT_HIGH_FREQ_TRUNC_LENGTHS.copy
-    )
-    ts_default_low_freq_trunc_lengths: List[pd.DateOffset] = field(
-        default_factory=TS_DEFAULT_LOW_FREQ_TRUNC_LENGTHS.copy
-    )
-    ts_default_time_unit_threshold: pd.Timedelta = TS_DEFAULT_TIME_UNIT_THRESHOLD
-    binary_min_sample_threshold: int = BINARY_MIN_SAMPLE_THRESHOLD
-    multiclass_min_sample_threshold: int = MULTICLASS_MIN_SAMPLE_THRESHOLD
-    binary_bootstrap_loops: int = BINARY_BOOTSTRAP_LOOPS
-    multiclass_bootstrap_loops: int = MULTICLASS_BOOTSTRAP_LOOPS
-    fit_sample_threshold: int = FIT_SAMPLE_THRESHOLD
-    fit_sample_rows: int = FIT_SAMPLE_ROWS
-    fit_sample_rows_with_eval_set: int = FIT_SAMPLE_ROWS_WITH_EVAL_SET
-    fit_sample_threshold_with_eval_set: int = FIT_SAMPLE_THRESHOLD_WITH_EVAL_SET
-    fit_sample_rows_ts: int = FIT_SAMPLE_ROWS_TS
 
 
 @dataclass
@@ -117,6 +92,22 @@ def sample(
             **kwargs,
         )
 
+    # separate OOT
+    oot_dfs = []
+    other_dfs = []
+    if EVAL_SET_INDEX in df.columns:
+        for eval_set_index in df[EVAL_SET_INDEX].unique():
+            eval_df = df[df[EVAL_SET_INDEX] == eval_set_index]
+            if TARGET in eval_df.columns and eval_df[TARGET].isna().all():
+                oot_dfs.append(eval_df)
+            else:
+                other_dfs.append(eval_df)
+    if len(oot_dfs) > 0:
+        oot_df = pd.concat(oot_dfs, ignore_index=False)
+        df = pd.concat(other_dfs, ignore_index=False)
+    else:
+        oot_df = None
+
     num_samples = _num_samples(df)
     if num_samples > fit_sample_threshold:
         logger.info(
@@ -125,6 +116,18 @@ def sample(
         )
         df = df.sample(n=fit_sample_rows, random_state=random_state)
         logger.info(f"Shape after threshold resampling: {df.shape}")
+
+    if oot_df is not None:
+        num_samples_oot = _num_samples(oot_df)
+        if num_samples_oot > fit_sample_threshold:
+            logger.info(
+                f"OOT has size {num_samples_oot} more than threshold {fit_sample_threshold} "
+                f"and will be downsampled to {fit_sample_rows}"
+            )
+            oot_df = oot_df.sample(n=fit_sample_rows, random_state=random_state)
+        df = pd.concat([df, oot_df], ignore_index=False)
+
+    logger.info(f"Dataset size after downsampling: {len(df)}")
 
     return df
 
@@ -175,7 +178,7 @@ def sample_time_series_train_eval(
             )
         if logger is not None:
             logger.info(f"Eval set size: {len(eval_df)}")
-        df = pd.concat([train_df, eval_df])
+        df = pd.concat([train_df, eval_df], ignore_index=False)
 
     elif len(train_df) > max_rows:
         df = sample_time_series_trunc(

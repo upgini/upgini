@@ -12,6 +12,7 @@ from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold, TimeSeriesSplit
 
+from upgini.autofe.utils import pydantic_parse_method
 from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.metadata import (
@@ -39,12 +40,14 @@ from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
 from .utils import (
     mock_default_requests,
     mock_get_metadata,
+    mock_get_selected_features,
     mock_get_task_metadata_v2,
     mock_get_task_metadata_v2_from_file,
     mock_initial_progress,
     mock_initial_search,
     mock_initial_summary,
     mock_raw_features,
+    mock_set_selected_features,
     mock_target_outliers,
     mock_target_outliers_file,
     mock_validation_progress,
@@ -142,15 +145,10 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["score"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["score"])
     path_to_mock_features = os.path.join(BASE_DIR, "real_train_df.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
-
-    # train = pd.read_parquet(os.path.join(BASE_DIR, "real_train.parquet"))
-    # train.sort_index()
-    # X = train[["request_date", "score"]]
-    # y = train["target1"].rename("target")
-    # test = pd.read_parquet(os.path.join(BASE_DIR, "real_test.parquet"))
-    # eval_set = [(test[["request_date", "score"]], test["target1"].rename("target"))]
 
     search_keys = {"request_date": SearchKey.DATE}
     enricher = FeaturesEnricher(
@@ -191,6 +189,7 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
         {0: (sampled_eval_X, enriched_eval_X, sampled_eval_y)},
         search_keys,
         columns_renaming,
+        [],
     )
 
     metrics = enricher.calculate_metrics()
@@ -222,8 +221,11 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
     requests_mock.get(url + f"/public/api/v2/search/{search_task_id}/metadata", json=file_meta)
     with open(os.path.join(BASE_DIR, "provider_meta.json"), "rb") as f:
         provider_meta_json = json.load(f)
-        provider_meta = ProviderTaskMetadataV2.parse_obj(provider_meta_json)
+        provider_meta = pydantic_parse_method(ProviderTaskMetadataV2)(provider_meta_json)
     mock_get_task_metadata_v2(requests_mock, url, ads_search_task_id, provider_meta)
+    important_features = [f.name for f in provider_meta.features if f.shap_value > 0]
+    mock_get_selected_features(requests_mock, url, search_task_id, important_features)
+    mock_set_selected_features(requests_mock, url, search_task_id, important_features)
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(BASE_DIR, "x_enriched.parquet"))
 
     search_keys = {"country": SearchKey.COUNTRY, "Postal_code": SearchKey.POSTAL_CODE}
@@ -254,6 +256,7 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
         dict(),
         search_keys,
         columns_renaming,
+        []
     )
     enricher.fit_select_features = False
 
@@ -322,6 +325,8 @@ def test_default_metric_binary(requests_mock: Mocker, update_metrics_flag: bool)
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1_422b73"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1_422b73"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -434,6 +439,8 @@ def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: b
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1_422b73", "postal_code"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1_422b73", "postal_code"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -499,8 +506,10 @@ def test_default_metric_regression_with_outliers(requests_mock: Mocker, update_m
     )
     mock_get_metadata(requests_mock, url, search_task_id)
     path_to_metadata = os.path.join(FIXTURE_DIR, "metadata_regression_date_country_postal.json")
-    mock_get_task_metadata_v2_from_file(requests_mock, url, ads_search_task_id, path_to_metadata)
-
+    meta = mock_get_task_metadata_v2_from_file(requests_mock, url, ads_search_task_id, path_to_metadata)
+    important_features = [f["name"] for f in meta["features"] if f["shap_value"] > 0]
+    mock_get_selected_features(requests_mock, url, search_task_id, important_features)
+    mock_set_selected_features(requests_mock, url, search_task_id, important_features)
     search_keys = {"date": SearchKey.DATE, "country": SearchKey.COUNTRY, "postal_code": SearchKey.POSTAL_CODE}
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_regression_date_country_postal.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
@@ -633,6 +642,8 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker, update_metrics
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -744,6 +755,8 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker, update_metrics_fl
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -854,6 +867,8 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -895,7 +910,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
 
     assert len(enriched_X) == len(X)
 
-    metrics_df = enricher.calculate_metrics(scoring="RMSLE")
+    metrics_df = enricher.calculate_metrics(scoring="RMSLE", inner_call=True)
     assert metrics_df is not None
 
     if update_metrics_flag:
@@ -959,6 +974,8 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1080,6 +1097,8 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1194,6 +1213,8 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1321,6 +1342,8 @@ def test_lightgbm_metric_binary_with_cat_features(requests_mock: Mocker, update_
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1433,6 +1456,8 @@ def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -1540,6 +1565,8 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
             ],
         ),
     )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 

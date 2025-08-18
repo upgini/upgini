@@ -224,9 +224,9 @@ from upgini.metadata import SearchKey
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
-    		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE,
-    		"hashed_email": SearchKey.HEM,
+		"country": SearchKey.COUNTRY,
+		"zip_code": SearchKey.POSTAL_CODE,
+		"hashed_email": SearchKey.HEM,
 		"last_visit_ip_address": SearchKey.IP,
 		"registered_with_phone": SearchKey.PHONE
 	})
@@ -312,9 +312,9 @@ from upgini.metadata import SearchKey
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
-    		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE,
-    		"hashed_email": SearchKey.HEM,
+		"country": SearchKey.COUNTRY,
+		"zip_code": SearchKey.POSTAL_CODE,
+		"hashed_email": SearchKey.HEM,
 		"last_visit_ip_address": SearchKey.IP,
 		"registered_with_phone": SearchKey.PHONE
 	}, 
@@ -335,7 +335,7 @@ from upgini.metadata import SearchKey
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
-    		"zip_code": SearchKey.POSTAL_CODE,
+		"zip_code": SearchKey.POSTAL_CODE,
 	}, 
 	country_code = "US",
 	date_format = "%Y-%d-%m"
@@ -363,8 +363,8 @@ y = train_df["churn_flag"]
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
-    		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE
+		"country": SearchKey.COUNTRY,
+		"zip_code": SearchKey.POSTAL_CODE
 	})
 
 # everything is ready to fit! For 200к records fitting should take around 10 minutes,
@@ -418,8 +418,8 @@ And then, for `transform` in a production ML pipeline, you'll get enrichment wit
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
-    		"country": SearchKey.COUNTRY,
-    		"zip_code": SearchKey.POSTAL_CODE,
+		"country": SearchKey.COUNTRY,
+		"zip_code": SearchKey.POSTAL_CODE,
 	},
 ) 
 ```
@@ -470,8 +470,8 @@ enricher = FeaturesEnricher(
 If you're working with multivariate time series, you should specify id columns of individual univariate series in `FeaturesEnricher`. For example, if you have a dataset predicting sales for different stores and products, you should specify store and product id columns as follows:
 ```python
 enricher = FeaturesEnricher(
-    search_keys={
-        "sales_date": SearchKey.DATE,
+		search_keys={
+				"sales_date": SearchKey.DATE,
     },
     id_columns=["store_id", "product_id"],
     cv=CVType.time_series
@@ -687,8 +687,51 @@ enricher.fit(
 )
 ```
 #### ⚠️ Requirements for out-of-time dataset  
-- Same data schema as for search initialization dataset  
+- Same data schema as for search initialization X dataset
 - Pandas dataframe representation
+
+There are 3 options to pass out-of-time without labels:
+```python
+enricher.fit(
+  train_ids_and_features,
+  train_label,
+  eval_set = [
+    (eval_ids_and_features_1,),  # Just tuple of 1 element
+    (eval_ids_and_features_2, None),  # None as labels
+    (eval_ids_and_features_3, [np.nan] * len(eval_ids_and_features_3)),  # List or Series of the same size as eval X
+  ]
+)
+```
+
+### Control feature stability with PSI parameters
+
+`FeaturesEnricher` supports Population Stability Index (PSI) calculation on eval_set to evaluate feature stability over time. You can control this behavior using stability parameters in `fit` and `fit_transform` methods:
+
+```python
+enricher = FeaturesEnricher(
+    search_keys={"registration_date": SearchKey.DATE}
+)
+
+# Control feature stability during fit
+enricher.fit(
+    X, y, 
+    stability_threshold=0.2,  # PSI threshold: features with PSI above this value will be dropped
+    stability_agg_func="max"  # Aggregation function for stability values: "max", "min", "mean"
+)
+
+# Same parameters work for fit_transform
+enriched_df = enricher.fit_transform(
+    X, y,
+    stability_threshold=0.1,   # Stricter threshold for more stable features
+    stability_agg_func="mean"  # Use mean aggregation instead of max
+)
+```
+
+**Stability parameters:**
+- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI below this threshold will be excluded from the final feature set. Lower values mean stricter stability requirements.
+- `stability_agg_func` (str, default="max"): Function to aggregate PSI values across time intervals. Options: "max" (most conservative), "min" (least conservative), "mean" (balanced approach).
+
+**PSI (Population Stability Index)** measures how much feature distribution changes over time. Lower PSI values indicate more stable features, which are generally more reliable for production ML models.
 
 ### Use custom loss function in feature selection & metrics calculation
 
@@ -708,20 +751,6 @@ enricher = FeaturesEnricher(
     	model_task_type=ModelTaskType.REGRESSION
 )
 enriched_dataframe.fit(X, y)
-```
-
-### Return initial dataframe enriched with TOP external features by importance
-
-`transform` and `fit_transform` methods of `FeaturesEnricher` can be used with two additional parameters:
-- `importance_threshold`: float = 0 - only features with *importance >= threshold* will be added to the output dataframe
-- `max_features`: int  - only first TOP N features by importance will be returned, where *N = max_features*  
-
-And `keep_input=True` will keep all initial columns from search dataset X:  
-```python
-enricher = FeaturesEnricher(
-	search_keys={"subscription_activation_date": SearchKey.DATE}
-)
-enriched_dataframe.fit_transform(X, y, keep_input=True, max_features=2)
 ```
 
 ### Exclude premium data sources from fit, transform and metrics calculation
@@ -751,7 +780,7 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y)
 ```
 
-## Turn off removing of target outliers
+### Turn off removing of target outliers
 Upgini detect rows with target outlier for regression tasks. By default such rows are dropped on metrics calculation. To turn off removing of target outlier rows use parameter `remove_outliers_calc_metrics=False` in fit, fit_transform or calculate_metrics methods:
 
 ```python
@@ -762,7 +791,7 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y, remove_outliers_calc_metrics=False)
 ```
 
-## Turn off generating features on search keys
+### Turn off generating features on search keys
 Upgini tries to generate features on email, date and datetime search keys. By default this generation is enabled. To disable it use parameter `generate_search_key_features` of FeaturesEnricher constructor:
 
 ```python
@@ -770,6 +799,7 @@ enricher = FeaturesEnricher(
   search_keys={"date": SearchKey.DATE},
   generate_search_key_features=False,
 )
+```
 
 ## 🔑 Open up all capabilities of Upgini
 
