@@ -858,7 +858,7 @@ Some convenient ways to start contributing are:
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links
-- [Simple sales predictions as a template notebook](#-simple-sales-predictions-use-as-a-template)
+- [Simple sales predictions as a template notebook](#-simple-sales-prediction-for-retail-stores)
 - [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
 - [Project on PyPI](https://pypi.org/project/upgini)
 - [More perks for registered users](https://profile.upgini.com)
