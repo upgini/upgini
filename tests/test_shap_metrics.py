@@ -53,8 +53,8 @@ def test_calculate_shap_with_lgbm_regressor():
     assert shap_values is not None
     assert isinstance(shap_values, dict)
     assert len(shap_values) == 2
-    assert shap_values["feature1"] == 0.04838424947275008
-    assert shap_values["feature2"] == 0.05082362023113759
+    assert shap_values["feature1"] == 0.048384249472750065
+    assert shap_values["feature2"] == 0.050823620231137595
 
 
 def test_calculate_shap_with_non_lgbm_model():

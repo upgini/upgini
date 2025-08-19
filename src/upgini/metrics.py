@@ -847,7 +847,7 @@ class CatBoostWrapper(EstimatorWrapper):
 
             feature_importance = {}
             for i, col in enumerate(x.columns):
-                feature_importance[col] = np.mean(np.abs(shap_values[:, i]))
+                feature_importance[col] = float(np.mean(np.abs(shap_values[:, i])))
 
             return feature_importance
 
@@ -922,6 +922,7 @@ class LightGBMWrapper(EstimatorWrapper):
                     encoded = cat_encoder.transform(x_copy[self.cat_features]).astype(int)
                 else:
                     encoded = cat_encoder.transform(x_copy[self.cat_features]).astype("category")
+                x_copy = x_copy.drop(columns=self.cat_features, errors="ignore")
                 x_copy[self.cat_features] = encoded
 
             shap_matrix = estimator.predict(
@@ -943,7 +944,7 @@ class LightGBMWrapper(EstimatorWrapper):
 
             feature_importance = {}
             for i, col in enumerate(x.columns):
-                feature_importance[col] = np.mean(np.abs(shap_matrix[:, i]))
+                feature_importance[col] = float(np.mean(np.abs(shap_matrix[:, i])))
 
             return feature_importance
 

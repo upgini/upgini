@@ -238,7 +238,6 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
     assert enriched_train_features.shape == (10000, 6)
@@ -295,7 +294,6 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
 
@@ -448,7 +446,6 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
             train_target,
             eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
             calculate_metrics=False,
-            keep_input=True,
         )
 
     enricher.fit(
@@ -456,7 +453,6 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
         train_target,
         eval_set=[(eval1_features, eval1_target)],
         calculate_metrics=False,
-        keep_input=True,
     )
 
 
@@ -605,7 +601,6 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             train_target,
             calculate_metrics=False,
             select_features=False,
-            keep_input=True,
         )
         assert enriched_train_features.shape == (6, 5)
 
@@ -622,7 +617,6 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             train_features,
             train_target,
             calculate_metrics=False,
-            keep_input=True,
         )
         assert enriched_train_features.shape == (6, 3)
 
@@ -774,26 +768,20 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
         logs_enabled=False,
     )
 
+    df_for_transform = train_features.copy()
+    df_for_transform["some_feature_on_transform"] = np.random.randint(0, 1000, size=len(train_features))
+
     enriched_train_features = enricher.transform(
-        train_features,
+        df_for_transform,
     )
     logging.warning(enriched_train_features)
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 6)
 
     # Check keep_input=False
     enriched_train_features = enricher.transform(
         train_features, keep_input=False
     )
     assert enriched_train_features.shape == (10000, 1)
-
-    df_for_transform = train_features.copy()
-    df_for_transform["some_feature_on_transform"] = np.random.randint(0, 1000, size=len(train_features))
-
-    # Check keep_input=True
-    enriched_train_features = enricher.transform(
-        df_for_transform, keep_input=True
-    )
-    assert enriched_train_features.shape == (10000, 6)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1031,7 +1019,6 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         train_features,
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
-        keep_input=True,
         calculate_metrics=False,
         select_features=False,
     )
@@ -1286,7 +1273,6 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
@@ -1515,7 +1501,6 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
@@ -1747,7 +1732,6 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
     assert enriched_train_features.shape == (10000, 5)
@@ -2178,7 +2162,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
 
-    assert transformed.shape == (10000, 5)
+    assert transformed.shape == (10000, 6)
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
@@ -3707,7 +3691,6 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         train_target,
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
-        keep_input=True,
         select_features=False,
     )
     assert enriched_train_features.shape == (10000, 6)

@@ -584,7 +584,7 @@ class FeaturesEnricher(TransformerMixin):
         eval_set: list[tuple] | tuple | None = None,
         *args,
         exclude_features_sources: list[str] | None | None = None,
-        keep_input: bool | None = None,
+        keep_input: bool = True,
         calculate_metrics: bool | None = None,
         scoring: Callable | str | None = None,
         estimator: Any | None = None,
@@ -612,10 +612,9 @@ class FeaturesEnricher(TransformerMixin):
             list of pairs (X, y) for validation.
 
         keep_input: bool, optional (default=True)
-            keep_input: bool, optional (default=None)
-            If True, copy original input columns to the output dataframe.
+            keep_input: bool, optional (default=True)
+            If True, then all search keys, ID columns, selected client features and enriched columns will be returned.
             If False, then only enriched columns are returned.
-            If None, then all search keys, ID columns, selected client features and enriched columns will be returned.
 
         estimator: sklearn-compatible estimator, optional (default=None)
             Custom estimator for metrics calculation.
@@ -751,7 +750,7 @@ class FeaturesEnricher(TransformerMixin):
         *args,
         y: pd.Series | None = None,
         exclude_features_sources: list[str] | None = None,
-        keep_input: bool | None = None,
+        keep_input: bool = True,
         trace_id: str | None = None,
         metrics_calculation: bool = False,
         silent_mode=False,
@@ -768,10 +767,11 @@ class FeaturesEnricher(TransformerMixin):
         X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
 
-        keep_input: bool, optional (default=None)
-            If True, copy original input columns to the output dataframe.
+        keep_input: bool, optional (default=True)
+            keep_input: bool, optional (default=True)
+            If True, then all search keys, ID columns, selected client features, enriched columns and intput columns
+            that were not present on fit will be returned.
             If False, then only enriched columns are returned.
-            If None, then all search keys, ID columns, selected client features and enriched columns will be returned.
 
         Returns
         -------
@@ -2178,7 +2178,7 @@ class FeaturesEnricher(TransformerMixin):
         df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set)
 
         # Exclude OOT eval sets from transform because they are not used for metrics calculation
-        if not is_for_metrics and EVAL_SET_INDEX in df.columns:
+        if is_for_metrics and EVAL_SET_INDEX in df.columns:
             for eval_index in df[EVAL_SET_INDEX].unique():
                 if eval_index == 0:
                     continue
@@ -2482,7 +2482,7 @@ if response.status_code == 200:
         progress_bar: ProgressBar | None = None,
         progress_callback: Callable[[SearchProgress], Any] | None = None,
         add_fit_system_record_id: bool = False,
-        keep_input: bool | None = None,
+        keep_input: bool = True,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
@@ -2831,21 +2831,23 @@ if response.status_code == 200:
                 how="left",
             )
 
+            fit_input_columns = [c.originalName for c in self._search_task.get_file_metadata(trace_id).columns]
+            new_columns_on_transform = [c for c in validated_Xy.columns if c not in fit_input_columns]
+
             selected_generated_features = [
                 c for c in generated_features if not self.fit_select_features or c in self.feature_names_
             ]
-            if keep_input is None:
+            if keep_input is True:
                 selected_input_columns = [
                     c
                     for c in validated_Xy.columns
                     if not self.fit_select_features
                     or c in self.feature_names_
+                    or c in new_columns_on_transform
                     or c in self.search_keys
                     or c in (self.id_columns or [])
                     or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
                 ]
-            elif keep_input is True:
-                selected_input_columns = validated_Xy.columns.to_list()
             else:
                 selected_input_columns = []
 

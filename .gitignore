@@ -111,6 +111,7 @@ env10/
 .env10/
 .env310/
 env11/
+env12/
 venv/
 ENV/
 env.bak/
