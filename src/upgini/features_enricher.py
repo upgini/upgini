@@ -1423,8 +1423,15 @@ class FeaturesEnricher(TransformerMixin):
         # Find latest eval set or earliest if all eval sets are before train set
         date_column = self._get_date_column(search_keys)
 
-        # Get minimum date from main dataset X
-        main_min_date = X[date_column].dropna().min()
+        x_date = X[date_column].dropna()
+        if not is_numeric_dtype(x_date):
+            x_date = pd.to_datetime(x_date).dt.floor("D").astype(np.int64) / 10**6
+        main_min_date = x_date.min()
+
+        for eval_x, _ in eval_set:
+            eval_x_date = eval_x[date_column].dropna()
+            if not is_numeric_dtype(eval_x_date):
+                eval_x[date_column] = pd.to_datetime(eval_x_date).dt.floor("D").astype(np.int64) / 10**6
 
         # Find minimum date for each eval_set and compare with main dataset
         eval_dates = []
@@ -1433,8 +1440,11 @@ class FeaturesEnricher(TransformerMixin):
                 if len(eval_x) < 1000:
                     self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
                     continue
-                eval_min_date = eval_x[date_column].dropna().min()
-                eval_max_date = eval_x[date_column].dropna().max()
+                eval_x_date = eval_x[date_column].dropna()
+                if not is_numeric_dtype(eval_x_date):
+                    eval_x_date = pd.to_datetime(eval_x_date).dt.floor("D").astype(np.int64) / 10**6
+                eval_min_date = eval_x_date.min()
+                eval_max_date = eval_x_date.max()
                 eval_dates.append((i, eval_min_date, eval_max_date))
 
         if not eval_dates:
@@ -1460,6 +1470,10 @@ class FeaturesEnricher(TransformerMixin):
         checking_eval_set_df = checking_eval_set_df.copy()
 
         checking_eval_set_df[date_column] = eval_set_dates[selected_eval_set_idx]
+        if not is_numeric_dtype(checking_eval_set_df[date_column]):
+            checking_eval_set_df[date_column] = (
+                pd.to_datetime(checking_eval_set_df[date_column]).dt.floor("D").astype(np.int64) / 10**6
+            )
 
         psi_values_sparse = calculate_sparsity_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
@@ -3708,6 +3722,25 @@ if response.status_code == 200:
             else:
                 raise ValidationError(self.bundle.get("eval_x_and_x_diff_shape"))
 
+        if any(validated_eval_X.dtypes != X.dtypes):
+            x_types = X.dtypes
+            eval_types = validated_eval_X.dtypes
+            # Find columns with different types
+            diff_cols = [
+                (col, x_types[col], eval_types[col])
+                for col in x_types.index
+                if x_types[col] != eval_types[col]
+            ]
+            diff_col_names = [col for col, _, _ in diff_cols]
+            # print columns with different types
+            print("Columns with different types:")
+            for col, x_type, eval_type in diff_cols:
+                print("-" * 50)
+                print(f"Column: {col}")
+                print(f"X type:        {x_type}")
+                print(f"Eval_set type: {eval_type}")
+            raise ValidationError(self.bundle.get("eval_x_and_x_diff_dtypes").format(diff_col_names))
+
         if _num_samples(validated_eval_X) != _num_samples(eval_y):
             raise ValidationError(
                 self.bundle.get("x_and_y_diff_size_eval_set").format(
@@ -4420,7 +4453,8 @@ if response.status_code == 200:
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
-            if self.features_info[self.bundle.get("features_info_psi")].isna().all():
+            # If all psi values are 0 or null, drop psi column
+            if self.features_info[self.bundle.get("features_info_psi")].fillna(0.0).eq(0.0).all():
                 self.features_info.drop(columns=[self.bundle.get("features_info_psi")], inplace=True)
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)

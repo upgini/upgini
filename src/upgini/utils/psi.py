@@ -82,9 +82,6 @@ def calculate_features_psi(
 ) -> dict[str, float]:
     empty_res = {col: 0.0 for col in df.columns if col not in [TARGET, date_column]}
 
-    if not is_numeric_dtype(df[date_column]):
-        df[date_column] = pd.to_datetime(df[date_column]).dt.floor("D").astype(np.int64) / 10**6
-
     # Filter out rows with missing dates
     df = df[df[date_column].notna()].copy()
 
