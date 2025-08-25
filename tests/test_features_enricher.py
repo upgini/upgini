@@ -147,14 +147,14 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -302,6 +302,235 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
 
+def test_features_enricher_without_external_features(requests_mock: Mocker, update_metrics_flag: bool):
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    if pd.__version__ >= "2.2.0":
+        print("Use features for pandas 2.2")
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        print("Use features for pandas 2.0")
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        print("Use features for pandas 1.*")
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 4,
+                "name": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 5,
+                "name": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=100.0, shap_value=0.2
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_sin_65d4f7",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.15,
+                ),
+                FeaturesMetadataV2(
+                    name="datetime_day_in_quarter_cos_eeb97a",
+                    type="NUMERIC",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.16,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+                ModelEvalSet(
+                    eval_set_index=2,
+                    hit_rate=0.99,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_get_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        ["client_feature", "datetime_day_in_quarter_sin", "datetime_day_in_quarter_cos"],
+    )
+    mock_set_selected_features(
+        requests_mock,
+        url,
+        search_task_id,
+        ["client_feature", "datetime_day_in_quarter_sin", "datetime_day_in_quarter_cos"],
+    )
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns=["SystemRecordId_473310000"], inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+    eval1_features = eval1_df.drop(columns="target")
+    eval1_target = eval1_df["target"].reset_index(drop=True)
+    eval2_df = df[11000:12000]
+    eval2_features = eval2_df.drop(columns="target")
+    eval2_target = eval2_df["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enriched_train_features = enricher.fit_transform(
+        train_features,
+        train_target,
+        eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
+        calculate_metrics=False,
+    )
+    assert enriched_train_features.shape == (10000, 5)
+
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info.csv"), index=False  # noqa: E501
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info.csv")
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    expected_features_info["Provider"] = expected_features_info["Provider"].astype("string")
+    expected_features_info["Source"] = expected_features_info["Source"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+    enricher.features_info["Provider"] = enricher.features_info["Provider"].astype("string")
+    enricher.features_info["Source"] = enricher.features_info["Source"].astype("string")
+    expected_features_info.fillna("", inplace=True)
+    enricher.features_info.fillna("", inplace=True)
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
+    # check imbalanced mode
+    enricher.imbalanced = True
+    metrics = enricher.calculate_metrics()
+
+    if update_metrics_flag:
+        metrics.to_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv"), index=False)  # noqa: E501
+
+    expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv"))  # noqa: E501
+
+    assert metrics is not None
+    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+
+    if update_metrics_flag:
+        enricher.features_info.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv"),  # noqa: E501
+            index=False,
+        )
+
+    expected_features_info = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv")  # noqa: E501
+    )
+    expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
+    expected_features_info["Provider"] = expected_features_info["Provider"].astype("string")
+    expected_features_info["Source"] = expected_features_info["Source"].astype("string")
+    enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
+    enricher.features_info["Provider"] = enricher.features_info["Provider"].astype("string")
+    enricher.features_info["Source"] = enricher.features_info["Source"].astype("string")
+    expected_features_info.fillna("", inplace=True)
+    enricher.features_info.fillna("", inplace=True)
+
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+
+    assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
+    assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
+
+
 def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
     url = "http://fake_url2"
 
@@ -350,14 +579,14 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -511,14 +740,14 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -778,9 +1007,7 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
     assert enriched_train_features.shape == (10000, 6)
 
     # Check keep_input=False
-    enriched_train_features = enricher.transform(
-        train_features, keep_input=False
-    )
+    enriched_train_features = enricher.transform(train_features, keep_input=False)
     assert enriched_train_features.shape == (10000, 1)
 
     if update_metrics_flag:
@@ -920,14 +1147,14 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1172,14 +1399,14 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1399,14 +1626,14 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -1630,14 +1857,14 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -2430,14 +2657,14 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -3157,14 +3384,14 @@ def test_search_keys_autodetection(requests_mock: Mocker):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
@@ -3614,14 +3841,14 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
             {
                 "index": 4,
                 "name": "datetime_day_in_quarter_sin_65d4f7",
-                "originalName": "datetime_day_in_quarter_sin_65d4f7",
+                "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
-                "originalName": "datetime_day_in_quarter_cos_eeb97a",
+                "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
                 "meaningType": "FEATURE",
             },

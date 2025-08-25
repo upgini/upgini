@@ -854,7 +854,7 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
             finally:
                 self.logger.info(f"Transform elapsed time: {time.time() - start_time}")
-            
+
             return result
 
     def calculate_metrics(
@@ -1741,7 +1741,8 @@ class FeaturesEnricher(TransformerMixin):
             c
             for c in (validated_X.columns.to_list() + generated_features)
             if (not self.fit_select_features or c in set(self.feature_names_).union(self.id_columns or []))
-            and c not in (
+            and c
+            not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
@@ -2215,7 +2216,8 @@ class FeaturesEnricher(TransformerMixin):
             progress_callback=progress_callback,
             add_fit_system_record_id=True,
         )
-        if enriched_df is None:
+        if enriched_df is None or len(enriched_df) == 0 or len(enriched_df.columns) == 0:
+            self.logger.warning(f"Empty enriched dataframe returned: {enriched_df}, returning None")
             return None
 
         x_columns = [
@@ -2519,7 +2521,7 @@ if response.status_code == 200:
             if len(self.feature_names_) == 0:
                 msg = self.bundle.get("no_important_features_for_transform")
                 self.__log_warning(msg, show_support_link=True)
-                return X, {c: c for c in X.columns}, [], dict()
+                return None, {}, [], self.search_keys
 
             self.__validate_search_keys(self.search_keys, self.search_id)
 
@@ -2527,7 +2529,7 @@ if response.status_code == 200:
                 msg = self.bundle.get("transform_with_paid_features")
                 self.logger.warning(msg)
                 self.__display_support_link(msg)
-                return None, {c: c for c in X.columns}, [], {}
+                return None, {}, [], self.search_keys
 
             features_meta = self._search_task.get_all_features_metadata_v2()
             online_api_features = [fm.name for fm in features_meta if fm.from_online_api and fm.shap_value > 0]
@@ -2550,7 +2552,7 @@ if response.status_code == 200:
                         self.logger.warning(msg)
                         print(msg)
                         show_request_quote_button()
-                        return None, {c: c for c in X.columns}, [], {}
+                        return None, {}, [], {}
                     else:
                         msg = self.bundle.get("transform_usage_info").format(
                             transform_usage.limit, transform_usage.transformed_rows
@@ -2620,14 +2622,33 @@ if response.status_code == 200:
 
             # If there are no external features, we don't call backend on transform
             external_features = [fm for fm in features_meta if fm.shap_value > 0 and fm.source != "etalon"]
-            if not external_features:
+            if len(external_features) == 0:
                 self.logger.warning(
                     "No external features found, returning original dataframe"
                     f" with generated important features: {self.feature_names_}"
                 )
-                filtered_columns = [c for c in self.feature_names_ if c in df.columns]
-                self.logger.warning(f"Filtered columns by existance in dataframe: {filtered_columns}")
-                return df[filtered_columns], columns_renaming, generated_features, search_keys
+                df = df.rename(columns=columns_renaming)
+                generated_features = [columns_renaming.get(c, c) for c in generated_features]
+                search_keys = {columns_renaming.get(c, c): t for c, t in search_keys.items()}
+                selecting_columns = self._selecting_input_and_generated_columns(
+                    validated_Xy, generated_features, keep_input, trace_id
+                )
+                self.logger.warning(f"Filtered columns by existance in dataframe: {selecting_columns}")
+                if add_fit_system_record_id:
+                    df = self._add_fit_system_record_id(
+                        df,
+                        search_keys,
+                        SYSTEM_RECORD_ID,
+                        TARGET,
+                        columns_renaming,
+                        self.id_columns,
+                        self.cv,
+                        self.model_task_type,
+                        self.logger,
+                        self.bundle,
+                    )
+                    selecting_columns.append(SYSTEM_RECORD_ID)
+                return df[selecting_columns], columns_renaming, generated_features, search_keys
 
             # Don't pass all features in backend on transform
             runtime_parameters = self._get_copy_of_runtime_parameters()
@@ -2845,29 +2866,12 @@ if response.status_code == 200:
                 how="left",
             )
 
-            fit_input_columns = [c.originalName for c in self._search_task.get_file_metadata(trace_id).columns]
-            new_columns_on_transform = [c for c in validated_Xy.columns if c not in fit_input_columns]
-
-            selected_generated_features = [
-                c for c in generated_features if not self.fit_select_features or c in self.feature_names_
-            ]
-            if keep_input is True:
-                selected_input_columns = [
-                    c
-                    for c in validated_Xy.columns
-                    if not self.fit_select_features
-                    or c in self.feature_names_
-                    or c in new_columns_on_transform
-                    or c in self.search_keys
-                    or c in (self.id_columns or [])
-                    or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
-                ]
-            else:
-                selected_input_columns = []
-
-            selecting_columns = selected_input_columns + selected_generated_features
+            selecting_columns = self._selecting_input_and_generated_columns(
+                validated_Xy, generated_features, keep_input, trace_id
+            )
             selecting_columns.extend(
-                c for c in result.columns
+                c
+                for c in result.columns
                 if c in self.feature_names_ and c not in selecting_columns and c not in validated_Xy.columns
             )
             if add_fit_system_record_id:
@@ -2894,6 +2898,35 @@ if response.status_code == 200:
                 result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
 
             return result, columns_renaming, generated_features, search_keys
+
+    def _selecting_input_and_generated_columns(
+        self,
+        validated_Xy: pd.DataFrame,
+        generated_features: list[str],
+        keep_input: bool,
+        trace_id: str,
+    ):
+        fit_input_columns = [c.originalName for c in self._search_task.get_file_metadata(trace_id).columns]
+        new_columns_on_transform = [c for c in validated_Xy.columns if c not in fit_input_columns]
+
+        selected_generated_features = [
+            c for c in generated_features if not self.fit_select_features or c in self.feature_names_
+        ]
+        if keep_input is True:
+            selected_input_columns = [
+                c
+                for c in validated_Xy.columns
+                if not self.fit_select_features
+                or c in self.feature_names_
+                or c in new_columns_on_transform
+                or c in self.search_keys
+                or c in (self.id_columns or [])
+                or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
+            ]
+        else:
+            selected_input_columns = []
+
+        return selected_input_columns + selected_generated_features
 
     def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
@@ -3727,9 +3760,7 @@ if response.status_code == 200:
             eval_types = validated_eval_X.dtypes
             # Find columns with different types
             diff_cols = [
-                (col, x_types[col], eval_types[col])
-                for col in x_types.index
-                if x_types[col] != eval_types[col]
+                (col, x_types[col], eval_types[col]) for col in x_types.index if x_types[col] != eval_types[col]
             ]
             diff_col_names = [col for col, _, _ in diff_cols]
             # print columns with different types
@@ -3815,9 +3846,7 @@ if response.status_code == 200:
         return Xy[X.columns].copy(), Xy[TARGET].copy()
 
     @staticmethod
-    def _sort_by_system_record_id(
-        X: pd.DataFrame, y: pd.Series, cv: CVType | None
-    ) -> tuple[pd.DataFrame, pd.Series]:
+    def _sort_by_system_record_id(X: pd.DataFrame, y: pd.Series, cv: CVType | None) -> tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
             record_id_column = ENTITY_SYSTEM_RECORD_ID if ENTITY_SYSTEM_RECORD_ID in X else SYSTEM_RECORD_ID
             Xy = X.copy()
