@@ -269,19 +269,22 @@ def make_html_report(
                 if search_keys is not None
                 else ""
             }
-            {"<h3>All relevant features. Accuracy after enrichment</h3>" + make_table(metrics_df)
-             if metrics_df is not None
-             else ""
+            {
+                "<h3>All relevant features. Accuracy after enrichment</h3>" + make_table(metrics_df)
+                if metrics_df is not None
+                else ""
             }
-            {"<h3>Relevant data sources</h3>" + make_table(relevant_datasources_df)
-             if len(relevant_datasources_df) > 0
-             else ""
+            {
+                "<h3>Relevant data sources</h3>" + make_table(relevant_datasources_df)
+                if len(relevant_datasources_df) > 0
+                else ""
             }
             <h3>All relevant features. Listing ({len(relevant_features_df)} items)</h3>
             {make_table(relevant_features_df, wrap_long_string=25)}
-            {"<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df, wrap_long_string=25)
-             if autofe_descriptions_df is not None
-             else ""
+            {
+                "<h3>Description of AutoFE feature names</h3>" + make_table(autofe_descriptions_df, wrap_long_string=25)
+                if autofe_descriptions_df is not None and len(autofe_descriptions_df) > 0
+                else ""
             }
             <p>To buy found data sources, please contact: <a href='mailto:sales@upgini.com'>sales@upgini.com</a></p>
             <p>Best regards, </br><b>Upgini Team</b></p>
