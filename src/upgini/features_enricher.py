@@ -1028,13 +1028,7 @@ class FeaturesEnricher(TransformerMixin):
                     columns_renaming,
                     _,
                 ) = prepared_data
-
-                # rename baseline_score_column
-                reversed_renaming = {v: k for k, v in columns_renaming.items()}
-                baseline_score_column = self.baseline_score_column
-                if baseline_score_column is not None:
-                    baseline_score_column = reversed_renaming[baseline_score_column]
-
+                
                 gc.collect()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
@@ -1089,7 +1083,7 @@ class FeaturesEnricher(TransformerMixin):
                             has_time=has_time,
                         )
                         baseline_cv_result = baseline_estimator.cross_val_predict(
-                            fitting_X, y_sorted, baseline_score_column
+                            fitting_X, y_sorted, self.baseline_score_column
                         )
                         baseline_metric = baseline_cv_result.get_display_metric()
                         if baseline_metric is None:
@@ -1192,7 +1186,7 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on client features: {eval_X_sorted.columns.to_list()}"
                                 )
                                 etalon_eval_results = baseline_estimator.calculate_metric(
-                                    eval_X_sorted, eval_y_sorted, baseline_score_column
+                                    eval_X_sorted, eval_y_sorted, self.baseline_score_column
                                 )
                                 etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
@@ -2502,6 +2496,9 @@ if response.status_code == 200:
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
         if self._search_task is None:
             raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
+        features_meta = self._search_task.get_all_features_metadata_v2()
+        if features_meta is None:
+            raise NotFittedError(self.bundle.get("transform_unfitted_enricher"))
 
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
@@ -2531,7 +2528,6 @@ if response.status_code == 200:
                 self.__display_support_link(msg)
                 return None, {}, [], self.search_keys
 
-            features_meta = self._search_task.get_all_features_metadata_v2()
             online_api_features = [fm.name for fm in features_meta if fm.from_online_api and fm.shap_value > 0]
             if len(online_api_features) > 0:
                 self.logger.warning(
@@ -3382,6 +3378,7 @@ if response.status_code == 200:
             except KeyboardInterrupt as e:
                 print(self.bundle.get("search_stopping"))
                 self.rest_client.stop_search_task_v2(trace_id, self._search_task.search_task_id)
+                self._search_task = None
                 self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
                 print(self.bundle.get("search_stopped"))
                 raise e

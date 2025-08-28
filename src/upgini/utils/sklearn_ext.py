@@ -1301,6 +1301,7 @@ def _encode_cat_features(X_train, y_train, X_test, y_test, cat_features, estimat
             encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
             encoder.fit(X_train[cat_features], y_train)
 
+            # OrdinalEncoder doesn't support progressive encoding with target
             X_train[cat_features] = encoder.transform(X_train[cat_features]).astype(int)
             X_test[cat_features] = encoder.transform(X_test[cat_features]).astype(int)
 
@@ -1314,10 +1315,8 @@ def _encode_cat_features(X_train, y_train, X_test, y_test, cat_features, estimat
             encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
             encoder.fit(X_train[cat_features], y_train)
 
-            # Progressive encoding on train (using y)
-            X_train[cat_features] = encoder.transform(X_train[cat_features], y_train).astype(int)
-
-            # Static encoding on validation (no y)
+            # OrdinalEncoder doesn't support progressive encoding with target
+            X_train[cat_features] = encoder.transform(X_train[cat_features]).astype(int)
             X_test[cat_features] = encoder.transform(X_test[cat_features]).astype(int)
 
             return X_train, y_train, X_test, y_test, [], encoder
