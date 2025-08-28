@@ -519,21 +519,24 @@ class DataSourcePublisher:
         description: str = "",
     ):
         if model_type is not None and model_type not in ["ONNX", "CATBOOST"]:
-            raise ValueError(f"Invalid model type: {model_type}. Available values: ONNX")
+            raise ValueError(f"Invalid model type: {model_type}. Available values: ONNX, CATBOOST")
         metadata = {
             "modelName": name,
             "inputNames": input_names,
             "dateColumn": date_column,
             "scoreName": score_name,
             "searchTaskId": search_id,
-            "modelType": model_type or "ONNX",
+            "modelType": model_type or "CATBOOST",
             "description": description,
         }
 
         trace_id = str(uuid.uuid4())
         with MDC(trace_id=trace_id):
             try:
-                self._rest_client.upload_autofe_model(file_path, metadata, trace_id)
+                result = self._rest_client.upload_autofe_model(file_path, metadata, trace_id)
+                if "ERROR" in result:
+                    raise Exception(result)
+                print(result)
             except Exception:
                 self.logger.exception("Failed to upload autofe model")
                 raise

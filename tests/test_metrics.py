@@ -1565,8 +1565,8 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
             ],
         ),
     )
-    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
-    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1"])
+    mock_get_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1", "feature_2_cat_508476"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["ads_feature1", "feature1", "feature_2_cat_508476"])
     path_to_mock_features = os.path.join(FIXTURE_DIR, "features_with_entity_system_record_id.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
