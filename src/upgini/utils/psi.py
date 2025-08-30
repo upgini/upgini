@@ -7,7 +7,6 @@ from typing import Callable, Dict, Optional
 import more_itertools
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
 from pydantic import BaseModel
 
 from upgini.metadata import TARGET, ModelTaskType

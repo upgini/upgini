@@ -1028,7 +1028,7 @@ class FeaturesEnricher(TransformerMixin):
                     columns_renaming,
                     _,
                 ) = prepared_data
-                
+
                 gc.collect()
 
                 if fitting_X.shape[1] == 0 and fitting_enriched_X.shape[1] == 0:
@@ -1406,7 +1406,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         X: pd.DataFrame,
         eval_set: list[tuple[pd.DataFrame, pd.Series]],
-        enriched_eval_set: dict,
+        enriched_eval_set: dict[int, tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]],
         eval_set_dates: dict[int, pd.Series],
         search_keys: dict[str, SearchKey],
         stability_threshold: float,
@@ -1417,31 +1417,42 @@ class FeaturesEnricher(TransformerMixin):
         # Find latest eval set or earliest if all eval sets are before train set
         date_column = self._get_date_column(search_keys)
 
-        x_date = X[date_column].dropna()
-        if not is_numeric_dtype(x_date):
-            x_date = pd.to_datetime(x_date).dt.floor("D").astype(np.int64) / 10**6
-        main_min_date = x_date.min()
+        date_converter = DateTimeSearchKeyConverter(
+            date_column, self.date_format, self.logger, self.bundle, generate_cyclical_features=False
+        )
 
-        for eval_x, _ in eval_set:
-            eval_x_date = eval_x[date_column].dropna()
-            if not is_numeric_dtype(eval_x_date):
-                eval_x[date_column] = pd.to_datetime(eval_x_date).dt.floor("D").astype(np.int64) / 10**6
+        X = date_converter.convert(X)
+
+        x_date = X[date_column].dropna()
+        if len(x_date) == 0:
+            self.logger.warning("Empty date column in X")
+            return []
+
+        main_min_date = x_date.min()
 
         # Find minimum date for each eval_set and compare with main dataset
         eval_dates = []
         for i, (eval_x, _) in enumerate(eval_set):
-            if date_column in eval_x.columns:
-                if len(eval_x) < 1000:
-                    self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
-                    continue
-                eval_x_date = eval_x[date_column].dropna()
-                if not is_numeric_dtype(eval_x_date):
-                    eval_x_date = pd.to_datetime(eval_x_date).dt.floor("D").astype(np.int64) / 10**6
-                eval_min_date = eval_x_date.min()
-                eval_max_date = eval_x_date.max()
-                eval_dates.append((i, eval_min_date, eval_max_date))
+            if date_column not in eval_x.columns:
+                self.logger.warning(f"Date column not found in eval_set {i + 1}")
+                continue
+            eval_x = date_converter.convert(eval_x)
+            eval_x_date = eval_x[date_column].dropna()
+            if len(eval_x_date) < 1000:
+                self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
+                continue
+            if len(enriched_eval_set[i][2]) < 1000:
+                self.logger.warning(
+                    f"Enriched eval_set {i} has less than 1000 rows. It will be ignored for stability check"
+                )
+                continue
+
+            eval_min_date = eval_x_date.min()
+            eval_max_date = eval_x_date.max()
+            eval_dates.append((i, eval_min_date, eval_max_date))
 
         if not eval_dates:
+            self.logger.warning("There are no correct eval_sets for stability check")
             return []
 
         # Check if any eval_set has minimum date >= main dataset minimum date
@@ -1464,10 +1475,7 @@ class FeaturesEnricher(TransformerMixin):
         checking_eval_set_df = checking_eval_set_df.copy()
 
         checking_eval_set_df[date_column] = eval_set_dates[selected_eval_set_idx]
-        if not is_numeric_dtype(checking_eval_set_df[date_column]):
-            checking_eval_set_df[date_column] = (
-                pd.to_datetime(checking_eval_set_df[date_column]).dt.floor("D").astype(np.int64) / 10**6
-            )
+        checking_eval_set_df = date_converter.convert(checking_eval_set_df)
 
         psi_values_sparse = calculate_sparsity_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type

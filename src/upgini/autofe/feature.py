@@ -42,6 +42,9 @@ class Column:
     def get_display_name(self, cache: bool = True, shorten: bool = False, **kwargs) -> str:
         return self.get_columns(**kwargs)[0]
 
+    def reset_display_indices(self) -> "Column":
+        return self
+
     def _unhash(self, feature_name: str) -> str:
         last_component_idx = feature_name.rfind("_")
         if not feature_name.startswith("f_"):
@@ -147,6 +150,13 @@ class Feature:
         self.cached_display_name = None
         return self
 
+    def rename_op_params(self, mapping: Dict[str, str]) -> "Feature":
+        self.op.rename_params(mapping)
+        for child in self.children:
+            if isinstance(child, Feature):
+                child.rename_op_params(mapping)
+        return self
+
     def get_column_nodes(self) -> List[Union[Column, "Feature"]]:
         res = []
         for child in self.children:
@@ -209,6 +219,13 @@ class Feature:
 
     def set_display_index(self, index) -> "Feature":
         self.display_index = index
+        self.cached_display_name = None
+        return self
+
+    def reset_display_indices(self) -> "Feature":
+        for child in self.children:
+            child.reset_display_indices()
+        self.display_index = None
         self.cached_display_name = None
         return self
 

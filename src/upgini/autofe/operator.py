@@ -89,6 +89,32 @@ class Operator(BaseModel, metaclass=OperatorRegistry):
     def delete_data(self):
         pass
 
+    def rename_params(self, columns_renaming: Dict[str, str]) -> "Operator":
+        # Rename occurrences of column names inside self.params keys according to columns_renaming
+        if not self.params or not columns_renaming:
+            return self
+
+        # Replace longer keys first to avoid partial overlaps
+        replacements = sorted(columns_renaming.items(), key=lambda kv: -len(kv[0]))
+
+        renamed_params: Dict[str, str] = {}
+        for param_key, param_value in self.params.items():
+            new_key = param_key
+            for old, new in replacements:
+                if old and old in new_key:
+                    new_key = new_key.replace(old, new)
+
+            if new_key in renamed_params and new_key != param_key:
+                self._logger.warning(
+                    "Param key collision after rename: '%s' -> '%s'. Overwriting value.",
+                    param_key,
+                    new_key,
+                )
+            renamed_params[new_key] = param_value
+
+        self.params = renamed_params
+        return self
+
 
 class ParametrizedOperator(Operator, abc.ABC):
 
