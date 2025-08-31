@@ -3386,8 +3386,8 @@ if response.status_code == 200:
             except KeyboardInterrupt as e:
                 print(self.bundle.get("search_stopping"))
                 self.rest_client.stop_search_task_v2(trace_id, self._search_task.search_task_id)
-                self._search_task = None
                 self.logger.warning(f"Search {self._search_task.search_task_id} stopped by user")
+                self._search_task = None
                 print(self.bundle.get("search_stopped"))
                 raise e
 
