@@ -286,7 +286,6 @@ class FeaturesEnricher(TransformerMixin):
 
         if model_task_type is not None:
             self.model_task_type = ModelTaskType.parse(model_task_type)
-        self.model_task_type = model_task_type
         self.endpoint = endpoint
         self._search_task: SearchTask | None = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
