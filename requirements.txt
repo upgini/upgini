@@ -20,6 +20,7 @@ levenshtein>=0.25.1
 psutil>=5.9.0
 category-encoders>=2.8.1
 catboost>=1.2.8
+more_itertools==10.7.0
 
 black
 flake8
