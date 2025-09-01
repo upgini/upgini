@@ -284,8 +284,7 @@ class FeaturesEnricher(TransformerMixin):
         self.country_code = country_code
         self.__validate_search_keys(search_keys, search_id)
 
-        if model_task_type is not None:
-            self.model_task_type = ModelTaskType.parse(model_task_type)
+        self.model_task_type = ModelTaskType.parse(model_task_type)
         self.endpoint = endpoint
         self._search_task: SearchTask | None = None
         self.features_info: pd.DataFrame = self.EMPTY_FEATURES_INFO
@@ -2035,7 +2034,6 @@ class FeaturesEnricher(TransformerMixin):
 
         # Sample after sorting by system_record_id for idempotency
         df.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
-        df = self.__downsample_for_metrics(df)
 
         if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
             df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
@@ -2043,6 +2041,9 @@ class FeaturesEnricher(TransformerMixin):
         df = df.rename(columns=columns_renaming)
         generated_features = [columns_renaming.get(c, c) for c in generated_features]
         search_keys = {columns_renaming.get(k, k): v for k, v in search_keys.items()}
+
+        # It uses original columns names!
+        df = self.__downsample_for_metrics(df)
 
         train_df = df.query(f"{EVAL_SET_INDEX} == 0") if eval_set is not None else df
         X_sampled = train_df.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")

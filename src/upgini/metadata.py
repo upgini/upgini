@@ -163,7 +163,9 @@ class ModelTaskType(Enum):
         return self in [ModelTaskType.BINARY, ModelTaskType.MULTICLASS]
 
     @staticmethod
-    def parse(task_type: Any) -> "ModelTaskType":
+    def parse(task_type: Any) -> Optional["ModelTaskType"]:
+        if task_type is None:
+            return None
         if isinstance(task_type, ModelTaskType):
             return task_type
         elif isinstance(task_type, str):

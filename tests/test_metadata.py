@@ -90,10 +90,7 @@ class TestModelTaskTypeParse:
                 ModelTaskType.parse(invalid_str)
 
     def test_parse_with_none(self):
-        """Test: None should raise ValueError"""
-        # Act & Assert
-        with pytest.raises(ValueError, match="Invalid task type: None"):
-            ModelTaskType.parse(None)
+        assert ModelTaskType.parse(None) is None
 
     def test_parse_preserves_enum_properties(self):
         """Test: parsing preserves enum properties after conversion"""

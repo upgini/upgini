@@ -268,12 +268,12 @@ def test_constant_and_empty_validation():
             "phone": np.random.randint(1, 99999999999, 1000),
             "a": [1] * 995 + [2] * 5,
             "b": [None] * 995 + [3] * 5,
-            "c": [0] * 995 + [1] * 5,
+            "c": [0] * 995 + [1] * 5,  # like One-Hot encoding
         }
     )
     features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c"])
-    assert features_to_drop == ["a", "b", "c"]
-    assert len(warnings) == 1
+    assert features_to_drop == ["a", "b"]
+    assert len(warnings) == 2
 
 
 def test_one_hot_encoding_validation():
