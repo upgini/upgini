@@ -309,8 +309,8 @@ class FeaturesEnricher(TransformerMixin):
             print(self.bundle.get("search_by_task_id_start"))
             trace_id = time.time_ns()
             if self.print_trace_id:
-                print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
-            with MDC(trace_id=trace_id):
+                print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
+            with MDC(correlation_id=trace_id):
                 try:
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
@@ -500,7 +500,7 @@ class FeaturesEnricher(TransformerMixin):
             progress_bar.progress = search_progress.to_progress_bar()
             progress_bar.display()
 
-        with MDC(trace_id=trace_id):
+        with MDC(correlation_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for fit: {args}"
                 self.logger.warning(msg)
@@ -649,7 +649,7 @@ class FeaturesEnricher(TransformerMixin):
         if self.print_trace_id:
             print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
         start_time = time.time()
-        with MDC(trace_id=trace_id):
+        with MDC(correlation_id=trace_id):
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for fit_transform: {args}"
                 self.logger.warning(msg)
@@ -791,7 +791,7 @@ class FeaturesEnricher(TransformerMixin):
                 progress_bar.display()
         trace_id = trace_id or time.time_ns()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
-        with MDC(trace_id=trace_id, search_id=search_id):
+        with MDC(correlation_id=trace_id, search_id=search_id):
             self.dump_input(trace_id, X)
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for transform: {args}"
@@ -909,7 +909,7 @@ class FeaturesEnricher(TransformerMixin):
         trace_id = trace_id or time.time_ns()
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
-        with MDC(trace_id=trace_id, search_id=search_id):
+        with MDC(correlation_id=trace_id, search_id=search_id):
             self.logger.info("Start calculate metrics")
             if len(args) > 0:
                 msg = f"WARNING: Unsupported positional arguments for calculate_metrics: {args}"
@@ -2509,7 +2509,7 @@ if response.status_code == 200:
 
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
-        with MDC(trace_id=trace_id, search_id=search_id):
+        with MDC(correlation_id=trace_id, search_id=search_id):
             self.logger.info("Start transform")
 
             validated_X, validated_y, validated_eval_set = self._validate_train_eval(
@@ -4975,7 +4975,7 @@ if response.status_code == 200:
         eval_set: tuple | None = None,
     ):
         def dump_task(X_, y_, eval_set_):
-            with MDC(trace_id=trace_id):
+            with MDC(correlation_id=trace_id):
                 try:
                     if isinstance(X_, pd.Series):
                         X_ = X_.to_frame()
