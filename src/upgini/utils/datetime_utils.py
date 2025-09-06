@@ -81,36 +81,32 @@ class DateTimeConverter:
             return True
 
         parsed = self.parse_datetime(df, raise_errors=False)
-        if parsed is None:
-            return False
-
-        return not parsed.isna().all()
+        return parsed is not None and not parsed.isna().all()
 
     def parse_datetime(self, df: pd.DataFrame, raise_errors=True) -> pd.Series | None:
         if len(df) == 0 or df[self.date_column].isna().all():
             return None
 
-        df = df.copy()
         try:
             if df[self.date_column].apply(lambda x: isinstance(x, datetime.datetime)).all():
-                return df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
+                parsed_datetime = df[self.date_column].apply(lambda x: x.replace(tzinfo=None))
             elif isinstance(df[self.date_column].dropna().values[0], datetime.date):
-                return pd.to_datetime(df[self.date_column], errors="coerce")
+                parsed_datetime = pd.to_datetime(df[self.date_column], errors="coerce")
             elif isinstance(df[self.date_column].dtype, pd.PeriodDtype):
-                return df[self.date_column].dt.to_timestamp()
+                parsed_datetime = df[self.date_column].dt.to_timestamp()
             elif is_numeric_dtype(df[self.date_column]):
                 # 315532801 - 2524608001    - seconds
                 # 315532801000 - 2524608001000 - milliseconds
                 # 315532801000000 - 2524608001000000 - microseconds
                 # 315532801000000000 - 2524608001000000000 - nanoseconds
                 if df[self.date_column].apply(lambda x: 10**16 < x).all():
-                    return pd.to_datetime(df[self.date_column], unit="ns")
+                    parsed_datetime = pd.to_datetime(df[self.date_column], unit="ns")
                 elif df[self.date_column].apply(lambda x: 10**14 < x < 10**16).all():
-                    return pd.to_datetime(df[self.date_column], unit="us")
+                    parsed_datetime = pd.to_datetime(df[self.date_column], unit="us")
                 elif df[self.date_column].apply(lambda x: 10**11 < x < 10**14).all():
-                    return pd.to_datetime(df[self.date_column], unit="ms")
+                    parsed_datetime = pd.to_datetime(df[self.date_column], unit="ms")
                 elif df[self.date_column].apply(lambda x: 10**8 < x < 10**11).all():
-                    return pd.to_datetime(df[self.date_column], unit="s")
+                    parsed_datetime = pd.to_datetime(df[self.date_column], unit="s")
                 else:
                     msg = self.bundle.get("unsupported_date_type").format(self.date_column)
                     if raise_errors:
@@ -119,7 +115,9 @@ class DateTimeConverter:
                         return None
             else:
                 df[self.date_column] = df[self.date_column].astype("string").apply(self.clean_date)
-                return self.parse_string_date(df, raise_errors)
+                parsed_datetime = self.parse_string_date(df, raise_errors)
+            parsed_datetime = parsed_datetime.dt.tz_localize(None)
+            return parsed_datetime
         except Exception as e:
             if raise_errors:
                 raise ValidationError(e)
@@ -136,19 +134,28 @@ class DateTimeConverter:
         parsed_datetime = self.parse_datetime(df)
         if parsed_datetime is None:
             return df[self.date_column]
-        parsed_date = parsed_datetime.dt.tz_localize(None).dt.floor("D")
-        if parsed_date.dt.unit == "ns":
-            return parsed_date.astype(np.int64) // 1_000_000
-        elif parsed_date.dt.unit == "us":
-            return parsed_date.astype(np.int64) // 1_000
-        elif parsed_date.dt.unit == "ms":
-            return parsed_date.astype(np.int64)
-        elif parsed_date.dt.unit == "s":
-            return parsed_date.astype(np.int64) * 1_000
+        return self.convert_datetime_to_date_ms(parsed_datetime)
+
+    def convert_datetime_to_datetime_ms(self, date_col: pd.Series) -> pd.Series:
+        if date_col.dt.unit == "ns":
+            date_col = date_col.astype(np.int64) // 1_000_000
+        elif date_col.dt.unit == "us":
+            date_col = date_col.astype(np.int64) // 1_000
+        elif date_col.dt.unit == "ms":
+            date_col = date_col.astype(np.int64)
+        elif date_col.dt.unit == "s":
+            date_col = date_col.astype(np.int64) * 1_000
         else:
-            raise ValueError(f"Unsupported date unit: {parsed_date.dt.unit}")
+            raise ValueError(f"Unsupported date unit: {date_col.dt.unit}")
+
+        return date_col.apply(self._int_to_opt).astype("Int64")
+
+    def convert_datetime_to_date_ms(self, date_col: pd.Series) -> pd.Series:
+        date_col = date_col.dt.floor("D")
+        return self.convert_datetime_to_datetime_ms(date_col)
 
     def convert(self, df: pd.DataFrame, keep_time=False) -> pd.DataFrame:
+        df = df.copy()
         parsed_datetime = self.parse_datetime(df)
         if parsed_datetime is None:
             return df
@@ -158,7 +165,6 @@ class DateTimeConverter:
         # If column with date is datetime then extract seconds of the day and minute of the hour
         # as additional features
         seconds = "datetime_seconds"
-        df[self.date_column] = df[self.date_column].dt.tz_localize(None)
 
         df = self.clean_old_dates(df)
 
@@ -233,10 +239,8 @@ class DateTimeConverter:
             df.drop(columns=seconds, inplace=True)
 
         if keep_time:
-            df[self.DATETIME_COL] = df[self.date_column].astype(np.int64) // 1_000_000
-            df[self.DATETIME_COL] = df[self.DATETIME_COL].apply(self._int_to_opt).astype("Int64")
-        df[self.date_column] = df[self.date_column].dt.floor("D").astype(np.int64) // 1_000_000
-        df[self.date_column] = df[self.date_column].apply(self._int_to_opt).astype("Int64")
+            df[self.DATETIME_COL] = self.convert_datetime_to_datetime_ms(df[self.date_column])
+        df[self.date_column] = self.convert_datetime_to_date_ms(df[self.date_column])
 
         self.logger.info(f"Date after convertion to timestamp: {df[self.date_column]}")
 
