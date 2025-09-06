@@ -165,9 +165,20 @@ class SearchTask:
 
         return list(zero_hit_search_keys)
 
-    def get_features_for_transform(self) -> Optional[List[str]]:
+    def get_features_for_embeddings(self) -> Optional[List[str]]:
         if self.provider_metadata_v2 is None:
             return None
+
+        features_for_transform = set()
+        for meta in self.provider_metadata_v2:
+            if meta.features_used_for_embeddings is not None:
+                features_for_transform.update(meta.features_used_for_embeddings)
+
+        return list(features_for_transform)
+
+    def get_features_for_transform(self) -> List[str]:
+        if self.provider_metadata_v2 is None:
+            return []
 
         features_for_transform = set()
         for meta in self.provider_metadata_v2:

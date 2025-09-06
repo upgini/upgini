@@ -308,8 +308,6 @@ class FeaturesEnricher(TransformerMixin):
 
             print(self.bundle.get("search_by_task_id_start"))
             trace_id = time.time_ns()
-            if self.print_trace_id:
-                print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
             with MDC(correlation_id=trace_id):
                 try:
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
@@ -488,7 +486,7 @@ class FeaturesEnricher(TransformerMixin):
         """
         trace_id = time.time_ns()
         if self.print_trace_id:
-            print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
+            print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
         start_time = time.time()
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         search_progress = SearchProgress(0.0, ProgressStage.START_FIT)
@@ -647,7 +645,7 @@ class FeaturesEnricher(TransformerMixin):
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
         trace_id = time.time_ns()
         if self.print_trace_id:
-            print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
+            print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
         start_time = time.time()
         with MDC(correlation_id=trace_id):
             if len(args) > 0:
@@ -747,8 +745,8 @@ class FeaturesEnricher(TransformerMixin):
     def transform(
         self,
         X: pd.DataFrame,
-        *args,
         y: pd.Series | None = None,
+        *args,
         exclude_features_sources: list[str] | None = None,
         keep_input: bool = True,
         trace_id: str | None = None,
@@ -2655,8 +2653,8 @@ if response.status_code == 200:
 
             # Don't pass all features in backend on transform
             runtime_parameters = self._get_copy_of_runtime_parameters()
-            features_for_transform = self._search_task.get_features_for_transform() or []
-            if len(features_for_transform) > 0:
+            features_for_transform = self._search_task.get_features_for_transform()
+            if features_for_transform:
                 missing_features_for_transform = [
                     columns_renaming.get(f) or f for f in features_for_transform if f not in df.columns
                 ]
@@ -2667,7 +2665,9 @@ if response.status_code == 200:
                     raise ValidationError(
                         self.bundle.get("missing_features_for_transform").format(missing_features_for_transform)
                     )
-                runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
+            features_for_embeddings = self._search_task.get_features_for_embeddings()
+            if features_for_embeddings:
+                runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_embeddings)
             features_for_transform = [f for f in features_for_transform if f not in search_keys.keys()]
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
