@@ -13,7 +13,7 @@ from upgini.metadata import SEARCH_KEY_UNNEST, ModelTaskType, SearchKey
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.utils.country_utils import CountrySearchKeyConverter
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.email_utils import EmailSearchKeyConverter
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.ip_utils import IpSearchKeyConverter
@@ -181,7 +181,7 @@ def test_string_date_to_timestamp_convertion():
             {"date": ""},
         ]
     )
-    converter = DateTimeSearchKeyConverter("date", "%Y-%m-%d")
+    converter = DateTimeConverter("date", "%Y-%m-%d")
     df = converter.convert(df)
     assert df.shape[0] == 3
     assert df["date"].dtype == "Int64"
@@ -196,7 +196,7 @@ def test_string_datetime_to_timestamp_convertion():
         ]
     )
     df["date"] = pd.to_datetime(df.date)
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df = converter.convert(df)
     assert df.shape == (1, 1)
     assert df["date"].dtype == "Int64"
@@ -205,7 +205,7 @@ def test_string_datetime_to_timestamp_convertion():
 
 def test_period_range_to_timestamp_conversion():
     df = pd.DataFrame({"date": pd.period_range(start="2020-01-01", periods=3, freq="D")})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df = converter.convert(df)
     assert df["date"].dtype == "Int64"
     assert df["date"].iloc[0] == 1577836800000
@@ -221,7 +221,7 @@ def test_python_date_to_timestamp_conversion():
             {"date": date(2020, 1, 3)},
         ]
     )
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df = converter.convert(df)
     assert df["date"].dtype == "Int64"
     assert df["date"].iloc[0] == 1577836800000
@@ -237,7 +237,7 @@ def test_python_datetime_to_timestamp_conversion():
             {"date": datetime(2020, 1, 3, 0, 0, 0)},
         ]
     )
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df = converter.convert(df)
     assert df["date"].dtype == "Int64"
     assert df["date"].iloc[0] == 1577836800000
@@ -253,7 +253,7 @@ def test_convert_datetime_without_cyclical_features():
             {"date": datetime(2020, 1, 3, 14, 50, 0)},
         ]
     )
-    converter = DateTimeSearchKeyConverter("date", generate_cyclical_features=False)
+    converter = DateTimeConverter("date", generate_cyclical_features=False)
     df = converter.convert(df)
     assert df.columns.to_list() == ["date"]
     assert df["date"].dtype == "Int64"
@@ -392,14 +392,14 @@ def test_float_string_postal_code_normalization():
 
 def test_old_dates_drop():
     df = pd.DataFrame({"date": ["2020-01-01", "2005-05-02", "1999-12-31", None]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df = converter.convert(df)
     assert len(df[df.date.isna()]) == 2
 
 
 def test_time_cutoff_from_str():
     df = pd.DataFrame({"date": ["2020-01-01 00:01:00", "2000-01-01 00:00:00", "1999-12-31 00:00:00", None]})
-    converter = DateTimeSearchKeyConverter("date", "%Y-%m-%d %H:%M:%S")
+    converter = DateTimeConverter("date", "%Y-%m-%d %H:%M:%S")
     dataset = converter.convert(df)
 
     expected_data = pd.DataFrame(
@@ -420,7 +420,7 @@ def test_time_cutoff_from_datetime():
     df = pd.DataFrame(
         {"date": [datetime(2020, 1, 1, 0, 1, 0), datetime(2000, 1, 1, 0, 0, 0), datetime(1999, 12, 31, 0, 0, 0), None]}
     )
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     dataset = converter.convert(df)
     expected_data = pd.DataFrame(
         {
@@ -438,7 +438,7 @@ def test_time_cutoff_from_datetime():
 
 def test_time_cutoff_from_period():
     df = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=24, freq="h")})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     dataset = converter.convert(df)
     for i in range(24):
         assert dataset.loc[i, "date"] == 1577836800000
@@ -454,7 +454,7 @@ def test_time_cutoff_from_period():
 
 def test_time_cutoff_from_timestamp():
     df = pd.DataFrame({"date": [1577836800000000000, 1577840400000000000, 1577844000000000000]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     # with pytest.raises(Exception, match="Unsupported type of date column date.*"):
     df = converter.convert(df)
     assert len(df) == 3
@@ -478,7 +478,7 @@ def test_time_cutoff_with_different_timezones():
         }
     )
     df["date"] = pd.to_datetime(df["date"])
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     dataset = converter.convert(df)
 
     expected_df = pd.DataFrame(
@@ -506,27 +506,27 @@ def test_date_in_diff_formats():
     expected_df.date = expected_df.date.astype("Int64")
 
     df = pd.DataFrame({"date": ["12.01.23", "13.02.23", "31.03.23", "Date is not available"]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     converted_df = converter.convert(df)
     assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "03.31.23", "Date is not available"]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     converted_df = converter.convert(df)
     assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["2023-01-12", "2023-02-13", "2023-03-31", "Date is not available"]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     converted_df = converter.convert(df)
     assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.2023", "02.13.2023", "03.31.2023", "Date is not available"]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     converted_df = converter.convert(df)
     assert_frame_equal(converted_df.iloc[:, :1], expected_df)
 
     df = pd.DataFrame({"date": ["01.12.23", "02.13.23", "13.13.23"]})
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     with pytest.raises(Exception, match="Failed to parse date.*"):
         converted_df = converter.convert(df)
 
@@ -559,7 +559,7 @@ def test_datetime_with_ms():
             ]
         }
     )
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     converted_df = converter.convert(df)
     print(converted_df)
     assert_frame_equal(converted_df, expected_df)

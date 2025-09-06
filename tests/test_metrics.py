@@ -35,7 +35,7 @@ from upgini.metrics import (
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 
 from .utils import (
     mock_default_requests,
@@ -256,7 +256,7 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
         dict(),
         search_keys,
         columns_renaming,
-        []
+        [],
     )
     enricher.fit_select_features = False
 
@@ -523,7 +523,7 @@ def test_default_metric_regression_with_outliers(requests_mock: Mocker, update_m
 
     mock_features = pd.read_parquet(path_to_mock_features)
 
-    converter = DateTimeSearchKeyConverter("date")
+    converter = DateTimeConverter("date")
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
     search_keys_copy = search_keys.copy()
     normalizer = Normalizer()

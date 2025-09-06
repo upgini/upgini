@@ -76,7 +76,7 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig, get_groups
 from upgini.utils.datetime_utils import (
-    DateTimeSearchKeyConverter,
+    DateTimeConverter,
     is_blocked_time_series,
     is_dates_distribution_valid,
     is_time_series,
@@ -220,7 +220,9 @@ class FeaturesEnricher(TransformerMixin):
         cv: CVType | None = None,
         loss: str | None = None,
         autodetect_search_keys: bool = True,
+        # deprecated, use text_features instead
         generate_features: list[str] | None = None,
+        text_features: list[str] | None = None,
         columns_for_online_api: list[str] | None = None,
         round_embeddings: int | None = None,
         logs_enabled: bool = True,
@@ -305,7 +307,7 @@ class FeaturesEnricher(TransformerMixin):
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
 
             print(self.bundle.get("search_by_task_id_start"))
-            trace_id = str(uuid.uuid4())
+            trace_id = time.time_ns()
             if self.print_trace_id:
                 print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
             with MDC(trace_id=trace_id):
@@ -342,14 +344,14 @@ class FeaturesEnricher(TransformerMixin):
         self.shared_datasets = shared_datasets
         if shared_datasets is not None:
             self.runtime_parameters.properties["shared_datasets"] = ",".join(shared_datasets)
-        self.generate_features = generate_features
+        self.generate_features = text_features or generate_features
         self.round_embeddings = round_embeddings
-        if generate_features is not None:
-            if len(generate_features) > self.GENERATE_FEATURES_LIMIT:
+        if self.generate_features is not None:
+            if len(self.generate_features) > self.GENERATE_FEATURES_LIMIT:
                 msg = self.bundle.get("too_many_generate_features").format(self.GENERATE_FEATURES_LIMIT)
                 self.logger.error(msg)
                 raise ValidationError(msg)
-            self.runtime_parameters.properties["generate_features"] = ",".join(generate_features)
+            self.runtime_parameters.properties["generate_features"] = ",".join(self.generate_features)
             if round_embeddings is not None:
                 if not isinstance(round_embeddings, int) or round_embeddings < 0:
                     msg = self.bundle.get("invalid_round_embeddings")
@@ -484,7 +486,7 @@ class FeaturesEnricher(TransformerMixin):
         stability_agg_func: str, optional (default="max")
             Function to aggregate stability values. Can be "max", "min", "mean".
         """
-        trace_id = str(uuid.uuid4())
+        trace_id = time.time_ns()
         if self.print_trace_id:
             print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
         start_time = time.time()
@@ -643,7 +645,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.warning_counter.reset()
         auto_fe_parameters = AutoFEParameters() if auto_fe_parameters is None else auto_fe_parameters
-        trace_id = str(uuid.uuid4())
+        trace_id = time.time_ns()
         if self.print_trace_id:
             print(f"https://app.datadoghq.eu/logs?query=%40trace_id%3A{trace_id}")
         start_time = time.time()
@@ -787,7 +789,7 @@ class FeaturesEnricher(TransformerMixin):
             progress_bar.progress = search_progress.to_progress_bar()
             if new_progress:
                 progress_bar.display()
-        trace_id = trace_id or str(uuid.uuid4())
+        trace_id = trace_id or time.time_ns()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
         with MDC(trace_id=trace_id, search_id=search_id):
             self.dump_input(trace_id, X)
@@ -904,7 +906,7 @@ class FeaturesEnricher(TransformerMixin):
             Dataframe with metrics calculated on train and validation datasets.
         """
 
-        trace_id = trace_id or str(uuid.uuid4())
+        trace_id = trace_id or time.time_ns()
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
         with MDC(trace_id=trace_id, search_id=search_id):
@@ -1415,13 +1417,11 @@ class FeaturesEnricher(TransformerMixin):
         # Find latest eval set or earliest if all eval sets are before train set
         date_column = self._get_date_column(search_keys)
 
-        date_converter = DateTimeSearchKeyConverter(
+        date_converter = DateTimeConverter(
             date_column, self.date_format, self.logger, self.bundle, generate_cyclical_features=False
         )
 
-        X = date_converter.convert(X)
-
-        x_date = X[date_column].dropna()
+        x_date = date_converter.to_date_ms(X).dropna()
         if len(x_date) == 0:
             self.logger.warning("Empty date column in X")
             return []
@@ -1434,8 +1434,7 @@ class FeaturesEnricher(TransformerMixin):
             if date_column not in eval_x.columns:
                 self.logger.warning(f"Date column not found in eval_set {i + 1}")
                 continue
-            eval_x = date_converter.convert(eval_x)
-            eval_x_date = eval_x[date_column].dropna()
+            eval_x_date = date_converter.to_date_ms(eval_x).dropna()
             if len(eval_x_date) < 1000:
                 self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
                 continue
@@ -1472,8 +1471,7 @@ class FeaturesEnricher(TransformerMixin):
         )
         checking_eval_set_df = checking_eval_set_df.copy()
 
-        checking_eval_set_df[date_column] = eval_set_dates[selected_eval_set_idx]
-        checking_eval_set_df = date_converter.convert(checking_eval_set_df)
+        checking_eval_set_df[date_column] = date_converter.to_date_ms(eval_set_dates[selected_eval_set_idx].to_frame())
 
         psi_values_sparse = calculate_sparsity_psi(
             checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
@@ -1745,7 +1743,7 @@ class FeaturesEnricher(TransformerMixin):
             not in (
                 excluding_search_keys
                 + list(self.fit_dropped_features)
-                + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
+                + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
@@ -1995,7 +1993,7 @@ class FeaturesEnricher(TransformerMixin):
         date_column = self._get_date_column(search_keys)
         generated_features = []
         if date_column is not None:
-            converter = DateTimeSearchKeyConverter(
+            converter = DateTimeConverter(
                 date_column,
                 self.date_format,
                 self.logger,
@@ -2004,6 +2002,7 @@ class FeaturesEnricher(TransformerMixin):
             )
             # Leave original date column values
             df_with_date_features = converter.convert(df, keep_time=True)
+            # TODO check if this is correct
             df_with_date_features[date_column] = df[date_column]
             df = df_with_date_features
             generated_features = converter.generated_features
@@ -2035,8 +2034,8 @@ class FeaturesEnricher(TransformerMixin):
         # Sample after sorting by system_record_id for idempotency
         df.sort_values(by=SYSTEM_RECORD_ID, inplace=True)
 
-        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-            df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
+        if DateTimeConverter.DATETIME_COL in df.columns:
+            df = df.drop(columns=DateTimeConverter.DATETIME_COL)
 
         df = df.rename(columns=columns_renaming)
         generated_features = [columns_renaming.get(c, c) for c in generated_features]
@@ -2388,7 +2387,7 @@ class FeaturesEnricher(TransformerMixin):
     def get_progress(self, trace_id: str | None = None, search_task: SearchTask | None = None) -> SearchProgress:
         search_task = search_task or self._search_task
         if search_task is not None:
-            trace_id = trace_id or uuid.uuid4()
+            trace_id = trace_id or time.time_ns()
             return search_task.get_progress(trace_id)
 
     def display_transactional_transform_api(self, only_online_sources=False):
@@ -2416,7 +2415,7 @@ class FeaturesEnricher(TransformerMixin):
                 return "12345678"
             return "test_value"
 
-        file_metadata = self._search_task.get_file_metadata(str(uuid.uuid4()))
+        file_metadata = self._search_task.get_file_metadata(time.time_ns())
 
         def get_column_meta(column_name: str) -> FileColumnMetadata:
             for c in file_metadata.columns:
@@ -2599,7 +2598,7 @@ if response.status_code == 200:
             generated_features = []
             date_column = self._get_date_column(search_keys)
             if date_column is not None:
-                converter = DateTimeSearchKeyConverter(
+                converter = DateTimeConverter(
                     date_column,
                     self.date_format,
                     self.logger,
@@ -2669,6 +2668,7 @@ if response.status_code == 200:
                         self.bundle.get("missing_features_for_transform").format(missing_features_for_transform)
                     )
                 runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_transform)
+            features_for_transform = [f for f in features_for_transform if f not in search_keys.keys()]
 
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
 
@@ -2729,8 +2729,17 @@ if response.status_code == 200:
                 )
                 df = converter.convert(df)
 
+            date_features = []
+            for col in features_for_transform:
+                if DateTimeConverter(col).is_datetime(df):
+                    df[col] = DateTimeConverter(col).to_date_string(df)
+                    date_features.append(col)
+
             meaning_types = {}
-            meaning_types.update({col: FileColumnMeaningType.FEATURE for col in features_for_transform})
+            meaning_types.update(
+                {col: FileColumnMeaningType.FEATURE for col in features_for_transform if col not in date_features}
+            )
+            meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
 
             features_not_to_pass.extend(
@@ -2743,8 +2752,8 @@ if response.status_code == 200:
                 ]
             )
 
-            if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-                df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
+            if DateTimeConverter.DATETIME_COL in df.columns:
+                df = df.drop(columns=DateTimeConverter.DATETIME_COL)
 
             # search keys might be changed after explode
             columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
@@ -3124,7 +3133,7 @@ if response.status_code == 200:
         self.fit_generated_features = []
 
         if has_date:
-            converter = DateTimeSearchKeyConverter(
+            converter = DateTimeConverter(
                 maybe_date_column,
                 self.date_format,
                 self.logger,
@@ -3177,8 +3186,8 @@ if response.status_code == 200:
             self.TARGET_NAME,
             EVAL_SET_INDEX,
         ] + list(self.fit_search_keys.keys())
-        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
+        if DateTimeConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
@@ -3265,15 +3274,27 @@ if response.status_code == 200:
             ENTITY_SYSTEM_RECORD_ID,
             SEARCH_KEY_UNNEST,
         ] + list(self.fit_search_keys.keys())
-        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-            non_feature_columns.append(DateTimeSearchKeyConverter.DATETIME_COL)
+        if DateTimeConverter.DATETIME_COL in df.columns:
+            non_feature_columns.append(DateTimeConverter.DATETIME_COL)
 
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
+        # find date features
+        date_features = []
+        for col in features_columns:
+            if DateTimeConverter(col).is_datetime(df):
+                df[col] = DateTimeConverter(col).to_date_string(df)
+                date_features.append(col)
+
         meaning_types = {
             **{col: key.value for col, key in self.fit_search_keys.items()},
-            **{str(c): FileColumnMeaningType.FEATURE for c in df.columns if c not in non_feature_columns},
+            **{
+                str(c): FileColumnMeaningType.FEATURE
+                for c in df.columns
+                if c not in non_feature_columns and c not in date_features
+            },
         }
+        meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
         meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
         if SEARCH_KEY_UNNEST in df.columns:
@@ -3294,8 +3315,8 @@ if response.status_code == 200:
             self.bundle,
         )
 
-        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-            df = df.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL)
+        if DateTimeConverter.DATETIME_COL in df.columns:
+            df = df.drop(columns=DateTimeConverter.DATETIME_COL)
 
         meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
 
@@ -3332,7 +3353,9 @@ if response.status_code == 200:
         dataset.columns_renaming = self.fit_columns_renaming
 
         self.passed_features = [
-            column for column, meaning_type in meaning_types.items() if meaning_type == FileColumnMeaningType.FEATURE
+            column
+            for column, meaning_type in meaning_types.items()
+            if meaning_type in [FileColumnMeaningType.FEATURE, FileColumnMeaningType.DATE_FEATURE]
         ]
 
         self._search_task = dataset.search(
@@ -3860,8 +3883,8 @@ if response.status_code == 200:
             X = Xy.drop(columns=TARGET)
             y = Xy[TARGET].copy()
 
-        if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
-            X.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
+        if DateTimeConverter.DATETIME_COL in X.columns:
+            X.drop(columns=DateTimeConverter.DATETIME_COL, inplace=True)
 
         return X, y
 
@@ -3871,8 +3894,8 @@ if response.status_code == 200:
         X: pd.DataFrame, y: pd.Series, search_keys: dict[str, SearchKey], cv: CVType | None
     ) -> tuple[pd.DataFrame, pd.Series]:
         if cv not in [CVType.time_series, CVType.blocked_time_series]:
-            if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
-                date_column = DateTimeSearchKeyConverter.DATETIME_COL
+            if DateTimeConverter.DATETIME_COL in X.columns:
+                date_column = DateTimeConverter.DATETIME_COL
             else:
                 date_column = FeaturesEnricher._get_date_column(search_keys)
             sort_columns = [date_column] if date_column is not None else []
@@ -3900,8 +3923,8 @@ if response.status_code == 200:
 
             y = Xy[TARGET].copy()
 
-        if DateTimeSearchKeyConverter.DATETIME_COL in X.columns:
-            X.drop(columns=DateTimeSearchKeyConverter.DATETIME_COL, inplace=True)
+        if DateTimeConverter.DATETIME_COL in X.columns:
+            X.drop(columns=DateTimeConverter.DATETIME_COL, inplace=True)
 
         return X, y
 
@@ -3980,12 +4003,10 @@ if response.status_code == 200:
             maybe_date_col = SearchKey.find_key(self.search_keys, [SearchKey.DATE, SearchKey.DATETIME])
             if X is not None and maybe_date_col is not None and maybe_date_col in X.columns:
                 # TODO cast date column to single dtype
-                date_converter = DateTimeSearchKeyConverter(
-                    maybe_date_col, self.date_format, generate_cyclical_features=False
-                )
-                converted_X = date_converter.convert(X)
-                min_date = converted_X[maybe_date_col].min()
-                max_date = converted_X[maybe_date_col].max()
+                date_converter = DateTimeConverter(maybe_date_col, self.date_format, generate_cyclical_features=False)
+                date_col_values = date_converter.to_date_ms(X)
+                min_date = date_col_values.min()
+                max_date = date_col_values.max()
                 self.logger.info(f"Dates interval is ({min_date}, {max_date})")
 
         except Exception:
@@ -4022,7 +4043,7 @@ if response.status_code == 200:
                 self.__log_warning(bundle.get("current_date_added"))
             df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
             search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
-            converter = DateTimeSearchKeyConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
+            converter = DateTimeConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
             df = converter.convert(df)
         return df
 
@@ -4153,8 +4174,8 @@ if response.status_code == 200:
             "__target",
             ENTITY_SYSTEM_RECORD_ID,
         ]
-        if DateTimeSearchKeyConverter.DATETIME_COL in df.columns:
-            date_column = DateTimeSearchKeyConverter.DATETIME_COL
+        if DateTimeConverter.DATETIME_COL in df.columns:
+            date_column = DateTimeConverter.DATETIME_COL
             sort_exclude_columns.append(FeaturesEnricher._get_date_column(search_keys))
         else:
             date_column = FeaturesEnricher._get_date_column(search_keys)

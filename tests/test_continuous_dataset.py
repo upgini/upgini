@@ -6,7 +6,7 @@ import pytest
 
 from upgini.ads import FileColumnMeaningType
 from upgini.dataset import Dataset
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -34,7 +34,7 @@ def test_continuous_dataset(datafiles, etalon_definition: Dict[str, FileColumnMe
     df = df.reset_index().rename(columns={"index": "system_record_id", "score": "target"})
     del etalon_definition["score"]
     etalon_definition["target"] = FileColumnMeaningType.TARGET
-    converter = DateTimeSearchKeyConverter("rep_date")
+    converter = DateTimeConverter("rep_date")
     df = converter.convert(df)
     ds = Dataset(
         dataset_name="test Dataset",  # type: ignore
