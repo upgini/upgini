@@ -1748,6 +1748,8 @@ class FeaturesEnricher(TransformerMixin):
                 + [DateTimeSearchKeyConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
+        if self.baseline_score_column is not None and self.baseline_score_column not in client_features:
+            client_features.append(self.baseline_score_column)
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
 
         selected_enriched_features = [c for c in self.feature_names_ if c not in client_features]
@@ -2926,6 +2928,7 @@ if response.status_code == 200:
                 or c in self.search_keys
                 or c in (self.id_columns or [])
                 or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
+                or c == self.baseline_score_column
             ]
         else:
             selected_input_columns = []
