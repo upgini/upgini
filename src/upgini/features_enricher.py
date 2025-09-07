@@ -788,6 +788,8 @@ class FeaturesEnricher(TransformerMixin):
             if new_progress:
                 progress_bar.display()
         trace_id = trace_id or time.time_ns()
+        if self.print_trace_id:
+            print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
         with MDC(correlation_id=trace_id, search_id=search_id):
             self.dump_input(trace_id, X)
@@ -1477,7 +1479,11 @@ class FeaturesEnricher(TransformerMixin):
 
         self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
 
-        unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
+        unstable_by_sparsity = [
+            feature
+            for feature, psi in psi_values_sparse.items()
+            if psi > stability_threshold and feature != self.baseline_score_column
+        ]
         if unstable_by_sparsity:
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
@@ -1487,7 +1493,11 @@ class FeaturesEnricher(TransformerMixin):
 
         self.logger.info(f"PSI values by value: {psi_values}")
 
-        unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
+        unstable_by_value = [
+            feature
+            for feature, psi in psi_values.items()
+            if psi > stability_threshold and feature != self.baseline_score_column
+        ]
         if unstable_by_value:
             self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
 
@@ -1744,6 +1754,8 @@ class FeaturesEnricher(TransformerMixin):
                 + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
+        if self.baseline_score_column is not None and self.baseline_score_column not in client_features:
+            client_features.append(self.baseline_score_column)
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
 
         selected_enriched_features = [c for c in self.feature_names_ if c not in client_features]

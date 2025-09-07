@@ -84,6 +84,7 @@ class DateTimeConverter:
         return parsed is not None and not parsed.isna().all()
 
     def parse_datetime(self, df: pd.DataFrame, raise_errors=True) -> pd.Series | None:
+        df = df.copy()
         if len(df) == 0 or df[self.date_column].isna().all():
             return None
 
