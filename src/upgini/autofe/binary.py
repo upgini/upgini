@@ -1,5 +1,6 @@
 import abc
 from typing import Optional
+
 import Levenshtein
 import numpy as np
 import pandas as pd
@@ -201,7 +202,7 @@ class JaroWinklerSim1(StringSim):
     has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
-        return value
+        return value if value is not None and len(value) > 0 else None
 
     def _similarity(self, left: str, right: str) -> float:
         return jarowinkler_similarity(left, right)
@@ -216,7 +217,7 @@ class JaroWinklerSim2(StringSim):
     has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
-        return value[::-1] if value is not None else None
+        return value[::-1] if value is not None and len(value) > 0 else None
 
     def _similarity(self, left: str, right: str) -> float:
         return jarowinkler_similarity(left, right)
@@ -231,7 +232,7 @@ class LevenshteinSim(StringSim):
     has_symmetry_importance: bool = True
 
     def _prepare_value(self, value: Optional[str]) -> Optional[str]:
-        return value
+        return value if value is not None and len(value) > 0 else None
 
     def _similarity(self, left: str, right: str) -> float:
         return 1 - Levenshtein.distance(left, right) / max(len(left), len(right))

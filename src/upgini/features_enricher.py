@@ -1482,7 +1482,7 @@ class FeaturesEnricher(TransformerMixin):
         unstable_by_sparsity = [
             feature
             for feature, psi in psi_values_sparse.items()
-            if psi > stability_threshold and feature != self.baseline_score_column
+            if psi > stability_threshold
         ]
         if unstable_by_sparsity:
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
@@ -1496,7 +1496,7 @@ class FeaturesEnricher(TransformerMixin):
         unstable_by_value = [
             feature
             for feature, psi in psi_values.items()
-            if psi > stability_threshold and feature != self.baseline_score_column
+            if psi > stability_threshold
         ]
         if unstable_by_value:
             self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
