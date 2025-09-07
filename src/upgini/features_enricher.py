@@ -2947,6 +2947,7 @@ if response.status_code == 200:
                 or c in self.search_keys
                 or c in (self.id_columns or [])
                 or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
+                or c == self.baseline_score_column
             ]
         else:
             selected_input_columns = []
