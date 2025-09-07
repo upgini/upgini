@@ -36,6 +36,7 @@ class FileColumnMeaningType(Enum):
     SCORE = "SCORE"
     TARGET = "TARGET"
     FEATURE = "FEATURE"
+    DATE_FEATURE = "DATE_FEATURE"
     CUSTOM_KEY = "CUSTOM_KEY"
     COUNTRY = "COUNTRY"
     POSTAL_CODE = "POSTAL_CODE"

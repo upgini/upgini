@@ -25,7 +25,7 @@ from upgini.metadata import (
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils import find_numbers_with_decimal_comma
 from upgini.utils.country_utils import CountrySearchKeyConverter
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyConverter
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
@@ -89,7 +89,7 @@ class Normalizer:
                 SYSTEM_RECORD_ID,
                 ENTITY_SYSTEM_RECORD_ID,
                 SEARCH_KEY_UNNEST,
-                DateTimeSearchKeyConverter.DATETIME_COL,
+                DateTimeConverter.DATETIME_COL,
             ]:
                 self.columns_renaming[column] = column
                 new_columns.append(column)

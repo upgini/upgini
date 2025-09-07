@@ -14,7 +14,7 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.target_utils import define_task
 
 
@@ -104,7 +104,7 @@ def remove_fintech_duplicates(
         sub_df = pd.merge(sub_df, nonunique_target_rows, on=personal_cols)
 
         # Convert date columns for further checks
-        sub_df = DateTimeSearchKeyConverter(
+        sub_df = DateTimeConverter(
             date_col, date_format=date_format, logger=logger, bundle=bundle, generate_cyclical_features=False
         ).convert(sub_df)
         grouped_by_personal_cols = sub_df.groupby(personal_cols, group_keys=False)

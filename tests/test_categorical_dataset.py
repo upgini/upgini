@@ -3,9 +3,9 @@ import os
 import pandas as pd
 import pytest
 
-from upgini.dataset import Dataset
 from upgini.ads import FileColumnMeaningType
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.dataset import Dataset
+from upgini.utils.datetime_utils import DateTimeConverter
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -31,7 +31,7 @@ def etalon_search_keys():
 def test_categorical_dataset(datafiles, etalon_definition, etalon_search_keys):
     df = pd.read_csv(datafiles / "data.csv.gz")
     df = df.reset_index().rename(columns={"index": "system_record_id"})
-    converter = DateTimeSearchKeyConverter("rep_date")
+    converter = DateTimeConverter("rep_date")
     df = converter.convert(df)
     ds = Dataset(
         dataset_name="test Dataset",  # type: ignore

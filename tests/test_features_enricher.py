@@ -29,7 +29,7 @@ from upgini.metadata import (
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
-from upgini.utils.datetime_utils import DateTimeSearchKeyConverter
+from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.sample_utils import SampleConfig
 
 from .utils import (
@@ -475,7 +475,10 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info.csv"), index=False  # noqa: E501
+            os.path.join(
+                FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info.csv"
+            ),
+            index=False,  # noqa: E501
         )
 
     expected_features_info = pd.read_csv(
@@ -500,21 +503,32 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     metrics = enricher.calculate_metrics()
 
     if update_metrics_flag:
-        metrics.to_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv"), index=False)  # noqa: E501
+        metrics.to_csv(
+            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv"),
+            index=False,
+        )  # noqa: E501
 
-    expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv"))  # noqa: E501
+    expected_metrics = pd.read_csv(
+        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_metrics.csv")
+    )  # noqa: E501
 
     assert metrics is not None
     assert_frame_equal(expected_metrics, metrics, atol=1e-6)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
-            os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv"),  # noqa: E501
+            os.path.join(
+                FIXTURE_DIR,
+                "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv",
+            ),  # noqa: E501
             index=False,
         )
 
     expected_features_info = pd.read_csv(
-        os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv")  # noqa: E501
+        os.path.join(
+            FIXTURE_DIR,
+            "test_features_enricher/test_features_enricher_without_external_features_info_after_metrics.csv",
+        )  # noqa: E501
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     expected_features_info["Provider"] = expected_features_info["Provider"].astype("string")
@@ -2751,7 +2765,7 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
     )
 
     mock_features = pd.read_parquet(path_to_mock_features)
-    converter = DateTimeSearchKeyConverter("rep_date")
+    converter = DateTimeConverter("rep_date")
     df_with_eval_set_index_with_date = converter.convert(df_with_eval_set_index)
     search_keys_copy = search_keys.copy()
     normalizer = Normalizer()

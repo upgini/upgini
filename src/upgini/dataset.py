@@ -151,7 +151,9 @@ class Dataset:
     def etalon_def_checked(self) -> Dict[str, str]:
         if self.etalon_def is None:
             self.etalon_def = {
-                v.value: k for k, v in self.meaning_types_checked.items() if v != FileColumnMeaningType.FEATURE
+                v.value: k
+                for k, v in self.meaning_types_checked.items()
+                if v not in [FileColumnMeaningType.FEATURE, FileColumnMeaningType.DATE_FEATURE]
             }
 
         return self.etalon_def
