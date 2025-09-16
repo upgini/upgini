@@ -1479,11 +1479,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
 
-        unstable_by_sparsity = [
-            feature
-            for feature, psi in psi_values_sparse.items()
-            if psi > stability_threshold
-        ]
+        unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
         if unstable_by_sparsity:
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
@@ -1493,11 +1489,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.logger.info(f"PSI values by value: {psi_values}")
 
-        unstable_by_value = [
-            feature
-            for feature, psi in psi_values.items()
-            if psi > stability_threshold
-        ]
+        unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
         if unstable_by_value:
             self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
 
@@ -2749,8 +2741,13 @@ if response.status_code == 200:
 
             meaning_types = {}
             meaning_types.update(
-                {col: FileColumnMeaningType.FEATURE for col in features_for_transform if col not in date_features}
+                {
+                    col: FileColumnMeaningType.FEATURE
+                    for col in features_for_transform
+                    if col not in date_features and col not in generated_features
+                }
             )
+            meaning_types.update({col: FileColumnMeaningType.GENERATED_FEATURE for col in generated_features})
             meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
             meaning_types.update({col: key.value for col, key in search_keys.items()})
 
@@ -3304,9 +3301,10 @@ if response.status_code == 200:
             **{
                 str(c): FileColumnMeaningType.FEATURE
                 for c in df.columns
-                if c not in non_feature_columns and c not in date_features
+                if c not in non_feature_columns and c not in date_features and c not in self.fit_generated_features
             },
         }
+        meaning_types.update({col: FileColumnMeaningType.GENERATED_FEATURE for col in self.fit_generated_features})
         meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
         meaning_types[self.TARGET_NAME] = FileColumnMeaningType.TARGET
         meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
@@ -3368,7 +3366,12 @@ if response.status_code == 200:
         self.passed_features = [
             column
             for column, meaning_type in meaning_types.items()
-            if meaning_type in [FileColumnMeaningType.FEATURE, FileColumnMeaningType.DATE_FEATURE]
+            if meaning_type
+            in [
+                FileColumnMeaningType.FEATURE,
+                FileColumnMeaningType.DATE_FEATURE,
+                FileColumnMeaningType.GENERATED_FEATURE,
+            ]
         ]
 
         self._search_task = dataset.search(
@@ -4433,7 +4436,9 @@ if response.status_code == 200:
             raise Exception(self.bundle.get("missing_features_meta"))
         features_meta = deepcopy(features_meta)
 
-        original_names_dict = {c.name: c.originalName for c in self._search_task.get_file_metadata(trace_id).columns}
+        file_metadata_columns = self._search_task.get_file_metadata(trace_id).columns
+        file_meta_by_orig_name = {c.originalName: c for c in file_metadata_columns}
+        original_names_dict = {c.name: c.originalName for c in file_metadata_columns}
         features_df = self._search_task.get_all_initial_raw_features(trace_id, metrics_calculation=True)
 
         # To be sure that names with hash suffixes
@@ -4453,7 +4458,11 @@ if response.status_code == 200:
             original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
             feature_meta.name = original_name
 
-            is_client_feature = original_name in clients_features_df.columns
+            file_meta = file_meta_by_orig_name.get(original_name)
+            is_generated_feature = (
+                file_meta is not None and file_meta.meaningType == FileColumnMeaningType.GENERATED_FEATURE
+            )
+            is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
 
             if selected_features is not None and feature_meta.name not in selected_features:
                 self.logger.info(f"Feature {feature_meta.name} is not selected before and skipped")
@@ -4476,9 +4485,13 @@ if response.status_code == 200:
 
         for feature_meta in selected_features_meta:
             original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
-            is_client_feature = original_name in clients_features_df.columns
+            file_meta = file_meta_by_orig_name.get(original_name)
+            is_generated_feature = (
+                file_meta is not None and file_meta.meaningType == FileColumnMeaningType.GENERATED_FEATURE
+            )
+            is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
 
-            if not is_client_feature:
+            if not is_client_feature and not is_generated_feature:
                 self.external_source_feature_names.append(original_name)
 
             if self.psi_values is not None:
@@ -4509,9 +4522,10 @@ if response.status_code == 200:
 
             self.feature_names_.append(feature_meta.name)
             self.feature_importances_.append(_round_shap_value(feature_meta.shap_value))
-
             df_for_sample = features_df if feature_meta.name in features_df.columns else clients_features_df
-            feature_info = FeatureInfo.from_metadata(feature_meta, df_for_sample, is_client_feature)
+            feature_info = FeatureInfo.from_metadata(
+                feature_meta, df_for_sample, is_client_feature, is_generated_feature
+            )
             features_info.append(feature_info.to_row(self.bundle))
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
             internal_features_info.append(feature_info.to_internal_row(self.bundle))
@@ -4522,7 +4536,7 @@ if response.status_code == 200:
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
             # If all psi values are 0 or null, drop psi column
-            if self.features_info[self.bundle.get("features_info_psi")].fillna(0.0).eq(0.0).all():
+            if self.features_info[self.bundle.get("features_info_psi")].astype(np.float64).fillna(0.0).eq(0.0).all():
                 self.features_info.drop(columns=[self.bundle.get("features_info_psi")], inplace=True)
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)

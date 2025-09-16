@@ -372,14 +372,14 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -3767,7 +3767,9 @@ def test_unsupported_arguments(requests_mock: Mocker):
             unsupported_key_argument=False,
         )
 
-        enricher.transform(df.drop(columns="target"), "unsupported_positional_argument", unsupported_key_argument=False)
+        enricher.transform(
+            df.drop(columns="target"), df["target"], "unsupported_positional_argument", unsupported_key_argument=False
+        )
 
         with pytest.raises(NoMockAddress):
             enricher.calculate_metrics(

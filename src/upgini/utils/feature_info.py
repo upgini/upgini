@@ -31,7 +31,10 @@ class FeatureInfo:
 
     @staticmethod
     def from_metadata(
-        feature_meta: FeaturesMetadataV2, data: Optional[pd.DataFrame], is_client_feature: bool
+        feature_meta: FeaturesMetadataV2,
+        data: Optional[pd.DataFrame],
+        is_client_feature: bool,
+        is_generated_feature: bool,
     ) -> "FeatureInfo":
         return FeatureInfo(
             name=_get_name(feature_meta),
@@ -41,8 +44,8 @@ class FeatureInfo:
             value_preview=_get_feature_sample(feature_meta, data),
             provider=_get_provider(feature_meta, is_client_feature),
             internal_provider=_get_internal_provider(feature_meta, is_client_feature),
-            source=_get_source(feature_meta, is_client_feature),
-            internal_source=_get_internal_source(feature_meta, is_client_feature),
+            source=_get_source(feature_meta, is_client_feature, is_generated_feature),
+            internal_source=_get_internal_source(feature_meta, is_client_feature, is_generated_feature),
             update_frequency=feature_meta.update_frequency,
             commercial_schema=feature_meta.commercial_schema,
             doc_link=feature_meta.doc_link,
@@ -139,22 +142,30 @@ def _get_internal_provider(feature_meta: FeaturesMetadataV2, is_client_feature: 
         return "" if is_client_feature else (feature_meta.data_provider or "Upgini")
 
 
-def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> str:
+def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool, is_generated_feature: bool) -> str:
+    if is_generated_feature:
+        return "AutoFE: features from Training dataset"
+
     sources = _list_or_single(feature_meta.data_sources, feature_meta.data_source)
     source_links = _list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
     if sources:
         source = _make_links(sources, source_links)
     else:
-        source = _get_internal_source(feature_meta, is_client_feature)
+        source = _get_internal_source(feature_meta, is_client_feature, is_generated_feature)
     return source
 
 
-def _get_internal_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool) -> str:
+def _get_internal_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool, is_generated_feature: bool) -> str:
+    if is_generated_feature:
+        return "AutoFE: features from Training dataset"
+
     sources = _list_or_single(feature_meta.data_sources, feature_meta.data_source)
     if sources:
         return ", ".join(sources)
+    elif feature_meta.data_source:
+        return feature_meta.data_source
     else:
-        return feature_meta.data_source or (
+        return (
             LLM_SOURCE
             if not feature_meta.name.endswith("_country")
             and not feature_meta.name.endswith("_postal_code")

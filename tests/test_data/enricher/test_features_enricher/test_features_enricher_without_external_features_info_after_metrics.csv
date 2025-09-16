@@ -1,4 +1,4 @@
 Feature name,SHAP value,Coverage %,Value preview,Provider,Source,Updates
 client_feature,0.0134,100.0,"1, 2, 4",,,
-datetime_day_in_quarter_cos,0.0039,100.0,"-0.6157, -0.5, -0.4601",,,
-datetime_day_in_quarter_sin,0.0026,100.0,"0.788, -0.866, -0.8879",,,
+datetime_day_in_quarter_cos,0.0039,100.0,"-0.6157, -0.5, -0.4601",<a href='https://upgini.com' target='_blank' rel='noopener noreferrer'>Upgini</a>,AutoFE: features from Training dataset,
+datetime_day_in_quarter_sin,0.0026,100.0,"0.788, -0.866, -0.8879",<a href='https://upgini.com' target='_blank' rel='noopener noreferrer'>Upgini</a>,AutoFE: features from Training dataset,
