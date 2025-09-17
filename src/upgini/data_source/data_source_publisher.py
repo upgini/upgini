@@ -123,17 +123,9 @@ class DataSourcePublisher:
                     set(search_keys.values()) == {SearchKey.IP_RANGE_FROM, SearchKey.IP_RANGE_TO}
                     or set(search_keys.values()) == {SearchKey.IPV6_RANGE_FROM, SearchKey.IPV6_RANGE_TO}
                     or set(search_keys.values()) == {SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO}
+                    or snapshot_frequency_days is not None or join_date_abs_limit_days is not None
                 ) and sort_column is None:
                     raise ValidationError("Sort column is required for passed search keys")
-                if (
-                    set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
-                    and snapshot_frequency_days is None
-                    and join_date_abs_limit_days is None
-                ):
-                    raise ValidationError(
-                        "With MSISDN and DATE keys one of the snapshot_frequency_days or"
-                        " join_date_abs_limit_days parameters is required"
-                    )
                 if (
                     set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
                     or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}

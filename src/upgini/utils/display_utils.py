@@ -339,17 +339,54 @@ def show_button_download_pdf(
             return display(HTML(html), display_id=display_id)
 
 
-def show_request_quote_button():
+def show_request_quote_button(is_registered: bool):
     if not ipython_available():
-        print("https://upgini.com/request-a-quote")
+        if is_registered:
+            print("https://upgini.com/request-a-quote")
+        else:
+            print("https://profile.upgini.com/login")
     else:
-        import ipywidgets as widgets
-        from IPython.display import Javascript, display
+        from IPython.display import HTML, display, Javascript
+        from ipywidgets import Layout, Button
 
-        button = widgets.Button(description="Request a quote", button_style="danger")
+        if is_registered:
+            display(HTML("""
+                <style>
+                    button.custom-button {
+                        border: 1px solid black !important;
+                        background: white !important;
+                        color: black !important;
+                        white-space: nowrap;
+                    }
+                </style>
+            """))
+            description = "Request a quote"
+            tooltip = "Ask a quote"
+            url = "https://upgini.com/request-a-quote"
+        else:
+            display(HTML("""
+                <style>
+                    button.custom-button {
+                        border: 1px solid #d00 !important;
+                        background: #fff !important;
+                        color: #d00 !important;
+                        white-space: nowrap;
+                    }
+                </style>
+            """))
+            description = "Get an API KEY"
+            tooltip = "Register"
+            url = "https://profile.upgini.com/login"
+
+        button = Button(
+            description=description,
+            layout=Layout(width='auto'),
+            tooltip=tooltip
+        )
+        button.add_class("custom-button")
 
         def on_button_clicked(b):
-            display(Javascript('window.open("https://upgini.com/request-a-quote");'))
+            display(Javascript('window.open("' + url + '");'))
 
         button.on_click(on_button_clicked)
 

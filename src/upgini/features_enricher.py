@@ -2553,10 +2553,15 @@ if response.status_code == 200:
                 if transform_usage.has_limit:
                     if len(X) > transform_usage.rest_rows:
                         rest_rows = max(transform_usage.rest_rows, 0)
-                        msg = self.bundle.get("transform_usage_warning").format(len(X), rest_rows)
+                        bundle_msg = (
+                            "transform_usage_warning_registered"
+                            if self.__is_registered
+                            else "transform_usage_warning_demo"
+                        )
+                        msg = self.bundle.get(bundle_msg).format(len(X), rest_rows)
                         self.logger.warning(msg)
                         print(msg)
-                        show_request_quote_button()
+                        show_request_quote_button(is_registered=self.__is_registered)
                         return None, {}, [], {}
                     else:
                         msg = self.bundle.get("transform_usage_info").format(
