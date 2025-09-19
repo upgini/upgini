@@ -3,7 +3,7 @@
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> : Free automated data enrichment library for machine learning: </br>only the accuracy improving features in 2 minutes </h2> -->
 <!-- <h2 align="center"> <a href="https://upgini.com/">Upgini</a> • Free production-ready automated data enrichment library for machine learning</h2>--> 
 <h2 align="center"> <a href="https://upgini.com/">Upgini • Intelligent data search & enrichment for Machine Learning and AI</a></h2>
-<p align="center"> <b>Easily find and add relevant features to your ML & AI pipeline from</br> hundreds of public, community and premium external data sources, </br>including open & commercial LLMs</b> </p>
+<p align="center"> <b>Easily find and add relevant features to your ML & AI pipeline from</br> hundreds of public, community, and premium external data sources, </br>including open & commercial LLMs</b> </p>
 <p align="center">
 	<br />
     <a href="https://colab.research.google.com/github/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb"><strong>Quick Start in Colab »</strong></a> |
@@ -11,7 +11,7 @@
     <a href="https://profile.upgini.com">Register / Sign In</a> |
     <!-- <a href="https://gitter.im/upgini/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link">Gitter Community</a> | -->
     <a href="https://4mlg.short.gy/join-upgini-community">Slack Community</a> |
-    <a href="https://forms.gle/pH99gb5hPxBEfNdR7"><strong>Propose new Data source</strong></a>
+    <a href="https://forms.gle/pH99gb5hPxBEfNdR7"><strong>Propose a new data source</strong></a>
  </p>
 <p align=center>
 <a href="/LICENSE"><img alt="BSD-3 license" src="https://img.shields.io/badge/license-BSD--3%20Clause-green"></a>
@@ -27,19 +27,19 @@
 [![Gitter Сommunity](https://img.shields.io/badge/gitter-@upgini-teal.svg?logo=gitter)](https://gitter.im/upgini/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) -->
 ## ❔ Overview
 
-**Upgini** is an intelligent data search engine with a Python library that helps you find and add relevant features to your ML pipeline from hundreds of public, community, and premium external data sources. Under the hood, Upgini automatically optimizes all connected data sources by [generating an optimal set of machine ML features using large language models (LLMs), GraphNNs and recurrent neural networks (RNNs)](https://upgini.com/#optimized_external_data).   
+**Upgini** is an intelligent data search engine with a Python library that helps you find and add relevant features to your ML pipeline from hundreds of public, community, and premium external data sources. Under the hood, Upgini automatically optimizes all connected data sources by [generating an optimal set of ML features using large language models (LLMs), GNNs (graph neural networks), and recurrent neural networks (RNNs)](https://upgini.com/#optimized_external_data).   
 
-**Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient enrichment tools for external data blocks massive adoption of external features in ML pipelines. We want radically simplify features search and enrichment to make external data a standard approach. Like a hyperparameter tuning for machine learning nowadays.  
+**Motivation:** for most supervised ML models external data & features boost accuracy significantly better than any hyperparameters tuning. But lack of automated and time-efficient enrichment tools for external data blocks massive adoption of external features in ML pipelines. We want to radically simplify feature search and enrichment to make external data a standard approach. Like hyperparameter tuning in machine learning today.  
 
 **Mission:** Democratize access to data sources for data science community.   
 
 ## 🚀 Awesome features
-⭐️ Automatically find only relevant features that *give accuracy improvement for ML model*. Not just correlated with target variable, what 9 out of 10 cases gives zero accuracy improvement  
-⭐️ Automated feature generation from the sources: feature generation with Large Language Models' data augmentation, RNNs, GraphNN; multiple data source ensembling  
-⭐️ Automatic search key augmentation from all connected sources. If you do not have all search keys in your search request, such as postal/zip code, Upgini will try to add those keys based on the provided set of search keys. This will broaden the search across all available data sources   
-⭐️ Calculate accuracy metrics and uplifts after enrichment existing ML model with external features   
-⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate risks of unstable external data dependencies in ML pipeline   
-⭐️ Easy to use - single request to enrich training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
+⭐️ Automatically find only relevant features that *improve your model’s accuracy*. Not just correlated with the target variable, which in 9 out of 10 cases yields zero accuracy improvement  
+⭐️ Automated feature generation from the sources: feature generation with LLM‑based data augmentation, RNNs, and GraphNNs; ensembling across multiple data sources  
+⭐️ Automatic search key augmentation from all connected sources. If you do not have all search keys in your search request, such as postal/ZIP code, Upgini will try to add those keys based on the provided set of search keys. This will broaden the search across all available data sources   
+⭐️ Calculate accuracy metrics and uplift after enriching an existing ML model with external features   
+⭐️ Check the stability of accuracy gain from external data on out-of-time intervals and verification datasets. Mitigate the risks of unstable external data dependencies in the ML pipeline   
+⭐️ Easy to use - a single request to enrich the training dataset with [*all of the keys at once*](#-search-key-types-we-support-more-to-come):  
 <table>
   <tr>
     <td> date / datetime </td>
@@ -55,7 +55,7 @@
   </tr>
 </table>
 
-⭐️ Scikit-learn compatible interface for quick data integration with existing ML pipelines  
+⭐️ Scikit-learn-compatible interface for quick data integration with existing ML pipelines  
 ⭐️ Support for most common supervised ML tasks on tabular data:  
 <table>
   <tr>
@@ -64,7 +64,7 @@
   </tr>
   <tr>
     <td><a href="https://en.wikipedia.org/wiki/Regression_analysis">☑️ regression</a></td>
-    <td><a href="https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting">☑️ time series prediction</a></td>
+    <td><a href="https://en.wikipedia.org/wiki/Time_series#Prediction_and_forecasting">☑️ time-series prediction</a></td>
   </tr>
 </table>   
 
@@ -76,13 +76,13 @@
 
 ## 🌎 Connected data sources and coverage
 
-- **Public data** : public sector, academic institutions, other sources through open data portals. Curated and updated by the Upgini team  
-- **Community shared data**: royalty / license free datasets or features from Data science community (our users). It's both a public and a scraped data  
+- **Public data**: public sector, academic institutions, other sources through open data portals. Curated and updated by the Upgini team  
+- **Community‑shared data**: royalty- or license-free datasets or features from the data science community (our users). This includes both public and scraped data  
 - **Premium data providers**: commercial data sources verified by the Upgini team in real-world use cases  
 
-👉 [**Details on  datasets and features**](https://upgini.com/#data_sources) 
+👉 [**Details on datasets and features**](https://upgini.com/#data_sources) 
 #### 📊 Total: **239 countries** and **up to 41 years** of history
-|Data sources|Countries|History, years|# sources for ensemble|Update|Search keys|API Key required
+|Data sources|Countries|History (years)|# sources for ensembling|Update frequency|Search keys|API Key required
 |--|--|--|--|--|--|--|
 |Historical weather & Climate normals | 68 |22|-|Monthly|date, country, postal/ZIP code|No
 |Location/Places/POI/Area/Proximity information from OpenStreetMap | 221 |2|-|Monthly|date, country, postal/ZIP code|No
@@ -90,7 +90,7 @@
 |Consumer Confidence index| 44 |22|-|Monthly|date, country|No
 |World economic indicators|191 |41|-|Monthly|date, country|No
 |Markets data|-|17|-|Monthly|date, datetime|No
-|World mobile & fixed broadband network coverage and performance |167|-|3|Monthly|country, postal/ZIP code|No
+|World mobile & fixed-broadband network coverage and performance |167|-|3|Monthly|country, postal/ZIP code|No
 |World demographic data |90|-|2|Annual|country, postal/ZIP code|No
 |World house prices |44|-|3|Annual|country, postal/ZIP code|No
 |Public social media profile data |104|-|-|Monthly|date, email/HEM, phone |Yes
@@ -105,8 +105,8 @@
 
 ###  [Search of relevant external features & Automated feature generation for Salary prediction task (use as a template)](https://github.com/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb)
 
-* The goal is to predict salary for data science job postning based on information about employer and job description.
-* Following this guide, you'll learn how to **search & auto generate new relevant features with Upgini library**
+* The goal is to predict salary for a data science job posting based on information about the employer and job description.
+* Following this guide, you'll learn how to **search and auto‑generate new relevant features with the Upgini library**
 * The evaluation metric is [Mean Absolute Error (MAE)](https://en.wikipedia.org/wiki/Mean_absolute_error).
  
 Run [Feature search & generation notebook](https://github.com/upgini/upgini/blob/main/notebooks/Upgini_Features_search%26generation.ipynb) inside your browser:
@@ -121,7 +121,7 @@ Run [Feature search & generation notebook](https://github.com/upgini/upgini/blob
 ### ❓ [Simple sales prediction for retail stores](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb)
 
 * The goal is to **predict future sales of different goods in stores** based on a 5-year history of sales.     
-* Kaggle Competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only) is a product sales forecasting. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). 
+* Kaggle Competition [Store Item Demand Forecasting Challenge](https://www.kaggle.com/c/demand-forecasting-kernels-only) is a product sales forecasting competition. The evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error). 
 
 Run [Simple sales prediction for retail stores](https://github.com/upgini/upgini/blob/main/notebooks/kaggle_example.ipynb) inside your browser:
 
@@ -133,25 +133,25 @@ Run [Simple sales prediction for retail stores](https://github.com/upgini/upgini
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->    
 
-### ❓ [How to boost ML model accuracy for Kaggle TOP1 Leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### ❓ [How to boost ML model accuracy for Kaggle Top-1 leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
 
-* The goal is **accuracy improvement for TOP1 winning Kaggle solution** from new relevant external features & data.  
-* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
+* The goal is **to improve a Top‑1 winning Kaggle solution** by adding new relevant external features and data.  
+* [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting competition; the evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
 
 ### ❓ [How to do low-code feature engineering for AutoML tools](https://www.kaggle.com/code/romaupgini/zero-feature-engineering-with-upgini-pycaret/notebook)
 
 * **Save time on feature search and engineering**. Use ready-to-use external features and data sources to maximize overall AutoML accuracy, right out of the box.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
-* Low-code AutoML tools: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
+* Low-code AutoML frameworks: [Upgini](https://github.com/upgini/upgini) and [PyCaret](https://github.com/pycaret/pycaret)
 
-### ❓ [How to improve accuracy of Multivariate Time Series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
+### ❓ [How to improve accuracy of Multivariate time-series forecast from external features & data](https://www.kaggle.com/code/romaupgini/guide-external-data-features-for-multivariatets/notebook)
 
-* The goal is **accuracy improvement of Multivariate Time Series prediction** from new relevant external features & data.  The main challenge here is a strategy of data & feature enrichment, when a component of Multivariate TS depends not only on its past values but also has **some dependency on other components**.  
+* The goal is **to improve the accuracy of multivariate time‑series forecasting** using new relevant external features and data. The main challenge is the data and feature enrichment strategy, in which a component of a multivariate time series depends not only on its past values but also on other components.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting, evaluation metric is [RMSLE](https://www.kaggle.com/code/carlmcbrideellis/store-sales-using-the-average-of-the-last-16-days#Note-regarding-calculating-the-average). 
 
 ### ❓ [How to speed up feature engineering hypothesis tests with ready-to-use external features](https://www.kaggle.com/code/romaupgini/statement-dates-to-use-or-not-to-use/notebook)
 
-*  **Save time on external data wrangling and feature calculation code** for hypothesis tests. The key challenge here is a time-dependent representation of information in a training dataset, which is uncommon for credit default prediction tasks. As a result, special data enrichment strategy is used.   
+*  **Save time on external data wrangling and feature calculation code** for hypothesis tests. The key challenge is the time‑dependent representation of information in the training dataset, which is uncommon for credit default prediction tasks. As a result, special data enrichment strategy is used.   
 * [Kaggle Competition](https://www.kaggle.com/competitions/amex-default-prediction) is a credit default prediction, evaluation metric is [normalized Gini coefficient](https://www.kaggle.com/competitions/amex-default-prediction/discussion/327464).
 
 ## 🏁 Quick start 
@@ -180,19 +180,19 @@ docker build -t upgini .</i></br>
 <i>
 docker run -p 8888:8888 upgini</br>
 </i></br>
-3. Open http://localhost:8888?token="<"your_token_from_console_output">" in your browser  
+3. Open http://localhost:8888?token=&lt;your_token_from_console_output&gt; in your browser  
 </details>
 
 
 ### 2. 💡 Use your labeled training dataset for search
 
 You can use your labeled training datasets "as is" to initiate the search. Under the hood, we'll search for relevant data using:
-- **[search keys](#-search-key-types-we-support-more-to-come)** from training dataset to match records from potential data sources with a new features
-- **labels** from training dataset to estimate relevancy of feature or dataset for your ML task and calculate feature importance metrics  
-- **your features** from training dataset to find external datasets and features which only give accuracy improvement to your existing data and estimate accuracy uplift ([optional](#find-features-only-give-accuracy-gain-to-existing-data-in-the-ml-model))  
+- **[search keys](#-search-key-types-we-support-more-to-come)** from the training dataset to match records from potential data sources with new features
+- **labels** from the training dataset to estimate the relevance of features or datasets for your ML task and calculate feature importance metrics  
+- **your features** from the training dataset to find external datasets and features that improve accuracy of your existing data and estimate accuracy uplift ([optional](#find-features-only-give-accuracy-gain-to-existing-data-in-the-ml-model))  
 
 
-Load training dataset into pandas dataframe and separate features' columns from label column in a Scikit-learn way:  
+Load the training dataset into a Pandas DataFrame and separate feature columns from the label column in a Scikit-learn way:  
 ```python
 import pandas as pd
 # labeled training dataset - customer_churn_prediction_train.csv
@@ -203,7 +203,7 @@ y = train_df["churn_flag"]
 <table border=1 cellpadding=10><tr><td>
 ⚠️  <b>Requirements for search initialization dataset</b>
 <br>
-We do dataset verification and cleaning under the hood, but still there are some requirements to follow:  
+We perform dataset verification and cleaning under the hood, but still there are some requirements to follow:  
 <br>
 1. <b>pandas.DataFrame</b>, <b>pandas.Series</b> or <b>numpy.ndarray</b> representation;  
 <br>
@@ -211,12 +211,12 @@ We do dataset verification and cleaning under the hood, but still there are some
 <br>
 3. at least one column selected as a <a href="#-search-key-types-we-support-more-to-come">search key</a>;
 <br>
-4. min size after deduplication by search key column and NaNs removal: <i>100 records</i>
+4. min size after deduplication by search-key columns and removal of NaNs: <i>100 records</i>
 </td></tr></table>
 
-### 3. 🔦 Choose one or multiple columns as a search keys
-*Search keys* columns will be used to match records from all potential external data sources / features.   
-Define one or multiple columns as a search keys with `FeaturesEnricher` class initialization.  
+### 3. 🔦 Choose one or more columns as search keys
+*Search keys* columns will be used to match records from all potential external data sources/features.   
+Define one or more columns as search keys when initializing the `FeaturesEnricher` class.
 ```python
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SearchKey
@@ -236,7 +236,7 @@ enricher = FeaturesEnricher(
   <tr>
     <th> Search Key<br/>Meaning Type </th>
     <th> Description </th>
-    <th> Allowed pandas dtypes (python types) </th>
+    <th> Allowed pandas dtypes (Python types) </th>
     <th> Example </th>
   </tr>
   <tr>
@@ -253,13 +253,13 @@ enricher = FeaturesEnricher(
   </tr>
   <tr>
     <td> SearchKey.IP </td>
-    <td> IP address (version 4) </td>
-    <td> <tt>object(str, ipaddress.IPv4Address)</tt> <br/> <tt>string</tt> <br/> <tt>int64</tt> </td>
+    <td> IPv4 or IPv6 address</td>
+    <td> <tt>object(str, ipaddress.IPv4Address, ipaddress.IPv6Address)</tt> <br/> <tt>string</tt> <br/> <tt>int64</tt> </td>
     <td> <tt>192.168.0.1 </tt> </td>
   </tr>
   <tr>
     <td> SearchKey.PHONE </td>
-    <td> phone number, <a href="https://en.wikipedia.org/wiki/E.164">E.164 standard</a> </td>
+    <td> phone number (<a href="https://en.wikipedia.org/wiki/E.164">E.164 standard</a>) </td>
     <td> <tt>object(str)</tt> <br/> <tt>string</tt> <br/> <tt>int64</tt> <br/> <tt>float64</tt> </td>
     <td> <tt>443451925138 </tt> </td>
   </tr>
@@ -274,7 +274,7 @@ enricher = FeaturesEnricher(
     </td>
     <td> 
       <tt>2020-02-12 </tt>&nbsp;(<a href="https://en.wikipedia.org/wiki/ISO_8601">ISO-8601 standard</a>) 
-      <br/> <tt>12.02.2020 </tt>&nbsp;(non standard notation) 
+      <br/> <tt>12.02.2020 </tt>&nbsp;(non‑standard notation) 
     </td>
   </tr>
   <tr>
@@ -296,7 +296,7 @@ enricher = FeaturesEnricher(
   </tr> 
   <tr>
     <td> SearchKey.POSTAL_CODE </td>
-    <td> Postal code a.k.a. ZIP code. Could be used only with SearchKey.COUNTRY  </td>
+    <td> Postal code a.k.a. ZIP code. Can only be used with SearchKey.COUNTRY </td>
     <td> <tt>object(str)</tt> <br/> <tt>string</tt> </td>
     <td> <tt>21174 </tt> <br/> <tt>061107 </tt> <br/> <tt>SE-999-99 </tt> </td>
   </tr>
@@ -304,7 +304,7 @@ enricher = FeaturesEnricher(
 
 </details>
 
-For the meaning types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with dtypes <tt>object</tt> or <tt>string</tt> you have to clarify date/datetime format by passing <tt>date_format</tt> parameter to `FeaturesEnricher`. For example:
+For the search key types <tt>SearchKey.DATE</tt>/<tt>SearchKey.DATETIME</tt> with dtypes <tt>object</tt> or <tt>string</tt> you have to specify the date/datetime format by passing <tt>date_format</tt> parameter to `FeaturesEnricher`. For example:
 ```python
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SearchKey
@@ -322,12 +322,12 @@ enricher = FeaturesEnricher(
 )
 ```
 
-To use datetime not in UTC timezone, you can cast datetime column explicitly to your timezone (example for Warsaw):
+To use a non-UTC timezone for datetime, you can cast datetime column explicitly to your timezone (example for Warsaw):
 ```python
 df["date"] = df.date.astype("datetime64").dt.tz_localize("Europe/Warsaw")
 ```
 
-Single country for the whole training dataset can be passed with `country_code` parameter:
+A single country for the whole training dataset can be passed via `country_code` parameter:
 ```python
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SearchKey
@@ -343,10 +343,10 @@ enricher = FeaturesEnricher(
 ```
 
 ### 4. 🔍 Start your first feature search!
-The main abstraction you interact is `FeaturesEnricher`, a Scikit-learn compatible estimator.  You can easily add it into your existing ML pipelines. 
-Create instance of the `FeaturesEnricher` class and call:
+The main abstraction you interact with is `FeaturesEnricher`, a Scikit-learn-compatible estimator. You can easily add it to your existing ML pipelines. 
+Create an instance of the `FeaturesEnricher` class and call:
 - `fit` to search relevant datasets & features  
-- than `transform` to enrich your dataset with features from search result  
+- then `transform` to enrich your dataset with features from the search result  
 
 Let's try it out!
 ```python
@@ -359,7 +359,7 @@ train_df = pd.read_csv("customer_churn_prediction_train.csv")
 X = train_df.drop(columns="churn_flag")
 y = train_df["churn_flag"]
 
-# now we're going to create `FeaturesEnricher` class
+# now we're going to create an instance of the `FeaturesEnricher` class
 enricher = FeaturesEnricher(
 	search_keys={
 		"subscription_activation_date": SearchKey.DATE,
@@ -367,15 +367,15 @@ enricher = FeaturesEnricher(
 		"zip_code": SearchKey.POSTAL_CODE
 	})
 
-# everything is ready to fit! For 200к records fitting should take around 10 minutes,
-# we send email notification, just register on profile.upgini.com
+# Everything is ready to fit! For 100k records, fitting should take around 10 minutes
+# We'll send an email notification; just register on profile.upgini.com
 enricher.fit(X, y)
 ```
 
-That's all! We've fit `FeaturesEnricher`. 
+That's it! The `FeaturesEnricher` is now fitted. 
 ### 5. 📈 Evaluate feature importances (SHAP values) from the search result
 
-`FeaturesEnricher` class has two properties for feature importances, which will be filled after fit - `feature_names_` and `feature_importances_`:  
+`FeaturesEnricher` class has two properties for feature importances, that are populated after fit - `feature_names_` and `feature_importances_`:  
 - `feature_names_` -  feature names from the search result, and if parameter `keep_input=True` was used, initial columns from search dataset as well  
 - `feature_importances_` - SHAP values for features from the search result, same order as in `feature_names_`  
 
@@ -386,8 +386,8 @@ enricher.get_features_info()
 Get more details about `FeaturesEnricher` at runtime using docstrings via `help(FeaturesEnricher)` or `help(FeaturesEnricher.fit)`.
 
 ### 6. 🏭 Enrich Production ML pipeline with relevant external features
-`FeaturesEnricher` is a Scikit-learn compatible estimator, so any pandas dataframe can be enriched with external features from a search result (after `fit` ).   
-Use `transform` method of `FeaturesEnricher` , and let magic to do the rest 🪄
+`FeaturesEnricher` is a Scikit-learn-compatible estimator, so any pandas dataframe can be enriched with external features from a search result (after `fit`).   
+Use the `transform` method of `FeaturesEnricher`, and let the magic do the rest 🪄
 ```python
 # load dataset for enrichment
 test_x = pd.read_csv("test.csv")
@@ -396,24 +396,24 @@ enriched_test_features = enricher.transform(test_x)
 ```
  #### 6.1 Reuse completed search for enrichment without 'fit' run
 
-`FeaturesEnricher` can be initiated with a `search_id` parameter from completed search after fit method call.   
+`FeaturesEnricher` can be initialized with `search_id` from a completed search (after a fit call).
 Just use `enricher.get_search_id()` or copy search id string from the `fit()` output.  
-Search keys and features in X should be the same as for `fit()`
+Search keys and features in X must be the same as for `fit()`
 ```python
 enricher = FeaturesEnricher(
-  #same set of a search keys as for the fit step
+  # same set of search keys as for the fit step
   search_keys={"date": SearchKey.DATE},
-  api_key="<YOUR API_KEY>",  # if you fit enricher with api_key then you should use it here
+  api_key="<YOUR API_KEY>",  # if you fitted the enricher with an api_key, then you should use it here
   search_id = "abcdef00-0000-0000-0000-999999999999"
 )
-enriched_prod_dataframe=enricher.transform(input_dataframe)
+enriched_prod_dataframe = enricher.transform(input_dataframe)
 ```
-#### 6.2 Enrichment with an updated external data sources and features
-For most of the ML cases, training step requires labeled dataset with a historical observations from the past. But for production step you'll need an updated and actual data sources and features for the present time, to calculate a prediction.  
-`FeaturesEnricher`, when initiated with set of search keys which includes `SearchKey.DATE`, will match records from all potential external data sources **exactly on a the specific date/datetime** based on `SearchKey.DATE`. To avoid enrichment with features "form the future" for the `fit` step.   
-And then, for `transform` in a production ML pipeline, you'll get enrichment with relevant features, actual for the present date.  
+#### 6.2 Enrichment with updated external data sources and features
+In most ML cases, the training step requires a labeled dataset with historical observations. For production, you'll need updated, current data sources and features to generate predictions.  
+`FeaturesEnricher`, when initialized with a set of search keys that includes `SearchKey.DATE`, will match records from all potential external data sources **exactly on the specified date/datetime** based on `SearchKey.DATE`, to avoid enrichment with features "from the future" during the `fit` step.   
+And then, for `transform` in a production ML pipeline, you'll get enrichment with relevant features, current as of the present date.
 
-⚠️ Initiate `FeaturesEnricher` with `SearchKey.DATE` search key in a key set to get actual features for production and avoid features from the future for the training:
+⚠️ Include `SearchKey.DATE` in the set of search keys to get current features for production and avoid features from the future during training:
 ```python
 enricher = FeaturesEnricher(
 	search_keys={
@@ -427,13 +427,13 @@ enricher = FeaturesEnricher(
 ## 💻 How does it work?
 
 ### 🧹 Search dataset validation
-We validate and clean search initialization dataset under the hood:  
+We validate and clean the search‑initialization dataset under the hood:  
 
- - сheck you **search keys** columns format; 
+ - check your **search keys** columns' formats; 
  - check zero variance for label column; 
- - check dataset for full row duplicates. If we find any, we remove duplicated rows and make a note on share of row duplicates;  
- - check inconsistent labels  - rows with the same features and keys but different labels, we remove them and make a note on share of row duplicates;  
- -  remove columns with zero variance  - we treat any non **search key** column in search dataset as a feature, so columns with zero variance will be removed
+ - check dataset for full row duplicates. If we find any, we remove them and report their share;  
+ - check inconsistent labels  - rows with the same features and keys but different labels, we remove them and report their share;  
+ - remove columns with zero variance - we treat any non **search key** column in the search dataset as a feature, so columns with zero variance will be removed
 
 ### ❔ Supervised ML tasks detection
 We detect ML task under the hood based on label column values. Currently we support:  
@@ -441,7 +441,7 @@ We detect ML task under the hood based on label column values. Currently we supp
   - ModelTaskType.MULTICLASS 
   - ModelTaskType.REGRESSION  
 
-But for certain search datasets you can pass parameter to `FeaturesEnricher` with correct ML taks type:
+But for certain search datasets you can pass parameter to `FeaturesEnricher` with correct ML task type:
 ```python
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SearchKey, ModelTaskType
@@ -451,12 +451,12 @@ enricher = FeaturesEnricher(
 	model_task_type=ModelTaskType.REGRESSION
 )
 ```
-#### ⏰ Time Series prediction support  
-*Time series prediction* supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time series specific cross-validation split:
-* [Scikit-learn time series cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split) - `CVType.time_series` parameter
-* [Blocked time series cross-validation](https://goldinlocks.github.io/Time-Series-Cross-Validation/#Blocked-and-Time-Series-Split-Cross-Validation) - `CVType.blocked_time_series` parameter
+#### ⏰ Time-series prediction support  
+*Time-series prediction* is supported as `ModelTaskType.REGRESSION` or `ModelTaskType.BINARY` tasks with time-series‑specific cross-validation splits:
+* [Scikit-learn time-series cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split) - `CVType.time_series` parameter
+* [Blocked time-series cross-validation](https://goldinlocks.github.io/Time-Series-Cross-Validation/#Blocked-and-Time-Series-Split-Cross-Validation) - `CVType.blocked_time_series` parameter
 
-To initiate feature search you can pass cross-validation type parameter to `FeaturesEnricher` with time series specific CV type:
+To initiate feature search, you can pass the cross-validation type parameter to `FeaturesEnricher` with a time-series‑specific CV type:
 ```python
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SearchKey, CVType
@@ -477,12 +477,12 @@ enricher = FeaturesEnricher(
     cv=CVType.time_series
 )
 ```
-⚠️ **Pre-process search dataset** in case of time series prediction:  
+⚠️ **Preprocess the dataset** in case of time-series prediction:  
 sort rows in dataset according to observation order, in most cases - ascending order by date/datetime.
 
 ### 🆙 Accuracy and uplift metrics calculations
-`FeaturesEnricher` automaticaly calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter in `fit` or `fit_transform` methods (example below).  
-You can use any model estimator with scikit-learn compartible interface, some examples are:
+`FeaturesEnricher` automatically calculates model metrics and uplift from new relevant features either using `calculate_metrics()` method or `calculate_metrics=True` parameter in `fit` or `fit_transform` methods (example below).  
+You can use any model estimator with scikit-learn-compatible interface, some examples are:
 * [All Scikit-Learn supervised models](https://scikit-learn.org/stable/supervised_learning.html)
 * [Xgboost](https://xgboost.readthedocs.io/en/stable/python/python_api.html#module-xgboost.sklearn)
 * [LightGBM](https://lightgbm.readthedocs.io/en/latest/Python-API.html#scikit-learn-api)
@@ -490,8 +490,8 @@ You can use any model estimator with scikit-learn compartible interface, some ex
 
 <details>
 	<summary>
-		👈 Evaluation metric should be passed to <i>calculate_metrics()</i> by <i>scoring</i>  parameter,<br/>   
-		out-of-the box Upgini supports 
+		👈 Evaluation metric should be passed to <i>calculate_metrics()</i> by the <i>scoring</i> parameter,<br/>   
+		out-of-the-box Upgini supports 
 	</summary>
 <table style="table-layout: fixed;">
   <tr>
@@ -598,10 +598,10 @@ You can use any model estimator with scikit-learn compartible interface, some ex
 </table>
 </details>
 
-In addition to that list, you can define custom evaluation metric function using [scikit-learn make_scorer](https://scikit-learn.org/0.15/modules/model_evaluation.html#defining-your-scoring-strategy-from-score-functions), for example [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
+In addition to that list, you can define a custom evaluation metric function using [scikit-learn make_scorer](https://scikit-learn.org/1.7/modules/model_evaluation.html#defining-your-scoring-strategy-from-score-functions), for example [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).
 
-By default, `calculate_metrics()` method calculates evaluation metric with the same cross-validation split as selected for `FeaturesEnricher.fit()` by parameter `cv = CVType.<cross-validation-split>`.   
-But you can easily define new split by passing child of BaseCrossValidator to parameter `cv` in `calculate_metrics()`.
+By default, the `calculate_metrics()` method calculates the evaluation metric with the same cross-validation split as selected for `FeaturesEnricher.fit()` by the parameter `cv = CVType.<cross-validation-split>`.   
+But you can easily define a new split by passing a subclass of `BaseCrossValidator` to the `cv` parameter in `calculate_metrics()`.
 
 Example with more tips-and-tricks:
 ```python
@@ -626,7 +626,7 @@ enricher.calculate_metrics(scoring=custom_scoring)
 custom_cv = TimeSeriesSplit(n_splits=5)
 enricher.calculate_metrics(cv=custom_cv)
 
-# All this custom parameters could be combined in both methods: fit, fit_transform and calculate_metrics:
+# All of these custom parameters can be combined in both methods: fit, fit_transform and calculate_metrics:
 enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator, scoring=custom_scoring, cv=custom_cv)
 ```
 
@@ -636,9 +636,9 @@ enricher.fit(X, y, eval_set, calculate_metrics=True, estimator=custom_estimator,
 
 ###  🤖 Automated feature generation from columns in a search dataset  
 
-If a training dataset has a text column, you can generate additional embeddings from it using instructed embeddings generation with LLMs and data augmentation from external sources, just like Upgini does for all records from connected data sources.
+If a training dataset has a text column, you can generate additional embeddings from it using instruction‑guided embedding generation with LLMs and data augmentation from external sources, just like Upgini does for all records from connected data sources.
 
-For most cases, this gives better results than direct embeddings generation from a text field. Currently, Upgini has two LLMs connected to a search engine - GPT-3.5 from OpenAI and GPT-J.
+In most cases, this gives better results than direct embeddings generation from a text field. Currently, Upgini has two LLMs connected to the search engine - GPT-3.5 from OpenAI and GPT-J.
 
 To use this feature, pass the column names as arguments to the `generate_features` parameter. You can use up to 2 columns.
 
@@ -653,17 +653,17 @@ enricher = FeaturesEnricher(
 
 With this code, Upgini will generate LLM embeddings from text columns and then check them for predictive power for your ML task.
 
-Finally, Upgini will return a dataset enriched by only relevant components of LLM embeddings.
+Finally, Upgini will return a dataset enriched with only the relevant components of LLM embeddings.
 
-### Find features only give accuracy gain to existing data in the ML model
+### Find features that only provide accuracy gains to existing data in the ML model
 
-If you already have features or other external data sources, you can specifically search new datasets & features only give accuracy gain "on top" of them.  
+If you already have features or other external data sources, you can specifically search for new datasets and features that only provide accuracy gains "on top" of them.  
 
-Just leave all these existing features in the labeled training dataset and Upgini library automatically use them during feature search process and as a baseline ML model to calculate accuracy metric uplift. Only features which improve accuracy will return.
+Just leave all these existing features in the labeled training dataset and the Upgini library automatically uses them during the feature search process and as a baseline ML model to calculate accuracy metric uplift. Only features that improve accuracy will be returned.
 
 ### Check robustness of accuracy improvement from external features
 
-You can validate external features robustness on out-of-time dataset using `eval_set` parameter:
+You can validate the robustness of external features on an out-of-time dataset using the `eval_set` parameter:
 ```python
 # load train dataset
 train_df = pd.read_csv("train.csv")
@@ -690,13 +690,13 @@ enricher.fit(
 - Same data schema as for search initialization X dataset
 - Pandas dataframe representation
 
-There are 3 options to pass out-of-time without labels:
+The out-of-time dataset can be without labels. There are 3 options to pass out-of-time without labels:
 ```python
 enricher.fit(
   train_ids_and_features,
   train_label,
   eval_set = [
-    (eval_ids_and_features_1,),  # Just tuple of 1 element
+    (eval_ids_and_features_1,),  # A tuple with 1 element
     (eval_ids_and_features_2, None),  # None as labels
     (eval_ids_and_features_3, [np.nan] * len(eval_ids_and_features_3)),  # List or Series of the same size as eval X
   ]
@@ -728,15 +728,15 @@ enriched_df = enricher.fit_transform(
 ```
 
 **Stability parameters:**
-- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI below this threshold will be excluded from the final feature set. Lower values mean stricter stability requirements.
+- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI above this threshold will be excluded from the final feature set. Lower values mean stricter stability requirements.
 - `stability_agg_func` (str, default="max"): Function to aggregate PSI values across time intervals. Options: "max" (most conservative), "min" (least conservative), "mean" (balanced approach).
 
-**PSI (Population Stability Index)** measures how much feature distribution changes over time. Lower PSI values indicate more stable features, which are generally more reliable for production ML models.
+**PSI (Population Stability Index)** measures how much feature distribution changes over time. Lower PSI values indicate more stable features, which are generally more reliable for production ML models. PSI is calculated on the eval_set, which should contain the most recent dates relative to the training dataset.
 
 ### Use custom loss function in feature selection & metrics calculation
 
 `FeaturesEnricher` can be initialized with additional string parameter `loss`. 
-Depending on ML-task, you can use the following loss functions:
+Depending on the ML task, you can use the following loss functions:
 - `regression`: regression, regression_l1, huber, poisson, quantile, mape, gamma, tweedie;
 - `binary`: binary;
 - `multiclass`: multiclass, multiclassova.
@@ -755,7 +755,7 @@ enriched_dataframe.fit(X, y)
 
 ### Exclude premium data sources from fit, transform and metrics calculation
 
-`fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with parameter `exclude_features_sources` that allows to exclude Trial or Paid features from Premium data sources:
+`fit`, `fit_transform`, `transform` and `calculate_metrics` methods of `FeaturesEnricher` can be used with the `exclude_features_sources` parameter to exclude Trial or Paid features from Premium data sources:
 ```python
 enricher = FeaturesEnricher(
   search_keys={"subscription_activation_date": SearchKey.DATE}
@@ -768,7 +768,7 @@ enricher.transform(X, exclude_features_sources=(trial_features + paid_features))
 ```
 
 ### Turn off autodetection for search key columns
-Upgini has autodetection of search keys on by default.
+Upgini has autodetection of search keys enabled by default.
 To turn off use `autodetect_search_keys=False`:
 
 ```python
@@ -780,8 +780,8 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y)
 ```
 
-### Turn off removing of target outliers
-Upgini detect rows with target outlier for regression tasks. By default such rows are dropped on metrics calculation. To turn off removing of target outlier rows use parameter `remove_outliers_calc_metrics=False` in fit, fit_transform or calculate_metrics methods:
+### Turn off removal of target outliers
+Upgini detects rows with target outliers for regression tasks. By default such rows are dropped during metrics calculation. To turn off the removal of target‑outlier rows, use the `remove_outliers_calc_metrics=False` parameter in the fit, fit_transform, or calculate_metrics methods:
 
 ```python
 enricher = FeaturesEnricher(
@@ -791,8 +791,8 @@ enricher = FeaturesEnricher(
 enricher.fit(X, y, remove_outliers_calc_metrics=False)
 ```
 
-### Turn off generating features on search keys
-Upgini tries to generate features on email, date and datetime search keys. By default this generation is enabled. To disable it use parameter `generate_search_key_features` of FeaturesEnricher constructor:
+### Turn off feature generation on search keys
+Upgini attempts to generate features for email, date and datetime search keys. By default this generation is enabled. To disable it use the `generate_search_key_features` parameter of the FeaturesEnricher constructor:
 
 ```python
 enricher = FeaturesEnricher(
@@ -803,37 +803,37 @@ enricher = FeaturesEnricher(
 
 ## 🔑 Open up all capabilities of Upgini
 
-[Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features: 600 mln+ phone numbers, 350 mln+ emails, 2^32 IP addresses
+[Register](https://profile.upgini.com) and get a free API key for exclusive data sources and features: 600M+ phone numbers, 350M+ emails, 2^32 IP addresses
 
 |Benefit|No Sign-up | Registered user |
 |--|--|--|
 |Enrichment with **date/datetime, postal/ZIP code and country keys**  | Yes |  Yes |
-|Enrichment with **phone number, hashed email/HEM and IP-address keys**  | No |  Yes |
+|Enrichment with **phone number, hashed email/HEM and IP address keys**  | No |  Yes |
 |Email notification on **search task completion** | No |  Yes |
 |Automated **feature generation with LLMs** from columns in a search dataset| Yes, *till 12/05/23* | Yes |
 |Email notification on **new data source activation** 🔜 | No |  Yes |
 
-## 👩🏻‍💻 How to share data/features with a community ?
-You may publish ANY data which you consider as royalty / license free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for ML applications for **community usage**:   
+## 👩🏻‍💻 How to share data/features with the community?
+You may publish ANY data which you consider as royalty‑ or license‑free ([Open Data](http://opendatahandbook.org/guide/en/what-is-open-data/)) and potentially valuable for ML applications for **community usage**:   
 1. Please Sign Up [here](https://profile.upgini.com)
-2. Copy *Upgini API key* from profile and upload your data from Upgini python library with this key:
+2. Copy *Upgini API key* from your profile and upload your data from the Upgini Python library with this key:
 ```python
 import pandas as pd
 from upgini.metadata import SearchKey
 from upgini.ads import upload_user_ads
 import os
 os.environ["UPGINI_API_KEY"] = "your_long_string_api_key_goes_here"
-#you can define custom search key which might not be supported yet, just use SearchKey.CUSTOM_KEY type
+#you can define a custom search key that might not yet be supported; just use SearchKey.CUSTOM_KEY type
 sample_df = pd.read_csv("path_to_data_sample_file")
 upload_user_ads("test", sample_df, {
     "city": SearchKey.CUSTOM_KEY,
     "stats_date": SearchKey.DATE
 })
 ```
-3. After data verification, search results on community data will be available usual way.
+3. After data verification, search results on community data will be available in the usual way.
 
 ## 🛠 Getting Help & Community
-Please note, that we are still in a beta stage.
+Please note that we are still in beta.
 Requests and support, in preferred order  
 [![Claim help in slack](https://img.shields.io/badge/slack-@upgini-orange.svg?style=for-the-badge&logo=slack)](https://4mlg.short.gy/join-upgini-community)
 [![Open GitHub issue](https://img.shields.io/badge/open%20issue%20on-github-blue?style=for-the-badge&logo=github)](https://github.com/upgini/upgini/issues)  
@@ -846,22 +846,22 @@ Requests and support, in preferred order
 
 ## 🧩 Contributing
 We are not a large team, so we probably won't be able to:
- - implement smooth integration with most common low-code ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc. )
+ - implement smooth integration with the most common low-code ML libraries and platforms ([PyCaret](https://www.github.com/pycaret/pycaret), [H2O AutoML](https://github.com//h2oai/h2o-3/blob/master/h2o-docs/src/product/automl.rst), etc.)
  - implement all possible data verification and normalization capabilities for different types of search keys 
 And we need some help from the community!
 
-So, we'll be happy about every **pull request** you open and **issue** you find to make this library **more incredible**. Please note that it might sometimes take us a while to get back to you.
-**For major changes**, please open an issue first to discuss what you would like to change
+So, we'll be happy about every **pull request** you open and every **issue** you report to make this library **even better**. Please note that it might sometimes take us a while to get back to you.
+**For major changes**, please open an issue first to discuss what you would like to change.
 #### Developing
 Some convenient ways to start contributing are:  
 ⚙️ [**Open in Visual Studio Code**](https://open.vscode.dev/upgini/upgini) You can remotely open this repo in VS Code without cloning or automatically clone and open it inside a docker container.  
 ⚙️ **Gitpod** [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/upgini/upgini) You can use Gitpod to launch a fully functional development environment right in your browser.
 
 ## 🔗 Useful links
-- [Simple sales predictions as a template notebook](#-simple-sales-prediction-for-retail-stores)
+- [Simple sales prediction template notebook](#-simple-sales-prediction-for-retail-stores)
 - [Full list of Kaggle Guides & Examples](https://www.kaggle.com/romaupgini/code)
 - [Project on PyPI](https://pypi.org/project/upgini)
 - [More perks for registered users](https://profile.upgini.com)
 
-<sup>😔 Found mistype or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
+<sup>😔 Found typo or a bug in code snippet? Our bad! <a href="https://github.com/upgini/upgini/issues/new?assignees=&title=readme%2Fbug">
 Please report it here</a></sup>
