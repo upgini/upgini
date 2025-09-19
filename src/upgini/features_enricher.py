@@ -732,6 +732,7 @@ class FeaturesEnricher(TransformerMixin):
 
             result = self.transform(
                 X,
+                y,
                 exclude_features_sources=exclude_features_sources,
                 keep_input=keep_input,
                 trace_id=trace_id,
