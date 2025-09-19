@@ -2558,7 +2558,7 @@ if response.status_code == 200:
                             if self.__is_registered
                             else "transform_usage_warning_demo"
                         )
-                        msg = self.bundle.get(bundle_msg).format(len(X), rest_rows)
+                        msg = self.bundle.get(bundle_msg).format(rest_rows, len(X))
                         self.logger.warning(msg)
                         print(msg)
                         show_request_quote_button(is_registered=self.__is_registered)
