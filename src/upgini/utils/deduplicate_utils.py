@@ -31,7 +31,7 @@ def remove_fintech_duplicates(
         logger = logging.getLogger()
         logger.setLevel(logging.FATAL)
     date_col = _get_column_by_key(search_keys, [SearchKey.DATE, SearchKey.DATETIME])
-    if define_task(df[TARGET], date_col is not None, silent=True) != ModelTaskType.BINARY:
+    if define_task(df[TARGET], date_col is not None, logger=logger, silent=True) != ModelTaskType.BINARY:
         return df, []
 
     if date_col is None:

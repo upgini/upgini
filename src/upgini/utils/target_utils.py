@@ -31,6 +31,7 @@ def define_task(
 ) -> ModelTaskType:
     if logger is None:
         logger = logging.getLogger()
+        logger.setLevel(logging.FATAL)
 
     # Replace inf and -inf with NaN to handle extreme values correctly
     y = y.replace([np.inf, -np.inf], np.nan, inplace=False)

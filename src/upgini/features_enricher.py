@@ -4470,7 +4470,6 @@ if response.status_code == 200:
             is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
 
             if selected_features is not None and feature_meta.name not in selected_features:
-                self.logger.info(f"Feature {feature_meta.name} is not selected before and skipped")
                 continue
 
             selected_features_meta.append(feature_meta)
