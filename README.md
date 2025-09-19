@@ -133,7 +133,7 @@ Run [Simple sales prediction for retail stores](https://github.com/upgini/upgini
 [![Open example in Gitpod](https://img.shields.io/badge/run_example_in-gitpod-orange?style=for-the-badge&logo=gitpod)](https://gitpod.io/#/github.com/upgini/upgini)
 -->    
 
-### ❓ [How to boost ML model accuracy for Kaggle Top-1 leaderboard in 10 minutes](https://www.kaggle.com/code/romaupgini/more-external-features-for-top1-private-lb-4-54/notebook)
+### ❓ [How to boost ML model accuracy for Kaggle Top-1 leaderboard in 15 minutes](https://www.kaggle.com/code/nikupgini/how-to-find-external-data-for-1-private-lb-4-53/notebook)
 
 * The goal is **to improve a Top‑1 winning Kaggle solution** by adding new relevant external features and data.  
 * [Kaggle Competition](https://www.kaggle.com/competitions/tabular-playground-series-jan-2022/) is a product sales forecasting competition; the evaluation metric is [SMAPE](https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error).  
