@@ -5,6 +5,7 @@ import sys
 from functools import lru_cache
 from getpass import getuser
 from hashlib import sha256
+from threading import Event, Lock
 from typing import Optional
 from uuid import getnode
 
@@ -51,8 +52,12 @@ def _get_execution_ide() -> str:
         return "other"
 
 
+_inflight_lock = Lock()
+_inflight_events = {}
+
+
 @lru_cache
-def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
+def _compute_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
     # default values
     track = {"ide": _get_execution_ide()}
     ident_res = "https://api64.ipify.org"
@@ -164,3 +169,26 @@ def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optiona
                 track["ip"] = "0.0.0.0"
 
     return track
+
+
+def get_track_metrics(client_ip: Optional[str] = None, client_visitorid: Optional[str] = None) -> dict:
+    key = (client_ip, client_visitorid)
+    with _inflight_lock:
+        event = _inflight_events.get(key)
+        if event is None:
+            event = Event()
+            _inflight_events[key] = event
+            is_owner = True
+        else:
+            is_owner = False
+
+    if not is_owner:
+        event.wait()
+        return _compute_track_metrics(client_ip, client_visitorid)
+
+    try:
+        return _compute_track_metrics(client_ip, client_visitorid)
+    finally:
+        with _inflight_lock:
+            event.set()
+            _inflight_events.pop(key, None)
