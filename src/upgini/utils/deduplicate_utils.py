@@ -160,7 +160,10 @@ def remove_fintech_duplicates(
 
 
 def clean_full_duplicates(
-    df: pd.DataFrame, logger: Optional[Logger] = None, bundle: Optional[ResourceBundle] = None
+    df: pd.DataFrame,
+    is_transform: bool = False,
+    logger: Optional[Logger] = None,
+    bundle: Optional[ResourceBundle] = None,
 ) -> Tuple[pd.DataFrame, Optional[str]]:
     if logger is None:
         logger = logging.getLogger()
@@ -193,7 +196,7 @@ def clean_full_duplicates(
         logger.warning(bundle.get("dataset_full_duplicates").format(share_full_dedup))
 
     msg = None
-    if TARGET in df.columns:
+    if not is_transform and TARGET in df.columns:
         unique_columns.remove(TARGET)
 
         # Separate rows to exclude from deduplication:

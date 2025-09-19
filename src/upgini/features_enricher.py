@@ -2786,7 +2786,7 @@ if response.status_code == 200:
             df_without_features = df.drop(columns=features_not_to_pass, errors="ignore")
 
             df_without_features, full_duplicates_warning = clean_full_duplicates(
-                df_without_features, self.logger, bundle=self.bundle
+                df_without_features, is_transform=True, logger=self.logger, bundle=self.bundle
             )
             if not silent_mode and full_duplicates_warning:
                 self.__log_warning(full_duplicates_warning)
