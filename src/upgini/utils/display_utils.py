@@ -8,7 +8,6 @@ from io import StringIO
 from typing import Callable, List, Optional
 
 import pandas as pd
-from xhtml2pdf import pisa
 
 from upgini.__about__ import __version__
 
@@ -325,18 +324,23 @@ def show_button_download_pdf(
 
     # html = HTML(string=source)
     # html.write_pdf(file_name)
-    with open(file_name, "wb") as output:
-        pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
+    try:
+        from xhtml2pdf import pisa
 
-    with open(file_name, "rb") as f:
-        b64 = base64.b64encode(f.read())
-        payload = b64.decode()
-        html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
-        <button>{title}</button></a>"""
-        if display_handle is not None:
-            display_handle.update(HTML(html))
-        else:
-            return display(HTML(html), display_id=display_id)
+        with open(file_name, "wb") as output:
+            pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
+
+        with open(file_name, "rb") as f:
+            b64 = base64.b64encode(f.read())
+            payload = b64.decode()
+            html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
+            <button>{title}</button></a>"""
+            if display_handle is not None:
+                display_handle.update(HTML(html))
+            else:
+                return display(HTML(html), display_id=display_id)
+    except Exception:
+        pass
 
 
 def show_request_quote_button(is_registered: bool):

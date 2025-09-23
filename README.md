@@ -640,14 +640,14 @@ If a training dataset has a text column, you can generate additional embeddings 
 
 In most cases, this gives better results than direct embeddings generation from a text field. Currently, Upgini has two LLMs connected to the search engine - GPT-3.5 from OpenAI and GPT-J.
 
-To use this feature, pass the column names as arguments to the `generate_features` parameter. You can use up to 2 columns.
+To use this feature, pass the column names as arguments to the `text_features` parameter. You can use up to 2 columns.
 
 Here's an example for generating features from the "description" and "summary" columns:
 
 ```python
 enricher = FeaturesEnricher(
     search_keys={"date": SearchKey.DATE},
-    generate_features=["description", "summary"]
+    text_features=["description", "summary"]
 )
 ```
 
