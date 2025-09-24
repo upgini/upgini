@@ -144,14 +144,14 @@ def mock_get_metadata(
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 6,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ]
     if search_keys is None:

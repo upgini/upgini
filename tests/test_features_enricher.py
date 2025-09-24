@@ -149,14 +149,14 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -200,7 +200,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
                     eval_set_index=2,
                     hit_rate=0.99,
                     hit_rate_metrics=HitRateMetrics(
-                        etalon_row_count=1000, max_hit_count=990, hit_rate=0.99, hit_rate_percent=99.0
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
                     ),
                 ),
             ],
@@ -240,7 +240,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 6)
+    assert enriched_train_features.shape == (10000, 5)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -471,7 +471,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 6)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -595,14 +595,14 @@ def test_eval_set_with_diff_order_of_columns(requests_mock: Mocker):
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -756,14 +756,14 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -782,7 +782,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
                     type="NUMERIC",
                     source="etalon",
                     hit_rate=100.0,
-                    shap_value=0.0,
+                    shap_value=0.1,
                 ),
                 FeaturesMetadataV2(
                     name="datetime_day_in_quarter_cos_eeb97a",
@@ -813,8 +813,8 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             ],
         ),
     )
-    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
-    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "datetime_day_in_quarter_sin"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature", "datetime_day_in_quarter_sin"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
 
@@ -854,14 +854,14 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             select_features=False,
             keep_input=False,
         )
-        assert enriched_train_features.shape == (6, 3)
+        assert enriched_train_features.shape == (6, 2)
 
         enriched_train_features = enricher.fit_transform(
             train_features,
             train_target,
             calculate_metrics=False,
         )
-        assert enriched_train_features.shape == (6, 3)
+        assert enriched_train_features.shape == (6, 5)
 
         enriched_train_features = enricher.fit_transform(
             train_features,
@@ -869,7 +869,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             calculate_metrics=False,
             keep_input=False,
         )
-        assert enriched_train_features.shape == (6, 1)
+        assert enriched_train_features.shape == (6, 2)
     finally:
         Dataset.MIN_ROWS_COUNT = min_rows_count
 
@@ -1163,14 +1163,14 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -1263,7 +1263,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1415,14 +1415,14 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -1516,7 +1516,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
@@ -1642,14 +1642,14 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -1744,7 +1744,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
     assert enriched_train_features.index.name == "custom_index_name"
 
     if update_metrics_flag:
@@ -1873,14 +1873,14 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -1975,7 +1975,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
     assert "index" not in enriched_train_features.columns
 
     if update_metrics_flag:
@@ -2673,14 +2673,14 @@ def test_correct_order_of_enriched_X(requests_mock: Mocker):
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -2916,8 +2916,8 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
             ],
         ),
     )
-    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
-    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "datetime_day_in_quarter_sin"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature", "datetime_day_in_quarter_sin"])
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
     validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
@@ -2960,13 +2960,13 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         select_features=False,
         stability_threshold=0.2,
     )
-    assert enriched_train_features.shape == (10000, 11)
+    assert enriched_train_features.shape == (10000, 5)
 
     logging.warning(enricher.features_info)
 
-    assert enricher.feature_names_ == ["feature"]
-    assert enricher.feature_importances_ == [10.1]
-    assert len(enricher.features_info) == 1
+    assert enricher.feature_names_ == ["feature", "datetime_day_in_quarter_sin"]
+    assert enricher.feature_importances_ == [10.1, 0.001]
+    assert len(enricher.features_info) == 2
     first_feature_info = enricher.features_info.iloc[0]
     assert first_feature_info[feature_name_header] == "feature"
     assert first_feature_info[shap_value_header] == 10.1
@@ -3400,14 +3400,14 @@ def test_search_keys_autodetection(requests_mock: Mocker):
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -3859,14 +3859,14 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
                 "name": "datetime_day_in_quarter_sin_65d4f7",
                 "originalName": "datetime_day_in_quarter_sin",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
             {
                 "index": 5,
                 "name": "datetime_day_in_quarter_cos_eeb97a",
                 "originalName": "datetime_day_in_quarter_cos",
                 "dataType": "DECIMAL",
-                "meaningType": "FEATURE",
+                "meaningType": "GENERATED_FEATURE",
             },
         ],
     )
@@ -3936,7 +3936,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 6)
+    assert enriched_train_features.shape == (10000, 5)
 
     metrics = enricher.calculate_metrics()
     assert metrics is not None
@@ -3969,7 +3969,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=True,
     )
-    assert enriched_train_features.shape == (10000, 3)
+    assert enriched_train_features.shape == (10000, 4)
     assert "client_feature" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()

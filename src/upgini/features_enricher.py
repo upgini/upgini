@@ -2938,7 +2938,7 @@ if response.status_code == 200:
         new_columns_on_transform = [c for c in validated_Xy.columns if c not in fit_input_columns]
 
         selected_generated_features = [
-            c for c in generated_features if not self.fit_select_features or c in self.feature_names_
+            c for c in generated_features if c in self.feature_names_
         ]
         if keep_input is True:
             selected_input_columns = [
@@ -3245,7 +3245,7 @@ if response.status_code == 200:
         if fintech_warnings:
             for fintech_warning in fintech_warnings:
                 self.__log_warning(fintech_warning)
-        df, full_duplicates_warning = clean_full_duplicates(df, self.logger, bundle=self.bundle)
+        df, full_duplicates_warning = clean_full_duplicates(df, logger=self.logger, bundle=self.bundle)
         if full_duplicates_warning:
             if len(df) == 0:
                 raise ValidationError(full_duplicates_warning)
