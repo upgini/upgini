@@ -252,6 +252,7 @@ class FileMetadata(BaseModel):
     rowsCount: Optional[int] = None
     checksumMD5: Optional[str] = None
     digest: Optional[str] = None
+    droppedColumns: Optional[List[str]] = None
 
     def column_by_name(self, name: str) -> Optional[FileColumnMetadata]:
         for c in self.columns:

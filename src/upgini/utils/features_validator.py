@@ -44,11 +44,13 @@ class FeaturesValidator:
                 else:
                     empty_or_constant_features.append(f)
 
-        if one_hot_encoded_features:
-            msg = bundle.get("one_hot_encoded_features").format(one_hot_encoded_features)
-            warnings.append(msg)
-
         columns_renaming = columns_renaming or {}
+
+        if one_hot_encoded_features:
+            msg = bundle.get("one_hot_encoded_features").format(
+                [columns_renaming.get(f, f) for f in one_hot_encoded_features]
+            )
+            warnings.append(msg)
 
         if empty_or_constant_features:
             msg = bundle.get("empty_or_contant_features").format(

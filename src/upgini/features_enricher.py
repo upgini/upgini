@@ -751,7 +751,6 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None = None,
         keep_input: bool = True,
         trace_id: str | None = None,
-        metrics_calculation: bool = False,
         silent_mode=False,
         progress_bar: ProgressBar | None = None,
         progress_callback: Callable[[SearchProgress], Any] | None = None,
@@ -810,11 +809,12 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y=y,
                     exclude_features_sources=exclude_features_sources,
-                    metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
                     progress_bar=progress_bar,
                     keep_input=keep_input,
                 )
+                if TARGET in result.columns:
+                    result = result.drop(columns=TARGET)
                 self.logger.info("Transform finished successfully")
                 search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
                 if progress_bar is not None:
@@ -1047,7 +1047,8 @@ class FeaturesEnricher(TransformerMixin):
                 with Spinner():
                     self._check_train_and_eval_target_distribution(y_sorted, fitting_eval_set_dict)
 
-                    has_date = self._get_date_column(search_keys) is not None
+                    date_col = self._get_date_column(search_keys)
+                    has_date = date_col is not None and date_col in validated_X.columns
                     model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
                     cat_features = list(set(client_cat_features + cat_features_from_backend))
                     has_time = has_date and isinstance(_cv, TimeSeriesSplit) or isinstance(_cv, BlockedTimeSeriesSplit)
@@ -1323,7 +1324,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys = {str(k): v for k, v in search_keys.items()}
 
         date_column = self._get_date_column(search_keys)
-        has_date = date_column is not None
+        has_date = date_column is not None and date_column in validated_X.columns
         if not has_date:
             self.logger.info("No date column for OOT PSI calculation")
             return
@@ -1637,7 +1638,7 @@ class FeaturesEnricher(TransformerMixin):
 
         if not isinstance(_cv, BaseCrossValidator):
             date_column = self._get_date_column(search_keys)
-            date_series = X[date_column] if date_column is not None else None
+            date_series = X[date_column] if date_column is not None and date_column in X.columns else None
             _cv, groups = CVConfig(
                 _cv, date_series, self.random_state, self._search_task.get_shuffle_kfold(), group_columns=group_columns
             ).get_cv_and_groups(X)
@@ -1736,17 +1737,22 @@ class FeaturesEnricher(TransformerMixin):
 
         self.logger.info(f"Excluding search keys: {excluding_search_keys}")
 
+        file_meta = self._search_task.get_file_metadata(trace_id)
+        fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
+        original_dropped_features = [columns_renaming.get(f, f) for f in fit_dropped_features]
+
         client_features = [
             c
-            for c in (validated_X.columns.to_list() + generated_features)
+            for c in validated_X.columns.to_list()
             if (not self.fit_select_features or c in set(self.feature_names_).union(self.id_columns or []))
             and c
             not in (
                 excluding_search_keys
-                + list(self.fit_dropped_features)
+                + original_dropped_features
                 + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
             )
         ]
+        client_features.extend(f for f in generated_features if f in self.feature_names_)
         if self.baseline_score_column is not None and self.baseline_score_column not in client_features:
             client_features.append(self.baseline_score_column)
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
@@ -1847,7 +1853,7 @@ class FeaturesEnricher(TransformerMixin):
             enriched_eval_X_sorted, enriched_eval_y_sorted = self._sort_by_system_record_id(
                 enriched_eval_X, eval_y_sampled, self.cv
             )
-            if date_column is not None:
+            if date_column is not None and date_column in eval_X_sorted.columns:
                 eval_set_dates[idx] = eval_X_sorted[date_column]
             fitting_eval_X = eval_X_sorted[fitting_x_columns].copy()
             fitting_enriched_eval_X = enriched_eval_X_sorted[fitting_enriched_x_columns].copy()
@@ -1936,7 +1942,9 @@ class FeaturesEnricher(TransformerMixin):
             and self.df_with_original_index is not None
         ):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
-            return self.__get_enriched_from_fit(eval_set, trace_id, remove_outliers_calc_metrics)
+            return self.__get_enriched_from_fit(
+                validated_X, validated_y, eval_set, trace_id, remove_outliers_calc_metrics
+            )
         else:
             self.logger.info(
                 "Dataset is imbalanced or exclude_features_sources or X was passed or this is saved search."
@@ -2074,6 +2082,8 @@ class FeaturesEnricher(TransformerMixin):
 
     def __get_enriched_from_fit(
         self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series,
         eval_set: list[tuple] | None,
         trace_id: str,
         remove_outliers_calc_metrics: bool | None,
@@ -2082,7 +2092,8 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = self.fit_search_keys.copy()
 
         rows_to_drop = None
-        has_date = self._get_date_column(search_keys) is not None
+        date_column = self._get_date_column(search_keys)
+        has_date = date_column is not None and date_column in validated_X.columns
         self.model_task_type = self.model_task_type or define_task(
             self.df_with_original_index[TARGET], has_date, self.logger, silent=True
         )
@@ -2124,6 +2135,24 @@ class FeaturesEnricher(TransformerMixin):
             drop_system_record_id=False,
         )
 
+        enriched_Xy.rename(columns=self.fit_columns_renaming, inplace=True)
+        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in search_keys.items()}
+        generated_features = [self.fit_columns_renaming.get(c, c) for c in self.fit_generated_features]
+
+        validated_Xy = validated_X.copy()
+        validated_Xy[TARGET] = validated_y
+
+        selecting_columns = self._selecting_input_and_generated_columns(
+            validated_Xy, self.fit_generated_features, keep_input=True, trace_id=trace_id
+        )
+        selecting_columns.extend(
+            c
+            for c in enriched_Xy.columns
+            if (c in self.feature_names_ and c not in selecting_columns and c not in validated_X.columns)
+            or c in [EVAL_SET_INDEX, ENTITY_SYSTEM_RECORD_ID, SYSTEM_RECORD_ID]
+        )
+        enriched_Xy = enriched_Xy[selecting_columns]
+
         # Handle eval sets extraction based on EVAL_SET_INDEX
         if EVAL_SET_INDEX in enriched_Xy.columns:
             eval_set_indices = list(enriched_Xy[EVAL_SET_INDEX].unique())
@@ -2135,7 +2164,11 @@ class FeaturesEnricher(TransformerMixin):
                 ].copy()
             enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
-        x_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
+        x_columns = [
+            c
+            for c in [self.fit_columns_renaming.get(k, k) for k in self.df_with_original_index.columns]
+            if c not in [EVAL_SET_INDEX, TARGET] and c in selecting_columns
+        ]
         X_sampled = enriched_Xy[x_columns].copy()
         y_sampled = enriched_Xy[TARGET].copy()
         enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")
@@ -2156,15 +2189,6 @@ class FeaturesEnricher(TransformerMixin):
                 eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
                 enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
-
-        # reversed_renaming = {v: k for k, v in self.fit_columns_renaming.items()}
-        X_sampled.rename(columns=self.fit_columns_renaming, inplace=True)
-        enriched_X.rename(columns=self.fit_columns_renaming, inplace=True)
-        for _, (eval_X_sampled, enriched_eval_X, _) in eval_set_sampled_dict.items():
-            eval_X_sampled.rename(columns=self.fit_columns_renaming, inplace=True)
-            enriched_eval_X.rename(columns=self.fit_columns_renaming, inplace=True)
-        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in search_keys.items()}
-        generated_features = [self.fit_columns_renaming.get(c, c) for c in self.fit_generated_features]
 
         datasets_hash = hash_input(self.X, self.y, self.eval_set)
         return self.__cache_and_return_results(
@@ -2642,7 +2666,7 @@ if response.status_code == 200:
                 generated_features = [columns_renaming.get(c, c) for c in generated_features]
                 search_keys = {columns_renaming.get(c, c): t for c, t in search_keys.items()}
                 selecting_columns = self._selecting_input_and_generated_columns(
-                    validated_Xy, generated_features, keep_input, trace_id
+                    validated_Xy, generated_features, keep_input, trace_id, is_transform=True
                 )
                 self.logger.warning(f"Filtered columns by existance in dataframe: {selecting_columns}")
                 if add_fit_system_record_id:
@@ -2895,7 +2919,7 @@ if response.status_code == 200:
             )
 
             selecting_columns = self._selecting_input_and_generated_columns(
-                validated_Xy, generated_features, keep_input, trace_id
+                validated_Xy, generated_features, keep_input, trace_id, is_transform=True
             )
             selecting_columns.extend(
                 c
@@ -2933,20 +2957,24 @@ if response.status_code == 200:
         generated_features: list[str],
         keep_input: bool,
         trace_id: str,
+        is_transform: bool = False,
     ):
-        fit_input_columns = [c.originalName for c in self._search_task.get_file_metadata(trace_id).columns]
-        new_columns_on_transform = [c for c in validated_Xy.columns if c not in fit_input_columns]
-
-        selected_generated_features = [
-            c for c in generated_features if c in self.feature_names_
+        file_meta = self._search_task.get_file_metadata(trace_id)
+        fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
+        fit_input_columns = [c.originalName for c in file_meta.columns]
+        original_dropped_features = [self.fit_columns_renaming.get(c, c) for c in fit_dropped_features]
+        new_columns_on_transform = [
+            c for c in validated_Xy.columns if c not in fit_input_columns and c not in original_dropped_features
         ]
+
+        selected_generated_features = [c for c in generated_features if c in self.feature_names_]
         if keep_input is True:
             selected_input_columns = [
                 c
                 for c in validated_Xy.columns
                 if not self.fit_select_features
                 or c in self.feature_names_
-                or c in new_columns_on_transform
+                or (c in new_columns_on_transform and is_transform)
                 or c in self.search_keys
                 or c in (self.id_columns or [])
                 or c in [EVAL_SET_INDEX, TARGET]  # transform for metrics calculation
@@ -3112,7 +3140,7 @@ if response.status_code == 200:
         self.fit_search_keys = self.__prepare_search_keys(df, self.fit_search_keys, is_demo_dataset)
 
         maybe_date_column = SearchKey.find_key(self.fit_search_keys, [SearchKey.DATE, SearchKey.DATETIME])
-        has_date = maybe_date_column is not None
+        has_date = maybe_date_column is not None and maybe_date_column in validated_X.columns
 
         self.model_task_type = self.model_task_type or define_task(validated_y, has_date, self.logger)
 
@@ -3358,6 +3386,7 @@ if response.status_code == 200:
             cv_type=self.cv,
             id_columns=self.__get_renamed_id_columns(),
             is_imbalanced=self.imbalanced,
+            dropped_columns=[self.fit_columns_renaming.get(f, f) for f in self.fit_dropped_features],
             date_column=self._get_date_column(self.fit_search_keys),
             date_format=self.date_format,
             random_state=self.random_state,
@@ -3746,7 +3775,8 @@ if response.status_code == 200:
         if eval_set is None:
             return None
         validated_eval_set = []
-        has_date = self._get_date_column(self.search_keys) is not None
+        date_col = self._get_date_column(self.search_keys)
+        has_date = date_col is not None and date_col in X.columns
         for idx, eval_pair in enumerate(eval_set):
             validated_pair = self._validate_eval_set_pair(X, eval_pair)
             if validated_pair[1].isna().all():

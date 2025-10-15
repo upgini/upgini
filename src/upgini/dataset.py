@@ -71,6 +71,7 @@ class Dataset:
         date_column: Optional[str] = None,
         id_columns: Optional[List[str]] = None,
         is_imbalanced: bool = False,
+        dropped_columns: Optional[List[str]] = None,
         random_state: Optional[int] = None,
         sample_config: Optional[SampleConfig] = None,
         rest_client: Optional[_RestClient] = None,
@@ -118,6 +119,7 @@ class Dataset:
         self.is_imbalanced: bool = False
         self.id_columns = id_columns
         self.is_imbalanced = is_imbalanced
+        self.dropped_columns = dropped_columns
         self.date_column = date_column
         if logger is not None:
             self.logger = logger
@@ -285,6 +287,7 @@ class Dataset:
             for key in search_group
             if key in self.columns_renaming
             and not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
+            and not self.columns_renaming.get(key) == "current_date"
         }
         ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
@@ -475,6 +478,7 @@ class Dataset:
             hierarchicalGroupKeys=self.hierarchical_group_keys,
             hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
             taskType=self.task_type,
+            droppedColumns=self.dropped_columns,
         )
 
     @staticmethod

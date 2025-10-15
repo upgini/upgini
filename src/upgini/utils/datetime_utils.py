@@ -1,6 +1,5 @@
 import datetime
 import logging
-import re
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -67,7 +66,7 @@ class DateTimeConverter:
         try:
             if s is None or len(str(s).strip()) == 0:
                 return None
-            if not re.match(DATETIME_PATTERN, str(s)):
+            if sum(ch.isdigit() for ch in str(s)) < 6:
                 return None
             return s
         except Exception:
@@ -116,7 +115,7 @@ class DateTimeConverter:
                     else:
                         return None
             else:
-                date_col = date_col.astype("string")  # .apply(self.clean_date)
+                date_col = date_col.astype("string").apply(self.clean_date)
                 parsed_datetime = self.parse_string_date(date_col.to_frame(self.date_column), raise_errors)
                 if parsed_datetime.isna().all():
                     raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
