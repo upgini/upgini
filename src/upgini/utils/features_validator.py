@@ -46,7 +46,7 @@ class FeaturesValidator:
 
         columns_renaming = columns_renaming or {}
 
-        if one_hot_encoded_features:
+        if one_hot_encoded_features and len(one_hot_encoded_features) > 1:
             msg = bundle.get("one_hot_encoded_features").format(
                 [columns_renaming.get(f, f) for f in one_hot_encoded_features]
             )

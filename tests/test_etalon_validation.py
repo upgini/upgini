@@ -269,9 +269,10 @@ def test_constant_and_empty_validation():
             "a": [1] * 995 + [2] * 5,
             "b": [None] * 995 + [3] * 5,
             "c": [0] * 995 + [1] * 5,  # like One-Hot encoding
+            "d": [1] * 10 + [0] * 990,
         }
     )
-    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c"])
+    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c", "d"])
     assert features_to_drop == ["a", "b"]
     assert len(warnings) == 2
 

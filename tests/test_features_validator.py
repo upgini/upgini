@@ -118,10 +118,18 @@ class TestIsOneHotEncoded:
         series = pd.Series(["true", "false", "false", "false", "true"])
         assert FeaturesValidator.is_one_hot_encoded(series) is True
 
-    def test_one_hot_validation(self):
+    def test_one_hot_validation_with_one_column(self):
         df = pd.DataFrame({
             "feature1": [False] * 13113 + [True] * 36
         })
         validator = FeaturesValidator()
-        expected_warning = bundle.get("one_hot_encoded_features").format(["feature1"])
-        assert validator.validate(df, ["feature1"]) == ([], [expected_warning])
+        assert validator.validate(df, ["feature1"]) == ([], [])
+
+    def test_one_hot_validation_with_several_columns(self):
+        df = pd.DataFrame({
+            "feature1": [False] * 13113 + [True] * 36,
+            "feature2": [True] * 49 + [False] * 13100,
+        })
+        validator = FeaturesValidator()
+        expected_warning = bundle.get("one_hot_encoded_features").format(["feature1", "feature2"])
+        assert validator.validate(df, ["feature1", "feature2"]) == ([], [expected_warning])
