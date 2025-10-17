@@ -24,4 +24,8 @@ class BaseSearchKeyDetector:
         for column_name in other_columns:
             if self._is_search_key_by_values(df[column_name]):
                 columns_by_values.append(column_name)
-        return list(set(columns_by_names + columns_by_values))
+
+        both = [col for col in columns_by_names if col in columns_by_values]
+        only_values = [col for col in columns_by_values if col not in columns_by_names]
+        only_names = [col for col in columns_by_names if col not in columns_by_values]
+        return both + only_values + only_names

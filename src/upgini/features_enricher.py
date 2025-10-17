@@ -77,6 +77,7 @@ from upgini.utils.custom_loss_utils import (
 )
 from upgini.utils.cv_utils import CVConfig, get_groups
 from upgini.utils.datetime_utils import (
+    DateSearchKeyDetector,
     DateTimeConverter,
     is_blocked_time_series,
     is_dates_distribution_valid,
@@ -238,6 +239,7 @@ class FeaturesEnricher(TransformerMixin):
         generate_search_key_features: bool = True,
         sample_config: SampleConfig | None = None,
         print_trace_id: bool = False,
+        print_loaded_report: bool = True,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -284,7 +286,7 @@ class FeaturesEnricher(TransformerMixin):
         self.id_columns = id_columns
         self.id_columns_encoder = None
         self.country_code = country_code
-        self.__validate_search_keys(search_keys, search_id)
+        self.__validate_search_keys(self.search_keys, search_id)
 
         self.model_task_type = ModelTaskType.parse(model_task_type)
         self.endpoint = endpoint
@@ -317,7 +319,8 @@ class FeaturesEnricher(TransformerMixin):
                     self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(trace_id, df, silent=True, update_selected_features=False)
-                    self.__show_selected_features()
+                    if print_loaded_report:
+                        self.__show_selected_features()
                     # TODO validate search_keys with search_keys from file_metadata
                     print(self.bundle.get("search_by_task_id_finish"))
                     self.logger.debug(f"Successfully initialized with search_id: {search_id}")
@@ -3226,8 +3229,11 @@ if response.status_code == 200:
             df, self.fit_search_keys, self.fit_generated_features
         )
         self.fit_columns_renaming = normalizer.columns_renaming
-        if normalizer.removed_features:
-            self.__log_warning(self.bundle.get("dataset_date_features").format(normalizer.removed_features))
+        if normalizer.removed_datetime_features:
+            original_removed_datetime_features = [
+                self.fit_columns_renaming.get(f, f) for f in normalizer.removed_datetime_features
+            ]
+            self.__log_warning(self.bundle.get("dataset_date_features").format(original_removed_datetime_features))
 
         non_feature_columns = [
             self.TARGET_NAME,
@@ -4093,11 +4099,12 @@ if response.status_code == 200:
             or set(search_keys.values()) == {SearchKey.EMAIL}
             or set(search_keys.values()) == {SearchKey.HEM}
             or set(search_keys.values()) == {SearchKey.COUNTRY, SearchKey.POSTAL_CODE}
+            or len(search_keys) == 0
+            or set(search_keys.values()) == {SearchKey.CUSTOM_KEY}
         ):
             if not silent:
                 self.__log_warning(bundle.get("current_date_added"))
             df[CURRENT_DATE_COL] = datetime.date.today()
-            # df[CURRENT_DATE_COL] = datetime.date(2025, 10, 15)
             search_keys[CURRENT_DATE_COL] = SearchKey.DATE
             converter = DateTimeConverter(CURRENT_DATE_COL, generate_cyclical_features=False)
             df = converter.convert(df)
@@ -4781,7 +4788,8 @@ if response.status_code == 200:
             else:
                 msg = self.bundle.get("unregistered_only_personal_keys")
             self.logger.warning(msg + f" Provided search keys: {search_keys}")
-            raise ValidationError(msg)
+            # Current date will be added later
+            # raise ValidationError(msg)
 
         if (
             len(valid_search_keys.values()) == 1
@@ -4899,6 +4907,16 @@ if response.status_code == 200:
             return not is_transform or (
                 search_key in self.fit_search_keys.values() and search_key not in search_keys.values()
             )
+
+        if check_need_detect(SearchKey.DATE) and check_need_detect(SearchKey.DATETIME):
+            maybe_keys = DateSearchKeyDetector().get_search_key_columns(sample, search_keys)
+            if len(maybe_keys) > 0:
+                datetime_key = maybe_keys[0]
+                search_keys[datetime_key] = SearchKey.DATETIME
+                self.autodetected_search_keys[datetime_key] = SearchKey.DATETIME
+                self.logger.info(f"Autodetected search key DATETIME in column {datetime_key}")
+                if not silent_mode:
+                    print(self.bundle.get("datetime_detected").format(datetime_key))
 
         # if SearchKey.POSTAL_CODE not in search_keys.values() and check_need_detect(SearchKey.POSTAL_CODE):
         if check_need_detect(SearchKey.POSTAL_CODE):

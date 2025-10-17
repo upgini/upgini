@@ -10,6 +10,7 @@ from pandas.api.types import is_numeric_dtype
 from upgini.errors import ValidationError
 from upgini.metadata import EVAL_SET_INDEX, SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
+from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 DATE_FORMATS = [
     "%Y-%m-%d",
@@ -27,6 +28,15 @@ DATE_FORMATS = [
 ]
 
 DATETIME_PATTERN = r"^[\d\s\.\-:T/+]+$"
+
+
+class DateSearchKeyDetector(BaseSearchKeyDetector):
+    def _is_search_key_by_name(self, column_name: str) -> bool:
+        lower_column_name = str(column_name).lower()
+        return "date" in lower_column_name or "time" in lower_column_name or "timestamp" in lower_column_name
+
+    def _is_search_key_by_values(self, column: pd.Series) -> bool:
+        return DateTimeConverter(column.name).is_datetime(column.to_frame(column.name))
 
 
 class DateTimeConverter:
@@ -80,7 +90,7 @@ class DateTimeConverter:
             return True
 
         parsed = self.parse_datetime(df, raise_errors=False)
-        return parsed is not None and not parsed.isna().all()
+        return parsed is not None and parsed.isna().mean() <= 0.5
 
     def parse_datetime(self, df: pd.DataFrame, raise_errors=True) -> pd.Series | None:
         if len(df) == 0 or df[self.date_column].isna().all():

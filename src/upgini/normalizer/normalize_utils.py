@@ -5,7 +5,6 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype as is_bool
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pandas.api.types import (
     is_float_dtype,
     is_numeric_dtype,
@@ -45,7 +44,7 @@ class Normalizer:
         self.columns_renaming = {}
         self.search_keys = {}
         self.generated_features = []
-        self.removed_features = []
+        self.removed_datetime_features = []
 
     def normalize(
         self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], generated_features: List[str]
@@ -134,8 +133,9 @@ class Normalizer:
         features = self._get_features(df)
 
         for f in features:
-            if is_datetime(df[f]) or isinstance(df[f].dtype, pd.PeriodDtype):
-                self.removed_features.append(f)
+            converter = DateTimeConverter(f)
+            if converter.is_datetime(df):
+                self.removed_datetime_features.append(f)
                 df.drop(columns=f, inplace=True)
 
         return df
