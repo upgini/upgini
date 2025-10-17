@@ -433,8 +433,8 @@ class _RestClient:
             with open(file_path, "rb") as file:
                 content = file.read()
                 md5_hash.update(content)
-                digest = md5_hash.hexdigest()
-                metadata_with_md5 = pydantic_copy_method(metadata)(update={"checksumMD5": digest})
+                digest_md5 = md5_hash.hexdigest()
+                metadata_with_md5 = pydantic_copy_method(metadata)(update={"checksumMD5": digest_md5})
 
             digest_sha256 = file_hash(file_path)
             metadata_with_md5 = pydantic_copy_method(metadata_with_md5)(update={"digest": digest_sha256})

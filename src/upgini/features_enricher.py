@@ -44,6 +44,7 @@ from upgini.http import (
 from upgini.mdc import MDC
 from upgini.metadata import (
     COUNTRY,
+    CURRENT_DATE_COL,
     DEFAULT_INDEX,
     ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
@@ -167,7 +168,6 @@ class FeaturesEnricher(TransformerMixin):
     """
 
     TARGET_NAME = "target"
-    CURRENT_DATE = "current_date"
     RANDOM_STATE = 42
     CALCULATE_METRICS_THRESHOLD = 50_000_000
     CALCULATE_METRICS_MIN_THRESHOLD = 500
@@ -2983,6 +2983,9 @@ if response.status_code == 200:
         else:
             selected_input_columns = []
 
+        if DEFAULT_INDEX in selected_input_columns:
+            selected_input_columns.remove(DEFAULT_INDEX)
+
         return selected_input_columns + selected_generated_features
 
     def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
@@ -3167,7 +3170,7 @@ if response.status_code == 200:
 
         if DEFAULT_INDEX in df.columns:
             msg = self.bundle.get("unsupported_index_column")
-            self.logger.info(msg)
+            self.logger.warning(msg)
             print(msg)
             self.fit_dropped_features.add(DEFAULT_INDEX)
             df.drop(columns=DEFAULT_INDEX, inplace=True)
@@ -4093,9 +4096,10 @@ if response.status_code == 200:
         ):
             if not silent:
                 self.__log_warning(bundle.get("current_date_added"))
-            df[FeaturesEnricher.CURRENT_DATE] = datetime.date.today()
-            search_keys[FeaturesEnricher.CURRENT_DATE] = SearchKey.DATE
-            converter = DateTimeConverter(FeaturesEnricher.CURRENT_DATE, generate_cyclical_features=False)
+            df[CURRENT_DATE_COL] = datetime.date.today()
+            # df[CURRENT_DATE_COL] = datetime.date(2025, 10, 15)
+            search_keys[CURRENT_DATE_COL] = SearchKey.DATE
+            converter = DateTimeConverter(CURRENT_DATE_COL, generate_cyclical_features=False)
             df = converter.convert(df)
         return df
 
@@ -4109,7 +4113,7 @@ if response.status_code == 200:
         return [
             col
             for col, t in search_keys.items()
-            if t not in [SearchKey.DATE, SearchKey.DATETIME] and df[col].dropna().nunique() > 1
+            if t not in [SearchKey.DATE, SearchKey.DATETIME] and col in df.columns and df[col].dropna().nunique() > 1
         ]
 
     @staticmethod

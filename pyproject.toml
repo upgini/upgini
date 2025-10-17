@@ -56,6 +56,7 @@ dependencies = [
     "psutil>=5.9.0",
     "category-encoders>=2.8.1",
     "more_itertools==10.7.0",
+    "pyarrow==18.1.0",
 ]
 
 [project.urls]

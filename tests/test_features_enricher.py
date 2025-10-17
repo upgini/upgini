@@ -240,7 +240,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -471,7 +471,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
         eval_set=[(eval1_features, eval1_target), (eval2_features, eval2_target)],
         calculate_metrics=False,
     )
-    assert enriched_train_features.shape == (10000, 6)
+    assert enriched_train_features.shape == (10000, 5)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -845,7 +845,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             calculate_metrics=False,
             select_features=False,
         )
-        assert enriched_train_features.shape == (6, 5)
+        assert enriched_train_features.shape == (6, 4)
 
         enriched_train_features = enricher.fit_transform(
             train_features,
@@ -861,7 +861,7 @@ def test_features_enricher_with_index_and_column_same_names(requests_mock: Mocke
             train_target,
             calculate_metrics=False,
         )
-        assert enriched_train_features.shape == (6, 5)
+        assert enriched_train_features.shape == (6, 4)
 
         enriched_train_features = enricher.fit_transform(
             train_features,
@@ -1263,7 +1263,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1516,7 +1516,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
 
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
@@ -1744,7 +1744,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
     assert enriched_train_features.index.name == "custom_index_name"
 
     if update_metrics_flag:
@@ -1975,7 +1975,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
     assert "index" not in enriched_train_features.columns
 
     if update_metrics_flag:
@@ -2403,7 +2403,7 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
 
-    assert transformed.shape == (10000, 6)
+    assert transformed.shape == (10000, 5)
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
@@ -2960,7 +2960,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         select_features=False,
         stability_threshold=0.2,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     logging.warning(enricher.features_info)
 
@@ -3267,9 +3267,9 @@ def test_email_search_key(requests_mock: Mocker):
             "email_822444_hem",
             "email_822444_one_domain",
             "email_domain_10c73f",
-            "current_date_b993c4",
+            "current_date__2ca9b8",
         }
-        assert {"email_822444", "email_822444_hem", "email_822444_one_domain", "current_date_b993c4"} == {
+        assert {"email_822444", "email_822444_hem", "email_822444_one_domain", "current_date__2ca9b8"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         raise TestException
@@ -3319,12 +3319,12 @@ def test_composit_index_search_key(requests_mock: Mocker):
             "entity_system_record_id",
             "country_aff64e",
             "postal_code_13534a",
-            "current_date_b993c4",
+            "current_date__2ca9b8",
             "target",
         }
         assert "country_aff64e" in self.columns
         assert "postal_code_13534a"
-        assert {"country_aff64e", "postal_code_13534a", "current_date_b993c4"} == {
+        assert {"country_aff64e", "postal_code_13534a", "current_date__2ca9b8"} == {
             sk for sublist in self.search_keys for sk in sublist
         }
         # assert "country_fake_a" in self.columns
@@ -3936,7 +3936,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=False,
     )
-    assert enriched_train_features.shape == (10000, 5)
+    assert enriched_train_features.shape == (10000, 4)
 
     metrics = enricher.calculate_metrics()
     assert metrics is not None
@@ -3969,7 +3969,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         calculate_metrics=False,
         select_features=True,
     )
-    assert enriched_train_features.shape == (10000, 4)
+    assert enriched_train_features.shape == (10000, 3)
     assert "client_feature" not in enriched_train_features.columns
 
     metrics = enricher.calculate_metrics()

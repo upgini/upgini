@@ -408,6 +408,10 @@ def is_dates_distribution_valid(
         if maybe_date_col is None:
             return
 
+        # Don't check if date column is constant
+        if X[maybe_date_col].nunique() <= 1:
+            return
+
         if isinstance(X[maybe_date_col].dtype, pd.PeriodDtype):
             dates = X[maybe_date_col].dt.to_timestamp().dt.date
         elif pd.__version__ >= "2.0.0":

@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
@@ -18,6 +20,7 @@ from pandas.api.types import (
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
+    CURRENT_DATE_COL,
     ENTITY_SYSTEM_RECORD_ID,
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
@@ -38,6 +41,7 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.config import SampleConfig
 from upgini.utils.email_utils import EmailSearchKeyConverter
+from upgini.utils.hash_utils import file_hash
 from upgini.utils.sample_utils import SampleColumns, sample
 
 try:
@@ -287,7 +291,7 @@ class Dataset:
             for key in search_group
             if key in self.columns_renaming
             and not self.columns_renaming.get(key).endswith(EmailSearchKeyConverter.ONE_DOMAIN_SUFFIX)
-            and not self.columns_renaming.get(key) == "current_date"
+            and not self.columns_renaming.get(key) == CURRENT_DATE_COL
         }
         ipv4_column = self.etalon_def_checked.get(FileColumnMeaningType.IP_ADDRESS.value)
         if (
@@ -469,6 +473,33 @@ class Dataset:
 
             columns.append(column_meta)
 
+        current_date = int(pd.Timestamp(pd.Timestamp.now().date(), tz="UTC").timestamp() * 1000)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            if (
+                self.date_column is not None
+                and self.data[self.date_column].nunique() == 1
+                and self.data[self.date_column].iloc[0] == current_date
+            ):
+                df_without_fake_date = self.data.drop(columns=[self.date_column])
+            else:
+                df_without_fake_date = self.data
+            parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
+
+            # calculate deterministic digest for any environment
+
+            table = pa.Table.from_pandas(df_without_fake_date, preserve_index=False)
+            table = table.replace_schema_metadata({})  # remove all metadata
+            pq.write_table(
+                table,
+                parquet_file_path,
+                compression=None,  # any compression will make it non-deterministic
+                data_page_size=0,  # optional, to remove page layout variations
+                use_deprecated_int96_timestamps=False,  # fix timestamp format
+                write_statistics=False,  # remove statistics to make it deterministic
+            )
+
+            deterministic_digest = file_hash(parquet_file_path)
+
         return FileMetadata(
             name=self.dataset_name,
             description=self.description,
@@ -479,6 +510,7 @@ class Dataset:
             hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
             taskType=self.task_type,
             droppedColumns=self.dropped_columns,
+            deterministicDigest=deterministic_digest,
         )
 
     @staticmethod

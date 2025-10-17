@@ -12,10 +12,19 @@ SORT_ID = "sort_id"
 EVAL_SET_INDEX = "eval_set_index"
 TARGET = "target"
 COUNTRY = "country_iso_code"
+CURRENT_DATE_COL = "current_date_"
 RENAMED_INDEX = "index_col"
 DEFAULT_INDEX = "index"
 ORIGINAL_INDEX = "original_index"
-SYSTEM_COLUMNS = {SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST, EVAL_SET_INDEX, TARGET, COUNTRY}
+SYSTEM_COLUMNS = {
+    SYSTEM_RECORD_ID,
+    ENTITY_SYSTEM_RECORD_ID,
+    SEARCH_KEY_UNNEST,
+    EVAL_SET_INDEX,
+    TARGET,
+    COUNTRY,
+    CURRENT_DATE_COL,
+}
 
 
 class FileColumnMeaningType(Enum):
@@ -252,6 +261,7 @@ class FileMetadata(BaseModel):
     rowsCount: Optional[int] = None
     checksumMD5: Optional[str] = None
     digest: Optional[str] = None
+    deterministicDigest: Optional[str] = None
     droppedColumns: Optional[List[str]] = None
 
     def column_by_name(self, name: str) -> Optional[FileColumnMetadata]:
