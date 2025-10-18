@@ -4908,7 +4908,12 @@ if response.status_code == 200:
                 search_key in self.fit_search_keys.values() and search_key not in search_keys.values()
             )
 
-        if check_need_detect(SearchKey.DATE) and check_need_detect(SearchKey.DATETIME):
+        if (
+            SearchKey.DATE not in search_keys.values()
+            and SearchKey.DATETIME not in search_keys.values()
+            and check_need_detect(SearchKey.DATE)
+            and check_need_detect(SearchKey.DATETIME)
+        ):
             maybe_keys = DateSearchKeyDetector().get_search_key_columns(sample, search_keys)
             if len(maybe_keys) > 0:
                 datetime_key = maybe_keys[0]
