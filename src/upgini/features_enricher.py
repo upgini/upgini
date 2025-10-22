@@ -816,7 +816,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress_bar=progress_bar,
                     keep_input=keep_input,
                 )
-                if TARGET in result.columns:
+                if result is not None and TARGET in result.columns:
                     result = result.drop(columns=TARGET)
                 self.logger.info("Transform finished successfully")
                 search_progress = SearchProgress(100.0, ProgressStage.FINISHED)
