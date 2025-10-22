@@ -2952,6 +2952,10 @@ if response.status_code == 200:
             if add_fit_system_record_id:
                 result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
 
+            for c in result.columns:
+                if result[c].dtype == "category":
+                    result.loc[:, c] = np.where(~result[c].isin(result[c].dtype.categories), np.nan, result[c])
+
             return result, columns_renaming, generated_features, search_keys
 
     def _selecting_input_and_generated_columns(
