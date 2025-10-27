@@ -3628,6 +3628,7 @@ def test_diff_target_dups(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         logs_enabled=False,
+        autodetect_search_keys=False,
     )
 
     df = pd.DataFrame(

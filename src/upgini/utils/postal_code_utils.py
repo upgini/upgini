@@ -4,16 +4,45 @@ from pandas.api.types import (
     is_object_dtype,
     is_string_dtype,
 )
+import re
 
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 
 class PostalCodeSearchKeyDetector(BaseSearchKeyDetector):
+    postal_pattern = re.compile(r'^[A-Za-z0-9][A-Za-z0-9\s\-]{1,9}$')
+
     def _is_search_key_by_name(self, column_name: str) -> bool:
-        return str(column_name).lower() in ["zip", "zipcode", "zip_code", "postal_code", "postalcode"]
+        return "zip" in str(column_name).lower() or "postal" in str(column_name).lower()
 
     def _is_search_key_by_values(self, column: pd.Series) -> bool:
-        return False
+        """
+        # Fast two-step check whether the column looks like a postal code.
+        # Returns True if, after removing missing values, values remain,
+        # and all of them match the common characteristics of a postal code.
+        """
+        s = column.copy().dropna().astype(str).str.strip()
+        s = s[s != ""]  # remove empty strings
+        if s.empty:
+            return False
+
+        # remove suffix ".0" (often after float)
+        s = s.str.replace(r"\.0$", "", regex=True)
+
+        # --- Step 1: fast filtering ---
+        mask_len = s.str.len().between(2, 10)
+        mask_digit = s.str.contains(r'\d', regex=True)
+        mask_chars = ~s.str.contains(r'[^A-Za-z0-9\s\-]', regex=True)
+        fast_mask = mask_len & mask_digit & mask_chars
+
+        # if any of them failed the fast check, return False
+        if not fast_mask.all():
+            return False
+
+        # --- Step 2: regex check ---
+        # only if the first step passed
+        valid_mask = s.apply(lambda x: bool(self.postal_pattern.fullmatch(x)))
+        return valid_mask.all()
 
 
 class PostalCodeSearchKeyConverter:
