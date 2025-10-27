@@ -21,6 +21,10 @@ class PostalCodeSearchKeyDetector(BaseSearchKeyDetector):
         # Returns True if, after removing missing values, values remain,
         # and all of them match the common characteristics of a postal code.
         """
+        # Check only columns that are candidates for postal code by column name
+        if not self._is_search_key_by_name(column.name):
+            return False
+
         s = column.copy().dropna().astype(str).str.strip()
         s = s[s != ""]  # remove empty strings
         if s.empty:

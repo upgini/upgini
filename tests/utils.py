@@ -259,7 +259,7 @@ def mock_validation_raw_features(
             )
     elif isinstance(mock_features, pd.DataFrame):
         with tempfile.TemporaryDirectory() as tmp_dir:
-            mock_features.to_parquet(f"{tmp_dir}/tmp.parquet")
+            mock_features.to_parquet(f"{tmp_dir}/tmp.parquet", engine='pyarrow')
             with open(f"{tmp_dir}/tmp.parquet", "rb") as f:
                 buffer = f.read()
                 requests_mock.get(

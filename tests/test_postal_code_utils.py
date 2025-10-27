@@ -8,7 +8,7 @@ detector = PostalCodeSearchKeyDetector()
 def test_is_postal_code_column_by_column_name():
     df = pd.DataFrame({"pstlcd": ["123", "321", "345"]})
 
-    assert detector.get_search_key_columns(df, []) == ["pstlcd"]
+    assert detector.get_search_key_columns(df, []) == []
 
     df = pd.DataFrame({"zip": ["123", "321", "345"]})
 

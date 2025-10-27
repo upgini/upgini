@@ -274,7 +274,7 @@ class FeaturesEnricher(TransformerMixin):
         self.X: pd.DataFrame | None = None
         self.y: pd.Series | None = None
         self.eval_set: list[tuple] | None = None
-        self.autodetected_search_keys: dict[str, SearchKey] = dict()
+        self.autodetected_search_keys: dict[str, SearchKey] | None = None
         self.imbalanced = False
         self.fit_select_features = True
         self.__cached_sampled_datasets: dict[str, tuple[pd.DataFrame, pd.DataFrame, pd.Series, dict, dict, dict]] = (
@@ -1311,8 +1311,15 @@ class FeaturesEnricher(TransformerMixin):
     def _get_autodetected_search_keys(self):
         if self.autodetected_search_keys is None and self._search_task is not None:
             meta = self._search_task.get_file_metadata(self._get_trace_id())
-            self.autodetected_search_keys = {k: SearchKey[v] for k, v in meta.autodetectedSearchKeys.items()}
+            autodetected_search_keys = meta.autodetectedSearchKeys or {}
+            self.autodetected_search_keys = {k: SearchKey[v] for k, v in autodetected_search_keys.items()}
 
+        return self.autodetected_search_keys
+
+    def _add_autodetected_search_keys(self, adding_search_keys: dict[str, SearchKey]):
+        if self.autodetected_search_keys is None:
+            self.autodetected_search_keys = dict()
+        self.autodetected_search_keys.update(adding_search_keys)
         return self.autodetected_search_keys
 
     def _get_fit_search_keys_with_original_names(self):
@@ -2954,10 +2961,6 @@ if response.status_code == 200:
         if add_fit_system_record_id:
             result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
 
-        for c in result.columns:
-            if result[c].dtype == "category":
-                result.loc[:, c] = np.where(~result[c].isin(result[c].dtype.categories), np.nan, result[c])
-
         return result, columns_renaming, generated_features, search_keys
 
     def _selecting_input_and_generated_columns(
@@ -3647,7 +3650,8 @@ if response.status_code == 200:
             keys.append("EMAIL")
         if "DATE" in keys:
             keys.append("DATETIME")
-        search_keys_with_autodetection = {**self.search_keys, **self.autodetected_search_keys}
+        autodetected_search_keys = self.autodetected_search_keys or {}
+        search_keys_with_autodetection = {**self.search_keys, **autodetected_search_keys}
         return [c for c, v in search_keys_with_autodetection.items() if v.value.value in keys]
 
     def _validate_train_eval(
@@ -4882,8 +4886,9 @@ if response.status_code == 200:
             maybe_keys = DateSearchKeyDetector().get_search_key_columns(sample, search_keys)
             if len(maybe_keys) > 0:
                 datetime_key = maybe_keys[0]
-                search_keys[datetime_key] = SearchKey.DATETIME
-                self.autodetected_search_keys[datetime_key] = SearchKey.DATETIME
+                new_keys = {datetime_key: SearchKey.DATETIME}
+                search_keys.update(new_keys)
+                self._add_autodetected_search_keys(new_keys)
                 self.logger.info(f"Autodetected search key DATETIME in column {datetime_key}")
                 print(self.bundle.get("datetime_detected").format(datetime_key))
 
@@ -4892,15 +4897,16 @@ if response.status_code == 200:
         if maybe_keys:
             new_keys = {key: SearchKey.POSTAL_CODE for key in maybe_keys}
             search_keys.update(new_keys)
-            self.autodetected_search_keys.update(new_keys)
+            self._add_autodetected_search_keys(new_keys)
             self.logger.info(f"Autodetected search key POSTAL_CODE in column {maybe_keys}")
             print(self.bundle.get("postal_code_detected").format(maybe_keys))
 
         if SearchKey.COUNTRY not in search_keys.values() and self.country_code is None:
             maybe_key = CountrySearchKeyDetector().get_search_key_columns(sample, search_keys)
             if maybe_key:
-                search_keys[maybe_key[0]] = SearchKey.COUNTRY
-                self.autodetected_search_keys[maybe_key[0]] = SearchKey.COUNTRY
+                new_keys = {maybe_key[0]: SearchKey.COUNTRY}
+                search_keys.update(new_keys)
+                self._add_autodetected_search_keys(new_keys)
                 self.logger.info(f"Autodetected search key COUNTRY in column {maybe_key}")
                 print(self.bundle.get("country_detected").format(maybe_key))
 
@@ -4910,7 +4916,7 @@ if response.status_code == 200:
                 if self.__is_registered or is_demo_dataset:
                     new_keys = {key: SearchKey.EMAIL for key in maybe_keys}
                     search_keys.update(new_keys)
-                    self.autodetected_search_keys.update(new_keys)
+                    self._add_autodetected_search_keys(new_keys)
                     self.logger.info(f"Autodetected search key EMAIL in column {maybe_keys}")
                     print(self.bundle.get("email_detected").format(maybe_keys))
                 else:
@@ -4926,7 +4932,7 @@ if response.status_code == 200:
             if self.__is_registered or is_demo_dataset:
                 new_keys = {key: SearchKey.PHONE for key in maybe_keys}
                 search_keys.update(new_keys)
-                self.autodetected_search_keys.update(new_keys)
+                self._add_autodetected_search_keys(new_keys)
                 self.logger.info(f"Autodetected search key PHONE in column {maybe_keys}")
                 print(self.bundle.get("phone_detected").format(maybe_keys))
             else:
