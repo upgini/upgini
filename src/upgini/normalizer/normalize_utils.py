@@ -134,7 +134,7 @@ class Normalizer:
 
         for f in features:
             converter = DateTimeConverter(f)
-            if converter.is_datetime(df):
+            if converter.is_datetime(df) and f != DateTimeConverter.DATETIME_COL:
                 self.removed_datetime_features.append(f)
                 df.drop(columns=f, inplace=True)
 

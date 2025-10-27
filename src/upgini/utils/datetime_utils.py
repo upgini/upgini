@@ -282,10 +282,13 @@ class DateTimeConverter:
                     warnings.filterwarnings("ignore", message="Could not infer format")
                     return pd.to_datetime(df[self.date_column])
             except ValueError:
-                if raise_errors:
-                    raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
-                else:
-                    return None
+                try:
+                    return pd.to_datetime(df[self.date_column], format="mixed", errors="raise")
+                except ValueError:
+                    if raise_errors:
+                        raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
+                    else:
+                        return None
 
     def clean_old_dates(self, df: pd.DataFrame) -> pd.DataFrame:
         condition = df[self.date_column] <= self.MIN_SUPPORTED_DATE_TS

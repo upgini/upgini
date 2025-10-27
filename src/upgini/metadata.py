@@ -96,7 +96,7 @@ class SearchKey(Enum):
         return [SearchKey.EMAIL, SearchKey.HEM, SearchKey.IP, SearchKey.PHONE]
 
     @staticmethod
-    def from_meaning_type(meaning_type: FileColumnMeaningType) -> "SearchKey":
+    def from_meaning_type(meaning_type: FileColumnMeaningType) -> Optional["SearchKey"]:
         if meaning_type == FileColumnMeaningType.EMAIL:
             return SearchKey.EMAIL
         if meaning_type == FileColumnMeaningType.HEM:
@@ -263,6 +263,7 @@ class FileMetadata(BaseModel):
     digest: Optional[str] = None
     deterministicDigest: Optional[str] = None
     droppedColumns: Optional[List[str]] = None
+    autodetectedSearchKeys: Optional[Dict[str, str]] = None
 
     def column_by_name(self, name: str) -> Optional[FileColumnMetadata]:
         for c in self.columns:

@@ -36,6 +36,7 @@ from upgini.metadata import (
     NumericInterval,
     RuntimeParameters,
     SearchCustomization,
+    SearchKey,
 )
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
@@ -76,6 +77,7 @@ class Dataset:
         id_columns: Optional[List[str]] = None,
         is_imbalanced: bool = False,
         dropped_columns: Optional[List[str]] = None,
+        autodetected_search_keys: Optional[Dict[str, SearchKey]] = None,
         random_state: Optional[int] = None,
         sample_config: Optional[SampleConfig] = None,
         rest_client: Optional[_RestClient] = None,
@@ -124,6 +126,7 @@ class Dataset:
         self.id_columns = id_columns
         self.is_imbalanced = is_imbalanced
         self.dropped_columns = dropped_columns
+        self.autodetected_search_keys = autodetected_search_keys
         self.date_column = date_column
         if logger is not None:
             self.logger = logger
@@ -500,6 +503,10 @@ class Dataset:
 
             deterministic_digest = file_hash(parquet_file_path)
 
+        autodetected_search_keys = (
+            {k: v.name for k, v in self.autodetected_search_keys.items()} if self.autodetected_search_keys else None
+        )
+
         return FileMetadata(
             name=self.dataset_name,
             description=self.description,
@@ -510,6 +517,7 @@ class Dataset:
             hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
             taskType=self.task_type,
             droppedColumns=self.dropped_columns,
+            autodetectedSearchKeys=autodetected_search_keys,
             deterministicDigest=deterministic_digest,
         )
 
