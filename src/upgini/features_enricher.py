@@ -3000,15 +3000,16 @@ if response.status_code == 200:
 
         return selected_input_columns + selected_generated_features
 
-    def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
+    def _validate_empty_search_keys(self, search_keys: dict[str, SearchKey], is_transform: bool = False):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
-            if search_id:
-                self.logger.debug(f"search_id {search_id} provided without search_keys")
+            if is_transform:
+                self.logger.debug("Transform started without search_keys")
                 return
             else:
                 self.logger.warning("search_keys not provided")
                 raise ValidationError(self.bundle.get("empty_search_keys"))
 
+    def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
         key_types = search_keys.values()
 
         # Multiple search keys allowed only for PHONE, IP, POSTAL_CODE, EMAIL, HEM
@@ -4800,6 +4801,8 @@ if response.status_code == 200:
                 # TODO maybe raise ValidationError
 
         self.logger.info(f"Prepared search keys: {valid_search_keys}")
+
+        self._validate_empty_search_keys(valid_search_keys, is_transform=is_transform)
 
         return valid_search_keys
 
