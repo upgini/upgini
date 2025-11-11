@@ -11,6 +11,7 @@ import uuid
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Thread
 from typing import Any, Callable
 
@@ -277,6 +278,8 @@ class FeaturesEnricher(TransformerMixin):
         self.autodetected_search_keys: dict[str, SearchKey] | None = None
         self.imbalanced = False
         self.fit_select_features = True
+        self.true_one_hot_groups: dict[str, list[str]] | None = None
+        self.pseudo_one_hot_groups: dict[str, list[str]] | None = None
         self.__cached_sampled_datasets: dict[str, tuple[pd.DataFrame, pd.DataFrame, pd.Series, dict, dict, dict]] = (
             dict()
         )
@@ -678,9 +681,6 @@ class FeaturesEnricher(TransformerMixin):
                 self.eval_set = self._check_eval_set(eval_set, X)
                 self.__set_select_features(select_features)
                 self.dump_input(X, y, self.eval_set)
-
-                if _num_samples(drop_duplicates(X)) > Dataset.MAX_ROWS:
-                    raise ValidationError(self.bundle.get("dataset_too_many_rows_registered").format(Dataset.MAX_ROWS))
 
                 self.__inner_fit(
                     X,
@@ -2049,6 +2049,9 @@ class FeaturesEnricher(TransformerMixin):
             generated_features.extend(generator.generated_features)
 
         normalizer = Normalizer(self.bundle, self.logger)
+        # TODO restore these properties from the server
+        normalizer.true_one_hot_groups = self.true_one_hot_groups
+        normalizer.pseudo_one_hot_groups = self.pseudo_one_hot_groups
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
@@ -2664,6 +2667,9 @@ if response.status_code == 200:
             generated_features.extend(generator.generated_features)
 
         normalizer = Normalizer(self.bundle, self.logger)
+        # TODO restore these properties from the server
+        normalizer.true_one_hot_groups = self.true_one_hot_groups
+        normalizer.pseudo_one_hot_groups = self.pseudo_one_hot_groups
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
@@ -2831,85 +2837,103 @@ if response.status_code == 200:
         del df
         gc.collect()
 
-        dataset = Dataset(
-            "sample_" + str(uuid.uuid4()),
-            df=df_without_features,
-            meaning_types=meaning_types,
-            search_keys=combined_search_keys,
-            unnest_search_keys=unnest_search_keys,
-            id_columns=self.__get_renamed_id_columns(columns_renaming),
-            date_column=self._get_date_column(search_keys),
-            date_format=self.date_format,
-            sample_config=self.sample_config,
-            rest_client=self.rest_client,
-            logger=self.logger,
-            bundle=self.bundle,
-            warning_callback=self.__log_warning,
-        )
-        dataset.columns_renaming = columns_renaming
+        def invoke_validation(df: pd.DataFrame):
 
-        validation_task = self._search_task.validation(
-            self._get_trace_id(),
-            dataset,
-            start_time=start_time,
-            extract_features=True,
-            runtime_parameters=runtime_parameters,
-            exclude_features_sources=exclude_features_sources,
-            metrics_calculation=metrics_calculation,
-            silent_mode=silent_mode,
-            progress_bar=progress_bar,
-            progress_callback=progress_callback,
-        )
+            dataset = Dataset(
+                "sample_" + str(uuid.uuid4()),
+                df=df,
+                meaning_types=meaning_types,
+                search_keys=combined_search_keys,
+                unnest_search_keys=unnest_search_keys,
+                id_columns=self.__get_renamed_id_columns(columns_renaming),
+                date_column=self._get_date_column(search_keys),
+                date_format=self.date_format,
+                sample_config=self.sample_config,
+                rest_client=self.rest_client,
+                logger=self.logger,
+                bundle=self.bundle,
+                warning_callback=self.__log_warning,
+            )
+            dataset.columns_renaming = columns_renaming
 
-        del df_without_features, dataset
-        gc.collect()
+            validation_task = self._search_task.validation(
+                self._get_trace_id(),
+                dataset,
+                start_time=start_time,
+                extract_features=True,
+                runtime_parameters=runtime_parameters,
+                exclude_features_sources=exclude_features_sources,
+                metrics_calculation=metrics_calculation,
+                silent_mode=silent_mode,
+                progress_bar=progress_bar,
+                progress_callback=progress_callback,
+            )
 
-        if not silent_mode:
-            print(self.bundle.get("polling_transform_task").format(validation_task.search_task_id))
-            if not self.__is_registered:
-                print(self.bundle.get("polling_unregister_information"))
+            del df, dataset
+            gc.collect()
 
-        progress = self.get_progress(validation_task)
-        progress.recalculate_eta(time.time() - start_time)
-        if progress_bar is not None:
-            progress_bar.progress = progress.to_progress_bar()
-        if progress_callback is not None:
-            progress_callback(progress)
-        prev_progress: SearchProgress | None = None
-        polling_period_seconds = 1
-        try:
-            while progress.stage != ProgressStage.DOWNLOADING.value:
-                if prev_progress is None or prev_progress.percent != progress.percent:
-                    progress.recalculate_eta(time.time() - start_time)
-                else:
-                    progress.update_eta(prev_progress.eta - polling_period_seconds)
-                prev_progress = progress
-                if progress_bar is not None:
-                    progress_bar.progress = progress.to_progress_bar()
-                if progress_callback is not None:
-                    progress_callback(progress)
-                if progress.stage == ProgressStage.FAILED.value:
-                    raise Exception(progress.error_message)
-                time.sleep(polling_period_seconds)
-                progress = self.get_progress(validation_task)
-        except KeyboardInterrupt as e:
-            print(self.bundle.get("search_stopping"))
-            self.rest_client.stop_search_task_v2(self._get_trace_id(), validation_task.search_task_id)
-            self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
-            print(self.bundle.get("search_stopped"))
-            raise e
+            if not silent_mode:
+                print(self.bundle.get("polling_transform_task").format(validation_task.search_task_id))
+                if not self.__is_registered:
+                    print(self.bundle.get("polling_unregister_information"))
 
-        validation_task.poll_result(self._get_trace_id(), quiet=True)
+            progress = self.get_progress(validation_task)
+            progress.recalculate_eta(time.time() - start_time)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
+            prev_progress: SearchProgress | None = None
+            polling_period_seconds = 1
+            try:
+                while progress.stage != ProgressStage.DOWNLOADING.value:
+                    if prev_progress is None or prev_progress.percent != progress.percent:
+                        progress.recalculate_eta(time.time() - start_time)
+                    else:
+                        progress.update_eta(prev_progress.eta - polling_period_seconds)
+                    prev_progress = progress
+                    if progress_bar is not None:
+                        progress_bar.progress = progress.to_progress_bar()
+                    if progress_callback is not None:
+                        progress_callback(progress)
+                    if progress.stage == ProgressStage.FAILED.value:
+                        raise Exception(progress.error_message)
+                    time.sleep(polling_period_seconds)
+                    progress = self.get_progress(validation_task)
+            except KeyboardInterrupt as e:
+                print(self.bundle.get("search_stopping"))
+                self.rest_client.stop_search_task_v2(self._get_trace_id(), validation_task.search_task_id)
+                self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
+                print(self.bundle.get("search_stopped"))
+                raise e
 
-        seconds_left = time.time() - start_time
-        progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
-        if progress_bar is not None:
-            progress_bar.progress = progress.to_progress_bar()
-        if progress_callback is not None:
-            progress_callback(progress)
+            validation_task.poll_result(self._get_trace_id(), quiet=True)
 
-        if not silent_mode:
-            print(self.bundle.get("transform_start"))
+            seconds_left = time.time() - start_time
+            progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
+            if progress_bar is not None:
+                progress_bar.progress = progress.to_progress_bar()
+            if progress_callback is not None:
+                progress_callback(progress)
+
+            if not silent_mode:
+                print(self.bundle.get("transform_start"))
+
+            return validation_task.get_all_validation_raw_features(self._get_trace_id(), metrics_calculation)
+
+        if len(df_without_features) <= Dataset.MAX_ROWS:
+            result_features = invoke_validation(df_without_features)
+        else:
+            self.logger.warning(
+                f"Dataset has more than {Dataset.MAX_ROWS} rows: {len(df_without_features)}, "
+                f"splitting into chunks of {Dataset.MAX_ROWS} rows"
+            )
+            result_features_list = []
+
+            for i in range(0, len(df_without_features), Dataset.MAX_ROWS):
+                chunk = df_without_features.iloc[i : i + Dataset.MAX_ROWS]
+                result_features_list.append(invoke_validation(chunk))
+            result_features = pd.concat(result_features_list)
 
         # Prepare input DataFrame for __enrich by concatenating generated ids and client features
         df_before_explode = df_before_explode.rename(columns=columns_renaming)
@@ -2921,8 +2945,6 @@ if response.status_code == 200:
             ],
             axis=1,
         ).set_index(validated_Xy.index)
-
-        result_features = validation_task.get_all_validation_raw_features(self._get_trace_id(), metrics_calculation)
 
         result = self.__enrich(
             combined_df,
@@ -2974,12 +2996,38 @@ if response.status_code == 200:
         fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
         fit_input_columns = [c.originalName for c in file_meta.columns]
         original_dropped_features = [self.fit_columns_renaming.get(c, c) for c in fit_dropped_features]
+        true_one_hot_features = (
+            [f for group in self.true_one_hot_groups.values() for f in group] if self.true_one_hot_groups else []
+        )
         new_columns_on_transform = [
-            c for c in validated_Xy.columns if c not in fit_input_columns and c not in original_dropped_features
+            c
+            for c in validated_Xy.columns
+            if c not in fit_input_columns and c not in original_dropped_features and c not in true_one_hot_features
         ]
         fit_original_search_keys = self._get_fit_search_keys_with_original_names()
 
         selected_generated_features = [c for c in generated_features if c in self.feature_names_]
+        selected_true_one_hot_features = (
+            [
+                c
+                for cat_feature, group in self.true_one_hot_groups.items()
+                for c in group
+                if cat_feature in self.feature_names_
+            ]
+            if self.true_one_hot_groups
+            else []
+        )
+        selected_pseudo_one_hot_features = (
+            [
+                feature
+                for group in self.pseudo_one_hot_groups.values()
+                if any(f in self.feature_names_ for f in group)
+                for feature in group
+            ]
+            if self.pseudo_one_hot_groups
+            else []
+        )
+
         if keep_input is True:
             selected_input_columns = [
                 c
@@ -2998,16 +3046,21 @@ if response.status_code == 200:
         if DEFAULT_INDEX in selected_input_columns:
             selected_input_columns.remove(DEFAULT_INDEX)
 
-        return selected_input_columns + selected_generated_features
+        return (
+            selected_input_columns
+            + selected_generated_features
+            + selected_true_one_hot_features
+            + selected_pseudo_one_hot_features
+        )
 
     def _validate_empty_search_keys(self, search_keys: dict[str, SearchKey], is_transform: bool = False):
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if is_transform:
                 self.logger.debug("Transform started without search_keys")
-                return
+                # return
             else:
                 self.logger.warning("search_keys not provided")
-                raise ValidationError(self.bundle.get("empty_search_keys"))
+                # raise ValidationError(self.bundle.get("empty_search_keys"))
 
     def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
         key_types = search_keys.values()
@@ -3167,7 +3220,7 @@ if response.status_code == 200:
         else:
             only_train_df = df
 
-        self.imbalanced = is_imbalanced(only_train_df, self.model_task_type, self.sample_config, self.bundle)
+        self.imbalanced = is_imbalanced(only_train_df, self.model_task_type, self.sample_config, self.bundle, self.__log_warning)
         if self.imbalanced:
             # Exclude eval sets from fit because they will be transformed before metrics calculation
             df = only_train_df
@@ -3240,6 +3293,8 @@ if response.status_code == 200:
             df, self.fit_search_keys, self.fit_generated_features
         )
         self.fit_columns_renaming = normalizer.columns_renaming
+        self.true_one_hot_groups = normalizer.true_one_hot_groups
+        self.pseudo_one_hot_groups = normalizer.pseudo_one_hot_groups
         if normalizer.removed_datetime_features:
             self.fit_dropped_features.update(normalizer.removed_datetime_features)
             original_removed_datetime_features = [
@@ -3257,7 +3312,11 @@ if response.status_code == 200:
         features_columns = [c for c in df.columns if c not in non_feature_columns]
 
         features_to_drop, feature_validator_warnings = FeaturesValidator(self.logger).validate(
-            df, features_columns, self.generate_features, self.fit_columns_renaming
+            df,
+            features_columns,
+            self.generate_features,
+            self.fit_columns_renaming,
+            [f for group in self.pseudo_one_hot_groups.values() for f in group] if self.pseudo_one_hot_groups else [],
         )
         if feature_validator_warnings:
             for warning in feature_validator_warnings:
@@ -3820,8 +3879,7 @@ if response.status_code == 200:
                 elif self.columns_for_online_api:
                     msg = self.bundle.get("oot_with_online_sources_not_supported").format(eval_set_index)
                 if msg:
-                    print(msg)
-                    self.logger.warning(msg)
+                    self.__log_warning(msg)
                     df = df[df[EVAL_SET_INDEX] != eval_set_index]
         return df
 
@@ -4766,7 +4824,7 @@ if response.status_code == 200:
         elif self.autodetect_search_keys:
             valid_search_keys = self.__detect_missing_search_keys(x, valid_search_keys, is_demo_dataset)
 
-        if all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
+        if len(valid_search_keys) > 0 and all(k == SearchKey.CUSTOM_KEY for k in valid_search_keys.values()):
             if self.__is_registered:
                 msg = self.bundle.get("only_custom_keys")
             else:
@@ -4802,7 +4860,7 @@ if response.status_code == 200:
 
         self.logger.info(f"Prepared search keys: {valid_search_keys}")
 
-        self._validate_empty_search_keys(valid_search_keys, is_transform=is_transform)
+        # x = self._validate_empty_search_keys(x, valid_search_keys, is_transform=is_transform)
 
         return valid_search_keys
 
@@ -5025,37 +5083,55 @@ if response.status_code == 200:
                         X_ = X_.to_frame()
 
                     with tempfile.TemporaryDirectory() as tmp_dir:
-                        X_.to_parquet(f"{tmp_dir}/x.parquet", compression="zstd")
-                        x_digest_sha256 = file_hash(f"{tmp_dir}/x.parquet")
+                        x_file_name = f"{tmp_dir}/x.parquet"
+                        X_.to_parquet(x_file_name, compression="zstd")
+                        uploading_file_size = Path(x_file_name).stat().st_size
+                        if uploading_file_size > Dataset.MAX_UPLOADING_FILE_SIZE:
+                            self.logger.warning(
+                                f"Uploading file x.parquet is too large: {uploading_file_size} bytes. Skip it"
+                            )
+                            return
+                        x_digest_sha256 = file_hash(x_file_name)
                         if self.rest_client.is_file_uploaded(trace_id_, x_digest_sha256):
                             self.logger.info(
                                 f"File x.parquet was already uploaded with digest {x_digest_sha256}, skipping"
                             )
                         else:
-                            self.rest_client.dump_input_file(
-                                trace_id_, f"{tmp_dir}/x.parquet", "x.parquet", x_digest_sha256
-                            )
+                            self.rest_client.dump_input_file(trace_id_, x_file_name, "x.parquet", x_digest_sha256)
 
                         if y_ is not None:
                             if isinstance(y_, pd.Series):
                                 y_ = y_.to_frame()
-                            y_.to_parquet(f"{tmp_dir}/y.parquet", compression="zstd")
-                            y_digest_sha256 = file_hash(f"{tmp_dir}/y.parquet")
+                            y_file_name = f"{tmp_dir}/y.parquet"
+                            y_.to_parquet(y_file_name, compression="zstd")
+                            uploading_file_size = Path(y_file_name).stat().st_size
+                            if uploading_file_size > Dataset.MAX_UPLOADING_FILE_SIZE:
+                                self.logger.warning(
+                                    f"Uploading file y.parquet is too large: {uploading_file_size} bytes. Skip it"
+                                )
+                                return
+                            y_digest_sha256 = file_hash(y_file_name)
                             if self.rest_client.is_file_uploaded(trace_id_, y_digest_sha256):
                                 self.logger.info(
                                     f"File y.parquet was already uploaded with digest {y_digest_sha256}, skipping"
                                 )
                             else:
-                                self.rest_client.dump_input_file(
-                                    trace_id_, f"{tmp_dir}/y.parquet", "y.parquet", y_digest_sha256
-                                )
+                                self.rest_client.dump_input_file(trace_id_, y_file_name, "y.parquet", y_digest_sha256)
 
                             if eval_set_ is not None and len(eval_set_) > 0:
                                 for idx, (eval_x_, eval_y_) in enumerate(eval_set_):
                                     if isinstance(eval_x_, pd.Series):
                                         eval_x_ = eval_x_.to_frame()
-                                    eval_x_.to_parquet(f"{tmp_dir}/eval_x_{idx}.parquet", compression="zstd")
-                                    eval_x_digest_sha256 = file_hash(f"{tmp_dir}/eval_x_{idx}.parquet")
+                                    eval_x_file_name = f"{tmp_dir}/eval_x_{idx}.parquet"
+                                    eval_x_.to_parquet(eval_x_file_name, compression="zstd")
+                                    uploading_file_size = Path(eval_x_file_name).stat().st_size
+                                    if uploading_file_size > Dataset.MAX_UPLOADING_FILE_SIZE:
+                                        self.logger.warning(
+                                            f"Uploading file eval_x_{idx}.parquet is too large: "
+                                            f"{uploading_file_size} bytes. Skip it"
+                                        )
+                                        return
+                                    eval_x_digest_sha256 = file_hash(eval_x_file_name)
                                     if self.rest_client.is_file_uploaded(trace_id_, eval_x_digest_sha256):
                                         self.logger.info(
                                             f"File eval_x_{idx}.parquet was already uploaded with"
@@ -5064,15 +5140,23 @@ if response.status_code == 200:
                                     else:
                                         self.rest_client.dump_input_file(
                                             trace_id_,
-                                            f"{tmp_dir}/eval_x_{idx}.parquet",
+                                            eval_x_file_name,
                                             f"eval_x_{idx}.parquet",
                                             eval_x_digest_sha256,
                                         )
 
                                     if isinstance(eval_y_, pd.Series):
                                         eval_y_ = eval_y_.to_frame()
-                                    eval_y_.to_parquet(f"{tmp_dir}/eval_y_{idx}.parquet", compression="zstd")
-                                    eval_y_digest_sha256 = file_hash(f"{tmp_dir}/eval_y_{idx}.parquet")
+                                    eval_y_file_name = f"{tmp_dir}/eval_y_{idx}.parquet"
+                                    eval_y_.to_parquet(eval_y_file_name, compression="zstd")
+                                    uploading_file_size = Path(eval_y_file_name).stat().st_size
+                                    if uploading_file_size > Dataset.MAX_UPLOADING_FILE_SIZE:
+                                        self.logger.warning(
+                                            f"Uploading file eval_y_{idx}.parquet is too large: "
+                                            f"{uploading_file_size} bytes. Skip it"
+                                        )
+                                        return
+                                    eval_y_digest_sha256 = file_hash(eval_y_file_name)
                                     if self.rest_client.is_file_uploaded(trace_id_, eval_y_digest_sha256):
                                         self.logger.info(
                                             f"File eval_y_{idx}.parquet was already uploaded"
@@ -5081,7 +5165,7 @@ if response.status_code == 200:
                                     else:
                                         self.rest_client.dump_input_file(
                                             trace_id_,
-                                            f"{tmp_dir}/eval_y_{idx}.parquet",
+                                            eval_y_file_name,
                                             f"eval_y_{idx}.parquet",
                                             eval_y_digest_sha256,
                                         )

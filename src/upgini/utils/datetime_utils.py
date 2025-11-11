@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from pandas.api.types import is_numeric_dtype
 
 from upgini.errors import ValidationError
-from upgini.metadata import EVAL_SET_INDEX, SearchKey
+from upgini.metadata import CURRENT_DATE_COL, EVAL_SET_INDEX, SearchKey
 from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
@@ -418,12 +418,12 @@ def is_dates_distribution_valid(
                 except Exception:
                     pass
 
-        if maybe_date_col is None:
-            return
+        if maybe_date_col is None or maybe_date_col == CURRENT_DATE_COL:
+            return True
 
         # Don't check if date column is constant
         if X[maybe_date_col].nunique() <= 1:
-            return
+            return True
 
         if isinstance(X[maybe_date_col].dtype, pd.PeriodDtype):
             dates = X[maybe_date_col].dt.to_timestamp().dt.date

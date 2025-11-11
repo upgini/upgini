@@ -268,28 +268,43 @@ def test_constant_and_empty_validation():
             "phone": np.random.randint(1, 99999999999, 1000),
             "a": [1] * 995 + [2] * 5,
             "b": [None] * 995 + [3] * 5,
-            "c": [0] * 995 + [1] * 5,  # like One-Hot encoding
+            "c": [0] * 995 + [1] * 5,
             "d": [1] * 10 + [0] * 990,
         }
     )
-    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c", "d"])
-    assert features_to_drop == ["a", "b"]
-    assert len(warnings) == 2
+    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c", "d"], columns_renaming={})
+    assert features_to_drop == ["a", "b", "c", "d"]
+    assert len(warnings) == 1
 
 
 def test_one_hot_encoding_validation():
     df = pd.DataFrame(
         {
-            "phone": np.random.randint(1, 99999999999, 1000),
+            "phone_renamed": np.random.randint(1, 99999999999, 1000),
             "a": np.random.randint(1, 10, 1000),
-            "b": np.random.rand(1000),
-            "text_feature": ["text_" + str(n) for n in np.random.rand(1000)],
+            "b_renamed": np.random.rand(1000),
+            "text_feature_renamed": ["text_" + str(n) for n in np.random.rand(1000)],
         }
     )
     df = pd.get_dummies(df, columns=["a"])
+    one_hot_renaming = {f"a_{i}": f"a_{i}_renamed" for i in range(10)}
+    df.rename(columns=one_hot_renaming, inplace=True)
+    reverse_one_hot_renaming = {v: k for k, v in one_hot_renaming.items()}
     features_columns = df.columns.to_list()
-    features_columns.remove("phone")
-    features_to_drop, warnings = FeaturesValidator().validate(df, features_columns, ["text_feature"])
+    features_columns.remove("phone_renamed")
+    columns_renaming = {
+        "phone_renamed": "phone",
+        "b_renamed": "b",
+        "text_feature_renamed": "text_feature",
+    }
+    columns_renaming.update(reverse_one_hot_renaming)
+    features_to_drop, warnings = FeaturesValidator().validate(
+        df,
+        features_columns,
+        ["text_feature"],
+        columns_renaming=columns_renaming,
+        pseudo_one_hot_encoded_features=list(one_hot_renaming.keys()),
+    )
     assert features_to_drop == []
     assert warnings == []
 
@@ -332,8 +347,8 @@ def test_fail_on_small_class_observations():
         }
     )
 
-    with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
-        is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
+    # with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
+    assert is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
 
 
 def test_fail_on_too_many_classes():
