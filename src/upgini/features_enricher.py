@@ -3057,10 +3057,8 @@ if response.status_code == 200:
         if (search_keys is None or len(search_keys) == 0) and self.country_code is None:
             if is_transform:
                 self.logger.debug("Transform started without search_keys")
-                # return
             else:
                 self.logger.warning("search_keys not provided")
-                # raise ValidationError(self.bundle.get("empty_search_keys"))
 
     def __validate_search_keys(self, search_keys: dict[str, SearchKey], search_id: str | None = None):
         key_types = search_keys.values()
@@ -3220,7 +3218,9 @@ if response.status_code == 200:
         else:
             only_train_df = df
 
-        self.imbalanced = is_imbalanced(only_train_df, self.model_task_type, self.sample_config, self.bundle, self.__log_warning)
+        self.imbalanced = is_imbalanced(
+            only_train_df, self.model_task_type, self.sample_config, self.bundle, self.__log_warning
+        )
         if self.imbalanced:
             # Exclude eval sets from fit because they will be transformed before metrics calculation
             df = only_train_df

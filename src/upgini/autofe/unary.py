@@ -15,11 +15,9 @@ class Abs(PandasOperator, VectorizableMixin):
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
         return data.astype(np.float64).abs()
-        # return data.abs()
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
         return data.astype(np.float64).abs()
-        # return data.abs()
 
 
 class Log(PandasOperator, VectorizableMixin):
