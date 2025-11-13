@@ -63,10 +63,10 @@ def _compute_track_metrics(client_ip: Optional[str] = None, client_visitorid: Op
     ident_res = "https://api64.ipify.org"
 
     try:
-        track["hostname"] = socket.gethostname()
+        track["host_name"] = socket.gethostname()
         track["whoami"] = getuser()
     except Exception as e:
-        track["hostname"] = "localhost"
+        track["host_name"] = "localhost"
         track["whoami"] = "root"
         track["err"] = str(e)
     # get real info depending on ide

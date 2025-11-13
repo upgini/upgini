@@ -1050,8 +1050,9 @@ class LoggerFactory:
         rest_client = get_rest_client(backend_url, api_token, client_ip, client_visitorid)
         datadog_handler = BackendLogHandler(rest_client, client_ip, client_visitorid)
         json_formatter = jsonlogger.JsonFormatter(
-            "%(asctime)s %(threadName)s %(name)s %(levelname)s %(message)s",
+            "%(asctime)s %(threadName)s %(name)s %(levelname)s %(levelno)d %(message)s",
             timestamp=True,
+            rename_fields={"levelname": "level", "levelno": "level_value"},
         )
         datadog_handler.setFormatter(json_formatter)
         upgini_logger.addHandler(datadog_handler)
