@@ -58,7 +58,7 @@ class Dataset:
     MAX_ROWS = 3_000_000
     MIN_SUPPORTED_DATE_TS = 946684800000  # 2000-01-01
     MAX_FEATURES_COUNT = 3500
-    MAX_UPLOADING_FILE_SIZE = 268435456  # 256 Mb
+    MAX_UPLOADING_FILE_SIZE = 536_870_912  # 512 Mb
     MAX_STRING_FEATURE_LENGTH = 24573
     FORCE_SAMPLE_SIZE = 7_000
 
@@ -304,10 +304,11 @@ class Dataset:
         ):
             keys_to_validate.remove(ipv4_column)
 
-        mandatory_columns = [target]
+        mandatory_columns = {target} if target is not None else set()
         columns_to_validate = mandatory_columns.copy()
-        columns_to_validate.extend(keys_to_validate)
-        columns_to_validate = set([i for i in columns_to_validate if i is not None])
+        columns_to_validate.update(keys_to_validate)
+        if len(columns_to_validate) == 0:
+            return
 
         nrows = len(self.data)
         validation_stats = {}
@@ -370,7 +371,10 @@ class Dataset:
                 self.data["valid_keys"] = self.data["valid_keys"] + self.data[f"{col}_is_valid"]
             self.data.drop(columns=f"{col}_is_valid", inplace=True)
 
-        self.data["is_valid"] = self.data["valid_keys"] > 0
+        if len(keys_to_validate) > 0:
+            self.data["is_valid"] = self.data["valid_keys"] > 0
+        else:
+            self.data["is_valid"] = True
         self.data["is_valid"] = self.data["is_valid"] & self.data["valid_mandatory"]
         self.data.drop(columns=["valid_keys", "valid_mandatory"], inplace=True)
 

@@ -117,6 +117,7 @@ def is_imbalanced(
     task_type: ModelTaskType,
     sample_config: SampleConfig,
     bundle: ResourceBundle,
+    warning_callback: Optional[Callable] = None,
 ) -> bool:
     if task_type is None or not task_type.is_classification():
         return False
@@ -144,7 +145,8 @@ def is_imbalanced(
         msg = bundle.get("dataset_rarest_class_less_min").format(
             min_class_value, min_class_count, MIN_TARGET_CLASS_ROWS
         )
-        raise ValidationError(msg)
+        if warning_callback is not None:
+            warning_callback(msg)
 
     min_class_percent = IMBALANCE_THESHOLD / target_classes_count
     min_class_threshold = min_class_percent * count
@@ -196,14 +198,34 @@ def balance_undersample(
     resampled_data = df
     df = df.copy().sort_values(by=SYSTEM_RECORD_ID)
     if task_type == ModelTaskType.MULTICLASS:
+        # Remove rare classes which have <0.01% of samples
+        total_count = len(df)
+        # Always preserve two most frequent classes, even if they are rare
+        top_two_classes = list(vc.index[:2])
+        rare_classes_all = [cls for cls, cnt in vc.items() if cnt / total_count < 0.0001]
+        rare_classes = [cls for cls in rare_classes_all if cls not in top_two_classes]
+        if rare_classes:
+            msg = bundle.get("rare_target_classes_drop").format(rare_classes)
+            logger.warning(msg)
+            warning_callback(msg)
+            df = df[~df[target_column].isin(rare_classes)]
+            target = df[target_column].copy()
+            vc = target.value_counts()
+            max_class_value = vc.index[0]
+            min_class_value = vc.index[len(vc) - 1]
+            max_class_count = vc[max_class_value]
+            min_class_count = vc[min_class_value]
+            num_classes = len(vc)
+
         if len(df) > multiclass_min_sample_threshold and max_class_count > (
             min_class_count * multiclass_bootstrap_loops
         ):
 
             msg = bundle.get("imbalanced_target").format(min_class_value, min_class_count)
-            logger.warning(msg)
             if warning_callback is not None:
                 warning_callback(msg)
+            else:
+                logger.warning(msg)
 
             sample_strategy = dict()
             for class_value in vc.index:
@@ -228,9 +250,10 @@ def balance_undersample(
             resampled_data = df[df[SYSTEM_RECORD_ID].isin(new_x[SYSTEM_RECORD_ID])]
     elif len(df) > binary_min_sample_threshold:
         msg = bundle.get("imbalanced_target").format(min_class_value, min_class_count)
-        logger.warning(msg)
         if warning_callback is not None:
             warning_callback(msg)
+        else:
+            logger.warning(msg)
 
         # fill up to min_sample_threshold by majority class
         minority_class = df[df[target_column] == min_class_value]

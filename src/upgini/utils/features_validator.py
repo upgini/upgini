@@ -4,7 +4,12 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
+from pandas.api.types import (
+    is_float_dtype,
+    is_integer_dtype,
+    is_object_dtype,
+    is_string_dtype,
+)
 
 from upgini.resource_bundle import bundle
 
@@ -24,7 +29,6 @@ class FeaturesValidator:
         features_for_generate: Optional[List[str]] = None,
         columns_renaming: Optional[Dict[str, str]] = None,
     ) -> Tuple[List[str], List[str]]:
-        one_hot_encoded_features = []
         empty_or_constant_features = []
         high_cardinality_features = []
         warnings = []
@@ -38,19 +42,10 @@ class FeaturesValidator:
 
             if len(value_counts) == 1:
                 empty_or_constant_features.append(f)
-            elif most_frequent_percent >= 0.99:
-                if self.is_one_hot_encoded(column):
-                    one_hot_encoded_features.append(f)
-                else:
-                    empty_or_constant_features.append(f)
+            elif most_frequent_percent >= 0.99 and len(value_counts) != 2 and not self.__is_integer(column):
+                empty_or_constant_features.append(f)
 
         columns_renaming = columns_renaming or {}
-
-        if one_hot_encoded_features and len(one_hot_encoded_features) > 1:
-            msg = bundle.get("one_hot_encoded_features").format(
-                [columns_renaming.get(f, f) for f in one_hot_encoded_features]
-            )
-            warnings.append(msg)
 
         if empty_or_constant_features:
             msg = bundle.get("empty_or_contant_features").format(
@@ -99,40 +94,20 @@ class FeaturesValidator:
     def find_constant_features(df: pd.DataFrame) -> List[str]:
         return [i for i in df if df[i].nunique() <= 1]
 
-    @staticmethod
-    def is_one_hot_encoded(series: pd.Series) -> bool:
-        try:
-            # All rows should be the same type
-            if series.apply(lambda x: type(x)).nunique() != 1:
-                return False
 
-            # First, handle string representations of True/False
-            series_copy = series.copy()
-            if series_copy.dtype == "object" or series_copy.dtype == "string":
-                # Convert string representations of boolean values to numeric
-                series_copy = series_copy.astype(str).str.strip().str.lower()
-                series_copy = series_copy.replace({"true": "1", "false": "0"})
-
-            # Column contains only 0 and 1 (as strings or numbers or booleans)
-            series_copy = series_copy.astype(float)
-            if set(series_copy.unique()) != {0.0, 1.0}:
-                return False
-
-            series_copy = series_copy.astype(int)
-
-            # Column doesn't contain any NaN, np.NaN, space, null, etc.
-            if not (series_copy.isin([0, 1])).all():
-                return False
-
-            vc = series_copy.value_counts()
-            # Column should contain both 0 and 1
-            if len(vc) != 2:
-                return False
-
-            # Minority class is 1
-            if vc[1] >= vc[0]:
-                return False
-
-            return True
-        except ValueError:
+def is_effective_int(column: pd.Series) -> bool:
+    """
+    Return True if the series is effectively integer:
+    - integer dtype; or
+    - float dtype with all non-null values being whole numbers within int64 range.
+    """
+    if is_integer_dtype(column):
+        return True
+    if is_float_dtype(column):
+        non_null_values = column.dropna()
+        if non_null_values.empty:
             return False
+        within_range_mask = non_null_values.abs() < np.iinfo(np.int64).max
+        is_integer_mask = non_null_values.apply(lambda v: float(v).is_integer())
+        return bool((within_range_mask & is_integer_mask).all())
+    return False

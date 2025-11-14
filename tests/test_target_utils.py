@@ -9,10 +9,7 @@ from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import SYSTEM_RECORD_ID, TARGET, ModelTaskType, SearchKey
 from upgini.resource_bundle import bundle
-from upgini.utils.target_utils import (
-    balance_undersample,
-    define_task,
-)
+from upgini.utils.target_utils import balance_undersample, define_task
 
 
 def test_invalid_target():
@@ -130,6 +127,41 @@ def test_balance_undersaampling_multiclass():
     expected_df = pd.DataFrame({SYSTEM_RECORD_ID: [1, 2, 3, 4, 5, 6, 8], TARGET: ["a", "b", "c", "c", "c", "b", "c"]})
     # Get all of rarest class (a) and x2 (or all if less) of major classes or up to 4
     assert_frame_equal(balanced_df.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True), expected_df)
+
+
+def test_balance_undersampling_multiclass_with_rare_classes_removal():
+    # Create a dataset with two rare classes ('a' and 'b'), each <0.1% of data, and a majority class 'c'
+    total_samples = 20003
+    # 'a': 1, 'b': 2, 'c': 1000
+    df = pd.DataFrame(
+        {
+            SYSTEM_RECORD_ID: range(1, total_samples + 1),
+            TARGET: ["a"] + ["b", "b"] + ["c"] * 20000,
+        }
+    )
+
+    warnings = []
+
+    def warning_callback(msg):
+        warnings.append(msg)
+
+    # Set a low multiclass_min_sample_threshold to trigger undersampling logic
+    balanced_df = balance_undersample(
+        df,
+        TARGET,
+        ModelTaskType.MULTICLASS,
+        42,
+        multiclass_min_sample_threshold=5000,
+        warning_callback=warning_callback,
+    )
+    assert len(warnings) == 2
+    assert warnings[0] == bundle.get("rare_target_classes_drop").format(["a"])
+    assert warnings[1] == bundle.get("imbalanced_target").format("b", 2)
+
+    # 'a' and 'b' should be removed, leaving only 'c'
+    vc = balanced_df[TARGET].value_counts()
+    assert vc["c"] == 9996
+    assert vc["b"] == 2
 
 
 def test_binary_psi_calculation(requests_mock: Mocker):

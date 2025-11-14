@@ -26,6 +26,7 @@ from upgini.utils import find_numbers_with_decimal_comma
 from upgini.utils.country_utils import CountrySearchKeyConverter
 from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.ip_utils import IpSearchKeyConverter
+from upgini.utils.one_hot_encoder import OneHotDecoder
 from upgini.utils.phone_utils import PhoneSearchKeyConverter
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyConverter
 
@@ -45,6 +46,8 @@ class Normalizer:
         self.search_keys = {}
         self.generated_features = []
         self.removed_datetime_features = []
+        self.true_one_hot_groups: dict[str, list[str]] | None = None
+        self.pseudo_one_hot_groups: dict[str, list[str]] | None = None
 
     def normalize(
         self, df: pd.DataFrame, search_keys: Dict[str, SearchKey], generated_features: List[str]
@@ -53,6 +56,9 @@ class Normalizer:
         self.generated_features = generated_features.copy()
 
         df = df.copy()
+
+        df = self._convert_one_hot_encoded_columns(df)
+
         df = self._rename_columns(df)
 
         df = self._remove_dates_from_features(df)
@@ -76,6 +82,15 @@ class Normalizer:
         df = self.__convert_features_types(df)
 
         return df, self.search_keys, self.generated_features
+
+    def _convert_one_hot_encoded_columns(self, df: pd.DataFrame):
+        if self.true_one_hot_groups is not None or self.pseudo_one_hot_groups is not None:
+            df = OneHotDecoder.decode_with_cached_groups(
+                df, self.true_one_hot_groups, self.pseudo_one_hot_groups
+            )
+        else:
+            df, self.true_one_hot_groups, self.pseudo_one_hot_groups = OneHotDecoder.decode(df)
+        return df
 
     def _rename_columns(self, df: pd.DataFrame):
         # logger.info("Replace restricted symbols in column names")

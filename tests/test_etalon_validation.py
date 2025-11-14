@@ -98,7 +98,7 @@ def test_string_ip_to_bytes_conversion():
 
     assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
     assert search_keys == {"ip_binary": SearchKey.IP_BINARY, "ip_prefix": SearchKey.IP_PREFIX}
-    assert columns_renaming == {"ip_binary": "original_ip", "ip_prefix": "original_ip"}
+    assert columns_renaming == {"ip": "original_ip", "ip_binary": "original_ip", "ip_prefix": "original_ip"}
     assert isinstance(df["ip_binary"].iloc[0], bytes)
     assert isinstance(df["ip_prefix"].iloc[0], str)
     assert df["ip_binary"].isnull().sum() == 2
@@ -122,7 +122,7 @@ def test_python_ip_to_bytes_conversion():
 
     assert set(df.columns.to_list()) == {"ip_binary", "ip_prefix"}
     assert search_keys == {"ip_binary": SearchKey.IP_BINARY, "ip_prefix": SearchKey.IP_PREFIX}
-    assert columns_renaming == {"ip_binary": "original_ip", "ip_prefix": "original_ip"}
+    assert columns_renaming == {"ip": "original_ip", "ip_binary": "original_ip", "ip_prefix": "original_ip"}
     assert isinstance(df["ip_binary"].iloc[0], bytes)
     assert isinstance(df["ip_prefix"].iloc[0], str)
     assert df["ip_binary"].iloc[0] == b"\xc0\xa8\x01\x01"
@@ -266,30 +266,44 @@ def test_constant_and_empty_validation():
     df = pd.DataFrame(
         {
             "phone": np.random.randint(1, 99999999999, 1000),
-            "a": [1] * 995 + [2] * 5,
+            "a": [1.1] * 995 + [2.2] * 3 + [3.3] * 2,
             "b": [None] * 995 + [3] * 5,
-            "c": [0] * 995 + [1] * 5,  # like One-Hot encoding
+            "c": [0.0] * 995 + [1.0] * 5,
             "d": [1] * 10 + [0] * 990,
         }
     )
-    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c", "d"])
-    assert features_to_drop == ["a", "b"]
-    assert len(warnings) == 2
+    features_to_drop, warnings = FeaturesValidator().validate(df, ["a", "b", "c", "d"], columns_renaming={})
+    assert features_to_drop == ["a"]
+    assert len(warnings) == 1
 
 
 def test_one_hot_encoding_validation():
     df = pd.DataFrame(
         {
-            "phone": np.random.randint(1, 99999999999, 1000),
+            "phone_renamed": np.random.randint(1, 99999999999, 1000),
             "a": np.random.randint(1, 10, 1000),
-            "b": np.random.rand(1000),
-            "text_feature": ["text_" + str(n) for n in np.random.rand(1000)],
+            "b_renamed": np.random.rand(1000),
+            "text_feature_renamed": ["text_" + str(n) for n in np.random.rand(1000)],
         }
     )
     df = pd.get_dummies(df, columns=["a"])
+    one_hot_renaming = {f"a_{i}": f"a_{i}_renamed" for i in range(10)}
+    df.rename(columns=one_hot_renaming, inplace=True)
+    reverse_one_hot_renaming = {v: k for k, v in one_hot_renaming.items()}
     features_columns = df.columns.to_list()
-    features_columns.remove("phone")
-    features_to_drop, warnings = FeaturesValidator().validate(df, features_columns, ["text_feature"])
+    features_columns.remove("phone_renamed")
+    columns_renaming = {
+        "phone_renamed": "phone",
+        "b_renamed": "b",
+        "text_feature_renamed": "text_feature",
+    }
+    columns_renaming.update(reverse_one_hot_renaming)
+    features_to_drop, warnings = FeaturesValidator().validate(
+        df,
+        features_columns,
+        ["text_feature"],
+        columns_renaming=columns_renaming,
+    )
     assert features_to_drop == []
     assert warnings == []
 
@@ -332,8 +346,8 @@ def test_fail_on_small_class_observations():
         }
     )
 
-    with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
-        is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
+    # with pytest.raises(ValidationError, match=bundle.get("dataset_rarest_class_less_min").format("a", 1, 100)):
+    assert is_imbalanced(df, ModelTaskType.MULTICLASS, SampleConfig(), bundle)
 
 
 def test_fail_on_too_many_classes():
