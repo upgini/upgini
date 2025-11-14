@@ -50,7 +50,7 @@ from upgini.utils.track_info import get_track_metrics
 
 UPGINI_URL: str = "UPGINI_URL"
 UPGINI_API_KEY: str = "UPGINI_API_KEY"
-DEMO_API_KEY: str = "Aa4BPwGFbn1zNEXIkZ-NbhsRk0ricN6puKuga1-O5lM"
+DEMO_API_KEY: str = "5PR1_IcjHTiYm_QVh5zyB2K1cdLrJaY5TKLzCF1Lew38N"
 TRACK_METRICS_TIMEOUT_SECONDS: int = 10
 
 refresh_token_lock = threading.Lock()
