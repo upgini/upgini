@@ -4,7 +4,12 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_integer_dtype, is_object_dtype, is_string_dtype
+from pandas.api.types import (
+    is_float_dtype,
+    is_integer_dtype,
+    is_object_dtype,
+    is_string_dtype,
+)
 
 from upgini.resource_bundle import bundle
 
@@ -23,17 +28,10 @@ class FeaturesValidator:
         features: List[str],
         features_for_generate: Optional[List[str]] = None,
         columns_renaming: Optional[Dict[str, str]] = None,
-        pseudo_one_hot_encoded_features: Optional[List[str]] = None,
     ) -> Tuple[List[str], List[str]]:
         empty_or_constant_features = []
         high_cardinality_features = []
         warnings = []
-
-        pseudo_one_hot_encoded_features = [
-            renamed
-            for renamed, original in columns_renaming.items()
-            if original in pseudo_one_hot_encoded_features or []
-        ]
 
         for f in features:
             column = df[f]
@@ -44,7 +42,7 @@ class FeaturesValidator:
 
             if len(value_counts) == 1:
                 empty_or_constant_features.append(f)
-            elif most_frequent_percent >= 0.99 and f not in pseudo_one_hot_encoded_features:
+            elif most_frequent_percent >= 0.99 and len(value_counts) != 2 and not self.__is_integer(column):
                 empty_or_constant_features.append(f)
 
         columns_renaming = columns_renaming or {}
@@ -95,3 +93,21 @@ class FeaturesValidator:
     @staticmethod
     def find_constant_features(df: pd.DataFrame) -> List[str]:
         return [i for i in df if df[i].nunique() <= 1]
+
+
+def is_effective_int(column: pd.Series) -> bool:
+    """
+    Return True if the series is effectively integer:
+    - integer dtype; or
+    - float dtype with all non-null values being whole numbers within int64 range.
+    """
+    if is_integer_dtype(column):
+        return True
+    if is_float_dtype(column):
+        non_null_values = column.dropna()
+        if non_null_values.empty:
+            return False
+        within_range_mask = non_null_values.abs() < np.iinfo(np.int64).max
+        is_integer_mask = non_null_values.apply(lambda v: float(v).is_integer())
+        return bool((within_range_mask & is_integer_mask).all())
+    return False

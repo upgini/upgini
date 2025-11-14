@@ -135,7 +135,7 @@ class IpSearchKeyConverter:
 
         df = df.drop(columns=self.ip_column)
         del self.search_keys[self.ip_column]
-        del self.columns_renaming[self.ip_column]
+        # del self.columns_renaming[self.ip_column]
         # self.search_keys[ipv6] = SearchKey.IPV6_ADDRESS
         self.search_keys[ip_binary] = SearchKey.IP_BINARY
         self.search_keys[ip_prefix_column] = SearchKey.IP_PREFIX

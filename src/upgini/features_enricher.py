@@ -1741,7 +1741,7 @@ class FeaturesEnricher(TransformerMixin):
         sampled_data = self._get_enriched_datasets(
             validated_X=validated_X,
             validated_y=validated_y,
-            eval_set=validated_eval_set,
+            validated_eval_set=validated_eval_set,
             exclude_features_sources=exclude_features_sources,
             is_input_same_as_fit=is_input_same_as_fit,
             is_demo_dataset=is_demo_dataset,
@@ -1944,7 +1944,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
         validated_y: pd.DataFrame | pd.Series | np.ndarray | list | None,
-        eval_set: list[tuple] | None,
+        validated_eval_set: list[tuple] | None,
         exclude_features_sources: list[str] | None,
         is_input_same_as_fit: bool,
         is_demo_dataset: bool,
@@ -1953,14 +1953,14 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Callable[[SearchProgress], Any] | None,
         is_for_metrics: bool = False,
     ) -> _EnrichedDataForMetrics:
-        datasets_hash = hash_input(validated_X, validated_y, eval_set)
+        datasets_hash = hash_input(validated_X, validated_y, validated_eval_set)
         cached_sampled_datasets = self.__cached_sampled_datasets.get(datasets_hash)
         if cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
             self.logger.info("Cached enriched dataset found - use it")
             return self.__get_sampled_cached_enriched(datasets_hash, exclude_features_sources)
         elif len(self.feature_names_) == 0 or all([f in validated_X.columns for f in self.feature_names_]):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
-            return self.__get_enriched_as_input(validated_X, validated_y, eval_set, is_demo_dataset)
+            return self.__get_enriched_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset)
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
         elif (
             not self.imbalanced
@@ -1969,7 +1969,9 @@ class FeaturesEnricher(TransformerMixin):
             and self.df_with_original_index is not None
         ):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
-            return self.__get_enriched_from_fit(validated_X, validated_y, eval_set, remove_outliers_calc_metrics)
+            return self.__get_enriched_from_fit(
+                validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics
+            )
         else:
             self.logger.info(
                 "Dataset is imbalanced or exclude_features_sources or X was passed or this is saved search."
@@ -1979,7 +1981,7 @@ class FeaturesEnricher(TransformerMixin):
             return self.__get_enriched_from_transform(
                 validated_X,
                 validated_y,
-                eval_set,
+                validated_eval_set,
                 exclude_features_sources,
                 progress_bar,
                 progress_callback,
@@ -2153,7 +2155,6 @@ class FeaturesEnricher(TransformerMixin):
             ]
             self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
 
-        enriched_eval_sets = {}
         enriched_Xy = self.__enrich(
             self.df_with_original_index,
             fit_features,
@@ -2180,14 +2181,17 @@ class FeaturesEnricher(TransformerMixin):
         enriched_Xy = enriched_Xy[selecting_columns]
 
         # Handle eval sets extraction based on EVAL_SET_INDEX
+        enriched_eval_sets = {}
         if EVAL_SET_INDEX in enriched_Xy.columns:
             eval_set_indices = list(enriched_Xy[EVAL_SET_INDEX].unique())
-            if 0 in eval_set_indices:
-                eval_set_indices.remove(0)
             for eval_set_index in eval_set_indices:
-                enriched_eval_sets[eval_set_index] = enriched_Xy.loc[
-                    enriched_Xy[EVAL_SET_INDEX] == eval_set_index
-                ].copy()
+                if eval_set_index == 0:
+                    continue
+                enriched_eval_set = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == eval_set_index].copy()
+                if enriched_eval_set[TARGET].isna().all():
+                    # skip OOT eval set
+                    continue
+                enriched_eval_sets[eval_set_index] = enriched_eval_set
             enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
         x_columns = [
@@ -2205,16 +2209,24 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Shape of y after sampling: {len(y_sampled)}")
 
         if eval_set is not None:
-            if len(enriched_eval_sets) != len(eval_set):
+            enumerated_eval_set: dict[int, tuple[pd.DataFrame, pd.Series]] = {}
+            for idx, eval_pair in enumerate(eval_set):
+                if eval_pair[1].isna().all():
+                    # skip OOT eval set
+                    continue
+                enumerated_eval_set[idx + 1] = eval_pair
+            if len(enriched_eval_sets) != len(enumerated_eval_set):
                 raise ValidationError(
-                    self.bundle.get("metrics_eval_set_count_diff").format(len(enriched_eval_sets), len(eval_set))
+                    self.bundle.get("metrics_eval_set_count_diff").format(
+                        len(enriched_eval_sets), len(enumerated_eval_set)
+                    )
                 )
 
-            for idx in range(len(eval_set)):
-                eval_X_sampled = enriched_eval_sets[idx + 1][x_columns].copy()
-                eval_y_sampled = enriched_eval_sets[idx + 1][TARGET].copy()
-                enriched_eval_X = enriched_eval_sets[idx + 1][enriched_X_columns].copy()
-                eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
+            for idx in enumerated_eval_set.keys():
+                eval_X_sampled = enriched_eval_sets[idx][x_columns].copy()
+                eval_y_sampled = enriched_eval_sets[idx][TARGET].copy()
+                enriched_eval_X = enriched_eval_sets[idx][enriched_X_columns].copy()
+                eval_set_sampled_dict[idx - 1] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
         datasets_hash = hash_input(self.X, self.y, self.eval_set)
         return self.__cache_and_return_results(
@@ -2516,7 +2528,7 @@ class FeaturesEnricher(TransformerMixin):
 {Format.BOLD}Shell{Format.END}:
 
 curl 'https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}' \\
-    -H 'Authorization: {self.api_key}' \\
+    -H 'Authorization: ***' \\
     -H 'Content-Type: application/json' \\
     -d '{{"search_keys": {keys_section}{features_section}, "only_online_sources": {str(only_online_sources).lower()}}}'
 
@@ -2526,7 +2538,7 @@ import requests
 
 response = requests.post(
     url='https://search.upgini.com/online/api/http_inference_trigger?search_id={search_id}',
-    headers={{'Authorization': '{self.api_key}'}},
+    headers={{'Authorization': '***'}},
     json={{"search_keys": {keys_section}{features_section}, "only_online_sources": {only_online_sources}}}
 )
 if response.status_code == 200:
@@ -2994,7 +3006,7 @@ if response.status_code == 200:
     ):
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
         fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
-        fit_input_columns = [c.originalName for c in file_meta.columns]
+        fit_input_columns = {c.originalName for c in file_meta.columns}
         original_dropped_features = [self.fit_columns_renaming.get(c, c) for c in fit_dropped_features]
         true_one_hot_features = (
             [f for group in self.true_one_hot_groups.values() for f in group] if self.true_one_hot_groups else []
@@ -3316,7 +3328,6 @@ if response.status_code == 200:
             features_columns,
             self.generate_features,
             self.fit_columns_renaming,
-            [f for group in self.pseudo_one_hot_groups.values() for f in group] if self.pseudo_one_hot_groups else [],
         )
         if feature_validator_warnings:
             for warning in feature_validator_warnings:
