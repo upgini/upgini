@@ -1481,6 +1481,9 @@ class FeaturesEnricher(TransformerMixin):
             if len(eval_x_date) < 1000:
                 self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
                 continue
+            if i not in enriched_eval_set:
+                self.logger.warning(f"Enriched eval_set {i} not found. It will be ignored for stability check")
+                continue
             if len(enriched_eval_set[i][2]) < 1000:
                 self.logger.warning(
                     f"Enriched eval_set {i} has less than 1000 rows. It will be ignored for stability check"
@@ -2203,9 +2206,6 @@ class FeaturesEnricher(TransformerMixin):
                 if eval_set_index == 0:
                     continue
                 enriched_eval_set = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == eval_set_index].copy()
-                if enriched_eval_set[TARGET].isna().all():
-                    # skip OOT eval set
-                    continue
                 enriched_eval_sets[eval_set_index] = enriched_eval_set
             enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
@@ -2226,9 +2226,6 @@ class FeaturesEnricher(TransformerMixin):
         if eval_set is not None:
             enumerated_eval_set: dict[int, tuple[pd.DataFrame, pd.Series]] = {}
             for idx, eval_pair in enumerate(eval_set):
-                if eval_pair[1].isna().all():
-                    # skip OOT eval set
-                    continue
                 enumerated_eval_set[idx + 1] = eval_pair
             if len(enriched_eval_sets) != len(enumerated_eval_set):
                 raise ValidationError(
