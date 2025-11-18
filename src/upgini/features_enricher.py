@@ -325,6 +325,7 @@ class FeaturesEnricher(TransformerMixin):
                     self.__prepare_feature_importances(df, silent=True, update_selected_features=False)
                     if print_loaded_report:
                         self.__show_selected_features()
+                        self.__show_report_button()
                     # TODO validate search_keys with search_keys from file_metadata
                     print(self.bundle.get("search_by_task_id_finish"))
                     self.logger.debug(f"Successfully initialized with search_id: {search_id}")
@@ -338,6 +339,16 @@ class FeaturesEnricher(TransformerMixin):
 
         self.runtime_parameters = runtime_parameters or RuntimeParameters()
         self.runtime_parameters.properties["feature_generation_params.hash_index"] = True
+        if "UPGINI_RUNTIME_PARAMETERS" in os.environ:
+            external_params = os.getenv("UPGINI_RUNTIME_PARAMETERS")
+            if external_params:
+                try:
+                    external_params_dict = json.loads(external_params)
+                    self.runtime_parameters.properties.update(external_params_dict)
+                    self.logger.info(f"Added external runtime parameters: {external_params_dict}")
+                except json.JSONDecodeError:
+                    self.logger.error(f"Failed to parse external runtime parameters: {external_params}")
+                    print(f"Failed to parse external runtime parameters: {external_params}")
         self.date_format = date_format
         self.random_state = random_state
         self.autodetect_search_keys = autodetect_search_keys
@@ -1478,6 +1489,10 @@ class FeaturesEnricher(TransformerMixin):
 
             eval_min_date = eval_x_date.min()
             eval_max_date = eval_x_date.max()
+            if eval_min_date == eval_max_date:
+                # TODO temporary skip this case, then use rows order for constant date
+                self.logger.warning(f"Eval_set {i} has constant date. It will be ignored for stability check")
+                continue
             eval_dates.append((i, eval_min_date, eval_max_date))
 
         if not eval_dates:
@@ -3932,6 +3947,9 @@ if response.status_code == 200:
             if set(validated_eval_X.columns.to_list()) == set(X.columns.to_list()):
                 validated_eval_X = validated_eval_X[X.columns.to_list()]
             else:
+                self.logger.warning(
+                    f"X columns: {X.columns.to_list()}, Eval set columns: {validated_eval_X.columns.to_list()}"
+                )
                 raise ValidationError(self.bundle.get("eval_x_and_x_diff_shape"))
 
         if any(validated_eval_X.dtypes != X.dtypes):
