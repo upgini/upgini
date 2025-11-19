@@ -39,6 +39,7 @@ from upgini.utils.datetime_utils import DateTimeConverter
 
 from .utils import (
     mock_default_requests,
+    mock_get_add_info,
     mock_get_metadata,
     mock_get_selected_features,
     mock_get_task_metadata_v2,
@@ -147,6 +148,12 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
     )
     mock_get_selected_features(requests_mock, url, search_task_id, ["score"])
     mock_set_selected_features(requests_mock, url, search_task_id, ["score"])
+    mock_get_add_info(
+        requests_mock,
+        url,
+        search_task_id,
+        {"columns_renaming": {}, "true_one_hot_groups": {}, "pseudo_one_hot_groups": {}},
+    )
     path_to_mock_features = os.path.join(BASE_DIR, "real_train_df.parquet")
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
 
@@ -227,6 +234,12 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
     mock_get_selected_features(requests_mock, url, search_task_id, important_features)
     mock_set_selected_features(requests_mock, url, search_task_id, important_features)
     mock_raw_features(requests_mock, url, search_task_id, os.path.join(BASE_DIR, "x_enriched.parquet"))
+    mock_get_add_info(
+        requests_mock,
+        url,
+        search_task_id,
+        {"columns_renaming": {}, "true_one_hot_groups": {}, "pseudo_one_hot_groups": {}},
+    )
 
     search_keys = {"country": SearchKey.COUNTRY, "Postal_code": SearchKey.POSTAL_CODE}
     enricher = FeaturesEnricher(

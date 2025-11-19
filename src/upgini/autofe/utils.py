@@ -5,6 +5,8 @@ Utility functions for autofe module.
 import functools
 from typing import Callable
 
+from pydantic import BaseModel
+
 
 def get_pydantic_version():
     """
@@ -83,7 +85,7 @@ def pydantic_validator(field_name: str, *fields, mode: str = "before", **kwargs)
         return decorator
 
 
-def pydantic_json_method(obj):
+def pydantic_json_method(obj: BaseModel) -> str:
     if get_pydantic_version() >= 2:
         return obj.model_dump_json
     else:
@@ -97,7 +99,7 @@ def pydantic_parse_method(cls):
         return cls.parse_obj
 
 
-def pydantic_dump_method(obj):
+def pydantic_dump_method(obj: BaseModel) -> dict:
     if get_pydantic_version() >= 2:
         return obj.model_dump
     else:

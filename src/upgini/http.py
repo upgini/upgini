@@ -1,6 +1,7 @@
 import base64
 import copy
 import datetime
+import json
 import hashlib
 import logging
 import os
@@ -278,6 +279,7 @@ class _RestClient:
     SEARCH_DUMP_INPUT_FILE_FMT = SERVICE_ROOT_V2 + "search/dump-input-file?digest={0}"
     TRANSFORM_USAGE_FMT = SERVICE_ROOT_V2 + "user/transform-usage"
     SEARCH_SELECTED_FEATURES_URI_FMT = SERVICE_ROOT_V2 + "search/{0}/selected-features"
+    SEARCH_ADD_INFO_FMT = SERVICE_ROOT_V2 + "search/{0}/add-info"
 
     UPLOAD_USER_ADS_URI = SERVICE_ROOT + "ads/upload"
     SEND_LOG_EVENT_URI = "private/api/v2/events/send"
@@ -690,6 +692,16 @@ class _RestClient:
         api_path = self.SEARCH_SELECTED_FEATURES_URI_FMT.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
         return response.get("features")
+
+    def update_add_info(self, trace_id: str, search_task_id: str, add_info: dict):
+        api_path = self.SEARCH_ADD_INFO_FMT.format(search_task_id)
+        request = {"add_info": json.dumps(add_info)}
+        self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
+
+    def get_add_info(self, trace_id: str, search_task_id: str) -> dict:
+        api_path = self.SEARCH_ADD_INFO_FMT.format(search_task_id)
+        response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
+        return json.loads(response.get("add_info"))
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI

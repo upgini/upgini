@@ -56,6 +56,7 @@ from upgini.metadata import (
     SORT_ID,
     SYSTEM_RECORD_ID,
     TARGET,
+    AddInfo,
     AutoFEParameters,
     CVType,
     FeaturesMetadataV2,
@@ -278,8 +279,6 @@ class FeaturesEnricher(TransformerMixin):
         self.autodetected_search_keys: dict[str, SearchKey] | None = None
         self.imbalanced = False
         self.fit_select_features = True
-        self.true_one_hot_groups: dict[str, list[str]] | None = None
-        self.pseudo_one_hot_groups: dict[str, list[str]] | None = None
         self.__cached_sampled_datasets: dict[str, tuple[pd.DataFrame, pd.DataFrame, pd.Series, dict, dict, dict]] = (
             dict()
         )
@@ -308,6 +307,7 @@ class FeaturesEnricher(TransformerMixin):
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
+        self.add_info: AddInfo | None = None
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -319,8 +319,14 @@ class FeaturesEnricher(TransformerMixin):
                     self.logger.debug(f"FeaturesEnricher created from existing search: {search_id}")
                     self._search_task = search_task.poll_result(trace_id, quiet=True, check_fit=True)
                     file_metadata = self._search_task.get_file_metadata(trace_id)
+                    self.add_info = self._search_task.get_add_info(trace_id)
                     x_columns = [c.name for c in file_metadata.columns]
-                    self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
+                    # self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
+                    self.fit_columns_renaming = (
+                        self.add_info.columns_renaming
+                        if self.add_info is not None
+                        else {c.name: c.originalName for c in file_metadata.columns}
+                    )
                     df = pd.DataFrame(columns=x_columns)
                     self.__prepare_feature_importances(df, silent=True, update_selected_features=False)
                     if print_loaded_report:
@@ -1321,9 +1327,12 @@ class FeaturesEnricher(TransformerMixin):
 
     def _get_autodetected_search_keys(self):
         if self.autodetected_search_keys is None and self._search_task is not None:
-            meta = self._search_task.get_file_metadata(self._get_trace_id())
-            autodetected_search_keys = meta.autodetectedSearchKeys or {}
-            self.autodetected_search_keys = {k: SearchKey[v] for k, v in autodetected_search_keys.items()}
+            if self.add_info is not None and self.add_info.autodetected_search_keys is not None:
+                self.autodetected_search_keys = self.add_info.autodetected_search_keys
+            else:
+                meta = self._search_task.get_file_metadata(self._get_trace_id())
+                autodetected_search_keys = meta.autodetectedSearchKeys or {}
+                self.autodetected_search_keys = {k: SearchKey[v] for k, v in autodetected_search_keys.items()}
 
         return self.autodetected_search_keys
 
@@ -1331,6 +1340,7 @@ class FeaturesEnricher(TransformerMixin):
         if self.autodetected_search_keys is None:
             self.autodetected_search_keys = dict()
         self.autodetected_search_keys.update(adding_search_keys)
+        self.add_info.autodetected_search_keys = self.autodetected_search_keys
         return self.autodetected_search_keys
 
     def _get_fit_search_keys_with_original_names(self):
@@ -2069,9 +2079,8 @@ class FeaturesEnricher(TransformerMixin):
             generated_features.extend(generator.generated_features)
 
         normalizer = Normalizer(self.bundle, self.logger)
-        # TODO restore these properties from the server
-        normalizer.true_one_hot_groups = self.true_one_hot_groups
-        normalizer.pseudo_one_hot_groups = self.pseudo_one_hot_groups
+        normalizer.true_one_hot_groups = self.add_info.true_one_hot_groups
+        normalizer.pseudo_one_hot_groups = self.add_info.pseudo_one_hot_groups
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
@@ -2228,11 +2237,14 @@ class FeaturesEnricher(TransformerMixin):
             for idx, eval_pair in enumerate(eval_set):
                 enumerated_eval_set[idx + 1] = eval_pair
             if len(enriched_eval_sets) != len(enumerated_eval_set):
-                raise ValidationError(
-                    self.bundle.get("metrics_eval_set_count_diff").format(
-                        len(enriched_eval_sets), len(enumerated_eval_set)
+                eval_set_without_oot = {i: es for i, es in enumerated_eval_set.items() if not es[1].isna().all()}
+                if len(enriched_eval_sets) != len(eval_set_without_oot):
+                    raise ValidationError(
+                        self.bundle.get("metrics_eval_set_count_diff").format(
+                            len(enriched_eval_sets), len(enumerated_eval_set)
+                        )
                     )
-                )
+                enumerated_eval_set = eval_set_without_oot
 
             for idx in enumerated_eval_set.keys():
                 eval_X_sampled = enriched_eval_sets[idx][x_columns].copy()
@@ -2691,9 +2703,8 @@ if response.status_code == 200:
             generated_features.extend(generator.generated_features)
 
         normalizer = Normalizer(self.bundle, self.logger)
-        # TODO restore these properties from the server
-        normalizer.true_one_hot_groups = self.true_one_hot_groups
-        normalizer.pseudo_one_hot_groups = self.pseudo_one_hot_groups
+        normalizer.true_one_hot_groups = self.add_info.true_one_hot_groups
+        normalizer.pseudo_one_hot_groups = self.add_info.pseudo_one_hot_groups
         df, search_keys, generated_features = normalizer.normalize(df, search_keys, generated_features)
         columns_renaming = normalizer.columns_renaming
 
@@ -3021,7 +3032,9 @@ if response.status_code == 200:
         fit_input_columns = {c.originalName for c in file_meta.columns}
         original_dropped_features = [self.fit_columns_renaming.get(c, c) for c in fit_dropped_features]
         true_one_hot_features = (
-            [f for group in self.true_one_hot_groups.values() for f in group] if self.true_one_hot_groups else []
+            [f for group in self.add_info.true_one_hot_groups.values() for f in group]
+            if self.add_info.true_one_hot_groups is not None
+            else []
         )
         new_columns_on_transform = [
             c
@@ -3034,21 +3047,21 @@ if response.status_code == 200:
         selected_true_one_hot_features = (
             [
                 c
-                for cat_feature, group in self.true_one_hot_groups.items()
+                for cat_feature, group in self.add_info.true_one_hot_groups.items()
                 for c in group
                 if cat_feature in self.feature_names_
             ]
-            if self.true_one_hot_groups
+            if self.add_info.true_one_hot_groups
             else []
         )
         selected_pseudo_one_hot_features = (
             [
                 feature
-                for group in self.pseudo_one_hot_groups.values()
+                for group in self.add_info.pseudo_one_hot_groups.values()
                 if any(f in self.feature_names_ for f in group)
                 for feature in group
             ]
-            if self.pseudo_one_hot_groups
+            if self.add_info.pseudo_one_hot_groups is not None
             else []
         )
 
@@ -3174,6 +3187,7 @@ if response.status_code == 200:
         self.fit_dropped_features = set()
         self.fit_generated_features = []
         self.psi_values = None
+        self.add_info = AddInfo()
 
         validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set)
 
@@ -3317,8 +3331,9 @@ if response.status_code == 200:
             df, self.fit_search_keys, self.fit_generated_features
         )
         self.fit_columns_renaming = normalizer.columns_renaming
-        self.true_one_hot_groups = normalizer.true_one_hot_groups
-        self.pseudo_one_hot_groups = normalizer.pseudo_one_hot_groups
+        self.add_info.columns_renaming = normalizer.columns_renaming
+        self.add_info.true_one_hot_groups = normalizer.true_one_hot_groups
+        self.add_info.pseudo_one_hot_groups = normalizer.pseudo_one_hot_groups
         if normalizer.removed_datetime_features:
             self.fit_dropped_features.update(normalizer.removed_datetime_features)
             original_removed_datetime_features = [
@@ -3499,6 +3514,7 @@ if response.status_code == 200:
             bundle=self.bundle,
             warning_callback=self.__log_warning,
             sample_config=self.sample_config,
+            add_info=self.add_info,
         )
         dataset.columns_renaming = self.fit_columns_renaming
 

@@ -34,6 +34,7 @@ from upgini.utils.sample_utils import SampleConfig
 
 from .utils import (
     mock_default_requests,
+    mock_get_add_info,
     mock_get_metadata,
     mock_get_selected_features,
     mock_get_task_metadata_v2,
@@ -983,6 +984,16 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
         ),
     )
     mock_get_selected_features(requests_mock, url, search_task_id, ["feature", "client_feature"])
+    mock_get_add_info(
+        requests_mock,
+        url,
+        search_task_id,
+        {
+            "columns_renaming": {"phone_num_a54a33": "phone_num", "rep_date_f5d6bb": "rep_date"},
+            "true_one_hot_groups": {},
+            "pseudo_one_hot_groups": {},
+        },
+    )
     mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features, metrics_calculation=True)
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features)
     mock_validation_raw_features(

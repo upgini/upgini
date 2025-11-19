@@ -588,3 +588,15 @@ def mock_set_selected_features(requests_mock: Mocker, url: str, search_task_id: 
     requests_mock.post(
         f"{url}/public/api/v2/search/{search_task_id}/selected-features", json={"features": selected_features}
     )
+
+
+def mock_get_add_info(requests_mock: Mocker, url: str, search_task_id: str, add_info: dict):
+    requests_mock.get(
+        f"{url}/public/api/v2/search/{search_task_id}/add-info", json={"add_info": json.dumps(add_info)}
+    )
+
+
+def mock_set_add_info(requests_mock: Mocker, url: str, search_task_id: str, add_info: dict):
+    requests_mock.post(
+        f"{url}/public/api/v2/search/{search_task_id}/add-info", json=add_info
+    )

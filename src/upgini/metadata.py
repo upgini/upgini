@@ -357,6 +357,7 @@ class SearchCustomization(BaseModel):
     returnScores: Optional[bool] = None
     runtimeParameters: Optional[RuntimeParameters] = None
     metricsCalculation: Optional[bool] = None
+    addInfoJson: Optional[str] = None
 
     def __repr__(self):
         return (
@@ -367,7 +368,8 @@ class SearchCustomization(BaseModel):
             f"max features: {self.maxFeatures}, "
             f"return scores: {self.returnScores}, "
             f"runtimeParameters: {self.runtimeParameters}, "
-            f"metricsCalculation: {self.metricsCalculation}"
+            f"metricsCalculation: {self.metricsCalculation}, "
+            f"addInfoJson: {self.addInfoJson}"
         )
 
 
@@ -380,3 +382,10 @@ class CVType(Enum):
 
     def is_time_series(self) -> bool:
         return self in [CVType.time_series, CVType.blocked_time_series]
+
+
+class AddInfo(BaseModel):
+    columns_renaming: Optional[Dict[str, str]] = None
+    true_one_hot_groups: Optional[Dict[str, List[str]]] = None
+    pseudo_one_hot_groups: Optional[Dict[str, List[str]]] = None
+    autodetected_search_keys: Optional[Dict[str, SearchKey]] = None

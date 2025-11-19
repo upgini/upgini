@@ -17,6 +17,7 @@ from pandas.api.types import (
     is_string_dtype,
 )
 
+from upgini.autofe.utils import pydantic_json_method
 from upgini.errors import ValidationError
 from upgini.http import ProgressStage, SearchProgress, _RestClient
 from upgini.metadata import (
@@ -25,6 +26,7 @@ from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
+    AddInfo,
     AutoFEParameters,
     CVType,
     DataType,
@@ -84,6 +86,7 @@ class Dataset:
         logger: Optional[logging.Logger] = None,
         bundle: Optional[ResourceBundle] = None,
         warning_callback: Optional[Callable] = None,
+        add_info: Optional[AddInfo] = None,
         **kwargs,
     ):
         self.bundle = bundle or get_custom_bundle()
@@ -134,6 +137,7 @@ class Dataset:
             self.logger = logging.getLogger()
             self.logger.setLevel("FATAL")
         self.warning_callback = warning_callback
+        self.add_info = add_info
 
     def __len__(self):
         return len(self.data) if self.data is not None else None
@@ -566,6 +570,8 @@ class Dataset:
             search_customization.runtimeParameters.properties["feature_generation_params.ts.gap_days"] = (
                 auto_fe_parameters.ts_gap_days
             )
+        if self.add_info is not None:
+            search_customization.addInfoJson = pydantic_json_method(self.add_info)(exclude_none=True)
         return search_customization
 
     def _rename_generate_features(self, runtime_parameters: Optional[RuntimeParameters]) -> Optional[RuntimeParameters]:

@@ -18,6 +18,7 @@ from upgini.http import (
 )
 from upgini.metadata import (
     SYSTEM_RECORD_ID,
+    AddInfo,
     FeaturesMetadataV2,
     FileMetadata,
     GeneratedFeatureMetadata,
@@ -328,6 +329,15 @@ class SearchTask:
 
     def get_selected_features(self, trace_id: str) -> list[str] | None:
         return self.rest_client.get_selected_features(trace_id, self.search_task_id)
+
+    def update_add_info(self, trace_id: str, add_info: dict):
+        return self.rest_client.update_add_info(trace_id, self.search_task_id, add_info)
+
+    def get_add_info(self, trace_id: str) -> AddInfo:
+        add_info_dict = self.rest_client.get_add_info(trace_id, self.search_task_id)
+        if add_info_dict is not None:
+            return AddInfo(**add_info_dict)
+        return AddInfo()
 
 
 @lru_cache
