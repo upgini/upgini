@@ -324,7 +324,7 @@ class FeaturesEnricher(TransformerMixin):
                     # self.fit_columns_renaming = {c.name: c.originalName for c in file_metadata.columns}
                     self.fit_columns_renaming = (
                         self.add_info.columns_renaming
-                        if self.add_info is not None
+                        if self.add_info is not None and self.add_info.columns_renaming is not None
                         else {c.name: c.originalName for c in file_metadata.columns}
                     )
                     df = pd.DataFrame(columns=x_columns)
