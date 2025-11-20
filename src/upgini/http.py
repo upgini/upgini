@@ -698,10 +698,12 @@ class _RestClient:
         request = {"add_info": json.dumps(add_info)}
         self._with_unauth_retry(lambda: self._send_post_req(api_path, trace_id, request, result_format=None))
 
-    def get_add_info(self, trace_id: str, search_task_id: str) -> dict:
+    def get_add_info(self, trace_id: str, search_task_id: str) -> dict | None:
         api_path = self.SEARCH_ADD_INFO_FMT.format(search_task_id)
         response = self._with_unauth_retry(lambda: self._send_get_req(api_path, trace_id))
-        return json.loads(response.get("add_info"))
+        if response is not None and "add_info" in response:
+            return json.loads(response.get("add_info"))
+        return None
 
     def send_log_event(self, log_event: LogEvent):
         api_path = self.SEND_LOG_EVENT_URI
