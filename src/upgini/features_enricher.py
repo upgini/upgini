@@ -3912,13 +3912,15 @@ if response.status_code == 200:
             date_col = self._get_date_column(search_keys)
             has_date = date_col is not None and date_col in eval_df.columns
             if eval_df[TARGET].isna().all():
-                msg = None
+                # OOT eval set - warn but don't remove
                 if not has_date:
                     msg = self.bundle.get("oot_without_date_not_supported").format(eval_set_index)
+                    self.__log_warning(msg)
+                    # OOT without date will be included in server upload but not used for stability check
                 elif self.columns_for_online_api:
                     msg = self.bundle.get("oot_with_online_sources_not_supported").format(eval_set_index)
-                if msg:
                     self.__log_warning(msg)
+                    # OOT with online sources is still removed as it's not supported
                     df = df[df[EVAL_SET_INDEX] != eval_set_index]
         return df
 

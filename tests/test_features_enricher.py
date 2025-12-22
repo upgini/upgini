@@ -15,6 +15,7 @@ from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher, hash_input
 from upgini.http import _RestClient
 from upgini.metadata import (
+    EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
     CVType,
@@ -4120,6 +4121,68 @@ def test_add_fit_system_record_id():
     expected_df.set_index("index", inplace=True)
 
     assert_frame_equal(df, expected_df)
+
+
+def test_oot_without_date_used_in_fit(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    # Create train data
+    train_X = pd.DataFrame(
+        {
+            "feature1": [1, 2, 3],
+        }
+    )
+    train_y = pd.Series([0, 1, 0])
+
+    # Create OOT eval set
+    oot_X = pd.DataFrame(
+        {
+            "feature1": [4, 5],
+        }
+    )
+
+    result_wrapper = DataFrameWrapper()
+
+    def mocked_initial_search(self, trace_id, file_path, metadata, metrics, search_customization):
+        result_wrapper.df = pd.read_parquet(file_path)
+        raise TestException
+
+    original_initial_search = _RestClient.initial_search_v2
+    _RestClient.initial_search_v2 = mocked_initial_search
+
+    old_min_rows_count = Dataset.MIN_ROWS_COUNT
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher = FeaturesEnricher(
+            endpoint=url,
+            api_key="fake_api_key",
+            logs_enabled=False,
+        )
+
+        try:
+            enricher.fit(train_X, train_y, eval_set=[(oot_X,)], calculate_metrics=False)
+        except TestException:
+            pass
+
+        # Verify OOT eval set is included in uploaded dataframe
+        uploaded_df = result_wrapper.df
+        assert uploaded_df is not None
+        assert EVAL_SET_INDEX in uploaded_df.columns
+
+        # Check that OOT eval set (index 1) is present
+        oot_rows = uploaded_df[uploaded_df[EVAL_SET_INDEX] == 1]
+        assert len(oot_rows) == 2, "OOT eval set should be included in upload"
+        assert oot_rows[TARGET].isna().all(), "OOT targets should be NaN"
+
+        # Check that train set (index 0) is present
+        train_rows = uploaded_df[uploaded_df[EVAL_SET_INDEX] == 0]
+        assert len(train_rows) == 3, "Train set should be included"
+
+    finally:
+        _RestClient.initial_search_v2 = original_initial_search
+        Dataset.MIN_ROWS_COUNT = old_min_rows_count
 
 
 class DataFrameWrapper:
