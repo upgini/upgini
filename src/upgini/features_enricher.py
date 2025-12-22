@@ -2013,7 +2013,7 @@ class FeaturesEnricher(TransformerMixin):
                 exclude_features_sources,
                 progress_bar,
                 progress_callback,
-                is_for_metrics=is_for_metrics,
+                exclude_oot=is_for_metrics,  # Exclude OOT eval sets from transform because they are not used for metrics calculation
             )
 
     def __get_sampled_cached_enriched(
@@ -2272,7 +2272,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None,
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
-        is_for_metrics: bool = False,
+        exclude_oot: bool = False,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -2281,8 +2281,7 @@ class FeaturesEnricher(TransformerMixin):
         # Prepare
         df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set)
 
-        # Exclude OOT eval sets from transform because they are not used for metrics calculation
-        if is_for_metrics and EVAL_SET_INDEX in df.columns:
+        if exclude_oot and EVAL_SET_INDEX in df.columns:
             for eval_index in df[EVAL_SET_INDEX].unique():
                 if eval_index == 0:
                     continue
@@ -3259,9 +3258,10 @@ if response.status_code == 200:
         self.imbalanced = is_imbalanced(
             only_train_df, self.model_task_type, self.sample_config, self.bundle, self.__log_warning
         )
-        if self.imbalanced:
-            # Exclude eval sets from fit because they will be transformed before metrics calculation
-            df = only_train_df
+        # Always include eval sets (including OOT) in fit to send them to the server
+        # if self.imbalanced:
+        #     # Exclude eval sets from fit because they will be transformed before metrics calculation
+        #     df = only_train_df
 
         self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns or []])
 
