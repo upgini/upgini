@@ -302,6 +302,7 @@ class FeaturesMetadataV2(BaseModel):
     update_frequency: Optional[str] = None
     from_online_api: Optional[bool] = None
     psi_value: Optional[float] = None
+    drift_score: Optional[float] = None
 
 
 class HitRateMetrics(BaseModel):

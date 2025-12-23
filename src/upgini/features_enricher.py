@@ -117,7 +117,6 @@ except Exception:
     )
 
 from upgini.utils.config import SampleConfig
-from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
 from upgini.utils.sample_utils import SampleColumns, _num_samples, sample
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import calculate_psi, define_task, is_imbalanced
@@ -303,7 +302,6 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.external_source_feature_names = []
         self.feature_importances_ = []
-        self.psi_values: dict[str, float] | None = None
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
@@ -1356,211 +1354,6 @@ class FeaturesEnricher(TransformerMixin):
             fit_search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
         return fit_search_keys
 
-    def _select_features_by_psi(
-        self,
-        X: pd.DataFrame | pd.Series | np.ndarray,
-        y: pd.DataFrame | pd.Series | np.ndarray | list,
-        eval_set: list[tuple] | tuple | None,
-        stability_threshold: float,
-        stability_agg_func: Callable,
-        cv: BaseCrossValidator | CVType | str | None = None,
-        estimator=None,
-        exclude_features_sources: list[str] | None = None,
-        progress_bar: bool = True,
-        progress_callback: Callable | None = None,
-    ):
-        search_keys = self.search_keys.copy()
-        search_keys.update(self._get_autodetected_search_keys())
-        validated_X, _, validated_eval_set = self._validate_train_eval(X, y, eval_set)
-        if isinstance(X, np.ndarray):
-            search_keys = {str(k): v for k, v in search_keys.items()}
-
-        date_column = self._get_date_column(search_keys)
-        has_date = date_column is not None and date_column in validated_X.columns
-        if not has_date:
-            self.logger.info("No date column for OOT PSI calculation")
-            return
-        if not validated_eval_set:
-            self.logger.info("No eval set for OOT PSI calculation")
-            return
-        if validated_X[date_column].nunique() <= 1:
-            self.logger.warning("Constant date for OOT PSI calculation")
-            return
-        if self.cv is not None and self.cv.is_time_series():
-            self.logger.warning("Time series CV is not supported for OOT PSI calculation")
-            return
-
-        cat_features_from_backend = self.__get_categorical_features()
-        cat_features_from_backend = [self.fit_columns_renaming.get(c, c) for c in cat_features_from_backend]
-        client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
-            estimator, validated_X, search_keys
-        )
-        if self.id_columns and self.id_columns_encoder is not None:
-            if cat_features_from_backend:
-                cat_features_from_backend = [
-                    c for c in cat_features_from_backend if c not in self.id_columns_encoder.feature_names_in_
-                ]
-            if client_cat_features:
-                client_cat_features = [
-                    c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
-                ]
-
-        prepared_data = self._get_cached_enriched_data(
-            X=X,
-            y=y,
-            eval_set=eval_set,
-            exclude_features_sources=exclude_features_sources,
-            remove_outliers_calc_metrics=False,
-            cv_override=cv,
-            search_keys_for_metrics=search_keys_for_metrics,
-            progress_bar=progress_bar,
-            progress_callback=progress_callback,
-            client_cat_features=client_cat_features,
-        )
-        if prepared_data is None:
-            return None
-
-        (
-            validated_X,
-            _,
-            y_sorted,
-            _,
-            _,
-            fitting_eval_set_dict,
-            _,
-            _,
-            _,
-            _,
-            eval_set_dates,
-        ) = prepared_data
-
-        model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
-        cat_features = list(set(client_cat_features + cat_features_from_backend))
-
-        # Drop unstable features
-        unstable_features = self._check_stability(
-            validated_X,
-            validated_eval_set,
-            fitting_eval_set_dict,
-            eval_set_dates,
-            search_keys,
-            stability_threshold,
-            stability_agg_func,
-            cat_features,
-            model_task_type,
-        )
-
-        if unstable_features:
-            msg = f"{len(unstable_features)} feature(s) are unstable: {unstable_features} and will be dropped"
-            self.logger.warning(msg)
-            print(msg)
-
-    def _check_stability(
-        self,
-        X: pd.DataFrame,
-        eval_set: list[tuple[pd.DataFrame, pd.Series]],
-        enriched_eval_set: dict[int, tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]],
-        eval_set_dates: dict[int, pd.Series],
-        search_keys: dict[str, SearchKey],
-        stability_threshold: float,
-        stability_agg_func: str | None,
-        cat_features: list[str],
-        model_task_type: ModelTaskType,
-    ) -> list[str]:
-        # Find latest eval set or earliest if all eval sets are before train set
-        date_column = self._get_date_column(search_keys)
-
-        date_converter = DateTimeConverter(
-            date_column, self.date_format, self.logger, self.bundle, generate_cyclical_features=False
-        )
-
-        x_date = date_converter.to_date_ms(X).dropna()
-        if len(x_date) == 0:
-            self.logger.warning("Empty date column in X")
-            return []
-
-        main_min_date = x_date.min()
-
-        # Find minimum date for each eval_set and compare with main dataset
-        eval_dates = []
-        for i, (eval_x, _) in enumerate(eval_set):
-            if date_column not in eval_x.columns:
-                self.logger.warning(f"Date column not found in eval_set {i + 1}")
-                continue
-            eval_x_date = date_converter.to_date_ms(eval_x).dropna()
-            if len(eval_x_date) < 1000:
-                self.logger.warning(f"Eval_set {i} has less than 1000 rows. It will be ignored for stability check")
-                continue
-            if i not in enriched_eval_set:
-                self.logger.warning(f"Enriched eval_set {i} not found. It will be ignored for stability check")
-                continue
-            if len(enriched_eval_set[i][2]) < 1000:
-                self.logger.warning(
-                    f"Enriched eval_set {i} has less than 1000 rows. It will be ignored for stability check"
-                )
-                continue
-
-            eval_min_date = eval_x_date.min()
-            eval_max_date = eval_x_date.max()
-            if eval_min_date == eval_max_date:
-                # TODO temporary skip this case, then use rows order for constant date
-                self.logger.warning(f"Eval_set {i} has constant date. It will be ignored for stability check")
-                continue
-            eval_dates.append((i, eval_min_date, eval_max_date))
-
-        if not eval_dates:
-            self.logger.warning("There are no correct eval_sets for stability check")
-            return []
-
-        # Check if any eval_set has minimum date >= main dataset minimum date
-        later_eval_sets = [(i, min_date, max_date) for i, min_date, max_date in eval_dates if min_date >= main_min_date]
-
-        if later_eval_sets:
-            # If there are eval_sets with date >= main date, choose the one with highest maximum date
-            selected_eval_set_idx = max(later_eval_sets, key=lambda x: x[2])[0]
-        else:
-            # If all eval_sets have dates < main date, choose the one with lowest minimux date
-            selected_eval_set_idx = max(eval_dates, key=lambda x: x[1])[0]
-
-        checking_eval_set = enriched_eval_set[selected_eval_set_idx]
-
-        checking_eval_set_df = (
-            checking_eval_set[2]
-            if checking_eval_set[1] is None or checking_eval_set[1].isna().all()
-            else pd.concat([checking_eval_set[2], checking_eval_set[1].to_frame(TARGET)], axis=1)
-        )
-        checking_eval_set_df = checking_eval_set_df.copy()
-
-        checking_eval_set_df[date_column] = date_converter.to_date_ms(eval_set_dates[selected_eval_set_idx].to_frame())
-
-        psi_values_sparse = calculate_sparsity_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
-        )
-
-        self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
-
-        unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
-        if unstable_by_sparsity:
-            self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
-
-        psi_values = calculate_features_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
-        )
-
-        self.logger.info(f"PSI values by value: {psi_values}")
-
-        unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
-        if unstable_by_value:
-            self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
-
-        self.psi_values = {
-            feature: psi_value for feature, psi_value in psi_values.items() if psi_value <= stability_threshold
-        }
-
-        total_unstable_features = sorted(set(unstable_by_sparsity + unstable_by_value))
-
-        return total_unstable_features
-
     def _update_shap_values(self, df: pd.DataFrame, new_shaps: dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
         self.logger.info(f"Updating SHAP values: {new_shaps}")
@@ -2008,7 +1801,8 @@ class FeaturesEnricher(TransformerMixin):
                 exclude_features_sources,
                 progress_bar,
                 progress_callback,
-                exclude_oot=is_for_metrics,  # Exclude OOT eval sets from transform because they are not used for metrics calculation
+                # Exclude OOT eval sets from transform because they are not used for metrics calculation
+                exclude_oot=is_for_metrics,
             )
 
     def __get_sampled_cached_enriched(
@@ -3611,21 +3405,6 @@ if response.status_code == 200:
 
             self.__prepare_feature_importances(df)
 
-            self._select_features_by_psi(
-                X=X,
-                y=y,
-                eval_set=eval_set,
-                stability_threshold=stability_threshold,
-                stability_agg_func=stability_agg_func,
-                cv=self.cv,
-                estimator=estimator,
-                exclude_features_sources=exclude_features_sources,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-            )
-
-            self.__prepare_feature_importances(df)
-
             self.__show_selected_features()
 
             if self._has_paid_features(exclude_features_sources):
@@ -4616,12 +4395,6 @@ if response.status_code == 200:
             if not is_client_feature and not is_generated_feature:
                 self.external_source_feature_names.append(original_name)
 
-            if self.psi_values is not None:
-                if original_name in self.psi_values:
-                    feature_meta.psi_value = self.psi_values[original_name]
-                else:
-                    continue
-
             # TODO make a decision about selected features based on special flag from mlb
 
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
@@ -4657,9 +4430,12 @@ if response.status_code == 200:
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
-            # If all psi values are 0 or null, drop psi column
-            if self.features_info[self.bundle.get("features_info_psi")].astype(np.float64).fillna(0.0).eq(0.0).all():
-                self.features_info.drop(columns=[self.bundle.get("features_info_psi")], inplace=True)
+            # If all drift score values are 0 or null, drop drift column
+            drift_col = self.bundle.get("features_info_adversarial_drift")
+            if drift_col in self.features_info.columns and (
+                self.features_info[drift_col].astype(np.float64).fillna(0.0).eq(0.0).all()
+            ):
+                self.features_info.drop(columns=[drift_col], inplace=True)
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
             if not silent:
