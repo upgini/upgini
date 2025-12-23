@@ -1990,12 +1990,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__get_enriched_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset)
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
-        elif (
-            not self.imbalanced
-            and not exclude_features_sources
-            and is_input_same_as_fit
-            and self.df_with_original_index is not None
-        ):
+        elif not exclude_features_sources and is_input_same_as_fit and self.df_with_original_index is not None:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__get_enriched_from_fit(
                 validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics
