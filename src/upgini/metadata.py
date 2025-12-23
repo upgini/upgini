@@ -317,6 +317,9 @@ class ModelEvalSet(BaseModel):
     eval_set_index: int
     hit_rate: float
     hit_rate_metrics: HitRateMetrics
+    drift_auc_score: float | None = None
+    drift_removed_features: list[str] | None = None
+    drift_scores: dict[str, float] | None = None
 
 
 class BaseColumnMetadata(BaseModel):

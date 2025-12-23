@@ -147,6 +147,7 @@ def make_html_report(
     relevant_datasources_df: pd.DataFrame,
     metrics_df: Optional[pd.DataFrame],
     autofe_descriptions_df: Optional[pd.DataFrame],
+    eval_sets_drift_df: Optional[pd.DataFrame],
     search_id: str,
     email: Optional[str] = None,
     search_keys: Optional[List[str]] = None,
@@ -269,6 +270,11 @@ def make_html_report(
                 else ""
             }
             {
+                "<h3>Eval sets drift</h3>" + make_table(eval_sets_drift_df)
+                if eval_sets_drift_df is not None and len(eval_sets_drift_df) > 0
+                else ""
+            }
+            {
                 "<h3>All relevant features. Accuracy after enrichment</h3>" + make_table(metrics_df)
                 if metrics_df is not None
                 else ""
@@ -299,6 +305,7 @@ def prepare_and_show_report(
     search_id: str,
     email: Optional[str],
     search_keys: Optional[List[str]] = None,
+    eval_sets_drift_df: Optional[pd.DataFrame] = None,
     display_id: Optional[str] = None,
     display_handle=None,
 ):
@@ -306,7 +313,14 @@ def prepare_and_show_report(
         return
 
     report = make_html_report(
-        relevant_features_df, relevant_datasources_df, metrics_df, autofe_descriptions_df, search_id, email, search_keys
+        relevant_features_df,
+        relevant_datasources_df,
+        metrics_df,
+        autofe_descriptions_df,
+        eval_sets_drift_df,
+        search_id,
+        email,
+        search_keys,
     )
 
     if len(relevant_features_df) > 0:
@@ -354,7 +368,9 @@ def show_request_quote_button(is_registered: bool):
         from ipywidgets import Layout, Button
 
         if is_registered:
-            display(HTML("""
+            display(
+                HTML(
+                    """
                 <style>
                     button.custom-button {
                         border: 1px solid black !important;
@@ -363,12 +379,16 @@ def show_request_quote_button(is_registered: bool):
                         white-space: nowrap;
                     }
                 </style>
-            """))
+            """
+                )
+            )
             description = "Request a quote"
             tooltip = "Ask a quote"
             url = "https://upgini.com/request-a-quote"
         else:
-            display(HTML("""
+            display(
+                HTML(
+                    """
                 <style>
                     button.custom-button {
                         border: 1px solid #d00 !important;
@@ -377,16 +397,14 @@ def show_request_quote_button(is_registered: bool):
                         white-space: nowrap;
                     }
                 </style>
-            """))
+            """
+                )
+            )
             description = "Get an API KEY"
             tooltip = "Register"
             url = "https://profile.upgini.com/login"
 
-        button = Button(
-            description=description,
-            layout=Layout(width='auto'),
-            tooltip=tooltip
-        )
+        button = Button(description=description, layout=Layout(width="auto"), tooltip=tooltip)
         button.add_class("custom-button")
 
         def on_button_clicked(b):

@@ -13,7 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -4736,6 +4736,8 @@ if response.status_code == 200:
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
+            eval_sets_drift_df = self._get_eval_sets_drift_summary()
+
             return prepare_and_show_report(
                 relevant_features_df=self._features_info_without_links,
                 relevant_datasources_df=self.relevant_data_sources,
@@ -4744,11 +4746,67 @@ if response.status_code == 200:
                 search_id=self._search_task.search_task_id,
                 email=self.rest_client.get_current_email(),
                 search_keys=[str(sk) for sk in self.search_keys.values()],
+                eval_sets_drift_df=eval_sets_drift_df,
                 display_id=display_id,
                 display_handle=display_handle,
             )
         except Exception:
             pass
+
+    def _get_eval_sets_drift_summary(self) -> Optional[pd.DataFrame]:
+        """
+        Build a summary table with drift AUC and top drifting features for each eval set.
+        If there is only a single eval set or there is no drift information, None is returned.
+        """
+        if self._search_task is None or self._search_task.provider_metadata_v2 is None:
+            return None
+
+        rows: Dict[int, Dict[str, object]] = {}
+
+        for provider_meta in self._search_task.provider_metadata_v2:
+            if provider_meta.eval_set_metrics is None:
+                continue
+
+            for eval_metrics in provider_meta.eval_set_metrics:
+                eval_idx = eval_metrics.eval_set_index
+
+                if eval_idx not in rows:
+                    rows[eval_idx] = {
+                        "Eval set index": eval_idx,
+                        "Drift AUC": None,
+                        "Top drifting features": "",
+                    }
+
+                # Keep the maximum drift AUC across providers for the same eval set index
+                auc = eval_metrics.drift_auc_score
+                if auc is not None:
+                    current_auc = rows[eval_idx]["Drift AUC"]
+                    if current_auc is None or auc > current_auc:
+                        rows[eval_idx]["Drift AUC"] = auc
+
+                # Collect top drifting features using drift_scores ordering (descending by score)
+                top_features: list[str] = []
+                drift_scores = eval_metrics.drift_scores
+                drift_removed_features = eval_metrics.drift_removed_features
+
+                if drift_scores and drift_removed_features:
+                    sorted_features = sorted(drift_removed_features, key=drift_scores.get, reverse=True)
+                    top_features = sorted_features[:5]
+
+                if top_features:
+                    existing = rows[eval_idx]["Top drifting features"]
+                    if existing:
+                        merged = list(dict.fromkeys(str(existing).split(", ") + top_features))
+                        rows[eval_idx]["Top drifting features"] = ", ".join(merged[:5])
+                    else:
+                        rows[eval_idx]["Top drifting features"] = ", ".join(top_features)
+
+        if len(rows) <= 1:
+            # We only show a separate table if we really have multiple eval sets
+            return None
+
+        data = sorted(rows.values(), key=lambda r: r["Eval set index"])
+        return pd.DataFrame(data)
 
     def __detect_missing_search_keys(
         self,
