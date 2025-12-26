@@ -78,9 +78,23 @@ def sample(
             **kwargs,
         )
 
+    # Preserve eval sets before balancing (balance_undersample filters them out)
+    eval_sets_dfs = []
+    if EVAL_SET_INDEX in df.columns:
+        for eval_set_index in df[EVAL_SET_INDEX].unique():
+            if eval_set_index == 0:
+                continue  # Skip train set
+            eval_df = df[df[EVAL_SET_INDEX] == eval_set_index].copy()
+            eval_sets_dfs.append(eval_df)
+        # Extract train set for balancing
+        train_df = df[df[EVAL_SET_INDEX] == 0].copy()
+    else:
+        train_df = df
+        eval_sets_dfs = []
+
     if task_type is not None and task_type.is_classification() and balance:
-        df = balance_undersample(
-            df=df,
+        train_df = balance_undersample(
+            df=train_df,
             target_column=sample_columns.target,
             task_type=task_type,
             random_state=random_state,
@@ -91,6 +105,12 @@ def sample(
             logger=logger,
             **kwargs,
         )
+
+    # Combine balanced train with eval sets
+    if len(eval_sets_dfs) > 0:
+        df = pd.concat([train_df] + eval_sets_dfs, ignore_index=False)
+    else:
+        df = train_df
 
     # separate OOT
     oot_dfs = []

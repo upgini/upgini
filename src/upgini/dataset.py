@@ -248,11 +248,6 @@ class Dataset:
 
     def __resample(self, force_downsampling=False):
 
-        if EVAL_SET_INDEX in self.data.columns and not force_downsampling:
-            train_segment = self.data[self.data[EVAL_SET_INDEX] == 0]
-        else:
-            train_segment = self.data
-
         sample_columns = SampleColumns(
             ids=self.id_columns,
             date=self.date_column,
@@ -261,7 +256,7 @@ class Dataset:
         )
 
         self.data = sample(
-            train_segment if self.is_imbalanced else self.data,  # for imbalanced data we will be doing transform anyway
+            self.data,
             self.task_type,
             self.cv_type,
             self.sample_config,
