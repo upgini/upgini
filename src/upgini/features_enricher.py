@@ -1709,8 +1709,10 @@ class FeaturesEnricher(TransformerMixin):
 
             # Convert bool to string in eval_set
             if len(bool_columns) > 0:
-                fitting_eval_X[col] = fitting_eval_X[col].astype(str)
-                fitting_enriched_eval_X[col] = fitting_enriched_eval_X[col].astype(str)
+                for col in bool_columns:
+                    fitting_eval_X[col] = fitting_eval_X[col].astype(str)
+                    fitting_enriched_eval_X[col] = fitting_enriched_eval_X[col].astype(str)
+
             # Correct string features with decimal commas
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
