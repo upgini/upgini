@@ -389,3 +389,16 @@ class AddInfo(BaseModel):
     true_one_hot_groups: Optional[Dict[str, List[str]]] = None
     pseudo_one_hot_groups: Optional[Dict[str, List[str]]] = None
     autodetected_search_keys: Optional[Dict[str, SearchKey]] = None
+
+
+class AdsHintType(str, Enum):
+    # BW table column must have type `DATE`
+    DATE_CLUSTER_KEY = "DATE_CLUSTER_KEY" # cluster column also plays role of ADS search key
+    DATE_CLUSTER_SYNTHETIC = "DATE_CLUSTER_SYNTHETIC" # cluster column used only for partition elimination
+
+class AdsHint(BaseModel):
+    ads_hint_type: AdsHintType
+    hint_column_name: str
+    # must be set if registered ADS defined as view and has clustered column in underlying table
+    # format: myDatasetId.myTableUsedInViewWithClusterField
+    fully_qualified_table_name: Optional[str] = None
