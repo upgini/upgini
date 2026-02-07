@@ -10,7 +10,7 @@ import pandas as pd
 from upgini.errors import HttpError, ValidationError
 from upgini.http import LoggerFactory, get_rest_client
 from upgini.mdc import MDC
-from upgini.metadata import SearchKey
+from upgini.metadata import SearchKey, AdsHint
 from upgini.spinner import Spinner
 
 
@@ -46,151 +46,132 @@ class DataSourcePublisher:
             self.logger.setLevel("FATAL")
 
     def place(
-        self,
-        data_table_uri: str,
-        search_keys: Dict[str, SearchKey],
-        update_frequency: Union[
-            Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
-        ],
-        exclude_from_autofe_generation: Optional[List[str]],
-        secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
-        sort_column: Optional[str] = None,
-        date_format: Optional[str] = None,
-        exclude_columns: Optional[List[str]] = None,
-        hash_feature_names=False,
-        snapshot_frequency_days: Optional[int] = None,
-        join_date_abs_limit_days: Optional[int] = None,
-        features_for_embeddings: Optional[Dict[str, str]] = DEFAULT_GENERATE_EMBEDDINGS,
-        data_table_id_to_replace: Optional[str] = None,
-        keep_features: Optional[List[str]] = None,
-        date_features: Optional[List[str]] = None,
-        date_vector_features: Optional[List[str]] = None,
-        date_features_format: Optional[str] = None,
-        generate_runtime_embeddings: Optional[List[str]] = None,
-        exclude_raw: Optional[List[str]] = None,
-        force_percentile_generation: Optional[List[str]] = None,
-        _force_generation=False,
-        _silent=False,
+            self,
+            data_table_uri: str,
+            search_keys: Dict[str, SearchKey],
+            update_frequency: Union[
+                Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
+            ],
+            exclude_from_autofe_generation: Optional[List[str]],
+            secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
+            sort_column: Optional[str] = None,
+            date_format: Optional[str] = None,
+            exclude_columns: Optional[List[str]] = None,
+            hash_feature_names=False,
+            snapshot_frequency_days: Optional[int] = None,
+            join_date_abs_limit_days: Optional[int] = None,
+            features_for_embeddings: Optional[Dict[str, str]] = DEFAULT_GENERATE_EMBEDDINGS,
+            data_table_id_to_replace: Optional[str] = None,
+            keep_features: Optional[List[str]] = None,
+            date_features: Optional[List[str]] = None,
+            date_vector_features: Optional[List[str]] = None,
+            date_features_format: Optional[str] = None,
+            generate_runtime_embeddings: Optional[List[str]] = None,
+            exclude_raw: Optional[List[str]] = None,
+            force_percentile_generation: Optional[List[str]] = None,
+            _force_generation=False,
+            _silent=False,
+            ads_hints: Optional[list[AdsHint]] = None
     ) -> str:
         """Register new ADS
 
-        Parameters
-        ----------
-        data_table_uri - str - table name in format {project_id}.{datasource_name}.{table_name}
+    Parameters
+    ----------
+    data_table_uri : str
+        table name in format {project_id}.{datasource_name}.{table_name}
 
-        search_keys - dict with column names as keys and SearchKey as value
+    search_keys : Dict[str, SearchKey]
+        dict with column names as keys and SearchKey as value
 
-        update_frequency - str - (Monthly, Weekly, Daily, Annually, Quarterly)
+    update_frequency : Union[Literal["Daily"], Literal["Weekly"], Literal["Monthly"],
+                             Literal["Quarterly"], Literal["Annually"]]
+        (Monthly, Weekly, Daily, Annually, Quarterly)
 
-        exclude_from_autofe_generation - optional list of features that should be excluded from AutoFE
+    exclude_from_autofe_generation : Optional[List[str]]
+        optional list of features that should be excluded from AutoFE
 
-        secondary_search_keys - optional dict of secondary search keys
+    secondary_search_keys : Optional[Dict[str, SearchKey]], default=None
 
-        sort_column - optional str - name of unique column that could be used for sort
+    sort_column : Optional[str], default=None
+        name of unique column that could be used for sort
 
-        date_format - optional str - format of date if it is present in search keys
+    date_format : Optional[str], default=None
+        format of date if it is present in search keys
 
-        features_for_embeddings - optional list of str - list of features that should be used for GPT features
-            generation
+    exclude_columns : Optional[List[str]], default=None
 
-        exclude_raw - optional list of str - list of features that should NOT be used as raw features
+    hash_feature_names : bool, default=False
 
-        ...
+    snapshot_frequency_days : Optional[int], default=None
 
-        data_table_id_to_replace - optional str - id of registered ADS that should be replaced by new table
+    join_date_abs_limit_days : Optional[int], default=None
 
-        keep_features - optional list - features that should not be removed from ADS (even if they are personal)
-        """
+    features_for_embeddings : Optional[Dict[str, str]], default=DEFAULT_GENERATE_EMBEDDINGS
+        optional list of features that should be used for GPT features generation
+
+    data_table_id_to_replace : Optional[str], default=None
+        id of registered ADS that should be replaced by new table
+
+    keep_features : Optional[List[str]], default=None
+        features that should not be removed from ADS (even if they are personal)
+
+    date_features : Optional[List[str]], default=None
+
+    date_vector_features : Optional[List[str]], default=None
+
+    date_features_format : Optional[str], default=None
+
+    generate_runtime_embeddings : Optional[List[str]], default=None
+
+    exclude_raw : Optional[List[str]], default=None
+        optional list of str - list of features that should NOT be used as raw features
+
+    force_percentile_generation : Optional[List[str]], default=None
+
+    _force_generation : bool, default=False
+
+    _silent : bool, default=False
+
+    ads_hints : Optional[list[AdsHint]], default=None
+        optional list of hints used to improve query performance
+
+    Returns
+    -------
+    str
+        The ID of the registered ADS
+    """
         trace_id = str(uuid.uuid4())
 
         with MDC(trace_id=trace_id):
             task_id = None
             try:
-                if data_table_uri is None or not data_table_uri.startswith("bq://"):
-                    raise ValidationError(
-                        "Unsupported data table uri. It should looks like bq://projectId.datasetId.tableId"
-                    )
-                if search_keys is None or len(search_keys) == 0:
-                    raise ValidationError("Empty search keys")
-                # if SearchKey.DATE in search_keys.values() and date_format is None:
-                #     raise ValidationError("date_format is required for DATE search key")
-                if update_frequency not in self.ACCEPTABLE_UPDATE_FREQUENCIES:
-                    raise ValidationError(
-                        f"Invalid update frequency: {update_frequency}. "
-                        f"Available values: {self.ACCEPTABLE_UPDATE_FREQUENCIES}"
-                    )
-                if (
-                    set(search_keys.values()) == {SearchKey.IP_RANGE_FROM, SearchKey.IP_RANGE_TO}
-                    or set(search_keys.values()) == {SearchKey.IPV6_RANGE_FROM, SearchKey.IPV6_RANGE_TO}
-                    or set(search_keys.values()) == {SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO}
-                    or snapshot_frequency_days is not None or join_date_abs_limit_days is not None
-                ) and sort_column is None:
-                    raise ValidationError("Sort column is required for passed search keys")
-                if (
-                    set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
-                    or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}
-                ) and not date_format:
-                    raise ValidationError("date_format argument is required for PHONE+DATE and HEM+DATE search keys")
-
                 if secondary_search_keys:
-                    response = self._rest_client.get_active_ads_definitions()
-                    definitions = pd.DataFrame(response["adsDefinitions"])
-                    prod_secondary_definitions = definitions.query(
-                        "(secondarySearchKeys.astype('string') != '[]') & (adsDefinitionAccessType == 'PROD')"
-                    )[["name", "searchKeys", "secondarySearchKeys"]]
-                    for _, row in prod_secondary_definitions.iterrows():
-                        existing_secondary_keys = {item for sublist in row["secondarySearchKeys"] for item in sublist}
-                        if existing_secondary_keys == {v.value.name for v in secondary_search_keys.values()}:
-                            existing_search_keys = {item for sublist in row["searchKeys"] for item in sublist}
-                            if existing_search_keys == {v.value.name for v in search_keys.values()} or (
-                                "IP" in str(existing_search_keys) and "IP" in str(search_keys.values())
-                            ):
-                                raise ValidationError(
-                                    "ADS with the same PRIMARY_KEYS -> SECONDARY_KEYS mapping "
-                                    f"already exists: {row['name']}"
-                                )
+                    self.validate_secondary_search_key(search_keys, secondary_search_keys)
 
-                request = {
-                    "dataTableUri": data_table_uri,
-                    "searchKeys": {k: v.value.value for k, v in search_keys.items()},
-                    "excludeColumns": exclude_columns,
-                    "hashFeatureNames": str(hash_feature_names).lower(),
-                    "snapshotFrequencyDays": snapshot_frequency_days,
-                    "joinDateAbsLimitDays": join_date_abs_limit_days,
-                    "updateFrequency": update_frequency,
-                    "featuresForEmbeddings": features_for_embeddings,
-                    "forceGeneration": str(_force_generation).lower(),
-                }
-                if date_format is not None:
-                    request["dateFormat"] = date_format
-                if secondary_search_keys is not None:
-                    request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
-                if sort_column is not None:
-                    request["sortColumn"] = sort_column
-                if data_table_id_to_replace is not None:
-                    request["adsDefinitionIdToReplace"] = data_table_id_to_replace
-                if exclude_from_autofe_generation is not None:
-                    request["excludeFromGeneration"] = exclude_from_autofe_generation
-                if keep_features is not None:
-                    request["keepFeatures"] = keep_features
-                if date_features is not None:
-                    if date_features_format is None:
-                        raise ValidationError("date_features_format should be presented if you use date features")
-                    request["dateFeatures"] = date_features
-                    request["dateFeaturesFormat"] = date_features_format
-                if date_vector_features is not None:
-                    if date_features_format is None:
-                        raise ValidationError(
-                            "date_features_format should be presented if you use date vector features"
-                        )
-                    request["dateVectorFeatures"] = date_vector_features
-                    request["dateFeaturesFormat"] = date_features_format
-                if generate_runtime_embeddings is not None:
-                    request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
-                if exclude_raw is not None:
-                    request["excludeRaw"] = exclude_raw
-                if force_percentile_generation is not None:
-                    request["forcePercentileGeneration"] = force_percentile_generation
+                request = self.build_place_request(data_table_uri=data_table_uri,
+                                                   search_keys=search_keys,
+                                                   update_frequency=update_frequency,
+                                                   exclude_from_autofe_generation=exclude_from_autofe_generation,
+                                                   secondary_search_keys=secondary_search_keys,
+                                                   sort_column=sort_column,
+                                                   date_format=date_format,
+                                                   exclude_columns=exclude_columns,
+                                                   hash_feature_names=hash_feature_names,
+                                                   snapshot_frequency_days=snapshot_frequency_days,
+                                                   join_date_abs_limit_days=join_date_abs_limit_days,
+                                                   features_for_embeddings=features_for_embeddings,
+                                                   data_table_id_to_replace=data_table_id_to_replace,
+                                                   keep_features=keep_features,
+                                                   date_features=date_features,
+                                                   date_vector_features=date_vector_features,
+                                                   date_features_format=date_features_format,
+                                                   generate_runtime_embeddings=generate_runtime_embeddings,
+                                                   exclude_raw=exclude_raw,
+                                                   force_percentile_generation=force_percentile_generation,
+                                                   _force_generation=_force_generation,
+                                                   _silent=_silent,
+                                                   ads_hints=ads_hints)
+
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
@@ -246,6 +227,7 @@ class DataSourcePublisher:
                                 force_percentile_generation=force_percentile_generation,
                                 _force_generation=True,
                                 _silent=_silent,
+                                ads_hints=ads_hints,
                             )
 
                         button.on_click(on_button_clicked)
@@ -532,3 +514,122 @@ class DataSourcePublisher:
             except Exception:
                 self.logger.exception("Failed to upload autofe model")
                 raise
+
+    def validate_secondary_search_key(self,
+                                      search_keys: Dict[str, SearchKey],
+                                      secondary_search_keys: Dict[str, SearchKey]):
+        if secondary_search_keys:
+            response = self._rest_client.get_active_ads_definitions()
+            definitions = pd.DataFrame(response["adsDefinitions"])
+            prod_secondary_definitions = definitions.query(
+                "(secondarySearchKeys.astype('string') != '[]') & (adsDefinitionAccessType == 'PROD')"
+            )[["name", "searchKeys", "secondarySearchKeys"]]
+            for _, row in prod_secondary_definitions.iterrows():
+                existing_secondary_keys = {item for sublist in row["secondarySearchKeys"] for item in sublist}
+                if existing_secondary_keys == {v.value.name for v in secondary_search_keys.values()}:
+                    existing_search_keys = {item for sublist in row["searchKeys"] for item in sublist}
+                    if existing_search_keys == {v.value.name for v in search_keys.values()} or (
+                            "IP" in str(existing_search_keys) and "IP" in str(search_keys.values())
+                    ):
+                        raise ValidationError(
+                            "ADS with the same PRIMARY_KEYS -> SECONDARY_KEYS mapping "
+                            f"already exists: {row['name']}"
+                        )
+
+    @staticmethod
+    def build_place_request(data_table_uri: str,
+        search_keys: Dict[str, SearchKey],
+        update_frequency: Union[
+            Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
+        ],
+        exclude_from_autofe_generation: Optional[List[str]],
+        secondary_search_keys: Optional[Dict[str, SearchKey]] = None,
+        sort_column: Optional[str] = None,
+        date_format: Optional[str] = None,
+        exclude_columns: Optional[List[str]] = None,
+        hash_feature_names=False,
+        snapshot_frequency_days: Optional[int] = None,
+        join_date_abs_limit_days: Optional[int] = None,
+        features_for_embeddings: Optional[Dict[str, str]] = DEFAULT_GENERATE_EMBEDDINGS,
+        data_table_id_to_replace: Optional[str] = None,
+        keep_features: Optional[List[str]] = None,
+        date_features: Optional[List[str]] = None,
+        date_vector_features: Optional[List[str]] = None,
+        date_features_format: Optional[str] = None,
+        generate_runtime_embeddings: Optional[List[str]] = None,
+        exclude_raw: Optional[List[str]] = None,
+        force_percentile_generation: Optional[List[str]] = None,
+        _force_generation=False,
+        _silent=False,
+        ads_hints: Optional[list[AdsHint]] = None) -> Dict:
+        if data_table_uri is None or not data_table_uri.startswith("bq://"):
+            raise ValidationError(
+                "Unsupported data table uri. It should looks like bq://projectId.datasetId.tableId"
+            )
+        if search_keys is None or len(search_keys) == 0:
+            raise ValidationError("Empty search keys")
+            # if SearchKey.DATE in search_keys.values() and date_format is None:
+            #     raise ValidationError("date_format is required for DATE search key")
+        if update_frequency not in DataSourcePublisher.ACCEPTABLE_UPDATE_FREQUENCIES:
+            raise ValidationError(
+                f"Invalid update frequency: {update_frequency}. "
+                f"Available values: {DataSourcePublisher.ACCEPTABLE_UPDATE_FREQUENCIES}"
+            )
+        if (
+                set(search_keys.values()) == {SearchKey.IP_RANGE_FROM, SearchKey.IP_RANGE_TO}
+                or set(search_keys.values()) == {SearchKey.IPV6_RANGE_FROM, SearchKey.IPV6_RANGE_TO}
+                or set(search_keys.values()) == {SearchKey.MSISDN_RANGE_FROM, SearchKey.MSISDN_RANGE_TO}
+                or snapshot_frequency_days is not None or join_date_abs_limit_days is not None
+        ) and sort_column is None:
+            raise ValidationError("Sort column is required for passed search keys")
+        if (
+                set(search_keys.values()) == {SearchKey.PHONE, SearchKey.DATE}
+                or set(search_keys.values()) == {SearchKey.HEM, SearchKey.DATE}
+        ) and not date_format:
+            raise ValidationError("date_format argument is required for PHONE+DATE and HEM+DATE search keys")
+
+        request = {
+            "dataTableUri": data_table_uri,
+            "searchKeys": {k: v.value.value for k, v in search_keys.items()},
+            "excludeColumns": exclude_columns,
+            "hashFeatureNames": str(hash_feature_names).lower(),
+            "snapshotFrequencyDays": snapshot_frequency_days,
+            "joinDateAbsLimitDays": join_date_abs_limit_days,
+            "updateFrequency": update_frequency,
+            "featuresForEmbeddings": features_for_embeddings,
+            "forceGeneration": str(_force_generation).lower(),
+        }
+        if date_format is not None:
+            request["dateFormat"] = date_format
+        if secondary_search_keys is not None:
+            request["secondarySearchKeys"] = {k: v.value.value for k, v in secondary_search_keys.items()}
+        if sort_column is not None:
+            request["sortColumn"] = sort_column
+        if data_table_id_to_replace is not None:
+            request["adsDefinitionIdToReplace"] = data_table_id_to_replace
+        if exclude_from_autofe_generation is not None:
+            request["excludeFromGeneration"] = exclude_from_autofe_generation
+        if keep_features is not None:
+            request["keepFeatures"] = keep_features
+        if date_features is not None:
+            if date_features_format is None:
+                raise ValidationError("date_features_format should be presented if you use date features")
+            request["dateFeatures"] = date_features
+            request["dateFeaturesFormat"] = date_features_format
+        if date_vector_features is not None:
+            if date_features_format is None:
+                raise ValidationError(
+                    "date_features_format should be presented if you use date vector features"
+                )
+            request["dateVectorFeatures"] = date_vector_features
+            request["dateFeaturesFormat"] = date_features_format
+        if generate_runtime_embeddings is not None:
+            request["generateRuntimeEmbeddingsFeatures"] = generate_runtime_embeddings
+        if exclude_raw is not None:
+            request["excludeRaw"] = exclude_raw
+        if force_percentile_generation is not None:
+            request["forcePercentileGeneration"] = force_percentile_generation
+        if ads_hints:
+            ads_hints_as_dict = [hint.model_dump() for hint in ads_hints]
+            request["adsHints"] = ads_hints_as_dict
+        return request
