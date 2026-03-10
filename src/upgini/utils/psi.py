@@ -134,6 +134,7 @@ def calculate_features_psi(
     reference_mask, current_masks = _split_intervals(df, date_column, psi_features_params.n_intervals, logger)
     features_agg_func = _get_agg_func(stability_agg_func or psi_features_params.agg)
     logger.info(f"Calculating features PSI with agg function {features_agg_func}")
+    features = [feature for feature in df.columns if feature not in [TARGET, date_column]]
     psi_values = [
         _stability_agg(
             [df[feature][cur] for cur in current_masks],
@@ -144,10 +145,9 @@ def calculate_features_psi(
             cat_top_pct=psi_features_params.cat_top_pct,
             agg_func=features_agg_func,
         )
-        for feature in df.columns
-        if feature not in [TARGET, date_column]
+        for feature in features
     ]
-    return {feature: psi for feature, psi in zip(df.columns, psi_values)}
+    return {feature: psi for feature, psi in zip(features, psi_values)}
 
 
 def _split_intervals(
