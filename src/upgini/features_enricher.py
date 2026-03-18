@@ -2873,6 +2873,14 @@ if response.status_code == 200:
         if DEFAULT_INDEX in selected_input_columns:
             selected_input_columns.remove(DEFAULT_INDEX)
 
+        selected_input_columns = [
+            c
+            for c in selected_input_columns
+            if c not in selected_generated_features
+            and c not in selected_true_one_hot_features
+            and c not in selected_pseudo_one_hot_features
+        ]
+
         return (
             selected_input_columns
             + selected_generated_features
