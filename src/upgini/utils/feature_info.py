@@ -28,6 +28,7 @@ class FeatureInfo:
     data_provider_link: str
     data_source_link: str
     drift_score: Optional[float] = None
+    psi_value: Optional[float] = None
 
     @staticmethod
     def from_metadata(
@@ -52,12 +53,14 @@ class FeatureInfo:
             data_provider_link=feature_meta.data_provider_link,
             data_source_link=feature_meta.data_source_link,
             drift_score=feature_meta.drift_score,
+            psi_value=feature_meta.psi_value,
         )
 
     def to_row(self, bundle: ResourceBundle) -> Dict[str, str]:
         return {
             bundle.get("features_info_name"): self.name,
             bundle.get("features_info_shap"): self.rounded_shap,
+            bundle.get("features_info_psi"): self.psi_value,
             bundle.get("features_info_adversarial_drift"): self.drift_score,
             bundle.get("features_info_hitrate"): self.hitrate,
             bundle.get("features_info_value_preview"): self.value_preview,
@@ -70,6 +73,7 @@ class FeatureInfo:
         return {
             bundle.get("features_info_name"): self.internal_name,
             bundle.get("features_info_shap"): self.rounded_shap,
+            bundle.get("features_info_psi"): self.psi_value,
             bundle.get("features_info_adversarial_drift"): self.drift_score,
             bundle.get("features_info_hitrate"): self.hitrate,
             bundle.get("features_info_value_preview"): self.value_preview,
@@ -83,6 +87,7 @@ class FeatureInfo:
             bundle.get("features_info_name"): self.internal_name,
             "feature_link": self.doc_link,
             bundle.get("features_info_shap"): self.rounded_shap,
+            bundle.get("features_info_psi"): self.psi_value,
             bundle.get("features_info_adversarial_drift"): self.drift_score,
             bundle.get("features_info_hitrate"): self.hitrate,
             bundle.get("features_info_value_preview"): self.value_preview,
