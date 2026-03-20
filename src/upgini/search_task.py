@@ -190,8 +190,7 @@ class SearchTask:
                     c.original_name
                     for f in meta.generated_features
                     for c in f.base_columns
-                    if c.ads_definition_id is None
-                    and not c.original_name.endswith("_emb")  # embeddings already added
+                    if c.ads_definition_id is None and not c.original_name.endswith("_emb")  # embeddings already added
                 )
         return list(features_for_transform)
 

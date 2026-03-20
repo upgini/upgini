@@ -13,7 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -108,6 +108,7 @@ from upgini.utils.hash_utils import file_hash, hash_input
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
+from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
 
 try:
     from upgini.utils.progress_bar import CustomProgressBar as ProgressBar
@@ -117,7 +118,6 @@ except Exception:
     )
 
 from upgini.utils.config import SampleConfig
-from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
 from upgini.utils.sample_utils import SampleColumns, _num_samples, sample
 from upgini.utils.sort import sort_columns
 from upgini.utils.target_utils import calculate_psi, define_task, is_imbalanced
@@ -1916,8 +1916,10 @@ class FeaturesEnricher(TransformerMixin):
 
             # Convert bool to string in eval_set
             if len(bool_columns) > 0:
-                fitting_eval_X[col] = fitting_eval_X[col].astype(str)
-                fitting_enriched_eval_X[col] = fitting_enriched_eval_X[col].astype(str)
+                for col in bool_columns:
+                    fitting_eval_X[col] = fitting_eval_X[col].astype(str)
+                    fitting_enriched_eval_X[col] = fitting_enriched_eval_X[col].astype(str)
+
             # Correct string features with decimal commas
             if len(decimal_columns_to_fix) > 0:
                 for col in decimal_columns_to_fix:
@@ -1990,12 +1992,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__get_enriched_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset)
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
-        elif (
-            not self.imbalanced
-            and not exclude_features_sources
-            and is_input_same_as_fit
-            and self.df_with_original_index is not None
-        ):
+        elif not exclude_features_sources and is_input_same_as_fit and self.df_with_original_index is not None:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__get_enriched_from_fit(
                 validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics
@@ -2013,7 +2010,8 @@ class FeaturesEnricher(TransformerMixin):
                 exclude_features_sources,
                 progress_bar,
                 progress_callback,
-                is_for_metrics=is_for_metrics,
+                # Exclude OOT eval sets from transform because they are not used for metrics calculation
+                exclude_oot=is_for_metrics,
             )
 
     def __get_sampled_cached_enriched(
@@ -2272,7 +2270,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None,
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
-        is_for_metrics: bool = False,
+        exclude_oot: bool = False,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -2281,8 +2279,7 @@ class FeaturesEnricher(TransformerMixin):
         # Prepare
         df = self.__combine_train_and_eval_sets(validated_X, validated_y, eval_set)
 
-        # Exclude OOT eval sets from transform because they are not used for metrics calculation
-        if is_for_metrics and EVAL_SET_INDEX in df.columns:
+        if exclude_oot and EVAL_SET_INDEX in df.columns:
             for eval_index in df[EVAL_SET_INDEX].unique():
                 if eval_index == 0:
                     continue
@@ -3083,6 +3080,14 @@ if response.status_code == 200:
         if DEFAULT_INDEX in selected_input_columns:
             selected_input_columns.remove(DEFAULT_INDEX)
 
+        selected_input_columns = [
+            c
+            for c in selected_input_columns
+            if c not in selected_generated_features
+            and c not in selected_true_one_hot_features
+            and c not in selected_pseudo_one_hot_features
+        ]
+
         return (
             selected_input_columns
             + selected_generated_features
@@ -3259,9 +3264,10 @@ if response.status_code == 200:
         self.imbalanced = is_imbalanced(
             only_train_df, self.model_task_type, self.sample_config, self.bundle, self.__log_warning
         )
-        if self.imbalanced:
-            # Exclude eval sets from fit because they will be transformed before metrics calculation
-            df = only_train_df
+        # Always include eval sets (including OOT) in fit to send them to the server
+        # if self.imbalanced:
+        #     # Exclude eval sets from fit because they will be transformed before metrics calculation
+        #     df = only_train_df
 
         self.id_columns_encoder = OrdinalEncoder().fit(df[self.id_columns or []])
 
@@ -3912,13 +3918,15 @@ if response.status_code == 200:
             date_col = self._get_date_column(search_keys)
             has_date = date_col is not None and date_col in eval_df.columns
             if eval_df[TARGET].isna().all():
-                msg = None
+                # OOT eval set - warn but don't remove
                 if not has_date:
                     msg = self.bundle.get("oot_without_date_not_supported").format(eval_set_index)
+                    self.__log_warning(msg)
+                    # OOT without date will be included in server upload but not used for stability check
                 elif self.columns_for_online_api:
                     msg = self.bundle.get("oot_with_online_sources_not_supported").format(eval_set_index)
-                if msg:
                     self.__log_warning(msg)
+                    # OOT with online sources is still removed as it's not supported
                     df = df[df[EVAL_SET_INDEX] != eval_set_index]
         return df
 
@@ -4660,9 +4668,12 @@ if response.status_code == 200:
 
         if len(features_info) > 0:
             self.features_info = pd.DataFrame(features_info)
-            # If all psi values are 0 or null, drop psi column
-            if self.features_info[self.bundle.get("features_info_psi")].astype(np.float64).fillna(0.0).eq(0.0).all():
-                self.features_info.drop(columns=[self.bundle.get("features_info_psi")], inplace=True)
+            # If all drift score values are 0 or null, drop drift column
+            drift_col = self.bundle.get("features_info_adversarial_drift")
+            if drift_col in self.features_info.columns and (
+                self.features_info[drift_col].astype(np.float64).fillna(0.0).eq(0.0).all()
+            ):
+                self.features_info.drop(columns=[drift_col], inplace=True)
             self._features_info_without_links = pd.DataFrame(features_info_without_links)
             self._internal_features_info = pd.DataFrame(internal_features_info)
             if not silent:
@@ -4963,6 +4974,8 @@ if response.status_code == 200:
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
+            eval_sets_drift_df = self._get_eval_sets_drift_summary()
+
             return prepare_and_show_report(
                 relevant_features_df=self._features_info_without_links,
                 relevant_datasources_df=self.relevant_data_sources,
@@ -4971,11 +4984,67 @@ if response.status_code == 200:
                 search_id=self._search_task.search_task_id,
                 email=self.rest_client.get_current_email(),
                 search_keys=[str(sk) for sk in self.search_keys.values()],
+                eval_sets_drift_df=eval_sets_drift_df,
                 display_id=display_id,
                 display_handle=display_handle,
             )
         except Exception:
             pass
+
+    def _get_eval_sets_drift_summary(self) -> Optional[pd.DataFrame]:
+        """
+        Build a summary table with drift AUC and top drifting features for each eval set.
+        If there is only a single eval set or there is no drift information, None is returned.
+        """
+        if self._search_task is None or self._search_task.provider_metadata_v2 is None:
+            return None
+
+        rows: Dict[int, Dict[str, object]] = {}
+
+        for provider_meta in self._search_task.provider_metadata_v2:
+            if provider_meta.eval_set_metrics is None:
+                continue
+
+            for eval_metrics in provider_meta.eval_set_metrics:
+                eval_idx = eval_metrics.eval_set_index
+
+                if eval_idx not in rows:
+                    rows[eval_idx] = {
+                        "Eval set index": eval_idx,
+                        "Drift AUC": None,
+                        "Top drifting features": "",
+                    }
+
+                # Keep the maximum drift AUC across providers for the same eval set index
+                auc = eval_metrics.drift_auc_score
+                if auc is not None:
+                    current_auc = rows[eval_idx]["Drift AUC"]
+                    if current_auc is None or auc > current_auc:
+                        rows[eval_idx]["Drift AUC"] = auc
+
+                # Collect top drifting features using drift_scores ordering (descending by score)
+                top_features: list[str] = []
+                drift_scores = eval_metrics.drift_scores
+                drift_removed_features = eval_metrics.drift_removed_features
+
+                if drift_scores and drift_removed_features:
+                    sorted_features = sorted(drift_removed_features, key=drift_scores.get, reverse=True)
+                    top_features = sorted_features[:5]
+
+                if top_features:
+                    existing = rows[eval_idx]["Top drifting features"]
+                    if existing:
+                        merged = list(dict.fromkeys(str(existing).split(", ") + top_features))
+                        rows[eval_idx]["Top drifting features"] = ", ".join(merged[:5])
+                    else:
+                        rows[eval_idx]["Top drifting features"] = ", ".join(top_features)
+
+        if len(rows) <= 1:
+            # We only show a separate table if we really have multiple eval sets
+            return None
+
+        data = sorted(rows.values(), key=lambda r: r["Eval set index"])
+        return pd.DataFrame(data)
 
     def __detect_missing_search_keys(
         self,
