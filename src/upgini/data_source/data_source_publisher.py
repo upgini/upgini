@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 import uuid
@@ -143,6 +144,7 @@ class DataSourcePublisher:
         trace_id = str(uuid.uuid4())
 
         with MDC(trace_id=trace_id):
+            self.logger.info(f"ads_hints: {ads_hints}")
             task_id = None
             try:
                 if secondary_search_keys:
@@ -172,6 +174,7 @@ class DataSourcePublisher:
                                                    _silent=_silent,
                                                    ads_hints=ads_hints)
 
+                logging.info(f"request json: {json.dumps(request)}")
                 self.logger.info(f"Start registering data table {request}")
 
                 task_id = self._rest_client.register_ads(request, trace_id)
