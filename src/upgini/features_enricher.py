@@ -303,6 +303,7 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.external_source_feature_names = []
         self.feature_importances_ = []
+        self.psi_values: dict[str, float] | None = None
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
