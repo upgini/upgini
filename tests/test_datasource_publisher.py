@@ -7,9 +7,9 @@ from upgini.metadata import AdsHint, AdsHintType
 
 def test_build_place_request_with_ads_hints():
     ads_hints: list[AdsHint] = [AdsHint(
-        ads_hint_type=AdsHintType.DATE_CLUSTER_KEY,
-        hint_column_name="clustered_date",
-        fully_qualified_table_name="my-dataset.table_with_clustered_date")]
+        adsHintType=AdsHintType.DATE_CLUSTER_KEY,
+        hintColumnName="clustered_date",
+        fullyQualifiedTableName="my-dataset.table_with_clustered_date")]
     print(f"1. Type of ads_hints: {type(ads_hints)}")
     print(f"2. Length of ads_hints: {len(ads_hints)}")
 

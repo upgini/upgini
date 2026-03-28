@@ -401,8 +401,8 @@ class AdsHintType(str, Enum):
     DATE_CLUSTER_SYNTHETIC = "DATE_CLUSTER_SYNTHETIC" # cluster column used only for partition elimination
 
 class AdsHint(BaseModel):
-    ads_hint_type: AdsHintType
-    hint_column_name: str
+    adsHintType: AdsHintType
+    hintColumnName: str
     # must be set if registered ADS defined as view and has clustered column in underlying table
     # format: myDatasetId.myTableUsedInViewWithClusterField
-    fully_qualified_table_name: Optional[str] = None
+    fullyQualifiedTableName: Optional[str] = None
