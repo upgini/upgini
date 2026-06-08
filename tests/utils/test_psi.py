@@ -1,9 +1,11 @@
+import ipaddress
 import logging
 import os
 
+import numpy as np
 import pandas as pd
 
-from upgini.metadata import ModelTaskType
+from upgini.metadata import ModelTaskType, TARGET
 from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
 
 base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/psi")
@@ -305,3 +307,30 @@ def test_psi_min_agg():
     }
 
     assert_dicts_equal(psi_values, expected_psi_values)
+
+
+def test_psi_mixed_ip_addresses_not_in_cat_features():
+    n = 200
+    dates = pd.date_range("2020-01-01", periods=n, freq="D")
+    df = pd.DataFrame(
+        {
+            "request_date": (dates.view("int64") // 10**6).astype(np.int64),
+            TARGET: np.random.randint(0, 2, n),
+            "ip_col": [
+                ipaddress.ip_address("200.63.41.111" if i % 2 == 0 else "2806:2f0:92c0:9cc4:dd2:5a5:41b:d7eb")
+                for i in range(n)
+            ],
+            "num_col": np.random.randn(n),
+        }
+    )
+
+    psi_values = calculate_features_psi(
+        df,
+        cat_features=[],
+        date_column="request_date",
+        logger=logging.getLogger(),
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    assert "ip_col" in psi_values
+    assert not np.isnan(psi_values["ip_col"])
