@@ -20,7 +20,7 @@ def test_build_place_request_with_ads_hints():
 
     print(ads_hints_as_dict)
     req = DataSourcePublisher.build_place_request(
-        data_table_uri=f"bq://my-project-dev.my-dataset.view_with_clustered_column",
+        data_table_uri="bq://my-project-dev.my-dataset.view_with_clustered_column",
         search_keys={"msisdn": SearchKey.PHONE, "clustered_date": SearchKey.DATE},
         date_format="%Y-%m-%d",
         update_frequency="Daily",

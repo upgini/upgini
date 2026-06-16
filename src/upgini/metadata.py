@@ -397,8 +397,9 @@ class AddInfo(BaseModel):
 
 class AdsHintType(str, Enum):
     # BW table column must have type `DATE`
-    DATE_CLUSTER_KEY = "DATE_CLUSTER_KEY" # cluster column also plays role of ADS search key
-    DATE_CLUSTER_SYNTHETIC = "DATE_CLUSTER_SYNTHETIC" # cluster column used only for partition elimination
+    DATE_CLUSTER_KEY = "DATE_CLUSTER_KEY"  # cluster column also plays role of ADS search key
+    DATE_CLUSTER_SYNTHETIC = "DATE_CLUSTER_SYNTHETIC"  # cluster column used only for partition elimination
+
 
 class AdsHint(BaseModel):
     adsHintType: AdsHintType

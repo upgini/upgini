@@ -540,7 +540,8 @@ class DataSourcePublisher:
                         )
 
     @staticmethod
-    def build_place_request(data_table_uri: str,
+    def build_place_request(
+        data_table_uri: str,
         search_keys: Dict[str, SearchKey],
         update_frequency: Union[
             Literal["Daily"], Literal["Weekly"], Literal["Monthly"], Literal["Quarterly"], Literal["Annually"]
@@ -564,7 +565,8 @@ class DataSourcePublisher:
         force_percentile_generation: Optional[List[str]] = None,
         _force_generation=False,
         _silent=False,
-        ads_hints: Optional[list[AdsHint]] = None) -> Dict:
+        ads_hints: Optional[list[AdsHint]] = None,
+    ) -> Dict:
         if data_table_uri is None or not data_table_uri.startswith("bq://"):
             raise ValidationError(
                 "Unsupported data table uri. It should looks like bq://projectId.datasetId.tableId"
