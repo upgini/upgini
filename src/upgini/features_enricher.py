@@ -1772,7 +1772,7 @@ class FeaturesEnricher(TransformerMixin):
         }
         date_column = self._get_date_column(search_keys)
         if date_column:
-            cat_features.discard(date_column)
+            cat_features.discard(to_renamed(date_column))
         return sorted(cat_features)
 
     def _resolve_client_features_in_sampled(
@@ -1878,7 +1878,8 @@ class FeaturesEnricher(TransformerMixin):
 
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
         fit_dropped_features = list(self.fit_dropped_features or file_meta.droppedColumns or [])
-        renamed_to_original = {renamed: original for original, renamed in columns_renaming.items()}
+        renamed_to_original = dict(columns_renaming)
+        original_to_renamed = {original: hashed for hashed, original in columns_renaming.items()}
         excluding_search_keys_original = [renamed_to_original.get(sk, sk) for sk in excluding_search_keys]
 
         excluded_client_columns = (
@@ -1886,7 +1887,7 @@ class FeaturesEnricher(TransformerMixin):
             + fit_dropped_features
             + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
         )
-        excluded_client_columns_renamed = {columns_renaming.get(c, c) for c in excluded_client_columns}
+        excluded_client_columns_renamed = {original_to_renamed.get(c, c) for c in excluded_client_columns}
 
         # Client columns for enriched metrics (respects select_features).
         client_features = [
@@ -1937,9 +1938,13 @@ class FeaturesEnricher(TransformerMixin):
             )
 
         fitting_X = X_sorted[baseline_client_features_in_sampled].copy()
-        fitting_enriched_X = enriched_X_sorted[
-            enriched_client_features_in_sampled + existing_selected_enriched_features
-        ].copy()
+        enriched_columns_for_fitting = []
+        seen_enriched_columns: set[str] = set()
+        for column in enriched_client_features_in_sampled + existing_selected_enriched_features:
+            if column not in seen_enriched_columns:
+                enriched_columns_for_fitting.append(column)
+                seen_enriched_columns.add(column)
+        fitting_enriched_X = enriched_X_sorted[enriched_columns_for_fitting].copy()
 
         renamed_generate_features = [columns_renaming.get(c, c) for c in (self.generate_features or [])]
         renamed_client_cat_features = [columns_renaming.get(c, c) for c in (client_cat_features or [])]

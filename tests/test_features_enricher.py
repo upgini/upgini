@@ -2592,6 +2592,50 @@ def test_handle_index_search_keys(requests_mock: Mocker):
     assert_frame_equal(handled, expected)
 
 
+def test_get_cat_features_for_psi_excludes_renamed_date_column(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    search_keys = {"rep_date_f5d6bb": SearchKey.DATE, "phone_num_a54a33": SearchKey.PHONE}
+    columns_renaming = {"rep_date_f5d6bb": "rep_date", "phone_num_a54a33": "phone_num"}
+    enricher = FeaturesEnricher(search_keys=search_keys, endpoint=url, logs_enabled=False)
+
+    cat_features = enricher._get_cat_features_for_psi(
+        client_cat_features=["some_cat"],
+        cat_features_from_backend=["another_cat"],
+        search_keys=search_keys,
+        columns_renaming=columns_renaming,
+    )
+
+    assert "rep_date" not in cat_features
+    assert "phone_num" in cat_features
+    assert "some_cat" in cat_features
+    assert "another_cat" in cat_features
+
+
+def test_columns_renaming_maps_hashed_to_original_for_client_features():
+    columns_renaming = {"feat_hash": "feature", "phone_num_a54a33": "phone_num"}
+    renamed_to_original = dict(columns_renaming)
+    original_to_renamed = {original: hashed for hashed, original in columns_renaming.items()}
+
+    excluding_search_keys = ["phone_num_a54a33"]
+    excluding_search_keys_original = [renamed_to_original.get(sk, sk) for sk in excluding_search_keys]
+    assert excluding_search_keys_original == ["phone_num"]
+
+    validated_X_columns = {"feature", "phone_num", "rep_date"}
+    excluded_client_columns = excluding_search_keys_original
+    excluded_client_columns_renamed = {original_to_renamed.get(c, c) for c in excluded_client_columns}
+    assert excluded_client_columns_renamed == {"phone_num_a54a33"}
+
+    client_features = [c for c in validated_X_columns if c not in excluded_client_columns]
+    for f in ["feat_hash"]:
+        original_f = renamed_to_original.get(f, f)
+        if original_f in ["feature"] and original_f not in client_features:
+            client_features.append(original_f)
+    assert "phone_num" not in client_features
+    assert "feature" in client_features
+
+
 def test_correct_target_regression(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
