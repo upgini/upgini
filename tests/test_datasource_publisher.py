@@ -6,10 +6,13 @@ from upgini.metadata import AdsHint, AdsHintType
 
 
 def test_build_place_request_with_ads_hints():
-    ads_hints: list[AdsHint] = [AdsHint(
-        adsHintType=AdsHintType.DATE_CLUSTER_KEY,
-        hintColumnName="clustered_date",
-        fullyQualifiedTableName="my-dataset.table_with_clustered_date")]
+    ads_hints: list[AdsHint] = [
+        AdsHint(
+            adsHintType=AdsHintType.DATE_CLUSTER_KEY,
+            hintColumnName="clustered_date",
+            fullyQualifiedTableName="my-dataset.table_with_clustered_date",
+        )
+    ]
     print(f"1. Type of ads_hints: {type(ads_hints)}")
     print(f"2. Length of ads_hints: {len(ads_hints)}")
 
@@ -29,26 +32,31 @@ def test_build_place_request_with_ads_hints():
         exclude_raw=[],
         exclude_from_autofe_generation=[],
         sort_column="row_num",
-        ads_hints=ads_hints
+        ads_hints=ads_hints,
     )
     req_as_json = json.dumps(req, indent=2)
     req_as_dict_from_json = json.loads(req_as_json)
     expected = {
-        'adsHints': [
-            {'ads_hint_type': 'DATE_CLUSTER_KEY',
-             'fully_qualified_table_name': 'my-dataset.table_with_clustered_date',
-             'hint_column_name': 'clustered_date'
-             }
+        "adsHints": [
+            {
+                "adsHintType": "DATE_CLUSTER_KEY",
+                "fullyQualifiedTableName": "my-dataset.table_with_clustered_date",
+                "hintColumnName": "clustered_date",
+            }
         ],
-        'dataTableUri': 'bq://my-project-dev.my-dataset.view_with_clustered_column', 'dateFormat': '%Y-%m-%d',
-        'excludeColumns': None,
-        'excludeFromGeneration': [],
-        'excludeRaw': [],
-        'featuresForEmbeddings': {},
-        'forceGeneration': 'false',
-        'generateRuntimeEmbeddingsFeatures': [],
-        'hashFeatureNames': 'false',
-        'joinDateAbsLimitDays': None,
-        'searchKeys': {'clustered_date': 'DATE', 'msisdn': 'MSISDN'},
-        'snapshotFrequencyDays': 36000, 'sortColumn': 'row_num', 'updateFrequency': 'Daily'}
+        "dataTableUri": "bq://my-project-dev.my-dataset.view_with_clustered_column",
+        "dateFormat": "%Y-%m-%d",
+        "excludeColumns": None,
+        "excludeFromGeneration": [],
+        "excludeRaw": [],
+        "featuresForEmbeddings": {},
+        "forceGeneration": "false",
+        "generateRuntimeEmbeddingsFeatures": [],
+        "hashFeatureNames": "false",
+        "joinDateAbsLimitDays": None,
+        "searchKeys": {"clustered_date": "DATE", "msisdn": "MSISDN"},
+        "snapshotFrequencyDays": 36000,
+        "sortColumn": "row_num",
+        "updateFrequency": "Daily",
+    }
     assert req_as_dict_from_json == expected

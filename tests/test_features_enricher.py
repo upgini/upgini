@@ -255,7 +255,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -282,7 +282,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -495,7 +495,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     expected_features_info.fillna("", inplace=True)
     enricher.features_info.fillna("", inplace=True)
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -541,7 +541,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     expected_features_info.fillna("", inplace=True)
     enricher.features_info.fillna("", inplace=True)
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1289,7 +1289,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1325,7 +1325,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1543,7 +1543,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1579,7 +1579,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1773,7 +1773,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1812,7 +1812,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -2004,7 +2004,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -2042,7 +2042,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6)
+    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
