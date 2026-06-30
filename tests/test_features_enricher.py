@@ -2613,6 +2613,29 @@ def test_get_cat_features_for_psi_excludes_renamed_date_column(requests_mock: Mo
     assert "another_cat" in cat_features
 
 
+def test_get_renamed_baseline_score_column(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    enricher.fit_columns_renaming = {"baseline_score_a1b2c3": "baseline_score"}
+
+    assert enricher._get_renamed_baseline_score_column() == "baseline_score"
+    assert (
+        enricher._get_renamed_baseline_score_column({"baseline_score_a1b2c3": "baseline_score"})
+        == "baseline_score"
+    )
+    assert enricher._get_renamed_baseline_score_column() == "baseline_score"
+
+    enricher_no_baseline = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
+    assert enricher_no_baseline._get_renamed_baseline_score_column() is None
+
+
 def test_columns_renaming_maps_hashed_to_original_for_client_features():
     columns_renaming = {"feat_hash": "feature", "phone_num_a54a33": "phone_num"}
     renamed_to_original = dict(columns_renaming)

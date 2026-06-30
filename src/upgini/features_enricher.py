@@ -1537,10 +1537,15 @@ class FeaturesEnricher(TransformerMixin):
 
         checking_eval_set_df[date_column] = date_converter.to_date_ms(eval_set_dates[selected_eval_set_idx].to_frame())
 
-        cat_features = [c for c in cat_features if c in checking_eval_set_df.columns]
+        baseline_score_column = self._get_renamed_baseline_score_column()
+        psi_df = checking_eval_set_df
+        if baseline_score_column and baseline_score_column in psi_df.columns:
+            psi_df = psi_df.drop(columns=[baseline_score_column])
+
+        cat_features = [c for c in cat_features if c in psi_df.columns]
 
         psi_values_sparse = calculate_sparsity_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
+            psi_df, cat_features, date_column, self.logger, model_task_type
         )
 
         self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
@@ -1550,7 +1555,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
         psi_values = calculate_features_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
+            psi_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
         )
 
         self.logger.info(f"PSI values by value: {psi_values}")
@@ -1564,6 +1569,8 @@ class FeaturesEnricher(TransformerMixin):
         }
 
         total_unstable_features = sorted(set(unstable_by_sparsity + unstable_by_value))
+        if baseline_score_column:
+            total_unstable_features = [f for f in total_unstable_features if f != baseline_score_column]
 
         return total_unstable_features
 
@@ -1752,6 +1759,15 @@ class FeaturesEnricher(TransformerMixin):
                         else:
                             raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
         return cat_features, search_keys_for_metrics
+
+    def _get_renamed_baseline_score_column(self, columns_renaming: dict[str, str] | None = None) -> str | None:
+        if self.baseline_score_column is None:
+            return None
+        if columns_renaming:
+            return columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
+        if self.fit_columns_renaming:
+            return self.fit_columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
+        return self.baseline_score_column
 
     def _get_cat_features_for_psi(
         self,
