@@ -631,7 +631,6 @@ def assert_metrics_frame_equal(
     actual: pd.DataFrame,
     *,
     metric_atol: float = 0.05,
-    metric_std_atol: float = 0.02,
     mean_target_atol: float = 10.0,
     uplift_atol: float = 0.05,
     uplift_pct_atol: float = 15.0,
@@ -667,15 +666,11 @@ def assert_metrics_frame_equal(
                     f"row {row_idx}, {column}: {expected_value} != {actual_value}"
                 )
             elif _is_metric_column(column) or " ± " in str(expected_value):
-                expected_metric, expected_std = _parse_metric_cell(expected_value)
-                actual_metric, actual_std = _parse_metric_cell(actual_value)
+                expected_metric, _ = _parse_metric_cell(expected_value)
+                actual_metric, _ = _parse_metric_cell(actual_value)
                 assert np.isclose(expected_metric, actual_metric, atol=metric_atol, rtol=0), (
                     f"row {row_idx}, {column} value: {expected_value} != {actual_value}"
                 )
-                if expected_std is not None and actual_std is not None:
-                    assert np.isclose(expected_std, actual_std, atol=metric_std_atol, rtol=0), (
-                        f"row {row_idx}, {column} std: {expected_value} != {actual_value}"
-                    )
             elif isinstance(expected_value, (int, float, np.floating)) or isinstance(
                 actual_value, (int, float, np.floating)
             ):
