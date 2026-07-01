@@ -57,9 +57,11 @@ class TrendCoefficient(TimeSeriesBase, ParametrizedOperator):
             x.iloc[:, -1].resample(f"{self.step_size}{self.step_unit}").fillna(method="ffill").fillna(method="bfill")
         )
         idx = np.arange(len(resampled))
+        value_col = x.columns[-1]
+        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
         try:
             coeffs = np.polyfit(idx, resampled, 1)
-            x.iloc[:, -1] = coeffs[0]
+            x.iloc[:, -1] = float(coeffs[0])
         except np.linalg.LinAlgError:
-            x.iloc[:, -1] = 0
+            x.iloc[:, -1] = 0.0
         return x.iloc[:, -1] if return_series else x

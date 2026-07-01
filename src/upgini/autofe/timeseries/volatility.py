@@ -65,6 +65,8 @@ class EWMAVolatility(VolatilityBase, ParametrizedOperator):
     def _ewma_vol(self, x):
         return_series = isinstance(x, pd.Series)
         x = pd.DataFrame(x)
+        value_col = x.columns[-1]
+        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
         returns = self._get_returns(x.iloc[:, -1], f"{self.step_size}{self.step_unit}")
         x.iloc[:, -1] = returns.ewm(span=self.window_size).std()
         return x.iloc[:, -1] if return_series else x
@@ -93,6 +95,8 @@ class RollingVolBase(VolatilityBase):
     ) -> Union[pd.DataFrame, pd.Series]:
         return_series = isinstance(x, pd.Series)
         x = pd.DataFrame(x)
+        value_col = x.columns[-1]
+        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
         returns = self._get_returns(x.iloc[:, -1], f"{self.step_size}{self.step_unit}")
         if abs_returns:
             returns = returns.abs()

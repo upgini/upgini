@@ -36,6 +36,7 @@ from upgini.utils.sample_utils import SampleConfig
 from .utils import (
     assert_features_info_frame_equal,
     assert_metrics_frame_equal,
+    assert_prepared_upload_df_equal,
     mock_default_requests,
     mock_get_add_info,
     mock_get_metadata,
@@ -495,8 +496,6 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
     enricher.features_info["Provider"] = enricher.features_info["Provider"].astype("string")
     enricher.features_info["Source"] = enricher.features_info["Source"].astype("string")
-    expected_features_info.fillna("", inplace=True)
-    enricher.features_info.fillna("", inplace=True)
 
     assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
@@ -541,8 +540,6 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
     enricher.features_info["Provider"] = enricher.features_info["Provider"].astype("string")
     enricher.features_info["Source"] = enricher.features_info["Source"].astype("string")
-    expected_features_info.fillna("", inplace=True)
-    enricher.features_info.fillna("", inplace=True)
 
     assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
@@ -3162,7 +3159,7 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_me
         if update_metrics_flag:
             actual_result_df.to_parquet(expected_result_path)
             expected_df = actual_result_df
-        assert_frame_equal(actual_result_df, expected_df, check_dtype=False)
+        assert_prepared_upload_df_equal(expected_df, actual_result_df)
 
     try:
         for i in range(5):
@@ -3330,13 +3327,11 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
                 pass
 
             actual_result_df = sort_prepared_upload_df(result_wrapper.df)
-            actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
-            actual_result_df["rep_date_f5d6bb"] = actual_result_df["rep_date_f5d6bb"].astype("Int64")
 
             if update_metrics_flag:
                 actual_result_df.to_parquet(expected_result_path)
                 expected_df = actual_result_df
-            assert_frame_equal(actual_result_df, expected_df, check_dtype=False)
+            assert_prepared_upload_df_equal(expected_df, actual_result_df)
 
         for i in range(5):
             print(f"Run {i} iteration")
