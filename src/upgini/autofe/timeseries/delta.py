@@ -23,6 +23,8 @@ class DeltaBase(TimeSeriesBase):
     def _calculate_delta(self, x: Union[pd.DataFrame, pd.Series]) -> Union[pd.DataFrame, pd.Series]:
         return_series = isinstance(x, pd.Series)
         x = pd.DataFrame(x)
+        value_col = x.columns[-1]
+        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
         lag = Lag(lag_size=self.delta_size, lag_unit=self.delta_unit)
         x.iloc[:, -1] = x.iloc[:, -1] - lag._aggregate(x.iloc[:, -1])
         return x.iloc[:, -1] if return_series else x

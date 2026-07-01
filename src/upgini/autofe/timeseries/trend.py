@@ -54,7 +54,7 @@ class TrendCoefficient(TimeSeriesBase, ParametrizedOperator):
         return_series = isinstance(x, pd.Series)
         x = pd.DataFrame(x)
         resampled = (
-            x.iloc[:, -1].resample(f"{self.step_size}{self.step_unit}").fillna(method="ffill").fillna(method="bfill")
+            x.iloc[:, -1].resample(f"{self.step_size}{self.step_unit}").ffill().bfill()
         )
         idx = np.arange(len(resampled))
         value_col = x.columns[-1]

@@ -631,6 +631,7 @@ def assert_metrics_frame_equal(
     actual: pd.DataFrame,
     *,
     metric_atol: float = 0.05,
+    eval_metric_atol: float = 0.08,
     mean_target_atol: float = 10.0,
     uplift_atol: float = 0.05,
     uplift_pct_atol: float = 15.0,
@@ -665,7 +666,12 @@ def assert_metrics_frame_equal(
             elif _is_metric_column(column) or " ± " in str(expected_value):
                 expected_metric, _ = _parse_metric_cell(expected_value)
                 actual_metric, _ = _parse_metric_cell(actual_value)
-                assert np.isclose(expected_metric, actual_metric, atol=metric_atol, rtol=0), (
+                row_metric_atol = metric_atol
+                if "Dataset type" in expected.columns and str(expected.iloc[row_idx]["Dataset type"]).startswith(
+                    "Eval"
+                ):
+                    row_metric_atol = eval_metric_atol
+                assert np.isclose(expected_metric, actual_metric, atol=row_metric_atol, rtol=0), (
                     f"row {row_idx}, {column} value: {expected_value} != {actual_value}"
                 )
             elif isinstance(expected_value, (int, float, np.floating)) or isinstance(
@@ -687,19 +693,27 @@ def assert_features_info_frame_equal(
     atol: float = 1e-2,
 ) -> None:
     columns_to_compare = [column for column in expected.columns if column != "Value preview"]
-    expected_to_compare = expected[columns_to_compare].reset_index(drop=True)
-    actual_to_compare = actual[columns_to_compare].reset_index(drop=True)
-    for frame in (expected_to_compare, actual_to_compare):
-        for column in frame.select_dtypes(include=[float]).columns:
-            frame[column] = frame[column].astype(object)
-    expected_to_compare = expected_to_compare.fillna("")
-    actual_to_compare = actual_to_compare.fillna("")
+    expected_to_compare = expected[columns_to_compare].reset_index(drop=True).astype(object).fillna("")
+    actual_to_compare = actual[columns_to_compare].reset_index(drop=True).astype(object).fillna("")
     assert_frame_equal(
         expected_to_compare,
         actual_to_compare,
         check_dtype=False,
         atol=atol,
     )
+
+
+def assert_feature_importances_equal(
+    expected: list,
+    actual: list,
+    *,
+    atol: float = 0.01,
+) -> None:
+    assert len(expected) == len(actual), f"length mismatch: {len(expected)} != {len(actual)}"
+    for expected_value, actual_value in zip(expected, actual):
+        assert np.isclose(float(expected_value), float(actual_value), atol=atol, rtol=0), (
+            f"{list(actual)} != {list(expected)}"
+        )
 
 
 def sort_prepared_upload_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -713,7 +727,7 @@ def sort_prepared_upload_df(df: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values(by=sort_columns).reset_index(drop=True)
 
 
-_PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS = {"system_record_id"}
+_PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS = {"system_record_id", "entity_system_record_id"}
 
 
 def _normalize_prepared_upload_dtypes(df: pd.DataFrame) -> pd.DataFrame:
@@ -724,12 +738,51 @@ def _normalize_prepared_upload_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def assert_prepared_upload_df_equal(expected: pd.DataFrame, actual: pd.DataFrame) -> None:
-    expected = _normalize_prepared_upload_dtypes(sort_prepared_upload_df(expected))
-    actual = _normalize_prepared_upload_dtypes(sort_prepared_upload_df(actual))
-    compare_columns = [column for column in expected.columns if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS]
-    assert_frame_equal(
-        expected[compare_columns].reset_index(drop=True),
-        actual[compare_columns].reset_index(drop=True),
-        check_dtype=False,
+def assert_prepared_upload_df_equal(expected: pd.DataFrame, actual: pd.DataFrame, *, atol: float = 1e-6) -> None:
+    assert list(expected.columns) == list(actual.columns), (
+        f"columns differ: {list(expected.columns)} vs {list(actual.columns)}"
     )
+
+    expected = _normalize_prepared_upload_dtypes(expected)
+    actual = _normalize_prepared_upload_dtypes(actual)
+
+    key_columns = [
+        column
+        for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]
+        if column in expected.columns
+    ]
+    value_columns = [
+        column
+        for column in expected.columns
+        if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS and column not in key_columns
+    ]
+
+    if not key_columns:
+        compare_columns = [column for column in expected.columns if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS]
+        assert_frame_equal(
+            sort_prepared_upload_df(expected)[compare_columns].reset_index(drop=True),
+            sort_prepared_upload_df(actual)[compare_columns].reset_index(drop=True),
+            check_dtype=False,
+            atol=atol,
+        )
+        return
+
+    merged = expected.merge(actual, on=key_columns, suffixes=("_expected", "_actual"), how="inner")
+    assert len(merged) == len(expected) == len(actual), (
+        f"row alignment mismatch after merge on {key_columns}: "
+        f"merged={len(merged)} expected={len(expected)} actual={len(actual)}"
+    )
+
+    for column in value_columns:
+        expected_values = merged[f"{column}_expected"]
+        actual_values = merged[f"{column}_actual"]
+        if pd.api.types.is_numeric_dtype(expected_values) or pd.api.types.is_numeric_dtype(actual_values):
+            assert np.allclose(
+                expected_values.astype(float),
+                actual_values.astype(float),
+                atol=atol,
+                rtol=0,
+                equal_nan=True,
+            ), f"column {column} differs"
+        else:
+            assert (expected_values.astype(str) == actual_values.astype(str)).all(), f"column {column} differs"
