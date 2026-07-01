@@ -1391,7 +1391,6 @@ class FeaturesEnricher(TransformerMixin):
             return
 
         cat_features_from_backend = self.__get_categorical_features()
-        cat_features_from_backend = [self.fit_columns_renaming.get(c, c) for c in cat_features_from_backend]
         client_cat_features, search_keys_for_metrics = self._get_and_validate_client_cat_features(
             estimator, validated_X, search_keys
         )
@@ -1427,15 +1426,20 @@ class FeaturesEnricher(TransformerMixin):
             _,
             _,
             fitting_eval_set_dict,
+            search_keys,
             _,
             _,
-            _,
-            _,
+            columns_renaming,
             eval_set_dates,
         ) = prepared_data
 
         model_task_type = self.model_task_type or define_task(y_sorted, has_date, self.logger, silent=True)
-        cat_features = list(set(client_cat_features + cat_features_from_backend))
+        cat_features = self._get_cat_features_for_psi(
+            client_cat_features=client_cat_features,
+            cat_features_from_backend=cat_features_from_backend,
+            search_keys=search_keys,
+            columns_renaming=columns_renaming,
+        )
 
         # Drop unstable features
         unstable_features = self._check_stability(
@@ -1533,8 +1537,15 @@ class FeaturesEnricher(TransformerMixin):
 
         checking_eval_set_df[date_column] = date_converter.to_date_ms(eval_set_dates[selected_eval_set_idx].to_frame())
 
+        baseline_score_column = self._get_renamed_baseline_score_column()
+        psi_df = checking_eval_set_df
+        if baseline_score_column and baseline_score_column in psi_df.columns:
+            psi_df = psi_df.drop(columns=[baseline_score_column])
+
+        cat_features = [c for c in cat_features if c in psi_df.columns]
+
         psi_values_sparse = calculate_sparsity_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
+            psi_df, cat_features, date_column, self.logger, model_task_type
         )
 
         self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
@@ -1544,7 +1555,7 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
         psi_values = calculate_features_psi(
-            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
+            psi_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
         )
 
         self.logger.info(f"PSI values by value: {psi_values}")
@@ -1558,6 +1569,8 @@ class FeaturesEnricher(TransformerMixin):
         }
 
         total_unstable_features = sorted(set(unstable_by_sparsity + unstable_by_value))
+        if baseline_score_column:
+            total_unstable_features = [f for f in total_unstable_features if f != baseline_score_column]
 
         return total_unstable_features
 
@@ -1747,6 +1760,92 @@ class FeaturesEnricher(TransformerMixin):
                             raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
         return cat_features, search_keys_for_metrics
 
+    def _get_renamed_baseline_score_column(self, columns_renaming: dict[str, str] | None = None) -> str | None:
+        if self.baseline_score_column is None:
+            return None
+        if columns_renaming:
+            return columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
+        if self.fit_columns_renaming:
+            return self.fit_columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
+        return self.baseline_score_column
+
+    def _get_cat_features_for_psi(
+        self,
+        client_cat_features: list[str] | None,
+        cat_features_from_backend: list[str],
+        search_keys: dict[str, SearchKey],
+        columns_renaming: dict[str, str] | None,
+    ) -> list[str]:
+        def to_renamed(name: str) -> str:
+            if columns_renaming:
+                return columns_renaming.get(name, name)
+            if self.fit_columns_renaming:
+                return self.fit_columns_renaming.get(name, name)
+            return name
+
+        cat_features = {
+            to_renamed(c) for c in (client_cat_features or []) + cat_features_from_backend + list(search_keys.keys())
+        }
+        date_column = self._get_date_column(search_keys)
+        if date_column:
+            cat_features.discard(to_renamed(date_column))
+        return sorted(cat_features)
+
+    def _resolve_client_features_in_sampled(
+        self,
+        client_features: list[str],
+        columns_renaming: dict[str, str],
+        available_columns: pd.Index,
+    ) -> tuple[list[str], set[str]]:
+        available_columns_set = set(available_columns)
+        resolved: list[str] = []
+        seen: set[str] = set()
+
+        def add_column(column: str) -> None:
+            if column in available_columns_set and column not in seen:
+                resolved.append(column)
+                seen.add(column)
+
+        for feature in client_features:
+            renamed = columns_renaming.get(feature, feature)
+            if renamed in available_columns_set:
+                add_column(renamed)
+                continue
+
+            one_hot_group = None
+            if self.add_info is not None and self.add_info.true_one_hot_groups:
+                one_hot_group = self.add_info.true_one_hot_groups.get(feature)
+                if one_hot_group is None:
+                    one_hot_group = self.add_info.true_one_hot_groups.get(renamed)
+            if one_hot_group:
+                for one_hot_feature in one_hot_group:
+                    add_column(columns_renaming.get(one_hot_feature, one_hot_feature))
+                continue
+
+            if self.add_info is not None and self.add_info.pseudo_one_hot_groups:
+                pseudo_one_hot_group = self.add_info.pseudo_one_hot_groups.get(feature)
+                if pseudo_one_hot_group is None:
+                    pseudo_one_hot_group = self.add_info.pseudo_one_hot_groups.get(renamed)
+                if pseudo_one_hot_group:
+                    for one_hot_feature in pseudo_one_hot_group:
+                        add_column(columns_renaming.get(one_hot_feature, one_hot_feature))
+
+        missing = {columns_renaming.get(feature, feature) for feature in client_features} - seen
+        return resolved, missing
+
+    def _get_etalon_columns_renamed(
+        self,
+        columns_renaming: dict[str, str],
+        available_columns: pd.Index,
+    ) -> list[str]:
+        if self.df_with_original_index is None:
+            return []
+        etalon_columns = [
+            c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
+        ]
+        resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available_columns)
+        return resolved
+
     def _get_cached_enriched_data(
         self,
         X: pd.DataFrame | pd.Series | np.ndarray | None = None,
@@ -1794,21 +1893,29 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"Excluding search keys: {excluding_search_keys}")
 
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
-        fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
-        original_dropped_features = [columns_renaming.get(f, f) for f in fit_dropped_features]
+        fit_dropped_features = list(self.fit_dropped_features or file_meta.droppedColumns or [])
+        renamed_to_original = dict(columns_renaming)
+        original_to_renamed = {original: hashed for hashed, original in columns_renaming.items()}
+        excluding_search_keys_original = [renamed_to_original.get(sk, sk) for sk in excluding_search_keys]
 
+        excluded_client_columns = (
+            excluding_search_keys_original
+            + fit_dropped_features
+            + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
+        )
+        excluded_client_columns_renamed = {original_to_renamed.get(c, c) for c in excluded_client_columns}
+
+        # Client columns for enriched metrics (respects select_features).
         client_features = [
             c
             for c in validated_X.columns.to_list()
             if (not self.fit_select_features or c in set(self.feature_names_).union(self.id_columns or []))
-            and c
-            not in (
-                excluding_search_keys
-                + original_dropped_features
-                + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
-            )
+            and c not in excluded_client_columns
         ]
-        client_features.extend(f for f in generated_features if f in self.feature_names_)
+        for f in generated_features:
+            original_f = renamed_to_original.get(f, f)
+            if original_f in self.feature_names_ and original_f not in client_features:
+                client_features.append(original_f)
         if self.baseline_score_column is not None and self.baseline_score_column not in client_features:
             client_features.append(self.baseline_score_column)
         self.logger.info(f"Client features column on prepare data for metrics: {client_features}")
@@ -1820,10 +1927,40 @@ class FeaturesEnricher(TransformerMixin):
 
         cv, groups = self._get_cv_and_groups(enriched_X_sorted, cv_override, search_keys)
 
-        existing_selected_enriched_features = [c for c in selected_enriched_features if c in enriched_X_sorted.columns]
+        existing_selected_enriched_features = [
+            columns_renaming.get(c, c)
+            for c in selected_enriched_features
+            if columns_renaming.get(c, c) in enriched_X_sorted.columns
+        ]
 
-        fitting_X = X_sorted[client_features].copy()
-        fitting_enriched_X = enriched_X_sorted[client_features + existing_selected_enriched_features].copy()
+        # Baseline always uses all etalon columns available in the sample (ignores select_features).
+        baseline_client_features_in_sampled = [
+            c
+            for c in self._get_etalon_columns_renamed(columns_renaming, X_sorted.columns)
+            if c not in excluded_client_columns_renamed
+        ]
+        self.logger.info(f"Baseline etalon columns for metrics: {baseline_client_features_in_sampled}")
+        if self.fit_select_features:
+            enriched_client_features_in_sampled, missing_client_features = self._resolve_client_features_in_sampled(
+                client_features, columns_renaming, X_sorted.columns
+            )
+        else:
+            enriched_client_features_in_sampled = baseline_client_features_in_sampled
+            missing_client_features = set()
+        if missing_client_features:
+            self.logger.warning(
+                "Client features missing from sampled data and excluded from enriched metrics: "
+                f"{sorted(missing_client_features)}"
+            )
+
+        fitting_X = X_sorted[baseline_client_features_in_sampled].copy()
+        enriched_columns_for_fitting = []
+        seen_enriched_columns: set[str] = set()
+        for column in enriched_client_features_in_sampled + existing_selected_enriched_features:
+            if column not in seen_enriched_columns:
+                enriched_columns_for_fitting.append(column)
+                seen_enriched_columns.add(column)
+        fitting_enriched_X = enriched_X_sorted[enriched_columns_for_fitting].copy()
 
         renamed_generate_features = [columns_renaming.get(c, c) for c in (self.generate_features or [])]
         renamed_client_cat_features = [columns_renaming.get(c, c) for c in (client_cat_features or [])]
@@ -2203,7 +2340,22 @@ class FeaturesEnricher(TransformerMixin):
             if (c in self.feature_names_ and c not in selecting_columns and c not in validated_X.columns)
             or c in [EVAL_SET_INDEX, ENTITY_SYSTEM_RECORD_ID, SYSTEM_RECORD_ID]
         )
-        enriched_Xy = enriched_Xy[selecting_columns]
+        selecting_columns_renamed = []
+        seen_selecting_columns = set()
+        for column in selecting_columns:
+            renamed_column = self.fit_columns_renaming.get(column, column)
+            if renamed_column in enriched_Xy.columns and renamed_column not in seen_selecting_columns:
+                selecting_columns_renamed.append(renamed_column)
+                seen_selecting_columns.add(renamed_column)
+
+        etalon_columns_renamed = self._get_etalon_columns_renamed(self.fit_columns_renaming or {}, enriched_Xy.columns)
+        columns_for_metrics = []
+        seen_metrics_columns = set()
+        for column in etalon_columns_renamed + selecting_columns_renamed:
+            if column not in seen_metrics_columns:
+                columns_for_metrics.append(column)
+                seen_metrics_columns.add(column)
+        enriched_Xy = enriched_Xy[columns_for_metrics]
 
         # Handle eval sets extraction based on EVAL_SET_INDEX
         enriched_eval_sets = {}
@@ -2216,11 +2368,8 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_sets[eval_set_index] = enriched_eval_set
             enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == 0].copy()
 
-        x_columns = [
-            c
-            for c in [self.fit_columns_renaming.get(k, k) for k in self.df_with_original_index.columns]
-            if c not in [EVAL_SET_INDEX, TARGET] and c in selecting_columns
-        ]
+        # X_sampled must contain all etalon columns for baseline metrics (regardless of select_features).
+        x_columns = [c for c in etalon_columns_renamed if c in enriched_Xy.columns]
         X_sampled = enriched_Xy[x_columns].copy()
         y_sampled = enriched_Xy[TARGET].copy()
         enriched_X = enriched_Xy.drop(columns=[TARGET, EVAL_SET_INDEX], errors="ignore")

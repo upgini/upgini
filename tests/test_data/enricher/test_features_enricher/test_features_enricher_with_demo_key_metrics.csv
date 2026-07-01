@@ -1,4 +1,4 @@
-Dataset type,Rows,Mean target,Enriched GINI
-Train,10000,0.5044,0.021 ± 0.023
-Eval 1,1000,0.487,-0.021 ± 0.026
-Eval 2,1000,0.486,-0.014 ± 0.017
+Dataset type,Rows,Mean target,Baseline GINI,Enriched GINI,"Uplift, abs","Uplift, %"
+Train,10000,0.5044,0.017 ± 0.023,-0.005 ± 0.044,-0.022,-131.7%
+Eval 1,1000,0.487,0.035 ± 0.039,0.005 ± 0.046,-0.03,-85.4%
+Eval 2,1000,0.486,0.011 ± 0.044,0.007 ± 0.046,-0.004,-38.6%

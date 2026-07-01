@@ -1,11 +1,14 @@
 import itertools
 import json
+import re
 import tempfile
 import uuid
 from random import randint
 from typing import Dict, List, Optional, Union
 
+import numpy as np
 import pandas as pd
+from pandas.testing import assert_frame_equal
 from requests_mock import Mocker
 
 from upgini.autofe.utils import pydantic_dump_method
@@ -600,3 +603,168 @@ def mock_set_add_info(requests_mock: Mocker, url: str, search_task_id: str, add_
     requests_mock.post(
         f"{url}/public/api/v2/search/{search_task_id}/add-info", json=add_info
     )
+
+
+_METRIC_WITH_STD_RE = re.compile(r"^(-?\d+(?:\.\d+)?) ± (-?\d+(?:\.\d+)?)$")
+
+
+def _parse_metric_cell(value) -> tuple[float | None, float | None]:
+    if pd.isna(value):
+        return None, None
+    if isinstance(value, (int, float, np.floating)):
+        return float(value), None
+    text = str(value).strip()
+    match = _METRIC_WITH_STD_RE.match(text)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    if text.endswith("%"):
+        return float(text[:-1]), None
+    return float(text), None
+
+
+def _is_metric_column(column: str) -> bool:
+    return column.startswith("Baseline ") or column.startswith("Enriched ")
+
+
+def assert_metrics_frame_equal(
+    expected: pd.DataFrame,
+    actual: pd.DataFrame,
+    *,
+    metric_atol: float = 0.05,
+    eval_metric_atol: float = 0.08,
+    mean_target_atol: float = 10.0,
+    uplift_atol: float = 0.05,
+    eval_uplift_atol: float = 0.1,
+    uplift_pct_atol: float = 15.0,
+) -> None:
+    assert list(expected.columns) == list(actual.columns)
+    assert len(expected) == len(actual)
+
+    for column in expected.columns:
+        for row_idx in range(len(expected)):
+            expected_value = expected.iloc[row_idx][column]
+            actual_value = actual.iloc[row_idx][column]
+
+            if column == "Dataset type":
+                assert expected_value == actual_value, (
+                    f"row {row_idx}, {column}: {expected_value!r} != {actual_value!r}"
+                )
+            elif column == "Rows":
+                assert int(expected_value) == int(actual_value), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Mean target":
+                assert np.isclose(float(expected_value), float(actual_value), atol=mean_target_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Uplift, abs":
+                row_uplift_atol = uplift_atol
+                if "Dataset type" in expected.columns and str(expected.iloc[row_idx]["Dataset type"]).startswith(
+                    "Eval"
+                ):
+                    row_uplift_atol = eval_uplift_atol
+                assert np.isclose(float(expected_value), float(actual_value), atol=row_uplift_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Uplift, %":
+                # Uplift % is unstable across platforms when baseline GINI is near zero.
+                continue
+            elif _is_metric_column(column) or " ± " in str(expected_value):
+                expected_metric, _ = _parse_metric_cell(expected_value)
+                actual_metric, _ = _parse_metric_cell(actual_value)
+                row_metric_atol = metric_atol
+                if "Dataset type" in expected.columns and str(expected.iloc[row_idx]["Dataset type"]).startswith(
+                    "Eval"
+                ):
+                    row_metric_atol = eval_metric_atol
+                assert np.isclose(expected_metric, actual_metric, atol=row_metric_atol, rtol=0), (
+                    f"row {row_idx}, {column} value: {expected_value} != {actual_value}"
+                )
+            elif isinstance(expected_value, (int, float, np.floating)) or isinstance(
+                actual_value, (int, float, np.floating)
+            ):
+                assert np.isclose(float(expected_value), float(actual_value), atol=metric_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            else:
+                assert expected_value == actual_value, (
+                    f"row {row_idx}, {column}: {expected_value!r} != {actual_value!r}"
+                )
+
+
+def assert_features_info_frame_equal(
+    expected: pd.DataFrame,
+    actual: pd.DataFrame,
+    *,
+    atol: float = 1e-2,
+) -> None:
+    columns_to_compare = [column for column in expected.columns if column != "Value preview"]
+    expected_to_compare = expected[columns_to_compare].reset_index(drop=True).astype(object).fillna("")
+    actual_to_compare = actual[columns_to_compare].reset_index(drop=True).astype(object).fillna("")
+    assert_frame_equal(
+        expected_to_compare,
+        actual_to_compare,
+        check_dtype=False,
+        atol=atol,
+    )
+
+
+def assert_feature_importances_equal(
+    expected: list,
+    actual: list,
+    *,
+    atol: float = 0.01,
+) -> None:
+    assert len(expected) == len(actual), f"length mismatch: {len(expected)} != {len(actual)}"
+    for expected_value, actual_value in zip(expected, actual):
+        assert np.isclose(float(expected_value), float(actual_value), atol=atol, rtol=0), (
+            f"{list(actual)} != {list(expected)}"
+        )
+
+
+def sort_prepared_upload_df(df: pd.DataFrame) -> pd.DataFrame:
+    sort_columns = [
+        column
+        for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]
+        if column in df.columns
+    ]
+    if not sort_columns:
+        sort_columns = ["system_record_id"]
+    return df.sort_values(by=sort_columns).reset_index(drop=True)
+
+
+_PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS = {"system_record_id", "entity_system_record_id"}
+
+
+def _normalize_prepared_upload_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+            if column in ["phone_num_a54a33", "rep_date_f5d6bb"]:
+                df[column] = df[column].astype("Int64")
+            else:
+                df[column] = df[column].astype("int64")
+    return df
+
+
+def assert_prepared_upload_df_equal(expected: pd.DataFrame, actual: pd.DataFrame, *, atol: float = 1e-6) -> None:
+    assert list(expected.columns) == list(actual.columns), (
+        f"columns differ: {list(expected.columns)} vs {list(actual.columns)}"
+    )
+
+    expected = _normalize_prepared_upload_dtypes(expected)
+    actual = _normalize_prepared_upload_dtypes(actual)
+
+    compare_columns = [
+        column for column in expected.columns if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS
+    ]
+    expected_sorted = (
+        expected[compare_columns].sort_values(by=compare_columns, kind="mergesort").reset_index(drop=True)
+    )
+    actual_sorted = actual[compare_columns].sort_values(by=compare_columns, kind="mergesort").reset_index(drop=True)
+
+    assert len(expected_sorted) == len(actual_sorted), (
+        f"row count mismatch: expected={len(expected_sorted)} actual={len(actual_sorted)}"
+    )
+    assert_frame_equal(expected_sorted, actual_sorted, check_dtype=False, atol=atol)

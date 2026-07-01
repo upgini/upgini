@@ -226,6 +226,12 @@ def _stability_agg(
     return float(psi_value)
 
 
+def _use_numerical_binning(reference_data: pd.Series, is_numerical: bool) -> bool:
+    if not is_numerical:
+        return False
+    return pd.api.types.is_numeric_dtype(reference_data)
+
+
 def _get_binned_data(
     reference_data: pd.Series,
     current_data: list[pd.Series],
@@ -245,7 +251,7 @@ def _get_binned_data(
     """
     n_vals = reference_data.nunique()
 
-    if is_numerical and n_vals > 20:
+    if _use_numerical_binning(reference_data, is_numerical) and n_vals > 20:
         bins = _get_bin_edges(reference_data, n_bins)
         reference_counts = np.histogram(reference_data, bins)[0]
         current_counts = [np.histogram(d, bins)[0] for d in current_data]
