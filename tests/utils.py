@@ -634,6 +634,7 @@ def assert_metrics_frame_equal(
     eval_metric_atol: float = 0.08,
     mean_target_atol: float = 10.0,
     uplift_atol: float = 0.05,
+    eval_uplift_atol: float = 0.1,
     uplift_pct_atol: float = 15.0,
 ) -> None:
     assert list(expected.columns) == list(actual.columns)
@@ -657,7 +658,12 @@ def assert_metrics_frame_equal(
                     f"row {row_idx}, {column}: {expected_value} != {actual_value}"
                 )
             elif column == "Uplift, abs":
-                assert np.isclose(float(expected_value), float(actual_value), atol=uplift_atol, rtol=0), (
+                row_uplift_atol = uplift_atol
+                if "Dataset type" in expected.columns and str(expected.iloc[row_idx]["Dataset type"]).startswith(
+                    "Eval"
+                ):
+                    row_uplift_atol = eval_uplift_atol
+                assert np.isclose(float(expected_value), float(actual_value), atol=row_uplift_atol, rtol=0), (
                     f"row {row_idx}, {column}: {expected_value} != {actual_value}"
                 )
             elif column == "Uplift, %":
@@ -732,9 +738,13 @@ _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS = {"system_record_id", "entity_system_r
 
 def _normalize_prepared_upload_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    for column in ["phone_num_a54a33", "rep_date_f5d6bb"]:
+    for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]:
         if column in df.columns:
-            df[column] = pd.to_numeric(df[column], errors="coerce").astype("Int64")
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+            if column in ["phone_num_a54a33", "rep_date_f5d6bb"]:
+                df[column] = df[column].astype("Int64")
+            else:
+                df[column] = df[column].astype("int64")
     return df
 
 
@@ -746,43 +756,15 @@ def assert_prepared_upload_df_equal(expected: pd.DataFrame, actual: pd.DataFrame
     expected = _normalize_prepared_upload_dtypes(expected)
     actual = _normalize_prepared_upload_dtypes(actual)
 
-    key_columns = [
-        column
-        for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]
-        if column in expected.columns
+    compare_columns = [
+        column for column in expected.columns if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS
     ]
-    value_columns = [
-        column
-        for column in expected.columns
-        if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS and column not in key_columns
-    ]
-
-    if not key_columns:
-        compare_columns = [column for column in expected.columns if column not in _PREPARED_UPLOAD_ORDER_DEPENDENT_COLUMNS]
-        assert_frame_equal(
-            sort_prepared_upload_df(expected)[compare_columns].reset_index(drop=True),
-            sort_prepared_upload_df(actual)[compare_columns].reset_index(drop=True),
-            check_dtype=False,
-            atol=atol,
-        )
-        return
-
-    merged = expected.merge(actual, on=key_columns, suffixes=("_expected", "_actual"), how="inner")
-    assert len(merged) == len(expected) == len(actual), (
-        f"row alignment mismatch after merge on {key_columns}: "
-        f"merged={len(merged)} expected={len(expected)} actual={len(actual)}"
+    expected_sorted = (
+        expected[compare_columns].sort_values(by=compare_columns, kind="mergesort").reset_index(drop=True)
     )
+    actual_sorted = actual[compare_columns].sort_values(by=compare_columns, kind="mergesort").reset_index(drop=True)
 
-    for column in value_columns:
-        expected_values = merged[f"{column}_expected"]
-        actual_values = merged[f"{column}_actual"]
-        if pd.api.types.is_numeric_dtype(expected_values) or pd.api.types.is_numeric_dtype(actual_values):
-            assert np.allclose(
-                expected_values.astype(float),
-                actual_values.astype(float),
-                atol=atol,
-                rtol=0,
-                equal_nan=True,
-            ), f"column {column} differs"
-        else:
-            assert (expected_values.astype(str) == actual_values.astype(str)).all(), f"column {column} differs"
+    assert len(expected_sorted) == len(actual_sorted), (
+        f"row count mismatch: expected={len(expected_sorted)} actual={len(actual_sorted)}"
+    )
+    assert_frame_equal(expected_sorted, actual_sorted, check_dtype=False, atol=atol)

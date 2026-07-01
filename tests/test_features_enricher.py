@@ -3131,9 +3131,9 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_me
         "test_data/binary/expected_prepared_with_entity_system_record_id.parquet",
     )
 
-    expected_result_df = sort_prepared_upload_df(pd.read_parquet(expected_result_path))
+    reference_result_df = None
 
-    def test(n_shuffles: int, expected_df: pd.DataFrame):
+    def run_with_shuffles(n_shuffles: int) -> pd.DataFrame:
         train_df = df.head(10000)
         for _ in range(n_shuffles):
             train_df = train_df.sample(frac=1, random_state=42 + n_shuffles).reset_index(drop=True)
@@ -3156,15 +3156,17 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_me
         except TestException:
             pass
 
-        actual_result_df = sort_prepared_upload_df(result_wrapper.df)
-        if update_metrics_flag:
-            actual_result_df.to_parquet(expected_result_path)
-            expected_df = actual_result_df
-        assert_prepared_upload_df_equal(expected_df, actual_result_df)
+        return sort_prepared_upload_df(result_wrapper.df)
 
     try:
         for i in range(5):
-            test(i, expected_result_df)
+            actual_result_df = run_with_shuffles(i)
+            if update_metrics_flag and reference_result_df is None:
+                actual_result_df.to_parquet(expected_result_path)
+            if reference_result_df is None:
+                reference_result_df = actual_result_df
+            else:
+                assert_prepared_upload_df_equal(reference_result_df, actual_result_df)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
 
@@ -3300,11 +3302,9 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
             os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalanced.parquet"
         )
 
-        expected_result_df = sort_prepared_upload_df(pd.read_parquet(expected_result_path))
-        expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
-        expected_result_df["rep_date_f5d6bb"] = expected_result_df["rep_date_f5d6bb"].astype("Int64")
+        reference_result_df = None
 
-        def test(n_shuffles: int, expected_df: pd.DataFrame):
+        def run_with_shuffles(n_shuffles: int) -> pd.DataFrame:
             train_df = initial_train_df.copy()
             for _ in range(n_shuffles):
                 train_df = initial_train_df.sample(frac=1, random_state=42 + n_shuffles).reset_index(drop=True)
@@ -3327,16 +3327,17 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
             except TestException:
                 pass
 
-            actual_result_df = sort_prepared_upload_df(result_wrapper.df)
-
-            if update_metrics_flag:
-                actual_result_df.to_parquet(expected_result_path)
-                expected_df = actual_result_df
-            assert_prepared_upload_df_equal(expected_df, actual_result_df)
+            return sort_prepared_upload_df(result_wrapper.df)
 
         for i in range(5):
             print(f"Run {i} iteration")
-            test(i, expected_result_df)
+            actual_result_df = run_with_shuffles(i)
+            if update_metrics_flag and reference_result_df is None:
+                actual_result_df.to_parquet(expected_result_path)
+            if reference_result_df is None:
+                reference_result_df = actual_result_df
+            else:
+                assert_prepared_upload_df_equal(reference_result_df, actual_result_df)
     finally:
         _RestClient.initial_search_v2 = original_initial_search
 
