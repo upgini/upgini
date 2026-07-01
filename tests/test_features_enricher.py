@@ -2542,8 +2542,37 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
         logs_enabled=False,
         raise_validation_error=True,
     )
-    with pytest.raises(ValidationError):
-        enricher.fit_transform(df.drop(columns="target"), df.target)
+    original_search = Dataset.search
+    original_min_count = Dataset.MIN_ROWS_COUNT
+
+    def mock_search(self, *args, **kwargs):
+        self.validate()
+        assert set(self.columns.to_list()) == {
+            "system_record_id",
+            "entity_system_record_id",
+            "target",
+            "phone_45569d",
+            "email_822444",
+            "current_date__2ca9b8",
+        }
+        assert {"phone_45569d", "email_822444", "current_date__2ca9b8"} == {
+            sk for sublist in self.search_keys for sk in sublist
+        }
+        raise TestException
+
+    Dataset.search = mock_search
+    Dataset.MIN_ROWS_COUNT = 1
+
+    try:
+        enricher.fit(df.drop(columns="target"), df.target)
+        raise AssertionError("Search should fail")
+    except AssertionError:
+        raise
+    except TestException:
+        pass
+    finally:
+        Dataset.search = original_search
+        Dataset.MIN_ROWS_COUNT = original_min_count
 
 
 def test_validation_metrics_calculation(requests_mock: Mocker):
