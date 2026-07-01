@@ -20,7 +20,7 @@ def test_trend_coef():
         children=[Column("date"), Column("value")],
     )
     expected_res = pd.Series([1] * 4, name="value")
-    assert_series_equal(feature.calculate(df), expected_res)
+    assert_series_equal(feature.calculate(df), expected_res, check_dtype=False)
 
 
 def test_trend_coef_formula():

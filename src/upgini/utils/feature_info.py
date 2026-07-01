@@ -104,7 +104,8 @@ def _get_feature_sample(feature_meta: FeaturesMetadataV2, data: Optional[pd.Data
     if data is not None and len(data) > 0 and feature_meta.name in data.columns:
         if len(data) > 3:
             rand = np.random.RandomState(42)
-            feature_sample = rand.choice(data[feature_meta.name].dropna().unique(), 3).tolist()
+            unique_values = sorted(data[feature_meta.name].dropna().unique(), key=str)
+            feature_sample = rand.choice(unique_values, 3, replace=False).tolist()
         else:
             feature_sample = data[feature_meta.name].dropna().unique().tolist()
         if len(feature_sample) > 0 and isinstance(feature_sample[0], float):

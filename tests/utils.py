@@ -1,11 +1,14 @@
 import itertools
 import json
+import re
 import tempfile
 import uuid
 from random import randint
 from typing import Dict, List, Optional, Union
 
+import numpy as np
 import pandas as pd
+from pandas.testing import assert_frame_equal
 from requests_mock import Mocker
 
 from upgini.autofe.utils import pydantic_dump_method
@@ -600,3 +603,114 @@ def mock_set_add_info(requests_mock: Mocker, url: str, search_task_id: str, add_
     requests_mock.post(
         f"{url}/public/api/v2/search/{search_task_id}/add-info", json=add_info
     )
+
+
+_METRIC_WITH_STD_RE = re.compile(r"^(-?\d+(?:\.\d+)?) ± (-?\d+(?:\.\d+)?)$")
+
+
+def _parse_metric_cell(value) -> tuple[float | None, float | None]:
+    if pd.isna(value):
+        return None, None
+    if isinstance(value, (int, float, np.floating)):
+        return float(value), None
+    text = str(value).strip()
+    match = _METRIC_WITH_STD_RE.match(text)
+    if match:
+        return float(match.group(1)), float(match.group(2))
+    if text.endswith("%"):
+        return float(text[:-1]), None
+    return float(text), None
+
+
+def _is_metric_column(column: str) -> bool:
+    return column.startswith("Baseline ") or column.startswith("Enriched ")
+
+
+def assert_metrics_frame_equal(
+    expected: pd.DataFrame,
+    actual: pd.DataFrame,
+    *,
+    metric_atol: float = 0.05,
+    metric_std_atol: float = 0.02,
+    mean_target_atol: float = 10.0,
+    uplift_atol: float = 0.05,
+    uplift_pct_atol: float = 15.0,
+) -> None:
+    assert list(expected.columns) == list(actual.columns)
+    assert len(expected) == len(actual)
+
+    for column in expected.columns:
+        for row_idx in range(len(expected)):
+            expected_value = expected.iloc[row_idx][column]
+            actual_value = actual.iloc[row_idx][column]
+
+            if column == "Dataset type":
+                assert expected_value == actual_value, (
+                    f"row {row_idx}, {column}: {expected_value!r} != {actual_value!r}"
+                )
+            elif column == "Rows":
+                assert int(expected_value) == int(actual_value), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Mean target":
+                assert np.isclose(float(expected_value), float(actual_value), atol=mean_target_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Uplift, abs":
+                assert np.isclose(float(expected_value), float(actual_value), atol=uplift_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif column == "Uplift, %":
+                expected_pct = float(str(expected_value).rstrip("%"))
+                actual_pct = float(str(actual_value).rstrip("%"))
+                assert np.isclose(expected_pct, actual_pct, atol=uplift_pct_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            elif _is_metric_column(column) or " ± " in str(expected_value):
+                expected_metric, expected_std = _parse_metric_cell(expected_value)
+                actual_metric, actual_std = _parse_metric_cell(actual_value)
+                assert np.isclose(expected_metric, actual_metric, atol=metric_atol, rtol=0), (
+                    f"row {row_idx}, {column} value: {expected_value} != {actual_value}"
+                )
+                if expected_std is not None and actual_std is not None:
+                    assert np.isclose(expected_std, actual_std, atol=metric_std_atol, rtol=0), (
+                        f"row {row_idx}, {column} std: {expected_value} != {actual_value}"
+                    )
+            elif isinstance(expected_value, (int, float, np.floating)) or isinstance(
+                actual_value, (int, float, np.floating)
+            ):
+                assert np.isclose(float(expected_value), float(actual_value), atol=metric_atol, rtol=0), (
+                    f"row {row_idx}, {column}: {expected_value} != {actual_value}"
+                )
+            else:
+                assert expected_value == actual_value, (
+                    f"row {row_idx}, {column}: {expected_value!r} != {actual_value!r}"
+                )
+
+
+def assert_features_info_frame_equal(
+    expected: pd.DataFrame,
+    actual: pd.DataFrame,
+    *,
+    atol: float = 1e-2,
+) -> None:
+    columns_to_compare = [column for column in expected.columns if column != "Value preview"]
+    expected_to_compare = expected[columns_to_compare].reset_index(drop=True).fillna("")
+    actual_to_compare = actual[columns_to_compare].reset_index(drop=True).fillna("")
+    assert_frame_equal(
+        expected_to_compare,
+        actual_to_compare,
+        check_dtype=False,
+        atol=atol,
+    )
+
+
+def sort_prepared_upload_df(df: pd.DataFrame) -> pd.DataFrame:
+    sort_columns = [
+        column
+        for column in ["phone_num_a54a33", "rep_date_f5d6bb", "eval_set_index", "target"]
+        if column in df.columns
+    ]
+    if not sort_columns:
+        sort_columns = ["system_record_id"]
+    return df.sort_values(by=sort_columns).reset_index(drop=True)

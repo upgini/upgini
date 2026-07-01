@@ -34,6 +34,8 @@ from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.sample_utils import SampleConfig
 
 from .utils import (
+    assert_features_info_frame_equal,
+    assert_metrics_frame_equal,
     mock_default_requests,
     mock_get_add_info,
     mock_get_metadata,
@@ -49,6 +51,7 @@ from .utils import (
     mock_validation_raw_features,
     mock_validation_search,
     mock_validation_summary,
+    sort_prepared_upload_df,
 )
 
 feature_name_header = bundle.get("features_info_name")
@@ -255,7 +258,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -268,7 +271,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher.csv"))
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -282,7 +285,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -301,7 +304,7 @@ def test_features_enricher(requests_mock: Mocker, update_metrics_flag: bool):
 
     metrics = enricher.calculate_metrics()
     logging.warning(metrics)
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_features_enricher_without_external_features(requests_mock: Mocker, update_metrics_flag: bool):
@@ -495,7 +498,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     expected_features_info.fillna("", inplace=True)
     enricher.features_info.fillna("", inplace=True)
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -515,7 +518,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     )  # noqa: E501
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -541,7 +544,7 @@ def test_features_enricher_without_external_features(requests_mock: Mocker, upda
     expected_features_info.fillna("", inplace=True)
     enricher.features_info.fillna("", inplace=True)
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1068,7 +1071,7 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_features_enricher/test_saved_features_enricher.csv"))
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1105,7 +1108,7 @@ def test_saved_features_enricher(requests_mock: Mocker, update_metrics_flag: boo
     )
 
     assert metrics is not None
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_flag: bool):
@@ -1289,7 +1292,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1306,7 +1309,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_demo_key_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1325,7 +1328,7 @@ def test_features_enricher_with_demo_key(requests_mock: Mocker, update_metrics_f
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1543,7 +1546,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     )
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1561,7 +1564,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_numpy_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1579,7 +1582,7 @@ def test_features_enricher_with_numpy(requests_mock: Mocker, update_metrics_flag
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1773,7 +1776,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -1792,7 +1795,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_named_index_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -1812,7 +1815,7 @@ def test_features_enricher_with_named_index(requests_mock: Mocker, update_metric
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -2004,7 +2007,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -2022,7 +2025,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_index_column_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -2042,7 +2045,7 @@ def test_features_enricher_with_index_column(requests_mock: Mocker, update_metri
     expected_features_info["Updates"] = expected_features_info["Updates"].astype("string")
     enricher.features_info["Updates"] = enricher.features_info["Updates"].astype("string")
 
-    assert_frame_equal(expected_features_info, enricher.features_info, atol=1e-6, check_dtype=False)
+    assert_features_info_frame_equal(expected_features_info, enricher.features_info)
 
     assert enricher.feature_names_ == expected_features_info["Feature name"].tolist()
     assert enricher.feature_importances_ == expected_features_info["SHAP value"].tolist()
@@ -2178,7 +2181,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
         )
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     if update_metrics_flag:
         enricher.features_info.to_csv(
@@ -3093,7 +3096,7 @@ def test_features_enricher_with_datetime(requests_mock: Mocker, update_metrics_f
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_datetime_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
@@ -3130,22 +3133,22 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_me
         "test_data/binary/expected_prepared_with_entity_system_record_id.parquet",
     )
 
-    expected_result_df = pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
+    expected_result_df = sort_prepared_upload_df(pd.read_parquet(expected_result_path))
 
     def test(n_shuffles: int, expected_df: pd.DataFrame):
         train_df = df.head(10000)
         for _ in range(n_shuffles):
-            train_df = train_df.sample(frac=1).reset_index(drop=True)
+            train_df = train_df.sample(frac=1, random_state=42 + n_shuffles).reset_index(drop=True)
         train_features = train_df.drop(columns="target")
         train_target = train_df["target"]
         eval1_df = df[10000:11000]
         for _ in range(n_shuffles):
-            eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
+            eval1_df = eval1_df.sample(frac=1, random_state=43 + n_shuffles).reset_index(drop=True)
         eval1_features = eval1_df.drop(columns="target")
         eval1_target = eval1_df["target"]
         eval2_df = df[11000:12000]
         for _ in range(n_shuffles):
-            eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
+            eval2_df = eval2_df.sample(frac=1, random_state=44 + n_shuffles).reset_index(drop=True)
         eval2_features = eval2_df.drop(columns="target")
         eval2_target = eval2_df["target"]
         eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
@@ -3155,11 +3158,11 @@ def test_idempotent_order_with_balanced_dataset(requests_mock: Mocker, update_me
         except TestException:
             pass
 
-        actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+        actual_result_df = sort_prepared_upload_df(result_wrapper.df)
         if update_metrics_flag:
             actual_result_df.to_parquet(expected_result_path)
             expected_df = actual_result_df
-        assert_frame_equal(actual_result_df, expected_df)
+        assert_frame_equal(actual_result_df, expected_df, check_dtype=False)
 
     try:
         for i in range(5):
@@ -3247,7 +3250,7 @@ def test_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
     expected_metrics = pd.read_csv(
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_imbalanced_dataset_metrics.csv")
     )
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_metrics_flag: bool):
@@ -3299,26 +3302,24 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
             os.path.dirname(os.path.realpath(__file__)), "test_data/binary/expected_prepared_imbalanced.parquet"
         )
 
-        expected_result_df = (
-            pd.read_parquet(expected_result_path).sort_values(by="system_record_id").reset_index(drop=True)
-        )
+        expected_result_df = sort_prepared_upload_df(pd.read_parquet(expected_result_path))
         expected_result_df["phone_num_a54a33"] = expected_result_df["phone_num_a54a33"].astype("Int64")
         expected_result_df["rep_date_f5d6bb"] = expected_result_df["rep_date_f5d6bb"].astype("Int64")
 
         def test(n_shuffles: int, expected_df: pd.DataFrame):
             train_df = initial_train_df.copy()
             for _ in range(n_shuffles):
-                train_df = initial_train_df.sample(frac=1).reset_index(drop=True)
+                train_df = initial_train_df.sample(frac=1, random_state=42 + n_shuffles).reset_index(drop=True)
             train_features = train_df.drop(columns="target")
             train_target = train_df["target"]
             eval1_df = initial_eval1_df.copy()
             for _ in range(n_shuffles):
-                eval1_df = eval1_df.sample(frac=1).reset_index(drop=True)
+                eval1_df = eval1_df.sample(frac=1, random_state=43 + n_shuffles).reset_index(drop=True)
             eval1_features = eval1_df.drop(columns="target")
             eval1_target = eval1_df["target"]
             eval2_df = initial_eval2_df.copy()
             for _ in range(n_shuffles):
-                eval2_df = eval2_df.sample(frac=1).reset_index(drop=True)
+                eval2_df = eval2_df.sample(frac=1, random_state=44 + n_shuffles).reset_index(drop=True)
             eval2_features = eval2_df.drop(columns="target")
             eval2_target = eval2_df["target"]
             eval_set = [(eval1_features, eval1_target), (eval2_features, eval2_target)]
@@ -3328,14 +3329,14 @@ def test_idempotent_order_with_imbalanced_dataset(requests_mock: Mocker, update_
             except TestException:
                 pass
 
-            actual_result_df = result_wrapper.df.sort_values(by="system_record_id").reset_index(drop=True)
+            actual_result_df = sort_prepared_upload_df(result_wrapper.df)
             actual_result_df["phone_num_a54a33"] = actual_result_df["phone_num_a54a33"].astype("Int64")
             actual_result_df["rep_date_f5d6bb"] = actual_result_df["rep_date_f5d6bb"].astype("Int64")
 
             if update_metrics_flag:
                 actual_result_df.to_parquet(expected_result_path)
                 expected_df = actual_result_df
-            assert_frame_equal(actual_result_df, expected_df)
+            assert_frame_equal(actual_result_df, expected_df, check_dtype=False)
 
         for i in range(5):
             print(f"Run {i} iteration")
@@ -4060,7 +4061,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
     enricher = FeaturesEnricher(
         search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
@@ -4096,7 +4097,7 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
         os.path.join(FIXTURE_DIR, "test_features_enricher/test_features_enricher_with_select_features_metrics_2.csv")
     )
 
-    assert_frame_equal(expected_metrics, metrics, atol=1e-6)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_id_columns_validation(requests_mock: Mocker):

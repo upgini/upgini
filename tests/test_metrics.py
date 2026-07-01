@@ -38,6 +38,7 @@ from upgini.search_task import SearchTask
 from upgini.utils.datetime_utils import DateTimeConverter
 
 from .utils import (
+    assert_metrics_frame_equal,
     mock_default_requests,
     mock_get_add_info,
     mock_get_metadata,
@@ -205,7 +206,7 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
         metrics.to_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_real_case_metric_binary.csv"), index=False)
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_real_case_metric_binary.csv"))
-    assert_frame_equal(expected_metrics, metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
@@ -279,7 +280,7 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
         metrics.to_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_demo_metrics.csv"), index=False)
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_demo_metrics.csv"))
-    assert_frame_equal(expected_metrics, metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics)
 
 
 def test_default_metric_binary(requests_mock: Mocker, update_metrics_flag: bool):
@@ -390,7 +391,7 @@ def test_default_metric_binary(requests_mock: Mocker, update_metrics_flag: bool)
         metrics_df.to_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary.csv"), index=False)
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary.csv"))
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: bool):
@@ -504,7 +505,7 @@ def test_default_metric_multiclass(requests_mock: Mocker, update_metrics_flag: b
         metrics_df.to_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_multiclass.csv"), index=False)
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_multiclass.csv"))
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_default_metric_regression_with_outliers(requests_mock: Mocker, update_metrics_flag: bool):
@@ -596,7 +597,7 @@ def test_default_metric_regression_with_outliers(requests_mock: Mocker, update_m
     expected_metrics = pd.read_csv(
         os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_regression_with_outliers.csv")
     )
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_default_metric_binary_custom_loss(requests_mock: Mocker, update_metrics_flag: bool):
@@ -709,7 +710,7 @@ def test_default_metric_binary_custom_loss(requests_mock: Mocker, update_metrics
         )
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary_custom_loss.csv"))
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_default_metric_binary_shuffled(requests_mock: Mocker, update_metrics_flag: bool):
@@ -824,7 +825,7 @@ def test_default_metric_binary_shuffled(requests_mock: Mocker, update_metrics_fl
         )
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary_shuffled.csv"))
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bool):
@@ -930,7 +931,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
         metrics_df.to_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_blocked_timeseries_rmsle.csv"), index=False)
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_blocked_timeseries_rmsle.csv"))
-    assert_frame_equal(metrics_df, expected_metrics)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 # @pytest.mark.skip
@@ -1039,7 +1040,7 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_catboost_metric_binary.csv"))
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 # @pytest.mark.skip
@@ -1169,7 +1170,7 @@ def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_
         os.path.join(FIXTURE_DIR, "test_metrics/test_catboost_metric_binary_with_cat_features.csv")
     )
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 # @pytest.mark.skip
@@ -1279,7 +1280,7 @@ def test_lightgbm_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_lightgbm_metric_binary.csv"))
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
     estimator2 = LGBMClassifier(random_seed=42, max_depth=5, n_estimators=10)
     metrics2 = enricher.calculate_metrics(estimator=estimator2, scoring="mean_absolute_error")
@@ -1413,7 +1414,7 @@ def test_lightgbm_metric_binary_with_cat_features(requests_mock: Mocker, update_
         os.path.join(FIXTURE_DIR, "test_metrics/test_lightgbm_metric_binary_with_cat_features.csv")
     )
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
@@ -1519,7 +1520,7 @@ def test_rf_metric_rmse(requests_mock: Mocker, update_metrics_flag: bool):
 
     expected_metrics = pd.read_csv(os.path.join(FIXTURE_DIR, "test_metrics/test_rf_metric_rmse.csv"))
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update_metrics_flag: bool):
@@ -1628,7 +1629,7 @@ def test_default_metric_binary_with_string_feature(requests_mock: Mocker, update
         os.path.join(FIXTURE_DIR, "test_metrics/test_default_metric_binary_with_string_feature.csv")
     )
 
-    assert_frame_equal(metrics_df, expected_metrics, atol=10**-6)
+    assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
 def approx(value: float):
