@@ -8,7 +8,7 @@ from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
-from upgini.autofe.utils import pydantic_validator
+from upgini.autofe.utils import bin_index, bin_index_many, bin_index_vectorized, pydantic_validator
 
 
 def get_pydantic_version():
@@ -254,26 +254,33 @@ class DatePercentileBase(PandasOperator, abc.ABC):
         left = pd.to_datetime(left, unit=self.date_unit)
 
         bounds = self._get_bounds(left)
+        values = pd.to_numeric(right, errors="coerce").to_numpy(dtype=np.float64, copy=False)
+        bounds_list = bounds.tolist()
+        result = np.full(len(values), np.nan)
 
-        return (
-            right.index.to_series()
-            .apply(lambda i: self._perc(right[i], bounds[i]))
-            .astype(pd.Int64Dtype())
-            .astype("category")
-        )
+        if not bounds_list:
+            return pd.Series(result, index=right.index).astype(pd.Int64Dtype()).astype("category")
+
+        bounds_lengths = {len(b) for b in bounds_list if isinstance(b, (list, np.ndarray))}
+        if len(bounds_lengths) == 1 and all(isinstance(b, (list, np.ndarray)) for b in bounds_list):
+            bounds_2d = np.asarray(bounds_list, dtype=np.float64)
+            if bounds_2d.ndim == 1:
+                result = bin_index_vectorized(values, bounds_2d)
+            else:
+                result = bin_index_many(values, bounds_2d)
+        else:
+            for i, row_bounds in enumerate(bounds_list):
+                if isinstance(row_bounds, (list, np.ndarray)) and len(row_bounds) > 0:
+                    result[i] = bin_index(values[i], row_bounds)
+
+        return pd.Series(result, index=right.index).astype(pd.Int64Dtype()).astype("category")
 
     @abc.abstractmethod
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
         pass
 
     def _perc(self, f, bounds):
-        if f is None or np.isnan(f):
-            return np.nan
-        hit = np.where(f >= np.array(bounds))[0]
-        if hit.size > 0:
-            return np.max(hit) + 1
-        else:
-            return np.nan
+        return bin_index(f, bounds)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
@@ -313,13 +320,15 @@ class DatePercentile(DatePercentileBase):
         return value
 
     def _get_bounds(self, date_col: pd.Series) -> pd.Series:
-        months = date_col.dt.month
-        years = date_col.dt.year
+        zero_bounds = self.zero_bounds if self.zero_bounds is not None else []
+        if not zero_bounds:
+            return pd.Series([[] for _ in range(len(date_col))], index=date_col.index)
 
-        month_diffs = 12 * (years - (self.zero_year or 0)) + (months - (self.zero_month or 0))
-        return month_diffs.apply(
-            lambda d: np.array(self.zero_bounds if self.zero_bounds is not None else []) + d * self.step
-        )
+        month_diffs = (
+            12 * (date_col.dt.year - (self.zero_year or 0)) + (date_col.dt.month - (self.zero_month or 0))
+        ).to_numpy()
+        bounds_2d = np.asarray(zero_bounds, dtype=np.float64) + month_diffs[:, None] * self.step
+        return pd.Series(list(bounds_2d), index=date_col.index)
 
 
 class DatePercentileMethod2(DatePercentileBase):

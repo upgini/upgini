@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator, VectorizableMixin
-from upgini.autofe.utils import pydantic_validator
+from upgini.autofe.utils import bin_index, bin_index_vectorized, pydantic_validator
 
 
 class Abs(PandasOperator, VectorizableMixin):
@@ -163,16 +163,13 @@ class Bin(PandasOperator):
     is_categorical: bool = True
 
     def calculate_unary(self, data: pd.Series) -> pd.Series:
-        return data.apply(self._bin, bounds=self.bin_bounds).fillna(-1).astype(int).astype("category")
+        bounds_arr = np.asarray(self.bin_bounds, dtype=np.float64)
+        values = pd.to_numeric(data, errors="coerce").to_numpy(dtype=np.float64, copy=False)
+        result = bin_index_vectorized(values, bounds_arr)
+        return pd.Series(result, index=data.index).fillna(-1).astype(int).astype("category")
 
     def _bin(self, f, bounds):
-        if f is None or np.isnan(f):
-            return np.nan
-        hit = np.where(f >= np.array(bounds))[0]
-        if hit.size > 0:
-            return np.max(hit) + 1
-        else:
-            return np.nan
+        return bin_index(f, bounds)
 
     def get_params(self) -> Dict[str, Optional[str]]:
         res = super().get_params()
