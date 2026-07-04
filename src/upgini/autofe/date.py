@@ -145,23 +145,51 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
             return None
         return cls(aggregation=aggregation)
 
+    @staticmethod
+    def _non_empty_list_mask(right: pd.Series) -> pd.Series:
+        values = right.to_numpy()
+        mask = np.empty(len(values), dtype=bool)
+        for i, value in enumerate(values):
+            if value is None or (isinstance(value, float) and np.isnan(value)):
+                mask[i] = False
+            elif isinstance(value, (list, tuple, np.ndarray)):
+                mask[i] = len(value) > 0
+            else:
+                mask[i] = False
+        return pd.Series(mask, index=right.index)
+
+    def _convert_date_lists(self, lists: pd.Series) -> pd.Series:
+        exploded = lists.explode()
+        converted = pd.to_datetime(exploded, unit=self.right_unit, errors="coerce")
+        return pd.Series(
+            {
+                idx: pd.arrays.DatetimeArray(values.to_numpy())
+                for idx, values in converted.groupby(converted.index, sort=False)
+            }
+        )
+
     def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
         if left.isna().all() or right.isna().all():
             return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
         left = self._convert_to_date(left, self.left_unit)
-        right_mask = right.apply(lambda x: len(x) > 0)
+        right_mask = self._non_empty_list_mask(right)
         mask = left.notna() & right.notna() & right_mask
-        right_masked = right[mask].apply(lambda x: pd.arrays.DatetimeArray(self._convert_to_date(x, self.right_unit)))
 
-        if len(right_masked) == 0:
-            diff = []
-        elif len(right_masked) < 2:
-            diff = [left[mask].iloc[0] - right_masked.iloc[0]]
-        else:
-            diff = left[mask] - right_masked.values
+        if not mask.any():
+            res = pd.Series(np.nan, index=left.index, dtype=np.float64)
+            if self.aggregation in _count_aggregations:
+                res[~right_mask] = 0.0
+            return res
 
-        res_masked = pd.Series(diff, index=left[mask].index).apply(lambda x: self._agg(self._diff(x)))
+        masked_left = left[mask]
+        converted_lists = self._convert_date_lists(right[mask])
+        results = np.empty(len(masked_left), dtype=np.float64)
+        results[:] = np.nan
+        for i, (idx, left_date) in enumerate(masked_left.items()):
+            results[i] = self._agg(self._diff(left_date - converted_lists[idx]))
+
+        res_masked = pd.Series(results, index=masked_left.index)
         res = res_masked.reindex(left.index.union(right.index))
         if self.aggregation in _count_aggregations:
             res[~right_mask] = 0.0
