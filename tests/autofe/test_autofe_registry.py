@@ -31,6 +31,17 @@ def test_get_operands_from_registry():
     assert parsed.aggregation == "count"
     assert parsed.__class__.__name__ == "DateListDiffBounded"
 
+    parsed = OperatorRegistry.get_operator("date_diff_lists")
+    assert parsed is not None
+    assert parsed.__class__.__name__ == "DateListDiffLists"
+
+    parsed = OperatorRegistry.get_operator("date_diff_list_agg_18_23_count")
+    assert parsed is not None
+    assert parsed.lower_bound == 18
+    assert parsed.upper_bound == 23
+    assert parsed.aggregation == "count"
+    assert parsed.__class__.__name__ == "DateListDiffAggWithinBounds"
+
     # Test parametrized roll operand
     parsed = OperatorRegistry.get_operator("roll_3d_mean")
     assert parsed is not None

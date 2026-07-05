@@ -113,6 +113,172 @@ _ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len,
 _count_aggregations = ["nunique", "count"]
 
 
+def _aggregate_diffs(values: np.ndarray, aggregation: str) -> float:
+    values = np.atleast_1d(np.asarray(values, dtype=np.float64))
+    method = getattr(np, aggregation, None)
+    default = np.nan
+    if method is None and aggregation in _ext_aggregations:
+        method, default = _ext_aggregations[aggregation]
+    elif not callable(method):
+        raise ValueError(f"Unsupported aggregation: {aggregation}")
+
+    return method(values) if len(values) > 0 else default
+
+
+class DateListDiffLists(PandasOperator, DateDiffMixin, ParametrizedOperator):
+    name: str = "date_diff_lists"
+    is_binary: bool = True
+    has_symmetry_importance: bool = True
+    output_type: Optional[str] = "vector"
+
+    replace_negative: bool = False
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "diff_unit": self.diff_unit,
+                "left_unit": self.left_unit,
+                "right_unit": self.right_unit,
+                "replace_negative": self.replace_negative,
+            }
+        )
+        return res
+
+    def to_formula(self) -> str:
+        return f"date_diff_lists_{self.diff_unit}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiffLists"]:
+        if formula == "date_diff_lists":
+            return cls()
+        if formula.startswith("date_diff_lists_"):
+            diff_unit = formula.replace("date_diff_lists_", "")
+            if diff_unit in {"D", "Y"}:
+                return cls(diff_unit=diff_unit)
+        return None
+
+    @staticmethod
+    def _non_empty_list_mask(right: pd.Series) -> pd.Series:
+        values = right.to_numpy()
+        mask = np.empty(len(values), dtype=bool)
+        for i, value in enumerate(values):
+            if value is None or (isinstance(value, float) and np.isnan(value)):
+                mask[i] = False
+            elif isinstance(value, (list, tuple, np.ndarray)):
+                mask[i] = len(value) > 0
+            else:
+                mask[i] = False
+        return pd.Series(mask, index=right.index)
+
+    def _convert_date_lists(self, lists: pd.Series) -> pd.Series:
+        exploded = lists.explode()
+        converted = pd.to_datetime(exploded, unit=self.right_unit, errors="coerce")
+        return pd.Series(
+            {
+                idx: pd.arrays.DatetimeArray(values.to_numpy())
+                for idx, values in converted.groupby(converted.index, sort=False)
+            }
+        )
+
+    def _row_diffs(self, left_date, right_dates: pd.arrays.DatetimeArray) -> List[float]:
+        diffs = self._convert_diff_to_unit(left_date - right_dates)
+        if self.replace_negative:
+            diffs = diffs[diffs > 0]
+        return np.atleast_1d(np.asarray(diffs, dtype=np.float64)).tolist()
+
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        if left.isna().all() or right.isna().all():
+            return pd.Series([None] * len(left), index=left.index, dtype=object)
+
+        left = self._convert_to_date(left, self.left_unit)
+        right_mask = self._non_empty_list_mask(right)
+        mask = left.notna() & right.notna() & right_mask
+
+        results = pd.Series([None] * len(left), index=left.index, dtype=object)
+        if not mask.any():
+            return results
+
+        masked_left = left[mask]
+        converted_lists = self._convert_date_lists(right[mask])
+        for idx, left_date in masked_left.items():
+            results.loc[idx] = self._row_diffs(left_date, converted_lists[idx])
+        return results
+
+
+class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
+    name: str = "date_diff_list_agg"
+    is_unary: bool = True
+    output_type: Optional[str] = "float"
+
+    lower_bound: Optional[int] = None
+    upper_bound: Optional[int] = None
+    aggregation: str
+    normalize: Optional[bool] = None
+
+    def get_params(self) -> Dict[str, Optional[str]]:
+        res = super().get_params()
+        res.update(
+            {
+                "aggregation": self.aggregation,
+                "lower_bound": str(self.lower_bound) if self.lower_bound is not None else None,
+                "upper_bound": str(self.upper_bound) if self.upper_bound is not None else None,
+                "normalize": str(self.normalize) if self.normalize is not None else None,
+            }
+        )
+        return res
+
+    def to_formula(self) -> str:
+        lower_bound = "minusinf" if self.lower_bound is None else self.lower_bound
+        upper_bound = "plusinf" if self.upper_bound is None else self.upper_bound
+        norm = "_norm" if self.normalize else ""
+        return f"date_diff_list_agg_{lower_bound}_{upper_bound}_{self.aggregation}{norm}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["DateListDiffAggWithinBounds"]:
+        import re
+
+        normalize = formula.endswith("_norm")
+        formula = formula.replace("_norm", "")
+
+        pattern = r"^date_diff_list_agg_((minusinf|\d+))_((plusinf|\d+))_(\w+)$"
+        match = re.match(pattern, formula)
+        if not match:
+            return None
+
+        lower_bound = None if match.group(1) == "minusinf" else int(match.group(1))
+        upper_bound = None if match.group(3) == "plusinf" else int(match.group(3))
+        aggregation = match.group(5)
+        return cls(
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            aggregation=aggregation,
+            normalize=normalize,
+        )
+
+    def _aggregate_row(self, diffs) -> float:
+        if diffs is None or (isinstance(diffs, float) and np.isnan(diffs)):
+            return np.nan
+
+        diffs = np.atleast_1d(np.asarray(diffs, dtype=np.float64))
+        orig_len = len(diffs)
+        if self.lower_bound is not None or self.upper_bound is not None:
+            lower = self.lower_bound if self.lower_bound is not None else -np.inf
+            upper = self.upper_bound if self.upper_bound is not None else np.inf
+            diffs = diffs[(diffs >= lower) & (diffs < upper)]
+        agg_res = _aggregate_diffs(diffs, self.aggregation)
+        if self.normalize and orig_len > 0:
+            return agg_res / orig_len
+        return agg_res
+
+    def calculate_unary(self, data: pd.Series) -> pd.Series:
+        results = np.empty(len(data), dtype=np.float64)
+        results[:] = np.nan
+        for i, diffs in enumerate(data.to_numpy()):
+            results[i] = self._aggregate_row(diffs)
+        return pd.Series(results, index=data.index, dtype=np.float64)
+
+
 class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
     is_binary: bool = True
     has_symmetry_importance: bool = True
@@ -145,71 +311,35 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
             return None
         return cls(aggregation=aggregation)
 
-    @staticmethod
-    def _non_empty_list_mask(right: pd.Series) -> pd.Series:
-        values = right.to_numpy()
-        mask = np.empty(len(values), dtype=bool)
-        for i, value in enumerate(values):
-            if value is None or (isinstance(value, float) and np.isnan(value)):
-                mask[i] = False
-            elif isinstance(value, (list, tuple, np.ndarray)):
-                mask[i] = len(value) > 0
-            else:
-                mask[i] = False
-        return pd.Series(mask, index=right.index)
-
-    def _convert_date_lists(self, lists: pd.Series) -> pd.Series:
-        exploded = lists.explode()
-        converted = pd.to_datetime(exploded, unit=self.right_unit, errors="coerce")
-        return pd.Series(
-            {
-                idx: pd.arrays.DatetimeArray(values.to_numpy())
-                for idx, values in converted.groupby(converted.index, sort=False)
-            }
+    def _lists_op(self) -> DateListDiffLists:
+        return DateListDiffLists(
+            diff_unit=self.diff_unit,
+            left_unit=self.left_unit,
+            right_unit=self.right_unit,
+            replace_negative=self.replace_negative,
         )
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def _agg_op(self) -> DateListDiffAggWithinBounds:
+        return DateListDiffAggWithinBounds(
+            lower_bound=None,
+            upper_bound=None,
+            aggregation=self.aggregation,
+            normalize=False,
+        )
+
+    def _compose_list_diff(self, left: pd.Series, right: pd.Series) -> pd.Series:
         if left.isna().all() or right.isna().all():
             return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
-        left = self._convert_to_date(left, self.left_unit)
-        right_mask = self._non_empty_list_mask(right)
-        mask = left.notna() & right.notna() & right_mask
-
-        if not mask.any():
-            res = pd.Series(np.nan, index=left.index, dtype=np.float64)
-            if self.aggregation in _count_aggregations:
-                res[~right_mask] = 0.0
-            return res
-
-        masked_left = left[mask]
-        converted_lists = self._convert_date_lists(right[mask])
-        results = np.empty(len(masked_left), dtype=np.float64)
-        results[:] = np.nan
-        for i, (idx, left_date) in enumerate(masked_left.items()):
-            results[i] = self._agg(self._diff(left_date - converted_lists[idx]))
-
-        res_masked = pd.Series(results, index=masked_left.index)
-        res = res_masked.reindex(left.index.union(right.index))
+        right_mask = DateListDiffLists._non_empty_list_mask(right)
+        diff_lists = self._lists_op().calculate_binary(left, right)
+        result = self._agg_op().calculate_unary(diff_lists)
         if self.aggregation in _count_aggregations:
-            res[~right_mask] = 0.0
-        res = res.astype(np.float64)
+            result[~right_mask] = 0.0
+        return result.astype(np.float64)
 
-        return res
-
-    def _diff(self, x: TimedeltaArray):
-        x = self._convert_diff_to_unit(x)
-        return x[x > 0] if self.replace_negative else x
-
-    def _agg(self, x):
-        method = getattr(np, self.aggregation, None)
-        default = np.nan
-        if method is None and self.aggregation in _ext_aggregations:
-            method, default = _ext_aggregations[self.aggregation]
-        elif not callable(method):
-            raise ValueError(f"Unsupported aggregation: {self.aggregation}")
-
-        return method(x) if len(x) > 0 else default
+    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+        return self._compose_list_diff(left, right)
 
 
 class DateListDiffBounded(DateListDiff, ParametrizedOperator):
@@ -258,16 +388,13 @@ class DateListDiffBounded(DateListDiff, ParametrizedOperator):
             res["normalize"] = str(self.normalize)
         return res
 
-    def _agg(self, x):
-        orig_len = len(x)
-        x = x[
-            (x >= (self.lower_bound if self.lower_bound is not None else -np.inf))
-            & (x < (self.upper_bound if self.upper_bound is not None else np.inf))
-        ]
-        agg_res = super()._agg(x)
-        if self.normalize and orig_len > 0:
-            return agg_res / orig_len
-        return agg_res
+    def _agg_op(self) -> DateListDiffAggWithinBounds:
+        return DateListDiffAggWithinBounds(
+            lower_bound=self.lower_bound,
+            upper_bound=self.upper_bound,
+            aggregation=self.aggregation,
+            normalize=self.normalize or False,
+        )
 
 
 class DatePercentileBase(PandasOperator, abc.ABC):

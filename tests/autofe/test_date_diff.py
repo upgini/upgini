@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
 
@@ -7,7 +8,9 @@ from upgini.autofe.date import (
     DateDiff,
     DateDiffType2,
     DateListDiff,
+    DateListDiffAggWithinBounds,
     DateListDiffBounded,
+    DateListDiffLists,
 )
 from upgini.autofe.utils import pydantic_parse_method
 
@@ -251,3 +254,71 @@ def test_date_list_diff_bounded_parse_obj():
     assert parsed_date_diff.aggregation == "count"
     assert parsed_date_diff.normalize is True
     assert parsed_date_diff.to_formula() == "date_diff_Y_18_25_count_norm"
+
+
+def test_date_list_diff_lists():
+    df = pd.DataFrame(
+        [
+            ["2022-10-10", ["1993-12-10", "1993-12-11"], None],
+            ["2022-10-10", ["1993-12-10", "1993-12-10"], None],
+            ["2022-10-10", ["2023-10-10"], None],
+            ["2022-10-10", [], None],
+        ],
+        columns=["date1", "date2", "date3"],
+    )
+
+    operand = DateListDiffLists()
+    diff_lists = operand.calculate_binary(df.date1, df.date2)
+    assert diff_lists.iloc[0] == [10531.0, 10530.0]
+    assert diff_lists.iloc[1] == [10531.0, 10531.0]
+    assert diff_lists.iloc[2] == [-365.0]
+    assert diff_lists.iloc[3] is None
+
+    operand = DateListDiffLists(replace_negative=True)
+    diff_lists = operand.calculate_binary(df.date1, df.date2)
+    assert diff_lists.iloc[2] == []
+
+
+def test_date_list_diff_agg_within_bounds():
+    diff_lists = pd.Series(
+        [
+            np.array([8.0, 20.0, 25.0]),
+            np.array([19.0, 22.0]),
+            np.array([]),
+            None,
+        ]
+    )
+
+    operand = DateListDiffAggWithinBounds(lower_bound=18, upper_bound=23, aggregation="count")
+    assert_series_equal(
+        operand.calculate_unary(diff_lists),
+        pd.Series([1.0, 2.0, 0.0, np.nan]),
+    )
+
+    operand = DateListDiffAggWithinBounds(
+        lower_bound=0, upper_bound=18, aggregation="count", normalize=True
+    )
+    assert_series_equal(
+        operand.calculate_unary(diff_lists),
+        pd.Series([1.0 / 3.0, 0.0, 0.0, np.nan]),
+    )
+
+
+def test_date_list_diff_bounded_composition():
+    df = pd.DataFrame(
+        [
+            ["2022-10-10", ["2013-12-10", "2013-12-11", "1999-12-11"], None],
+            ["2022-10-10", ["2023-10-10", "1993-12-10"], None],
+        ],
+        columns=["date1", "date2", "date3"],
+    )
+
+    lists_op = DateListDiffLists(diff_unit="Y")
+    agg_op = DateListDiffAggWithinBounds(lower_bound=0, upper_bound=18, aggregation="count")
+    composed = agg_op.calculate_unary(lists_op.calculate_binary(df.date1, df.date2))
+
+    bounded = DateListDiffBounded(diff_unit="Y", lower_bound=0, upper_bound=18, aggregation="count")
+    assert_series_equal(
+        composed,
+        bounded.calculate_binary(df.date1, df.date2),
+    )
