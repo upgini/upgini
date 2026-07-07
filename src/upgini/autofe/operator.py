@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, PrivateAttr
 
-from upgini.autofe.operand import OperandValue
+from upgini.autofe.operand import OperandValue, wrap_operand
 
 
 class OperatorRegistry(type(BaseModel)):
@@ -140,26 +140,29 @@ class PandasOperator(Operator, abc.ABC):
             return value
         return OperandValue.from_series(value)
 
-    def calculate(self, **kwargs) -> Union[pd.Series, OperandValue]:
+    def calculate(self, **kwargs) -> OperandValue:
         if self.is_unary:
-            return self.calculate_unary(self._operand(kwargs["data"]))
-        elif self.is_binary or self.is_grouping:
-            return self.calculate_binary(
-                self._operand(kwargs["left"]),
-                self._operand(kwargs["right"]),
-            )
-        else:
-            return self.calculate_vector([self._operand(value) for value in kwargs["data"]])
+            data = self._operand(kwargs["data"])
+            return wrap_operand(self.calculate_unary(data), source=data.source, index=data.index)
+        if self.is_binary or self.is_grouping:
+            left = self._operand(kwargs["left"])
+            right = self._operand(kwargs["right"])
+            return wrap_operand(self.calculate_binary(left, right), source=left.source, index=left.index)
+        operands = [self._operand(value) for value in kwargs["data"]]
+        index = operands[0].index if operands else None
+        return wrap_operand(self.calculate_vector(operands), index=index)
 
-    def calculate_unary(self, data: OperandValue) -> Union[pd.Series, OperandValue]:
+    def calculate_unary(self, data: OperandValue) -> Union[pd.Series, np.ndarray, OperandValue]:
         pass
 
     def calculate_binary(
         self, left: OperandValue, right: OperandValue
-    ) -> Union[pd.Series, OperandValue]:
+    ) -> Union[pd.Series, np.ndarray, OperandValue]:
         pass
 
-    def calculate_vector(self, data: List[OperandValue]) -> Union[pd.Series, OperandValue]:
+    def calculate_vector(
+        self, data: List[OperandValue]
+    ) -> Union[pd.Series, np.ndarray, OperandValue]:
         pass
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:

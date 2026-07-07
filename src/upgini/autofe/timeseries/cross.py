@@ -126,7 +126,7 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
         right_mask = self._get_mask(data, self.right_descriptor)
         right = self._extract_series(data, right_mask)
 
-        interaction: pd.Series = self.interaction_op.calculate(left=left, right=right)
+        interaction: pd.Series = self.interaction_op.calculate(left=left, right=right).as_series()
         interaction = interaction.reindex(self._get_index(data))
         res = pd.Series(np.nan, index=data[-1].index, name=data[-1].name)
         res.loc[left_mask] = interaction[left_mask].values

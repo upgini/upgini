@@ -18,12 +18,12 @@ def test_bin_basic():
     # 50 -> 3 (falls in third bin: >= 45)
     # None -> -1 (default for NaN values)
     expected_values = pd.Series([1, 1, 2, 2, 3, -1], dtype="category")
-    result = operator.calculate(data=data)
+    result = operator.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
     # Test with null series
     null_series = pd.Series([None, None, None])
-    result_null = operator.calculate(data=null_series)
+    result_null = operator.calculate(data=null_series).as_series()
     expected_null = pd.Series([-1, -1, -1], dtype="category")
     assert_series_equal(result_null, expected_null)
 
@@ -35,7 +35,7 @@ def test_bin_empty_bounds():
 
     # All values should return -1 as there's no bin to fall into
     expected_values = pd.Series([-1, -1], dtype="category")
-    result = operand.calculate(data=data)
+    result = operand.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
 
@@ -50,7 +50,7 @@ def test_bin_negative_values():
     # 0 -> 3 (falls in third bin: >= 0 and < 15)
     # 10 -> 3 (falls in third bin: >= 0 and < 15)
     expected_values = pd.Series([1, 2, 3, 3], dtype="category")
-    result = operand.calculate(data=data)
+    result = operand.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
 
@@ -65,7 +65,7 @@ def test_bin_out_of_bounds():
     # 10 -> 1 (falls in first bin: >= 0 and < 50)
     # 100 -> 2 (falls in second bin: >= 50)
     expected_values = pd.Series([-1, 1, 1, 2], dtype="category")
-    result = operand.calculate(data=data)
+    result = operand.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
 
@@ -90,7 +90,7 @@ def test_bin_string_bounds():
     data = pd.Series([10, 30, 60, 90])
 
     expected_values = pd.Series([1, 2, 3, 4], dtype="category")
-    result = op.calculate(data=data)
+    result = op.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
 
@@ -106,7 +106,7 @@ def test_bin_float_values():
     # 45.0 -> 3 (falls in third bin: >= 45)
     # 45.1 -> 3 (falls in third bin: >= 45)
     expected_values = pd.Series([1, 2, 2, 3, 3], dtype="category")
-    result = operand.calculate(data=data)
+    result = operand.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)
 
 
@@ -116,5 +116,5 @@ def test_bin_with_index():
     operand = Bin(bin_bounds=[0, 20, 40])
 
     expected_values = pd.Series([1, 2, 3], index=["a", "b", "c"], dtype="category")
-    result = operand.calculate(data=data)
+    result = operand.calculate(data=data).as_series()
     assert_series_equal(result, expected_values)

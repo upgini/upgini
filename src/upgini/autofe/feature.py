@@ -8,7 +8,7 @@ import pandas as pd
 from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operators import find_op
-from upgini.autofe.operand import CalculationContext, OperandValue, wrap_operand
+from upgini.autofe.operand import CalculationContext, OperandValue
 from upgini.autofe.operator import Operator, PandasOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 from upgini.autofe.utils import pydantic_dump_method, pydantic_parse_method
@@ -258,15 +258,12 @@ class Feature:
         if isinstance(self.op, PandasOperator):
             if self.op.is_vector:
                 operands = [child._eval(ctx) for child in self.children]
-                result = self.op.calculate(data=operands)
-                return wrap_operand(result)
+                return self.op.calculate(data=operands)
             left = self.children[0]._eval(ctx)
             if len(self.children) < 2:
-                result = self.op.calculate(data=left)
-                return wrap_operand(result, source=left.source)
+                return self.op.calculate(data=left)
             right = self.children[1]._eval(ctx)
-            result = self.op.calculate(left=left, right=right)
-            return wrap_operand(result, source=left.source)
+            return self.op.calculate(left=left, right=right)
         raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
 
     @staticmethod

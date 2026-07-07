@@ -341,7 +341,7 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
 
         right_mask = DateListDiffLists._non_empty_list_mask(right)
         diff_lists = self._lists_op().calculate(left=left, right=right)
-        result = self._agg_op().calculate(data=diff_lists)
+        result = self._agg_op().calculate(data=diff_lists).as_series()
         if self.aggregation in _count_aggregations:
             result[~right_mask] = 0.0
         return result.astype(np.float64)

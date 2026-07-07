@@ -64,9 +64,9 @@ def test_string_sim():
     expected_jw2 = pd.Series([0.883, None, None, 0.739, None, 1.0, 0.0])
     expected_lv = pd.Series([0.75, None, None, 0.5, None, 1.0, 0.0])
 
-    assert_series_equal(JaroWinklerSim1().calculate(left=data["a"], right=data["b"]).round(3), expected_jw1)
-    assert_series_equal(JaroWinklerSim2().calculate(left=data["a"], right=data["b"]).round(3), expected_jw2)
-    assert_series_equal(LevenshteinSim().calculate(left=data["a"], right=data["b"]).round(3), expected_lv)
+    assert_series_equal(JaroWinklerSim1().calculate(left=data["a"], right=data["b"]).as_series().round(3), expected_jw1)
+    assert_series_equal(JaroWinklerSim2().calculate(left=data["a"], right=data["b"]).as_series().round(3), expected_jw2)
+    assert_series_equal(LevenshteinSim().calculate(left=data["a"], right=data["b"]).as_series().round(3), expected_lv)
 
 
 def test_jaro_winkler_sim1_parse_obj():

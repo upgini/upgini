@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from jarowinkler import jarowinkler_similarity
 
-from upgini.autofe.operand import OperandValue
+from upgini.autofe.operand import OperandKind, OperandValue
 from upgini.autofe.operator import PandasOperator, VectorizableMixin
 
 
@@ -158,8 +158,23 @@ class Distance(PandasOperator):
     has_symmetry_importance: bool = True
 
     def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
-        left = left.as_series()
-        right = right.as_series()
+        if left.kind == OperandKind.MATRIX and right.kind == OperandKind.MATRIX:
+            return self._calculate_binary_matrices(left, right)
+        return self._calculate_binary_series(left.as_series(), right.as_series())
+
+    def _calculate_binary_matrices(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left_mat = left.as_matrix()
+        right_mat = right.as_matrix()
+        dot = np.sum(left_mat * right_mat, axis=1)
+        left_norm = np.sqrt(np.sum(left_mat * left_mat, axis=1))
+        right_norm = np.sqrt(np.sum(right_mat * right_mat, axis=1))
+        denom = left_norm * right_norm
+        with np.errstate(invalid="ignore", divide="ignore"):
+            result = 1 - dot / denom
+        result[denom == 0] = np.nan
+        return pd.Series(result, index=left.index, dtype=np.float64)
+
+    def _calculate_binary_series(self, left: pd.Series, right: pd.Series) -> pd.Series:
         return pd.Series(
             1 - self.__dot(left, right) / (self.__norm(left) * self.__norm(right)), index=left.index
         ).astype(np.float64)

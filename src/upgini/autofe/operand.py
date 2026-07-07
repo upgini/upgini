@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -50,24 +50,63 @@ class OperandValue:
 
 @dataclass
 class CalculationContext:
-    data: pd.DataFrame
+    data: Optional[pd.DataFrame] = None
+    matrices: Dict[str, np.ndarray] = field(default_factory=dict)
+    row_index: Optional[pd.Index] = None
+
+    def __post_init__(self) -> None:
+        if self.data is None and not self.matrices:
+            raise ValueError("CalculationContext requires data and/or matrices")
+        if self.matrices:
+            lengths = {name: matrix.shape[0] for name, matrix in self.matrices.items()}
+            if len(set(lengths.values())) > 1:
+                raise ValueError(f"Matrix row counts mismatch: {lengths}")
 
     @property
     def index(self) -> pd.Index:
-        return self.data.index
+        if self.data is not None:
+            return self.data.index
+        if self.row_index is not None:
+            return self.row_index
+        if self.matrices:
+            nrows = next(iter(self.matrices.values())).shape[0]
+            return pd.RangeIndex(nrows)
+        raise ValueError("CalculationContext has no index source")
 
     @classmethod
     def from_dataframe(cls, data: pd.DataFrame) -> "CalculationContext":
         return cls(data=data)
 
+    @classmethod
+    def from_matrices(
+        cls,
+        matrices: Dict[str, np.ndarray],
+        index: Optional[pd.Index] = None,
+    ) -> "CalculationContext":
+        return cls(matrices=matrices, row_index=index)
+
     def resolve_operand(self, name: str) -> OperandValue:
-        return OperandValue.from_series(self.data[name], source=name)
+        matrix = self.matrices.get(name)
+        if matrix is not None:
+            return OperandValue.from_matrix(matrix, index=self.index, source=name)
+        if self.data is not None and name in self.data:
+            return OperandValue.from_series(self.data[name], source=name)
+        raise KeyError(name)
 
 
 def wrap_operand(
-    result: Union[pd.Series, "OperandValue"],
+    result: Union[pd.Series, np.ndarray, "OperandValue"],
     source: Optional[str] = None,
+    index: Optional[pd.Index] = None,
 ) -> "OperandValue":
     if isinstance(result, OperandValue):
         return result
+    if isinstance(result, np.ndarray):
+        if index is None:
+            raise TypeError("index is required when wrapping ndarray result")
+        if result.ndim == 1:
+            return OperandValue.from_array(result, index=index, source=source)
+        if result.ndim == 2:
+            return OperandValue.from_matrix(result, index=index, source=source)
+        raise TypeError(f"Cannot wrap ndarray with {result.ndim} dimensions")
     return OperandValue.from_series(result, source=source)
