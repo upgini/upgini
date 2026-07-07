@@ -2,6 +2,7 @@ import abc
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator
 
 
@@ -22,7 +23,8 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         )
         return res
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+    def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        data = [operand.as_series() for operand in data]
         # assuming first is date, last is value, rest is group columns
         date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
         ts = pd.concat([date] + data[1:], axis=1)

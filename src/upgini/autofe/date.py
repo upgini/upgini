@@ -7,6 +7,7 @@ import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.utils import bin_index, bin_index_many, bin_index_vectorized, pydantic_validator
 
@@ -64,7 +65,9 @@ class DateDiff(PandasOperator, DateDiffMixin):
         )
         return res
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         if left.isna().all() or right.isna().all():
             return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
@@ -95,7 +98,9 @@ class DateDiffType2(PandasOperator, DateDiffMixin):
         )
         return res
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         left = self._convert_to_date(left, self.left_unit)
         right = self._convert_to_date(right, self.right_unit)
         future = right + (left.dt.year - right.dt.year).apply(
@@ -187,7 +192,9 @@ class DateListDiffLists(PandasOperator, DateDiffMixin, ParametrizedOperator):
             diffs = diffs[diffs > 0]
         return np.atleast_1d(np.asarray(diffs, dtype=np.float64)).tolist()
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         if left.isna().all() or right.isna().all():
             return pd.Series([None] * len(left), index=left.index, dtype=object)
 
@@ -271,7 +278,8 @@ class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
             return agg_res / orig_len
         return agg_res
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         results = np.empty(len(data), dtype=np.float64)
         results[:] = np.nan
         for i, diffs in enumerate(data.to_numpy()):
@@ -332,13 +340,15 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
             return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
         right_mask = DateListDiffLists._non_empty_list_mask(right)
-        diff_lists = self._lists_op().calculate_binary(left, right)
-        result = self._agg_op().calculate_unary(diff_lists)
+        diff_lists = self._lists_op().calculate(left=left, right=right)
+        result = self._agg_op().calculate(data=diff_lists)
         if self.aggregation in _count_aggregations:
             result[~right_mask] = 0.0
         return result.astype(np.float64)
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return self._compose_list_diff(left, right)
 
 
@@ -404,7 +414,9 @@ class DatePercentileBase(PandasOperator, abc.ABC):
 
     date_unit: Optional[str] = None
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         # Assuming that left is a date column, right is a feature column
         left = pd.to_datetime(left, unit=self.date_unit)
 

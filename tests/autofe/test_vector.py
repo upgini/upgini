@@ -14,7 +14,7 @@ def test_mean_operator():
     expected = pd.Series([4.0, 5.0, 4.0, 17 / 3], index=[0, 1, 2, 3])
 
     mean_op = Mean()
-    result = mean_op.calculate_vector(data)
+    result = mean_op.calculate(data=data)
 
     assert_series_equal(result, expected)
 
@@ -29,7 +29,7 @@ def test_sum_operator():
     expected = pd.Series([12.0, 15.0, 12.0, 17.0], index=[0, 1, 2, 3])
 
     sum_op = Sum()
-    result = sum_op.calculate_vector(data)
+    result = sum_op.calculate(data=data)
 
     assert_series_equal(result, expected)
 
@@ -44,7 +44,7 @@ def test_vectorize_operator():
     expected = pd.Series(expected_lists, index=[0, 1, 2, 3])
 
     vectorize_op = Vectorize()
-    result = vectorize_op.calculate_vector(data)
+    result = vectorize_op.calculate(data=data)
 
     for i, row in enumerate(result):
         assert len(row) == len(expected.iloc[i])

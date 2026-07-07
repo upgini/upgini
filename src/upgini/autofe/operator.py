@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, PrivateAttr
 
+from upgini.autofe.operand import OperandValue
+
 
 class OperatorRegistry(type(BaseModel)):
     _registry = {}
@@ -132,21 +134,32 @@ MAIN_COLUMN = "main_column"
 
 
 class PandasOperator(Operator, abc.ABC):
-    def calculate(self, **kwargs) -> pd.Series:
+    @staticmethod
+    def _operand(value: Union[pd.Series, OperandValue]) -> OperandValue:
+        if isinstance(value, OperandValue):
+            return value
+        return OperandValue.from_series(value)
+
+    def calculate(self, **kwargs) -> Union[pd.Series, OperandValue]:
         if self.is_unary:
-            return self.calculate_unary(kwargs["data"])
+            return self.calculate_unary(self._operand(kwargs["data"]))
         elif self.is_binary or self.is_grouping:
-            return self.calculate_binary(kwargs["left"], kwargs["right"])
+            return self.calculate_binary(
+                self._operand(kwargs["left"]),
+                self._operand(kwargs["right"]),
+            )
         else:
-            return self.calculate_vector(kwargs["data"])
+            return self.calculate_vector([self._operand(value) for value in kwargs["data"]])
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> Union[pd.Series, OperandValue]:
         pass
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(
+        self, left: OperandValue, right: OperandValue
+    ) -> Union[pd.Series, OperandValue]:
         pass
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+    def calculate_vector(self, data: List[OperandValue]) -> Union[pd.Series, OperandValue]:
         pass
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:

@@ -8,13 +8,14 @@ import pandas as pd
 from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operators import find_op
+from upgini.autofe.operand import CalculationContext, OperandValue, wrap_operand
 from upgini.autofe.operator import Operator, PandasOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 from upgini.autofe.utils import pydantic_dump_method, pydantic_parse_method
 
 
 class Column:
-    def __init__(self, name: str, data: Optional[pd.Series] = None, calculate_all=False):
+    def __init__(self, name: str, data: Optional[OperandValue] = None, calculate_all=False):
         self.name = name
         self.data = data
         self.calculate_all = calculate_all
@@ -61,8 +62,12 @@ class Column:
     def infer_type(self, data: pd.DataFrame) -> DtypeObj:
         return data[self.name].dtype
 
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        self.data = data[self.name]
+    def calculate(self, data: Union[pd.DataFrame, CalculationContext]) -> pd.Series:
+        ctx = data if isinstance(data, CalculationContext) else CalculationContext.from_dataframe(data)
+        return self._eval(ctx).as_series()
+
+    def _eval(self, ctx: CalculationContext) -> OperandValue:
+        self.data = ctx.resolve_operand(self.name)
         return self.data
 
     def to_formula(self, **kwargs) -> str:
@@ -236,26 +241,40 @@ class Feature:
             # either a symmetrical operator or group by
             return self.children[0].infer_type(data)
 
-    def calculate(self, data: pd.DataFrame, is_root=False) -> Union[pd.Series, pd.DataFrame]:
-        if isinstance(self.op, PandasOperator):
-            if self.op.is_vector:
-                ds = [child.calculate(data) for child in self.children]
-                new_data = self.op.calculate(data=ds)
-            else:
-                d1 = self.children[0].calculate(data)
-                d2 = None if len(self.children) < 2 else self.children[1].calculate(data)
-                new_data = self.op.calculate(data=d1, left=d1, right=d2)
-        else:
-            raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
-
-        if (str(new_data.dtype) == "category") | (str(new_data.dtype) == "object"):
-            pass
-        else:
-            new_data = new_data.replace([-np.inf, np.inf], np.nan)
+    def calculate(
+        self,
+        data: Union[pd.DataFrame, CalculationContext],
+        is_root: bool = False,
+    ) -> Union[pd.Series, pd.DataFrame]:
+        ctx = data if isinstance(data, CalculationContext) else CalculationContext.from_dataframe(data)
+        result = self._eval(ctx)
+        new_data = self._operand_to_output(result)
 
         if is_root:
             self.data = new_data
         return new_data
+
+    def _eval(self, ctx: CalculationContext) -> OperandValue:
+        if isinstance(self.op, PandasOperator):
+            if self.op.is_vector:
+                operands = [child._eval(ctx) for child in self.children]
+                result = self.op.calculate(data=operands)
+                return wrap_operand(result)
+            left = self.children[0]._eval(ctx)
+            if len(self.children) < 2:
+                result = self.op.calculate(data=left)
+                return wrap_operand(result, source=left.source)
+            right = self.children[1]._eval(ctx)
+            result = self.op.calculate(left=left, right=right)
+            return wrap_operand(result, source=left.source)
+        raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
+
+    @staticmethod
+    def _operand_to_output(operand: OperandValue) -> Union[pd.Series, pd.DataFrame]:
+        new_data = operand.as_series()
+        if (str(new_data.dtype) == "category") | (str(new_data.dtype) == "object"):
+            return new_data
+        return new_data.replace([-np.inf, np.inf], np.nan)
 
     @staticmethod
     def check_xor(left: Union[Column, "Feature"], right: Union[Column, "Feature"]) -> bool:

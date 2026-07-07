@@ -2,6 +2,7 @@ from typing import List, Optional
 
 import pandas as pd
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import OperatorRegistry, PandasOperator, ParametrizedOperator, VectorizableMixin
 
 
@@ -11,8 +12,9 @@ class Mean(PandasOperator, VectorizableMixin):
     is_vector: bool = True
     group_index: int = 0
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
-        return pd.DataFrame(data).T.fillna(0).mean(axis=1)
+    def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        series = [operand.as_series() for operand in data]
+        return pd.DataFrame(series).T.fillna(0).mean(axis=1)
 
 
 class Sum(PandasOperator, VectorizableMixin):
@@ -20,8 +22,9 @@ class Sum(PandasOperator, VectorizableMixin):
     is_vector: bool = True
     group_index: int = 0
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
-        return pd.DataFrame(data).T.fillna(0).sum(axis=1)
+    def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        series = [operand.as_series() for operand in data]
+        return pd.DataFrame(series).T.fillna(0).sum(axis=1)
 
 
 class Vectorize(PandasOperator, VectorizableMixin):
@@ -29,8 +32,9 @@ class Vectorize(PandasOperator, VectorizableMixin):
     is_vector: bool = True
     group_index: int = 0
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
-        return pd.DataFrame(data).T.apply(lambda x: x.to_list(), axis=1)
+    def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        series = [operand.as_series() for operand in data]
+        return pd.DataFrame(series).T.apply(lambda x: x.to_list(), axis=1)
 
 
 class OnnxModel(PandasOperator, ParametrizedOperator, metaclass=OperatorRegistry):

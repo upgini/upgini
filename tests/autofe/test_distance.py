@@ -26,7 +26,7 @@ def test_distance_calculation():
     # 8. None in both (should be None)
     expected = pd.Series([1.0, 1.0, 0.0, None, None, 0.0, None, None], dtype=np.float64)
 
-    result = Distance().calculate_binary(data["a"], data["b"])
+    result = Distance().calculate(left=data["a"], right=data["b"])
 
     # Drop NaN values for comparison as they don't equate correctly
     assert_series_equal(result.dropna().reset_index(drop=True), expected.dropna().reset_index(drop=True), atol=1e-6)
@@ -42,8 +42,8 @@ def test_distance_sim_relationship():
         }
     )
 
-    distance_results = Distance().calculate_binary(data["a"], data["b"])
-    sim_results = Sim().calculate_binary(data["a"], data["b"])
+    distance_results = Distance().calculate(left=data["a"], right=data["b"])
+    sim_results = Sim().calculate(left=data["a"], right=data["b"])
 
     # Sim should be 1 - Distance
     complementary = 1 - distance_results
@@ -58,8 +58,8 @@ def test_distance_symmetry():
         }
     )
 
-    forward_results = Distance().calculate_binary(data["a"], data["b"])
-    reverse_results = Distance().calculate_binary(data["b"], data["a"])
+    forward_results = Distance().calculate(left=data["a"], right=data["b"])
+    reverse_results = Distance().calculate(left=data["b"], right=data["a"])
 
     assert_series_equal(forward_results, reverse_results, atol=1e-6)
 
@@ -72,7 +72,7 @@ def test_distance_normalization():
         }
     )
 
-    results = Distance().calculate_binary(data["a"], data["b"])
+    results = Distance().calculate(left=data["a"], right=data["b"])
     expected = pd.Series([0.0, 0.0, 0.0], dtype=np.float64)
 
     assert_series_equal(results, expected, atol=1e-6)
@@ -115,7 +115,7 @@ def test_distance_edge_cases():
         }
     )
 
-    results = Distance().calculate_binary(data["a"], data["b"])
+    results = Distance().calculate(left=data["a"], right=data["b"])
 
     # Empty arrays should give NaN (since norm is 0)
     # 1D arrays should work fine

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from upgini.autofe.all_operators import find_op
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 from upgini.autofe.utils import pydantic_validator
@@ -117,14 +118,15 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
     def _get_interaction_op_name(self) -> str:
         return self.interaction_op.alias or self.interaction_op.to_formula()
 
-    def calculate_vector(self, data: List[pd.Series]) -> pd.Series:
+    def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        data = [operand.as_series() for operand in data]
         left_mask = self._get_mask(data, self.left_descriptor)
         left = self._extract_series(data, left_mask)
 
         right_mask = self._get_mask(data, self.right_descriptor)
         right = self._extract_series(data, right_mask)
 
-        interaction: pd.Series = self.interaction_op.calculate_binary(left, right)
+        interaction: pd.Series = self.interaction_op.calculate(left=left, right=right)
         interaction = interaction.reindex(self._get_index(data))
         res = pd.Series(np.nan, index=data[-1].index, name=data[-1].name)
         res.loc[left_mask] = interaction[left_mask].values
@@ -137,7 +139,7 @@ class CrossSeriesInteraction(TimeSeriesBase, ParametrizedOperator):
 
     def _extract_series(self, data: List[pd.Series], mask: pd.Series) -> pd.Series:
         masked_data = [d[mask] for d in data]
-        shifted = super().calculate_vector(masked_data)
+        shifted = super().calculate_vector([OperandValue.from_series(d) for d in masked_data])
         shifted.index = self._get_index(masked_data)
         return shifted
 

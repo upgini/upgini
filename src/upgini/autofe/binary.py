@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from jarowinkler import jarowinkler_similarity
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator, VectorizableMixin
 
 
@@ -15,7 +16,9 @@ class Min(PandasOperator):
     is_symmetrical: bool = True
     has_symmetry_importance: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return np.minimum(left, right)
 
 
@@ -25,7 +28,9 @@ class Max(PandasOperator):
     is_symmetrical: bool = True
     has_symmetry_importance: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return np.maximum(left, right)
 
 
@@ -37,7 +42,9 @@ class Add(PandasOperator, VectorizableMixin):
     has_symmetry_importance: bool = True
     is_vectorizable: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return left + right
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -56,7 +63,9 @@ class Subtract(PandasOperator, VectorizableMixin):
     has_symmetry_importance: bool = True
     is_vectorizable: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return left - right
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -75,7 +84,9 @@ class Multiply(PandasOperator, VectorizableMixin):
     has_symmetry_importance: bool = True
     is_vectorizable: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return left * right
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -94,7 +105,9 @@ class Divide(PandasOperator, VectorizableMixin):
     is_vectorizable: bool = True
     output_type: Optional[str] = "float"
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return left / right.replace(0, np.nan)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -111,7 +124,9 @@ class Combine(PandasOperator):
     has_symmetry_importance: bool = True
     output_type: Optional[str] = "object"
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         temp = left.astype(str) + "_" + right.astype(str)
         temp[left.isna() | right.isna()] = np.nan
         return pd.Series(temp, index=left.index)
@@ -126,7 +141,9 @@ class CombineThenFreq(PandasOperator):
     is_distribution_dependent: bool = True
     input_type: Optional[str] = "discrete"
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         temp = left.astype(str) + "_" + right.astype(str)
         temp[left.isna() | right.isna()] = np.nan
         value_counts = temp.value_counts(normalize=True)
@@ -140,7 +157,9 @@ class Distance(PandasOperator):
     is_symmetrical: bool = True
     has_symmetry_importance: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         return pd.Series(
             1 - self.__dot(left, right) / (self.__norm(left) * self.__norm(right)), index=left.index
         ).astype(np.float64)
@@ -167,12 +186,14 @@ class Sim(Distance):
     is_symmetrical: bool = True
     has_symmetry_importance: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
         return 1 - super().calculate_binary(left, right)
 
 
 class StringSim(PandasOperator, abc.ABC):
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         sims = []
         for i in left.index:
             left_i = self._prepare_value(left.get(i))

@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator, VectorizableMixin
 from upgini.autofe.utils import bin_index, bin_index_vectorized, pydantic_validator
 
@@ -13,7 +14,8 @@ class Abs(PandasOperator, VectorizableMixin):
     is_vectorizable: bool = True
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return data.astype(np.float64).abs()
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -27,7 +29,8 @@ class Log(PandasOperator, VectorizableMixin):
     output_type: Optional[str] = "float"
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return self._round_value(np.log(np.abs(data.replace(0, np.nan))), 10)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -41,7 +44,8 @@ class Sqrt(PandasOperator, VectorizableMixin):
     output_type: Optional[str] = "float"
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return self._round_value(np.sqrt(np.abs(data)))
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -54,7 +58,8 @@ class Square(PandasOperator, VectorizableMixin):
     is_vectorizable: bool = True
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return np.square(data)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -68,7 +73,8 @@ class Sigmoid(PandasOperator, VectorizableMixin):
     output_type: Optional[str] = "float"
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return self._round_value(1 / (1 + np.exp(-data)))
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -83,7 +89,8 @@ class Floor(PandasOperator, VectorizableMixin):
     input_type: Optional[str] = "continuous"
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return np.floor(data)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -97,7 +104,8 @@ class Residual(PandasOperator, VectorizableMixin):
     input_type: Optional[str] = "continuous"
     group_index: int = 0
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         return data - np.floor(data)
 
     def calculate_group(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -111,7 +119,8 @@ class Freq(PandasOperator):
     is_distribution_dependent: bool = True
     input_type: Optional[str] = "discrete"
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         value_counts = data.value_counts(normalize=True)
         return self._loc(data, value_counts)
 
@@ -122,7 +131,8 @@ class Norm(PandasOperator):
     output_type: Optional[str] = "float"
     norm: Optional[float] = None
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         data_dropna = data.dropna()
         if data_dropna.empty:
             return data
@@ -162,7 +172,8 @@ class Bin(PandasOperator):
     bin_bounds: List[int] = []
     is_categorical: bool = True
 
-    def calculate_unary(self, data: pd.Series) -> pd.Series:
+    def calculate_unary(self, data: OperandValue) -> pd.Series:
+        data = data.as_series()
         bounds_arr = np.asarray(self.bin_bounds, dtype=np.float64)
         values = pd.to_numeric(data, errors="coerce").to_numpy(dtype=np.float64, copy=False)
         result = bin_index_vectorized(values, bounds_arr)
