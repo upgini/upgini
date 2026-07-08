@@ -224,3 +224,16 @@ def test_distance_series_path_when_only_one_matrix_operand():
     ).as_series()
 
     assert_series_equal(mixed_result, series_result, atol=1e-6)
+
+
+def test_distance_matrix_mismatched_dimensions_returns_nan():
+    index = pd.Index(["x", "y"], name="id")
+    matrices = {
+        "empty_emb": np.full((2, 0), np.nan),
+        "full_emb": np.array([[1.0, 0.0], [0.0, 1.0]]),
+    }
+    ctx = CalculationContext.from_matrices(matrices, index=index)
+
+    result = Feature.from_formula("dist(empty_emb,full_emb)").calculate(ctx)
+
+    assert result.isna().all()

@@ -165,6 +165,8 @@ class Distance(PandasOperator):
     def _calculate_binary_matrices(self, left: OperandValue, right: OperandValue) -> pd.Series:
         left_mat = left.as_matrix()
         right_mat = right.as_matrix()
+        if left_mat.shape[1] != right_mat.shape[1]:
+            return pd.Series(np.full(len(left_mat), np.nan), index=left.index, dtype=np.float64)
         dot = np.sum(left_mat * right_mat, axis=1)
         left_norm = np.sqrt(np.sum(left_mat * left_mat, axis=1))
         right_norm = np.sqrt(np.sum(right_mat * right_mat, axis=1))
