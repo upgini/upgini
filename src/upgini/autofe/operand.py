@@ -94,6 +94,27 @@ class CalculationContext:
         raise KeyError(name)
 
 
+def finalize_operand(operand: OperandValue) -> OperandValue:
+    if operand.kind == OperandKind.MATRIX:
+        matrix = np.where(np.isinf(operand.as_matrix()), np.nan, operand.as_matrix())
+        return OperandValue.from_matrix(matrix, index=operand.index, source=operand.source)
+    if operand.kind == OperandKind.ARRAY:
+        array = operand.data  # type: ignore[assignment]
+        array = np.where(np.isinf(array), np.nan, array)
+        return OperandValue.from_array(array, index=operand.index, source=operand.source)
+    new_data = operand.as_series()
+    if (str(new_data.dtype) == "category") | (str(new_data.dtype) == "object"):
+        return OperandValue.from_series(new_data, source=operand.source)
+    return OperandValue.from_series(new_data.replace([-np.inf, np.inf], np.nan), source=operand.source)
+
+
+def operand_to_output(operand: OperandValue, preserve_kind: bool = False) -> Union[pd.Series, OperandValue]:
+    finalized = finalize_operand(operand)
+    if preserve_kind:
+        return finalized
+    return finalized.as_series()
+
+
 def wrap_operand(
     result: Union[pd.Series, np.ndarray, "OperandValue"],
     source: Optional[str] = None,

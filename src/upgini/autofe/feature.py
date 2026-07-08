@@ -8,7 +8,7 @@ import pandas as pd
 from pandas._typing import DtypeObj
 
 from upgini.autofe.all_operators import find_op
-from upgini.autofe.operand import CalculationContext, OperandValue
+from upgini.autofe.operand import CalculationContext, OperandValue, operand_to_output
 from upgini.autofe.operator import Operator, PandasOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
 from upgini.autofe.utils import pydantic_dump_method, pydantic_parse_method
@@ -62,9 +62,14 @@ class Column:
     def infer_type(self, data: pd.DataFrame) -> DtypeObj:
         return data[self.name].dtype
 
-    def calculate(self, data: Union[pd.DataFrame, CalculationContext]) -> pd.Series:
+    def calculate(
+        self,
+        data: Union[pd.DataFrame, CalculationContext],
+        preserve_kind: bool = False,
+    ) -> Union[pd.Series, OperandValue]:
         ctx = data if isinstance(data, CalculationContext) else CalculationContext.from_dataframe(data)
-        return self._eval(ctx).as_series()
+        operand = self._eval(ctx)
+        return operand if preserve_kind else operand.as_series()
 
     def _eval(self, ctx: CalculationContext) -> OperandValue:
         self.data = ctx.resolve_operand(self.name)
@@ -245,10 +250,11 @@ class Feature:
         self,
         data: Union[pd.DataFrame, CalculationContext],
         is_root: bool = False,
-    ) -> Union[pd.Series, pd.DataFrame]:
+        preserve_kind: bool = False,
+    ) -> Union[pd.Series, pd.DataFrame, OperandValue]:
         ctx = data if isinstance(data, CalculationContext) else CalculationContext.from_dataframe(data)
         result = self._eval(ctx)
-        new_data = self._operand_to_output(result)
+        new_data = operand_to_output(result, preserve_kind=preserve_kind)
 
         if is_root:
             self.data = new_data
@@ -265,13 +271,6 @@ class Feature:
             right = self.children[1]._eval(ctx)
             return self.op.calculate(left=left, right=right)
         raise NotImplementedError(f"Unrecognized operator {self.op.name}.")
-
-    @staticmethod
-    def _operand_to_output(operand: OperandValue) -> Union[pd.Series, pd.DataFrame]:
-        new_data = operand.as_series()
-        if (str(new_data.dtype) == "category") | (str(new_data.dtype) == "object"):
-            return new_data
-        return new_data.replace([-np.inf, np.inf], np.nan)
 
     @staticmethod
     def check_xor(left: Union[Column, "Feature"], right: Union[Column, "Feature"]) -> bool:

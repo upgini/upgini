@@ -4,7 +4,7 @@ import pytest
 from pandas.testing import assert_series_equal
 
 from upgini.autofe.binary import Distance
-from upgini.autofe.feature import Feature
+from upgini.autofe.feature import Column, Feature
 from upgini.autofe.operand import CalculationContext, OperandKind, OperandValue, wrap_operand
 from upgini.autofe.unary import Embeddings
 
@@ -72,9 +72,75 @@ def test_dist_emb_pipeline_with_ndarray_return(monkeypatch):
     assert_series_equal(result, expected, atol=1e-6)
 
 
-def test_embeddings_not_implemented():
-    data = pd.DataFrame({"a": ["x"]})
-    feature = Feature.from_formula("emb(a)")
+def test_column_preserve_kind_matrix_source():
+    matrix = np.array([[1.0, 2.0], [3.0, 4.0]])
+    ctx = CalculationContext.from_matrices({"emb_a": matrix})
 
-    with pytest.raises(NotImplementedError, match="Embeddings operator is not implemented"):
-        feature.calculate(data)
+    operand = Column("emb_a").calculate(ctx, preserve_kind=True)
+
+    assert isinstance(operand, OperandValue)
+    assert operand.kind == OperandKind.MATRIX
+    np.testing.assert_array_equal(operand.as_matrix(), matrix)
+
+
+def test_column_default_returns_series_for_matrix_source():
+    matrix = np.array([[1.0, 2.0]])
+    ctx = CalculationContext.from_matrices({"emb_a": matrix})
+
+    result = Column("emb_a").calculate(ctx)
+
+    assert isinstance(result, pd.Series)
+    np.testing.assert_array_equal(result.iloc[0], np.array([1.0, 2.0]))
+
+
+def test_feature_preserve_kind_returns_matrix(monkeypatch):
+    monkeypatch.setattr(Embeddings, "calculate_unary", _fake_emb_unary)
+
+    data = pd.DataFrame({"a": ["x", "y"]})
+    feature = Feature.from_formula("emb(a)")
+    result = feature.calculate(data, preserve_kind=True)
+
+    assert isinstance(result, OperandValue)
+    assert result.kind == OperandKind.MATRIX
+    np.testing.assert_array_equal(result.as_matrix(), np.array([[1.0, 0.0], [0.0, 1.0]]))
+
+
+def test_column_preserve_kind_returns_matrix_unchanged():
+    matrix = np.array([[1.0, np.inf], [np.nan, 2.0]])
+    ctx = CalculationContext.from_matrices({"emb_a": matrix})
+
+    result = Column("emb_a").calculate(ctx, preserve_kind=True)
+
+    assert isinstance(result, OperandValue)
+    assert result.kind == OperandKind.MATRIX
+    np.testing.assert_allclose(result.as_matrix(), matrix, rtol=0, atol=0, equal_nan=True)
+
+
+def test_feature_preserve_kind_replaces_inf_in_matrix(monkeypatch):
+    def fake_emb_inf(self, data: OperandValue) -> OperandValue:
+        matrix = np.array([[1.0, np.inf]])
+        return OperandValue.from_matrix(matrix, index=data.index, source=data.source)
+
+    monkeypatch.setattr(Embeddings, "calculate_unary", fake_emb_inf)
+
+    data = pd.DataFrame({"a": ["x"]})
+    result = Feature.from_formula("emb(a)").calculate(data, preserve_kind=True)
+
+    assert isinstance(result, OperandValue)
+    expected = np.array([[1.0, np.nan]])
+    np.testing.assert_allclose(result.as_matrix(), expected, rtol=0, atol=0, equal_nan=True)
+
+
+def test_dist_with_precomputed_matrix_columns(monkeypatch):
+    monkeypatch.setattr(Embeddings, "calculate_unary", _fake_emb_unary)
+
+    matrices = {
+        "emb_a": np.array([[1.0, 0.0], [0.0, 1.0]]),
+        "emb_b": np.array([[0.0, 1.0], [1.0, 0.0]]),
+    }
+    ctx = CalculationContext.from_matrices(matrices)
+    feature = Feature.from_formula("dist(emb_a,emb_b)")
+    result = feature.calculate(ctx)
+
+    expected = pd.Series([1.0, 1.0], dtype=np.float64)
+    assert_series_equal(result, expected, atol=1e-6)
