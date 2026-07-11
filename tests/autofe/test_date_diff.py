@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from pandas.testing import assert_series_equal
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.date import (
     DateDiff,
     DateDiffType2,
@@ -11,8 +12,25 @@ from upgini.autofe.date import (
     DateListDiffAggWithinBounds,
     DateListDiffBounded,
     DateListDiffLists,
+    _DATE_DIFF_LISTS_LENGTH_COL,
 )
 from upgini.autofe.utils import pydantic_parse_method
+
+
+def _date_diff_lists_matrix_to_object_series(matrix: np.ndarray, index: pd.Index) -> pd.Series:
+    lengths = matrix[:, _DATE_DIFF_LISTS_LENGTH_COL]
+    values = matrix[:, _DATE_DIFF_LISTS_LENGTH_COL + 1 :]
+    rows: list = []
+    for i, length in enumerate(lengths):
+        if length is None or (isinstance(length, float) and np.isnan(length)):
+            rows.append(None)
+            continue
+        length_i = int(length)
+        if length_i <= 0:
+            rows.append([])
+            continue
+        rows.append(values[i, :length_i].tolist())
+    return pd.Series(rows, index=index, dtype=object)
 
 
 def test_date_diff():
@@ -187,6 +205,12 @@ def test_date_diff_list_bounded():
         pd.Series([None] * len(df), dtype=float),
     )
 
+    operator = DateListDiffBounded(diff_unit="Y", aggregation="nunique", lower_bound=None, upper_bound=18)
+    assert_series_equal(
+        operator.calculate(left=df.date1, right=df.date2).as_series().rename(None),
+        pd.Series([1.0, 1.0, 0.0, 1.0, None, 0.0]),
+    )
+
 
 def test_date_list_diff_bounded_from_formula():
     # Test with both bounds specified
@@ -272,14 +296,19 @@ def test_date_list_diff_lists():
     )
 
     operator = DateListDiffLists()
-    diff_lists = operator.calculate(left=df.date1, right=df.date2).as_series()
+    diff_lists = operator.calculate(left=df.date1, right=df.date2)
+    assert diff_lists.kind.name == "MATRIX"
+    diff_lists = _date_diff_lists_matrix_to_object_series(diff_lists.as_matrix(), df.index)
     assert diff_lists.iloc[0] == [10531.0, 10530.0]
     assert diff_lists.iloc[1] == [10531.0, 10531.0]
     assert diff_lists.iloc[2] == [-365.0]
     assert diff_lists.iloc[3] == []
 
     operator = DateListDiffLists(replace_negative=True)
-    diff_lists = operator.calculate(left=df.date1, right=df.date2).as_series()
+    diff_lists = _date_diff_lists_matrix_to_object_series(
+        operator.calculate(left=df.date1, right=df.date2).as_matrix(),
+        df.index,
+    )
     assert diff_lists.iloc[2] == []
 
 
@@ -309,6 +338,49 @@ def test_date_list_diff_agg_within_bounds():
     assert_series_equal(
         operator.calculate(data=diff_lists).as_series(),
         pd.Series([3.0, 2.0, 0.0, np.nan]),
+    )
+
+
+def test_date_list_diff_agg_within_bounds_matrix():
+    matrix = np.array(
+        [
+            [3.0, 8.0, 20.0, 25.0],
+            [2.0, 19.0, 22.0, np.nan],
+            [0.0, np.nan, np.nan, np.nan],
+            [np.nan, np.nan, np.nan, np.nan],
+        ],
+        dtype=np.float64,
+    )
+    index = pd.RangeIndex(4)
+
+    operator = DateListDiffAggWithinBounds(lower_bound=18, upper_bound=23, aggregation="count")
+    assert_series_equal(
+        operator.calculate(data=OperandValue.from_matrix(matrix, index=index)).as_series(),
+        pd.Series([1.0, 2.0, 0.0, np.nan]),
+    )
+
+    operator = DateListDiffAggWithinBounds(lower_bound=0, upper_bound=18, aggregation="count", normalize=True)
+    assert_series_equal(
+        operator.calculate(data=OperandValue.from_matrix(matrix, index=index)).as_series(),
+        pd.Series([1.0 / 3.0, 0.0, 0.0, np.nan]),
+    )
+
+    operator = DateListDiffAggWithinBounds(lower_bound=None, upper_bound=None, aggregation="nunique", normalize=False)
+    assert_series_equal(
+        operator.calculate(data=OperandValue.from_matrix(matrix, index=index)).as_series(),
+        pd.Series([3.0, 2.0, 0.0, np.nan]),
+    )
+
+    operator = DateListDiffAggWithinBounds(lower_bound=18, upper_bound=23, aggregation="nunique")
+    assert_series_equal(
+        operator.calculate(data=OperandValue.from_matrix(matrix, index=index)).as_series(),
+        pd.Series([1.0, 2.0, 0.0, np.nan]),
+    )
+
+    operator = DateListDiffAggWithinBounds(lower_bound=None, upper_bound=None, aggregation="nunique", normalize=True)
+    assert_series_equal(
+        operator.calculate(data=OperandValue.from_matrix(matrix, index=index)).as_series(),
+        pd.Series([1.0, 2.0 / 2.0, 0.0, np.nan]),
     )
 
 

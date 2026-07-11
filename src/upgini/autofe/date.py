@@ -1,13 +1,13 @@
 import abc
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, NamedTuple, Optional, Union
 
 import numpy as np
 import pandas as pd
 from pandas.core.arrays.timedeltas import TimedeltaArray
 from pydantic import BaseModel, __version__ as pydantic_version
 
-from upgini.autofe.operand import OperandValue
+from upgini.autofe.operand import OperandKind, OperandValue
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator
 from upgini.autofe.utils import bin_index, bin_index_many, bin_index_vectorized, pydantic_validator
 
@@ -116,6 +116,55 @@ class DateDiffType2(PandasOperator, DateDiffMixin):
 
 _ext_aggregations = {"nunique": (lambda x: float(np.unique(x).size), 0), "count": (len, 0)}
 _count_aggregations = ["nunique", "count"]
+_DATE_DIFF_LISTS_LENGTH_COL = 0
+_NS_PER_DAY = np.float64(86400 * 10**9)
+_NS_PER_YEAR = np.float64(365 * 86400 * 10**9)
+_MATRIX_AGGREGATIONS = {
+    "nunique": "_matrix_agg_nunique",
+    "count": "_matrix_agg_count",
+    "sum": "_matrix_agg_sum",
+    "mean": "_matrix_agg_mean",
+    "min": "_matrix_agg_min",
+    "max": "_matrix_agg_max",
+}
+
+
+class _MatrixAggContext(NamedTuple):
+    lengths: np.ndarray
+    masked_values: np.ndarray
+    valid_mask: np.ndarray
+    missing: np.ndarray
+    empty: np.ndarray
+    agg_source: np.ndarray
+    count_source: np.ndarray
+    has_bounds: bool
+    results: np.ndarray
+
+
+def _timedelta_ns_to_diff_unit(delta_ns: np.ndarray, diff_unit: str) -> np.ndarray:
+    if diff_unit == "D":
+        return delta_ns / _NS_PER_DAY
+    if diff_unit == "Y":
+        return (delta_ns / _NS_PER_YEAR).astype(np.int64).astype(np.float64)
+    raise ValueError(f"Unsupported difference unit: {diff_unit}")
+
+
+def _group_cumcount(group_keys: np.ndarray) -> np.ndarray:
+    n = len(group_keys)
+    if n == 0:
+        return np.zeros(0, dtype=np.intp)
+    order = np.argsort(group_keys, kind="stable")
+    sorted_keys = group_keys[order]
+    group_change = np.empty(n, dtype=bool)
+    group_change[0] = True
+    if n > 1:
+        group_change[1:] = sorted_keys[1:] != sorted_keys[:-1]
+    group_ids = np.cumsum(group_change) - 1
+    group_start_idx = np.flatnonzero(group_change)
+    sorted_cumcount = np.arange(n, dtype=np.intp) - group_start_idx[group_ids]
+    cumcount = np.empty(n, dtype=np.intp)
+    cumcount[order] = sorted_cumcount
+    return cumcount
 
 
 def _aggregate_diffs(values: np.ndarray, aggregation: str) -> float:
@@ -163,57 +212,71 @@ class DateListDiffLists(PandasOperator, DateDiffMixin, ParametrizedOperator):
                 return cls(diff_unit=diff_unit)
         return None
 
-    @staticmethod
-    def _non_empty_list_mask(right: pd.Series) -> pd.Series:
-        values = right.to_numpy()
-        mask = np.empty(len(values), dtype=bool)
-        for i, value in enumerate(values):
-            if value is None or (isinstance(value, float) and np.isnan(value)):
-                mask[i] = False
-            elif isinstance(value, (list, tuple, np.ndarray)):
-                mask[i] = len(value) > 0
-            else:
-                mask[i] = False
-        return pd.Series(mask, index=right.index)
+    def _non_empty_list_mask(self, right: pd.Series) -> pd.Series:
+        return right.map(lambda value: isinstance(value, (list, tuple, np.ndarray)) and len(value) > 0).fillna(False)
 
-    def _convert_date_lists(self, lists: pd.Series) -> pd.Series:
-        exploded = lists.explode()
-        converted = pd.to_datetime(exploded, unit=self.right_unit, errors="coerce")
-        return pd.Series(
-            {
-                idx: pd.arrays.DatetimeArray(values.to_numpy())
-                for idx, values in converted.groupby(converted.index, sort=False)
-            }
-        )
+    def _build_matrix(self, left: pd.Series, right: pd.Series) -> np.ndarray:
+        n = len(left)
+        if n == 0:
+            return np.empty((0, 1), dtype=np.float64)
 
-    def _row_diffs(self, left_date, right_dates: pd.arrays.DatetimeArray) -> List[float]:
-        diffs = self._convert_diff_to_unit(left_date - right_dates)
+        left_dates = pd.to_datetime(left, unit=self.left_unit, errors="coerce")
+        date_unit = self.right_unit if self.right_unit is not None else self.left_unit
+        right_mask = self._non_empty_list_mask(right).to_numpy()
+        right_notna = right.notna().to_numpy()
+        left_notna = left_dates.notna().to_numpy()
+
+        compute_mask = left_notna & right_notna & right_mask
+        empty_right = right_notna & ~right_mask
+
+        lengths = np.full(n, np.nan, dtype=np.float64)
+        lengths[empty_right] = 0.0
+
+        compute_idx = np.flatnonzero(compute_mask)
+        if len(compute_idx) == 0:
+            return lengths.reshape(n, 1)
+
+        exploded = right.iloc[compute_idx].explode()
+        row_indices_arr = right.index.get_indexer(exploded.index).astype(np.intp)
+        raw_dates = exploded.to_numpy()
+        pos_in_row_arr = _group_cumcount(row_indices_arr)
+        converted = pd.to_datetime(pd.Series(raw_dates), unit=date_unit, errors="coerce")
+        left_ns = left_dates.iloc[row_indices_arr].astype(np.int64).to_numpy()
+        right_ns = converted.astype(np.int64).to_numpy()
+        diffs = np.full(len(row_indices_arr), np.nan, dtype=np.float64)
+        valid_ts = converted.notna().to_numpy()
+        if valid_ts.any():
+            diffs[valid_ts] = _timedelta_ns_to_diff_unit(left_ns[valid_ts] - right_ns[valid_ts], self.diff_unit)
+
         if self.replace_negative:
-            diffs = diffs[diffs > 0]
-        return np.atleast_1d(np.asarray(diffs, dtype=np.float64)).tolist()
+            keep = diffs > 0
+            row_indices_arr = row_indices_arr[keep]
+            diffs = diffs[keep]
+            lengths[compute_mask] = 0.0
+            if len(row_indices_arr):
+                pos_in_row_arr = _group_cumcount(row_indices_arr)
+                row_lengths = np.bincount(row_indices_arr, minlength=n).astype(np.float64)
+                positive_rows = np.flatnonzero(row_lengths > 0)
+                lengths[positive_rows] = row_lengths[positive_rows]
+        else:
+            row_lengths = np.bincount(row_indices_arr, minlength=n).astype(np.float64)
+            lengths[compute_mask] = row_lengths[compute_mask]
 
-    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        finite_lengths = lengths[np.isfinite(lengths)]
+        k_max = int(finite_lengths.max()) if finite_lengths.size else 0
+        matrix = np.full((n, 1 + k_max), np.nan, dtype=np.float64)
+        matrix[:, _DATE_DIFF_LISTS_LENGTH_COL] = lengths
+        if k_max > 0 and len(row_indices_arr):
+            matrix[row_indices_arr, pos_in_row_arr + 1] = diffs
+        return matrix
+
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> np.ndarray:
         left = left.as_series()
         right = right.as_series()
         if left.isna().all() or right.isna().all():
-            return pd.Series([None] * len(left), index=left.index, dtype=object)
+            return np.full((len(left), 1), np.nan, dtype=np.float64)
 
-        left = self._convert_to_date(left, self.left_unit)
-        right_mask = self._non_empty_list_mask(right)
-        mask = left.notna() & right.notna() & right_mask
-
-        results = pd.Series([None] * len(left), index=left.index, dtype=object)
-        if not mask.any():
-            return results
-
-        masked_left = left[mask]
-        converted_lists = self._convert_date_lists(right[mask])
-        for idx, left_date in masked_left.items():
-            results.loc[idx] = self._row_diffs(left_date, converted_lists[idx])
-        empty_right = right.notna() & ~right_mask
-        for idx in right.index[empty_right]:
-            results.at[idx] = []
-        return results
+        return self._build_matrix(left, right)
 
 
 class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
@@ -266,21 +329,94 @@ class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
             normalize=normalize,
         )
 
-    def _uses_unbounded_aggregation(self) -> bool:
-        return (
-            self.lower_bound is None
-            and self.upper_bound is None
-            and not self.normalize
-        )
+    def _masked_values(self, matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        lengths = matrix[:, _DATE_DIFF_LISTS_LENGTH_COL]
+        values = matrix[:, _DATE_DIFF_LISTS_LENGTH_COL + 1 :]
+        missing = np.isnan(lengths)
+        empty = (~missing) & (lengths == 0)
+        if values.shape[1] == 0:
+            valid_mask = np.zeros((len(lengths), 0), dtype=bool)
+        else:
+            valid_mask = np.arange(values.shape[1])[None, :] < lengths[:, None]
+        masked_values = np.where(valid_mask, values, np.nan)
+        return lengths, masked_values, valid_mask, missing, empty
 
-    def _calculate_unary_nunique(self, data: pd.Series) -> pd.Series:
-        results = np.full(len(data), np.nan, dtype=np.float64)
-        for i, diffs in enumerate(data.to_numpy()):
-            if diffs is None or (isinstance(diffs, float) and np.isnan(diffs)):
-                continue
-            values = np.asarray(diffs, dtype=np.float64)
-            results[i] = len(np.unique(values)) if values.size > 0 else 0.0
-        return pd.Series(results, index=data.index, dtype=np.float64)
+    def _matrix_agg_nunique(self, ctx: _MatrixAggContext) -> None:
+        ctx.results[ctx.empty] = 0.0
+        active = ~ctx.missing & ~ctx.empty
+        if ctx.has_bounds:
+            select_mask = ctx.count_source & active[:, None]
+        else:
+            select_mask = ctx.valid_mask & active[:, None]
+        rows, _ = np.nonzero(select_mask)
+        ctx.results[active] = 0.0
+        if rows.size:
+            vals = ctx.masked_values[select_mask]
+            counts = pd.Series(vals).groupby(rows, sort=False).nunique(dropna=False)
+            ctx.results[counts.index.to_numpy(dtype=np.intp)] = counts.to_numpy(dtype=np.float64)
+
+    def _matrix_agg_count(self, ctx: _MatrixAggContext) -> None:
+        ctx.results[~ctx.missing] = ctx.count_source[~ctx.missing].sum(axis=1).astype(np.float64)
+
+    def _matrix_agg_sum(self, ctx: _MatrixAggContext) -> None:
+        agg_rows = ~ctx.missing & ~ctx.empty
+        if agg_rows.any():
+            with np.errstate(all="ignore"):
+                ctx.results[agg_rows] = np.nansum(ctx.agg_source[agg_rows], axis=1)
+
+    def _matrix_agg_nanaxis(self, ctx: _MatrixAggContext, reducer) -> None:
+        agg_rows = ~ctx.missing & ~ctx.empty
+        if not agg_rows.any():
+            return
+        has_finite = np.any(np.isfinite(ctx.agg_source[agg_rows]), axis=1)
+        finite_rows = np.flatnonzero(agg_rows)[has_finite]
+        with np.errstate(all="ignore"):
+            ctx.results[finite_rows] = reducer(ctx.agg_source[finite_rows], axis=1)
+
+    def _matrix_agg_mean(self, ctx: _MatrixAggContext) -> None:
+        self._matrix_agg_nanaxis(ctx, np.nanmean)
+
+    def _matrix_agg_min(self, ctx: _MatrixAggContext) -> None:
+        self._matrix_agg_nanaxis(ctx, np.nanmin)
+
+    def _matrix_agg_max(self, ctx: _MatrixAggContext) -> None:
+        self._matrix_agg_nanaxis(ctx, np.nanmax)
+
+    def _calculate_unary_matrix(self, matrix: np.ndarray, index: pd.Index) -> pd.Series:
+        lengths, masked_values, valid_mask, missing, empty = self._masked_values(matrix)
+        results = np.full(len(lengths), np.nan, dtype=np.float64)
+        has_bounds = self.lower_bound is not None or self.upper_bound is not None
+
+        if has_bounds:
+            lower = self.lower_bound if self.lower_bound is not None else -np.inf
+            upper = self.upper_bound if self.upper_bound is not None else np.inf
+            in_bounds = (masked_values >= lower) & (masked_values < upper)
+            agg_source = np.where(in_bounds & valid_mask, masked_values, np.nan)
+            count_source = in_bounds & valid_mask
+        else:
+            agg_source = masked_values
+            count_source = valid_mask
+
+        ctx = _MatrixAggContext(
+            lengths=lengths,
+            masked_values=masked_values,
+            valid_mask=valid_mask,
+            missing=missing,
+            empty=empty,
+            agg_source=agg_source,
+            count_source=count_source,
+            has_bounds=has_bounds,
+            results=results,
+        )
+        method_name = _MATRIX_AGGREGATIONS.get(self.aggregation)
+        if method_name is None:
+            raise ValueError(f"Unsupported aggregation: {self.aggregation}")
+        getattr(self, method_name)(ctx)
+
+        if self.normalize:
+            normalize_mask = ~missing & ~empty & (lengths > 0)
+            results[normalize_mask] = results[normalize_mask] / lengths[normalize_mask]
+        return pd.Series(results, index=index, dtype=np.float64)
 
     def _aggregate_row(self, diffs) -> float:
         if diffs is None or (isinstance(diffs, float) and np.isnan(diffs)):
@@ -298,10 +434,10 @@ class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
         return agg_res
 
     def calculate_unary(self, data: OperandValue) -> pd.Series:
-        data = data.as_series()
-        if self.aggregation == "nunique" and self._uses_unbounded_aggregation():
-            return self._calculate_unary_nunique(data)
+        if data.kind == OperandKind.MATRIX:
+            return self._calculate_unary_matrix(data.as_matrix(), data.index)
 
+        data = data.as_series()
         results = np.empty(len(data), dtype=np.float64)
         results[:] = np.nan
         for i, diffs in enumerate(data.to_numpy()):
@@ -361,7 +497,7 @@ class DateListDiff(PandasOperator, DateDiffMixin, ParametrizedOperator):
         if left.isna().all() or right.isna().all():
             return pd.Series([None] * len(left), index=left.index, dtype=np.float64)
 
-        right_mask = DateListDiffLists._non_empty_list_mask(right)
+        right_mask = self._lists_op()._non_empty_list_mask(right)
         diff_lists = self._lists_op().calculate(left=left, right=right)
         result = self._agg_op().calculate(data=diff_lists).as_series()
         if self.aggregation in _count_aggregations:
