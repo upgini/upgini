@@ -114,7 +114,7 @@ class DateDiffType2(PandasOperator, DateDiffMixin):
         return diff
 
 
-_ext_aggregations = {"nunique": (lambda x: len(np.unique(x)), 0), "count": (len, 0)}
+_ext_aggregations = {"nunique": (lambda x: float(np.unique(x).size), 0), "count": (len, 0)}
 _count_aggregations = ["nunique", "count"]
 
 
@@ -210,6 +210,9 @@ class DateListDiffLists(PandasOperator, DateDiffMixin, ParametrizedOperator):
         converted_lists = self._convert_date_lists(right[mask])
         for idx, left_date in masked_left.items():
             results.loc[idx] = self._row_diffs(left_date, converted_lists[idx])
+        empty_right = right.notna() & ~right_mask
+        for idx in right.index[empty_right]:
+            results.at[idx] = []
         return results
 
 
@@ -263,6 +266,22 @@ class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
             normalize=normalize,
         )
 
+    def _uses_unbounded_aggregation(self) -> bool:
+        return (
+            self.lower_bound is None
+            and self.upper_bound is None
+            and not self.normalize
+        )
+
+    def _calculate_unary_nunique(self, data: pd.Series) -> pd.Series:
+        results = np.full(len(data), np.nan, dtype=np.float64)
+        for i, diffs in enumerate(data.to_numpy()):
+            if diffs is None or (isinstance(diffs, float) and np.isnan(diffs)):
+                continue
+            values = np.asarray(diffs, dtype=np.float64)
+            results[i] = len(np.unique(values)) if values.size > 0 else 0.0
+        return pd.Series(results, index=data.index, dtype=np.float64)
+
     def _aggregate_row(self, diffs) -> float:
         if diffs is None or (isinstance(diffs, float) and np.isnan(diffs)):
             return np.nan
@@ -280,6 +299,9 @@ class DateListDiffAggWithinBounds(PandasOperator, ParametrizedOperator):
 
     def calculate_unary(self, data: OperandValue) -> pd.Series:
         data = data.as_series()
+        if self.aggregation == "nunique" and self._uses_unbounded_aggregation():
+            return self._calculate_unary_nunique(data)
+
         results = np.empty(len(data), dtype=np.float64)
         results[:] = np.nan
         for i, diffs in enumerate(data.to_numpy()):

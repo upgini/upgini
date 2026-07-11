@@ -29,17 +29,17 @@ def test_date_diff():
         columns=["date1", "date2", "date3"],
     )
 
-    operand = DateDiff(right_unit="s")
+    operator = DateDiff(right_unit="s")
     expected_result = pd.Series([10531, -365.0, 20454, None, None, None, None], dtype=float)
-    assert_series_equal(operand.calculate(left=df.date1, right=df.date2).as_series(), expected_result)
+    assert_series_equal(operator.calculate(left=df.date1, right=df.date2).as_series(), expected_result)
 
-    operand = DateDiff(right_unit="s", replace_negative=True)
+    operator = DateDiff(right_unit="s", replace_negative=True)
     expected_result = pd.Series([10531, None, 20454, None, None, None, None], dtype=float)
-    assert_series_equal(operand.calculate(left=df.date1, right=df.date2).as_series(), expected_result)
+    assert_series_equal(operator.calculate(left=df.date1, right=df.date2).as_series(), expected_result)
 
-    operand = DateDiff(right_unit="s")
+    operator = DateDiff(right_unit="s")
     expected_result = pd.Series([None, None, None, None, None, None, None], dtype=float)
-    assert_series_equal(operand.calculate(left=df.date1, right=df.date3).as_series(), expected_result)
+    assert_series_equal(operator.calculate(left=df.date1, right=df.date3).as_series(), expected_result)
 
 
 def test_date_diff_type2():
@@ -55,13 +55,13 @@ def test_date_diff_type2():
         columns=["date1", "date2", "date3"],
     )
 
-    operand = DateDiffType2(left_unit="s")
+    operator = DateDiffType2(left_unit="s")
     expected_result = pd.Series([61.0, 182.0, None, None, None, None])
-    actual = operand.calculate(left=df.date1, right=df.date2).as_series()
+    actual = operator.calculate(left=df.date1, right=df.date2).as_series()
     assert_series_equal(actual, expected_result)
 
     expected_result = pd.Series([None, None, None, None, None, None], dtype=float)
-    actual = operand.calculate(left=df.date1, right=df.date3).as_series()
+    actual = operator.calculate(left=df.date1, right=df.date3).as_series()
     assert_series_equal(actual, expected_result)
 
 
@@ -78,9 +78,9 @@ def test_date_diff_list():
     )
 
     def check(aggregation, expected_formula, expected_values):
-        operand = DateListDiff(aggregation=aggregation)
-        assert operand.to_formula() == expected_formula
-        assert_series_equal(operand.calculate(left=df.date1, right=df.date2).as_series().rename(None), expected_values)
+        operator = DateListDiff(aggregation=aggregation)
+        assert operator.to_formula() == expected_formula
+        assert_series_equal(operator.calculate(left=df.date1, right=df.date2).as_series().rename(None), expected_values)
 
     check(
         aggregation="min",
@@ -103,26 +103,29 @@ def test_date_diff_list():
         expected_values=pd.Series([2.0, 1.0, 1.0, 1.0, 0.0]),
     )
 
-    operand = DateListDiff(aggregation="mean")
+    operator = DateListDiff(aggregation="mean")
     df1 = df.loc[[2], :]
     assert_series_equal(
-        operand.calculate(left=df1.date1, right=df1.date2).as_series().rename(None).reset_index(drop=True), pd.Series([-365.0])
+        operator.calculate(left=df1.date1, right=df1.date2).as_series().rename(None).reset_index(drop=True),
+        pd.Series([-365.0]),
     )
 
-    operand = DateListDiff(aggregation="nunique")
+    operator = DateListDiff(aggregation="nunique")
     df1 = df.loc[len(df) - 1 :, :]
     assert_series_equal(
-        operand.calculate(left=df1.date1, right=df1.date2).as_series().rename(None).reset_index(drop=True), pd.Series([0.0])
+        operator.calculate(left=df1.date1, right=df1.date2).as_series().rename(None).reset_index(drop=True),
+        pd.Series([0.0]),
     )
 
-    operand = DateListDiff(aggregation="min", replace_negative=True)
+    operator = DateListDiff(aggregation="min", replace_negative=True)
     assert_series_equal(
-        operand.calculate(left=df.date1, right=df.date2).as_series().rename(None), pd.Series([10530, 10531, None, None, None])
+        operator.calculate(left=df.date1, right=df.date2).as_series().rename(None),
+        pd.Series([10530, 10531, None, None, None]),
     )
 
-    operand = DateListDiff(aggregation="min")
+    operator = DateListDiff(aggregation="min")
     assert_series_equal(
-        operand.calculate(left=df.date1, right=df.date3).as_series().rename(None),
+        operator.calculate(left=df.date1, right=df.date3).as_series().rename(None),
         pd.Series([None, None, None, None, None], dtype=float),
     )
 
@@ -153,11 +156,11 @@ def test_date_diff_list_bounded():
     )
 
     def check_num_by_years(lower_bound, upper_bound, expected_formula, expected_values, normalize=False):
-        operand = DateListDiffBounded(
+        operator = DateListDiffBounded(
             diff_unit="Y", aggregation="count", lower_bound=lower_bound, upper_bound=upper_bound, normalize=normalize
         )
-        assert operand.to_formula() == expected_formula
-        assert_series_equal(operand.calculate(left=df.date1, right=df.date2).as_series().rename(None), expected_values)
+        assert operator.to_formula() == expected_formula
+        assert_series_equal(operator.calculate(left=df.date1, right=df.date2).as_series().rename(None), expected_values)
 
     check_num_by_years(0, 18, "date_diff_Y_0_18_count", pd.Series([2.0, 1.0, 0.0, 0.0, None, 0.0]))
     check_num_by_years(18, 23, "date_diff_Y_18_23_count", pd.Series([1.0, 2.0, 2.0, 0.0, None, 0.0]))
@@ -178,9 +181,10 @@ def test_date_diff_list_bounded():
         normalize=True,
     )
 
-    operand = DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=0, upper_bound=18)
+    operator = DateListDiffBounded(diff_unit="Y", aggregation="count", lower_bound=0, upper_bound=18)
     assert_series_equal(
-        operand.calculate(left=df.date1, right=df.date3).as_series().rename(None), pd.Series([None] * len(df), dtype=float)
+        operator.calculate(left=df.date1, right=df.date3).as_series().rename(None),
+        pd.Series([None] * len(df), dtype=float),
     )
 
 
@@ -267,15 +271,15 @@ def test_date_list_diff_lists():
         columns=["date1", "date2", "date3"],
     )
 
-    operand = DateListDiffLists()
-    diff_lists = operand.calculate(left=df.date1, right=df.date2).as_series()
+    operator = DateListDiffLists()
+    diff_lists = operator.calculate(left=df.date1, right=df.date2).as_series()
     assert diff_lists.iloc[0] == [10531.0, 10530.0]
     assert diff_lists.iloc[1] == [10531.0, 10531.0]
     assert diff_lists.iloc[2] == [-365.0]
-    assert diff_lists.iloc[3] is None
+    assert diff_lists.iloc[3] == []
 
-    operand = DateListDiffLists(replace_negative=True)
-    diff_lists = operand.calculate(left=df.date1, right=df.date2).as_series()
+    operator = DateListDiffLists(replace_negative=True)
+    diff_lists = operator.calculate(left=df.date1, right=df.date2).as_series()
     assert diff_lists.iloc[2] == []
 
 
@@ -289,18 +293,22 @@ def test_date_list_diff_agg_within_bounds():
         ]
     )
 
-    operand = DateListDiffAggWithinBounds(lower_bound=18, upper_bound=23, aggregation="count")
+    operator = DateListDiffAggWithinBounds(lower_bound=18, upper_bound=23, aggregation="count")
     assert_series_equal(
-        operand.calculate(data=diff_lists).as_series(),
+        operator.calculate(data=diff_lists).as_series(),
         pd.Series([1.0, 2.0, 0.0, np.nan]),
     )
 
-    operand = DateListDiffAggWithinBounds(
-        lower_bound=0, upper_bound=18, aggregation="count", normalize=True
-    )
+    operator = DateListDiffAggWithinBounds(lower_bound=0, upper_bound=18, aggregation="count", normalize=True)
     assert_series_equal(
-        operand.calculate(data=diff_lists).as_series(),
+        operator.calculate(data=diff_lists).as_series(),
         pd.Series([1.0 / 3.0, 0.0, 0.0, np.nan]),
+    )
+
+    operator = DateListDiffAggWithinBounds(lower_bound=None, upper_bound=None, aggregation="nunique", normalize=False)
+    assert_series_equal(
+        operator.calculate(data=diff_lists).as_series(),
+        pd.Series([3.0, 2.0, 0.0, np.nan]),
     )
 
 
