@@ -1,10 +1,8 @@
 import itertools
 import logging
-import operator
+from collections import Counter
 from functools import reduce
 from typing import Callable, Dict, Optional
-
-import more_itertools
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
@@ -260,12 +258,7 @@ def _get_binned_data(
         keys = _get_unique_not_nan_values_list_from_series([reference_data] + current_data)
         ref_feature_dict = {**dict.fromkeys(keys, 0), **dict(reference_data.value_counts())}
         current_feature_dict = [{**dict.fromkeys(keys, 0), **dict(d.value_counts())} for d in current_data]
-        key_dict = more_itertools.map_reduce(
-            itertools.chain(ref_feature_dict.items(), *(d.items() for d in current_feature_dict)),
-            keyfunc=operator.itemgetter(0),
-            valuefunc=operator.itemgetter(1),
-            reducefunc=sum,
-        )
+        key_dict = sum((Counter(d) for d in [ref_feature_dict, *current_feature_dict]), Counter())
         key_dict = pd.Series(key_dict)
         keys = key_dict.index[key_dict.rank(pct=True) >= cat_top_pct]
         reference_counts = np.array([ref_feature_dict[key] for key in keys])

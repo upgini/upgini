@@ -443,5 +443,4 @@ def _read_parquet(file_content: bytes, file_name: str = "features.parquet"):
         tmp_file_name = f"{tmp_dir}/{file_name}"
         with open(tmp_file_name, "wb") as gzip_file:
             gzip_file.write(file_content)
-        # Note: MLB writes files using pyarrow, so reading with fastparquet may cause errors.
         return pd.read_parquet(tmp_file_name, engine="pyarrow")
