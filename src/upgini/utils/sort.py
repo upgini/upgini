@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
-from psutil import cpu_count
 from scipy.stats import skew, spearmanr
 
 from upgini.metadata import ModelTaskType, SearchKey
 from upgini.utils import mstats
+from upgini.utils.cpu_utils import default_n_jobs
 
 
 def sort_columns(
@@ -132,7 +132,7 @@ def calculate_spearman_corr_with_target(
     cols2calc = np.where([c.size > 0 and not (c == c[0]).all() for c in X.T])[0]
 
     if omit_nan:
-        results = Parallel(n_jobs=n_jobs or cpu_count(logical=False))(
+        results = Parallel(n_jobs=n_jobs or default_n_jobs())(
             delayed(mstats.spearmanr)(
                 X[:, i],
                 y,

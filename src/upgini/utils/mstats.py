@@ -5,7 +5,7 @@ import numpy as np
 import numpy.ma as ma
 from joblib import Parallel, delayed
 from numpy import ndarray
-from psutil import cpu_count
+from upgini.utils.cpu_utils import default_n_jobs
 
 np.seterr(divide="ignore")
 
@@ -171,9 +171,8 @@ def spearmanr(
     if n_vars == 2:
         return _spearmanr_2cols(x)
     else:
-        max_cpu_cores = cpu_count(logical=False)
         with np.errstate(divide="ignore"):
-            results = Parallel(n_jobs=max_cpu_cores)(
+            results = Parallel(n_jobs=default_n_jobs())(
                 delayed(_spearmanr_2cols)(x[:, [var1, var2]])
                 for var1 in range(n_vars - 1)
                 for var2 in range(var1 + 1, n_vars)
