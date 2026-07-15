@@ -160,6 +160,8 @@ Run [Simple sales prediction for retail stores](https://github.com/upgini/upgini
 ```python
 %pip install upgini
 ```
+
+In Colab, it is recommended to **restart the runtime after install** before importing upgini. Otherwise pyarrow may fail with a binary incompatibility error.
 <details>
 	<summary>
 	🐳 <b>Docker-way</b>

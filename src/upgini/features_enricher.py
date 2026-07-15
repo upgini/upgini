@@ -105,6 +105,7 @@ from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.hash_utils import file_hash, hash_input
+from upgini.utils.pyarrow_utils import import_pyarrow_modules
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
@@ -508,6 +509,7 @@ class FeaturesEnricher(TransformerMixin):
         stability_agg_func: str, optional (default="max")
             Function to aggregate stability values. Can be "max", "min", "mean".
         """
+        self._ensure_pyarrow_available()
         trace_id = self._get_trace_id()
         if self.print_trace_id:
             print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
@@ -793,6 +795,7 @@ class FeaturesEnricher(TransformerMixin):
         X_new: pandas.DataFrame of shape (n_samples, n_features_new)
             Transformed dataframe, enriched with valuable features.
         """
+        self._ensure_pyarrow_available()
         self.warning_counter.reset()
         search_progress = SearchProgress(0.0, ProgressStage.START_TRANSFORM)
         if progress_callback is not None:
@@ -922,6 +925,7 @@ class FeaturesEnricher(TransformerMixin):
             Dataframe with metrics calculated on train and validation datasets.
         """
 
+        self._ensure_pyarrow_available()
         trace_id = self._get_trace_id()
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
@@ -1319,6 +1323,10 @@ class FeaturesEnricher(TransformerMixin):
                     raise e
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
+
+    @staticmethod
+    def _ensure_pyarrow_available() -> None:
+        import_pyarrow_modules()
 
     def _get_trace_id(self):
         if get_mdc_fields().get("correlation_id") is not None:
