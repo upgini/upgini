@@ -52,7 +52,7 @@ dependencies = [
     "jarowinkler>=2.0.0",
     "levenshtein>=0.25.1",
     "category-encoders>=2.8.1",
-    "pyarrow==23.0.1",
+    "pyarrow>=23.0.1,<24",
 ]
 
 [project.urls]
