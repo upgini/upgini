@@ -1630,12 +1630,17 @@ class FeaturesEnricher(TransformerMixin):
                 pass
 
     def _check_train_and_eval_target_distribution(self, y, eval_set_dict):
-        uneven_distribution = False
-        for eval_set in eval_set_dict.values():
-            _, eval_y, _, _ = eval_set
-            res = ks_2samp(y, eval_y)
-            if res[1] < 0.05:
-                uneven_distribution = True
+        y_series = pd.Series(y)
+        if is_numeric_dtype(y_series):
+            to_sample = lambda s: np.asarray(s, dtype=float)
+        else:
+            categories = pd.Categorical(y_series).categories
+            to_sample = lambda s: pd.Categorical(s, categories=categories).codes.astype(float)
+
+        y_sample = to_sample(y_series)
+        uneven_distribution = any(
+            ks_2samp(y_sample, to_sample(eval_y))[1] < 0.05 for _, eval_y, _, _ in eval_set_dict.values()
+        )
         if uneven_distribution:
             msg = self.bundle.get("uneven_eval_target_distribution")
             print(msg)
