@@ -221,7 +221,7 @@ class DateListDiffLists(PandasOperator, DateDiffMixin, ParametrizedOperator):
             return np.empty((0, 1), dtype=np.float64)
 
         left_dates = pd.to_datetime(left, unit=self.left_unit, errors="coerce")
-        date_unit = self.right_unit if self.right_unit is not None else self.left_unit
+        date_unit = self.right_unit
         right_mask = self._non_empty_list_mask(right).to_numpy()
         right_notna = right.notna().to_numpy()
         left_notna = left_dates.notna().to_numpy()
