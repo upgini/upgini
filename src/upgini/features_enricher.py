@@ -105,6 +105,7 @@ from upgini.utils.feature_info import FeatureInfo, _round_shap_value
 from upgini.utils.features_validator import FeaturesValidator
 from upgini.utils.format import Format
 from upgini.utils.hash_utils import file_hash, hash_input
+from upgini.utils.pyarrow_utils import import_pyarrow_modules
 from upgini.utils.ip_utils import IpSearchKeyConverter
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
@@ -508,6 +509,7 @@ class FeaturesEnricher(TransformerMixin):
         stability_agg_func: str, optional (default="max")
             Function to aggregate stability values. Can be "max", "min", "mean".
         """
+        self._ensure_pyarrow_available()
         trace_id = self._get_trace_id()
         if self.print_trace_id:
             print(f"https://app.datadoghq.eu/logs?query=%40correlation_id%3A{trace_id}")
@@ -793,6 +795,7 @@ class FeaturesEnricher(TransformerMixin):
         X_new: pandas.DataFrame of shape (n_samples, n_features_new)
             Transformed dataframe, enriched with valuable features.
         """
+        self._ensure_pyarrow_available()
         self.warning_counter.reset()
         search_progress = SearchProgress(0.0, ProgressStage.START_TRANSFORM)
         if progress_callback is not None:
@@ -922,6 +925,7 @@ class FeaturesEnricher(TransformerMixin):
             Dataframe with metrics calculated on train and validation datasets.
         """
 
+        self._ensure_pyarrow_available()
         trace_id = self._get_trace_id()
         start_time = time.time()
         search_id = self.search_id or (self._search_task.search_task_id if self._search_task is not None else None)
@@ -1320,6 +1324,10 @@ class FeaturesEnricher(TransformerMixin):
             finally:
                 self.logger.info(f"Calculating metrics elapsed time: {time.time() - start_time}")
 
+    @staticmethod
+    def _ensure_pyarrow_available() -> None:
+        import_pyarrow_modules()
+
     def _get_trace_id(self):
         if get_mdc_fields().get("correlation_id") is not None:
             return get_mdc_fields().get("correlation_id")
@@ -1630,12 +1638,17 @@ class FeaturesEnricher(TransformerMixin):
                 pass
 
     def _check_train_and_eval_target_distribution(self, y, eval_set_dict):
-        uneven_distribution = False
-        for eval_set in eval_set_dict.values():
-            _, eval_y, _, _ = eval_set
-            res = ks_2samp(y, eval_y)
-            if res[1] < 0.05:
-                uneven_distribution = True
+        y_series = pd.Series(y)
+        if is_numeric_dtype(y_series):
+            to_sample = lambda s: np.asarray(s, dtype=float)
+        else:
+            categories = pd.Categorical(y_series).categories
+            to_sample = lambda s: pd.Categorical(s, categories=categories).codes.astype(float)
+
+        y_sample = to_sample(y_series)
+        uneven_distribution = any(
+            ks_2samp(y_sample, to_sample(eval_y))[1] < 0.05 for _, eval_y, _, _ in eval_set_dict.values()
+        )
         if uneven_distribution:
             msg = self.bundle.get("uneven_eval_target_distribution")
             print(msg)

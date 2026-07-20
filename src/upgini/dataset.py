@@ -7,8 +7,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 from pandas.api.types import (
     is_float_dtype,
     is_integer_dtype,
@@ -492,6 +490,8 @@ class Dataset:
             parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
 
             # calculate deterministic digest for any environment
+            import pyarrow as pa
+            import pyarrow.parquet as pq
 
             table = pa.Table.from_pandas(df_without_fake_date, preserve_index=False)
             table = table.replace_schema_metadata({})  # remove all metadata
@@ -745,7 +745,7 @@ class Dataset:
 
     def prepare_uploading_file(self, base_path: str) -> str:
         parquet_file_path = f"{base_path}/{self.dataset_name}.parquet"
-        self.data.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="fastparquet")
+        self.data.to_parquet(path=parquet_file_path, index=False, compression="gzip", engine="pyarrow")
         uploading_file_size = Path(parquet_file_path).stat().st_size
         self.logger.info(f"Size of prepared uploading file: {uploading_file_size}. {len(self.data)} rows")
         if uploading_file_size > self.MAX_UPLOADING_FILE_SIZE:
