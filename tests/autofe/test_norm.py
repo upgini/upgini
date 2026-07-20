@@ -47,7 +47,7 @@ def test_norm():
     for c in data.columns:
         operand = Norm()
         operand_by_column[c] = operand
-        assert_series_equal(operand.calculate_unary(data[c]), expected_result[c])
+        assert_series_equal(operand.calculate(data=data[c]).as_series(), expected_result[c])
 
     transform_data = pd.DataFrame(
         {
@@ -67,7 +67,7 @@ def test_norm():
 
     for c in transform_data.columns:
         operand = operand_by_column[c]
-        assert_series_equal(operand.calculate_unary(transform_data[c]), expected_transform_result[c])
+        assert_series_equal(operand.calculate(data=transform_data[c]).as_series(), expected_transform_result[c])
 
 
 def test_deserialization_norm():

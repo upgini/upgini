@@ -3,8 +3,9 @@ Utility functions for autofe module.
 """
 
 import functools
-from typing import Callable
+from typing import Callable, Union
 
+import numpy as np
 from pydantic import BaseModel
 
 
@@ -111,3 +112,44 @@ def pydantic_copy_method(obj):
         return obj.model_copy
     else:
         return obj.copy
+
+
+def bin_index(value: Union[float, int, None], bounds) -> float:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return np.nan
+    bounds_arr = np.asarray(bounds, dtype=np.float64)
+    if bounds_arr.size == 0 or value < bounds_arr[0]:
+        return np.nan
+    return np.searchsorted(bounds_arr, value, side="right")
+
+
+def bin_index_vectorized(values: np.ndarray, bounds: np.ndarray) -> np.ndarray:
+    n = len(values)
+    result = np.full(n, np.nan)
+    bounds_arr = np.asarray(bounds, dtype=np.float64)
+    if bounds_arr.size == 0:
+        return result
+    valid = ~np.isnan(values)
+    if not valid.any():
+        return result
+    valid_values = values[valid]
+    idx = np.searchsorted(bounds_arr, valid_values, side="right").astype(np.float64)
+    below = valid_values < bounds_arr[0]
+    if below.any():
+        idx[below] = np.nan
+    result[valid] = idx
+    return result
+
+
+def bin_index_many(values: np.ndarray, bounds_2d: np.ndarray) -> np.ndarray:
+    n = len(values)
+    result = np.full(n, np.nan)
+    for i in range(n):
+        v = values[i]
+        if np.isnan(v):
+            continue
+        bounds_row = bounds_2d[i]
+        if bounds_row.size == 0 or v < bounds_row[0]:
+            continue
+        result[i] = np.searchsorted(bounds_row, v, side="right")
+    return result

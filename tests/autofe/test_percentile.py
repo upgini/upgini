@@ -31,9 +31,9 @@ def test_date_percentile():
     )
 
     expected_values = pd.Series([None, 1, 100, 51, 100, None], dtype="Int64").astype("category")
-    assert_series_equal(operand.calculate(left=data.date, right=data.feature), expected_values)
+    assert_series_equal(operand.calculate(left=data.date, right=data.feature).as_series(), expected_values)
     assert_series_equal(
-        operand.calculate(left=data.date, right=data.feature2),
+        operand.calculate(left=data.date, right=data.feature2).as_series(),
         pd.Series([None] * len(data), dtype="Int64").astype("category"),
     )
 

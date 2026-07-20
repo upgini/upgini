@@ -2,6 +2,7 @@ from typing import Optional
 
 import pandas as pd
 
+from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator, ParametrizedOperator, VectorizableMixin
 
 
@@ -27,7 +28,9 @@ class GroupByThenAgg(
             return None
         return cls(agg=agg)
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         temp = left.groupby(right).agg(self.agg.lower())
         return self._loc(right, temp)
 
@@ -46,7 +49,9 @@ class GroupByThenRank(PandasOperator, VectorizableMixin):
     output_type: Optional[str] = "float"
     is_distribution_dependent: bool = True
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         temp = pd.DataFrame(left[~right.isna()].groupby(right).rank(ascending=True, pct=True)).reset_index()
         return temp.merge(pd.DataFrame(right).reset_index(), how="right", on=["index"])[left.name]
 
@@ -66,7 +71,9 @@ class GroupByThenNUnique(PandasOperator, VectorizableMixin):
     is_distribution_dependent: bool = True
     input_type: Optional[str] = "discrete"
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         nunique = left.groupby(right).nunique()
         return self._loc(right, nunique)
 
@@ -85,7 +92,9 @@ class GroupByThenFreq(PandasOperator):
     is_distribution_dependent: bool = True
     input_type: Optional[str] = "discrete"
 
-    def calculate_binary(self, left: pd.Series, right: pd.Series) -> pd.Series:
+    def calculate_binary(self, left: OperandValue, right: OperandValue) -> pd.Series:
+        left = left.as_series()
+        right = right.as_series()
         def _f(x):
             value_counts = x.value_counts(normalize=True)
             return self._loc(x, value_counts)
