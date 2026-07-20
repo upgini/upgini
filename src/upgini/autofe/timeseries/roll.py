@@ -3,14 +3,15 @@ from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
+from upgini.autofe.timeseries.numpy_kernels import ROLL_AGGS, apply_grouped_kernel, roll_values
 from upgini.autofe.utils import pydantic_validator
 
-# Roll aggregation functions
+# Names kept for compatibility; computation uses numpy ROLL_AGGS.
 roll_aggregations = {
-    "norm_mean": lambda x: x[-1] / x.mean(),
-    "q25": lambda x: x.quantile(0.25),
-    "q75": lambda x: x.quantile(0.75),
-    "iqr": lambda x: x.quantile(0.75) - x.quantile(0.25),
+    "norm_mean": ROLL_AGGS["norm_mean"],
+    "q25": ROLL_AGGS["q25"],
+    "q75": ROLL_AGGS["q75"],
+    "iqr": ROLL_AGGS["iqr"],
 }
 
 
@@ -82,6 +83,12 @@ class Roll(TimeSeriesBase, ParametrizedOperator):
         return res
 
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.rolling(f"{self.window_size}{self.window_unit}", min_periods=1).agg(
-            roll_aggregations.get(self.aggregation, self.aggregation)
+        window_size = self.window_size
+        window_unit = self.window_unit
+        aggregation = self.aggregation
+        if aggregation not in ROLL_AGGS:
+            return ts.rolling(f"{window_size}{window_unit}", min_periods=1).agg(aggregation)
+        return apply_grouped_kernel(
+            ts,
+            lambda times, values: roll_values(times, values, window_size, window_unit, aggregation),
         )
