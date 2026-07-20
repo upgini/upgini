@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator
+from upgini.autofe.timeseries.numpy_kernels import apply_offset_grouped
 
 
 class TimeSeriesBase(PandasOperator, abc.ABC):
@@ -27,27 +28,36 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         data = [operand.as_series() for operand in data]
         # assuming first is date, last is value, rest is group columns
         date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
+        group_cols = [c.name for c in data[1:-1]]
+        value_col = data[-1].name
+
         ts = pd.concat([date] + data[1:], axis=1)
         ts.drop_duplicates(subset=ts.columns[:-1], keep="first", inplace=True)
         ts.set_index(date.name, inplace=True)
         ts = ts[ts.index.notna()].sort_index()
-        ts = (
-            ts.groupby([c.name for c in data[1:-1]], group_keys=True)
-            .apply(self._shift)[data[-1].name]
-            .to_frame()
-            .reset_index()
-            .set_index(date.name)
-            .groupby([c.name for c in data[1:-1]], group_keys=True)
-            if len(data) > 2
-            else self._shift(ts)
-        )
+
+        if self.offset_size > 0:
+            ts = apply_offset_grouped(ts, group_cols, value_col, self.offset_size, self.offset_unit)
+        elif group_cols:
+            # Keep a stable group-then-time order for contiguous group kernels
+            date_name = ts.index.name or "index"
+            ts = (
+                ts.reset_index()
+                .sort_values(group_cols + [date_name], kind="mergesort")
+                .set_index(date_name)
+            )
+
+        if group_cols:
+            ts = ts.groupby(group_cols, group_keys=True, sort=False)
+
         ts = self._aggregate(ts)
-        ts = ts.reindex(data[1:-1] + [date] if len(data) > 2 else date).reset_index()
+        ts = ts.reindex(data[1:-1] + [date] if group_cols else date).reset_index()
         ts.index = date.index
 
         return ts.iloc[:, -1]
 
     def _shift(self, ts: pd.DataFrame) -> pd.DataFrame:
+        # Kept for compatibility with callers/tests that may still reference it.
         if self.offset_size > 0:
             return ts.iloc[:, :-1].merge(
                 ts.iloc[:, -1].shift(freq=f"{self.offset_size}{self.offset_unit}"),

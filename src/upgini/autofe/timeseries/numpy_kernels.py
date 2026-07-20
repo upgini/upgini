@@ -6,7 +6,7 @@ Window semantics match pandas time-based rolling with a left-open interval
 
 from __future__ import annotations
 
-from typing import Callable, Union
+from typing import Callable, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -44,6 +44,18 @@ def lag_values(times_ns: np.ndarray, values: np.ndarray, lag_size: int, lag_unit
     return out
 
 
+def _quantile_linear(sorted_vals: np.ndarray, q: float) -> float:
+    """pandas/numpy linear quantile on an already-sorted 1d array."""
+    n = len(sorted_vals)
+    if n == 1:
+        return float(sorted_vals[0])
+    pos = q * (n - 1)
+    lo = int(pos)
+    hi = lo + 1 if lo + 1 < n else lo
+    w = pos - lo
+    return float(sorted_vals[lo] * (1.0 - w) + sorted_vals[hi] * w)
+
+
 def _rolling_mean(window: np.ndarray) -> float:
     return float(np.mean(window))
 
@@ -57,7 +69,7 @@ def _rolling_max(window: np.ndarray) -> float:
 
 
 def _rolling_median(window: np.ndarray) -> float:
-    return float(np.median(window))
+    return _quantile_linear(np.sort(window), 0.5)
 
 
 def _rolling_std(window: np.ndarray) -> float:
@@ -73,16 +85,16 @@ def _rolling_norm_mean(window: np.ndarray) -> float:
 
 
 def _rolling_q25(window: np.ndarray) -> float:
-    return float(np.quantile(window, 0.25, method="linear"))
+    return _quantile_linear(np.sort(window), 0.25)
 
 
 def _rolling_q75(window: np.ndarray) -> float:
-    return float(np.quantile(window, 0.75, method="linear"))
+    return _quantile_linear(np.sort(window), 0.75)
 
 
 def _rolling_iqr(window: np.ndarray) -> float:
-    q75, q25 = np.quantile(window, [0.75, 0.25], method="linear")
-    return float(q75 - q25)
+    sorted_vals = np.sort(window)
+    return _quantile_linear(sorted_vals, 0.75) - _quantile_linear(sorted_vals, 0.25)
 
 
 ROLL_AGGS: dict[str, WindowAgg] = {
@@ -117,49 +129,100 @@ def roll_values(
 
     window_ns = _timedelta_ns(window_size, window_unit)
     lefts = window_left_indices(times_ns, window_ns)
-    counts = np.arange(n, dtype=np.int64) - lefts + 1
+
+    # pandas rolling skipna=True: ignore NaNs inside the window
+    finite = np.isfinite(values)
+    safe = np.where(finite, values, 0.0)
 
     if aggregation in {"mean", "norm_mean", "std"}:
         csum = np.empty(n + 1, dtype=np.float64)
         csum[0] = 0.0
-        np.cumsum(values, out=csum[1:])
+        np.cumsum(safe, out=csum[1:])
+        ccount = np.empty(n + 1, dtype=np.float64)
+        ccount[0] = 0.0
+        np.cumsum(finite.astype(np.float64), out=ccount[1:])
         window_sum = csum[1:] - csum[lefts]
-        means = window_sum / counts
+        counts = ccount[1:] - ccount[lefts]
+        out = np.full(n, np.nan, dtype=np.float64)
+        valid = counts > 0
+        means = np.empty(n, dtype=np.float64)
+        means[valid] = window_sum[valid] / counts[valid]
         if aggregation == "mean":
-            return means
+            out[valid] = means[valid]
+            return out
         if aggregation == "norm_mean":
-            return values / means
-        # std, ddof=1
+            # last finite observation in window / mean; if current value NaN → NaN
+            out[valid & finite] = values[valid & finite] / means[valid & finite]
+            return out
+        # std ddof=1
         csum2 = np.empty(n + 1, dtype=np.float64)
         csum2[0] = 0.0
-        np.cumsum(values * values, out=csum2[1:])
+        np.cumsum(safe * safe, out=csum2[1:])
         window_sum2 = csum2[1:] - csum2[lefts]
-        out = np.full(n, np.nan, dtype=np.float64)
         multi = counts >= 2
-        # sample variance: (sumsq - sum^2/n) / (n-1)
         var = (window_sum2[multi] - window_sum[multi] * window_sum[multi] / counts[multi]) / (counts[multi] - 1)
-        # numerical noise can be slightly negative
         out[multi] = np.sqrt(np.maximum(var, 0.0))
         return out
 
+    if aggregation in {"q25", "q75", "iqr", "median"}:
+        return _roll_order_stats_skipna(values, lefts, aggregation)
+
     if aggregation == "min":
-        # Falling window minima via brute force is fine for correctness; still O(n·w) worst case.
-        # Use a simple loop — windows are typically small calendar spans.
-        out = np.empty(n, dtype=np.float64)
+        out = np.full(n, np.nan, dtype=np.float64)
         for i in range(n):
-            out[i] = np.min(values[lefts[i] : i + 1])
+            window = values[lefts[i] : i + 1]
+            if np.isfinite(window).any():
+                out[i] = np.nanmin(window)
         return out
 
     if aggregation == "max":
-        out = np.empty(n, dtype=np.float64)
+        out = np.full(n, np.nan, dtype=np.float64)
         for i in range(n):
-            out[i] = np.max(values[lefts[i] : i + 1])
+            window = values[lefts[i] : i + 1]
+            if np.isfinite(window).any():
+                out[i] = np.nanmax(window)
         return out
 
     agg = ROLL_AGGS[aggregation]
     out = np.empty(n, dtype=np.float64)
     for i in range(n):
-        out[i] = agg(values[lefts[i] : i + 1])
+        window = values[lefts[i] : i + 1]
+        finite_window = window[np.isfinite(window)]
+        out[i] = agg(finite_window) if len(finite_window) else np.nan
+    return out
+
+
+def _roll_order_stats_skipna(values: np.ndarray, lefts: np.ndarray, aggregation: str) -> np.ndarray:
+    """Fast q25/q75/iqr/median with NaN skipping (pandas rolling skipna=True)."""
+    n = len(values)
+    out = np.full(n, np.nan, dtype=np.float64)
+    q = {"q25": 0.25, "q75": 0.75, "median": 0.5, "iqr": None}[aggregation]
+
+    for i in range(n):
+        window = values[lefts[i] : i + 1]
+        finite_vals = window[np.isfinite(window)]
+        w = len(finite_vals)
+        if w == 0:
+            continue
+        if aggregation == "iqr":
+            if w == 1:
+                out[i] = 0.0
+            elif w == 2:
+                a, b = finite_vals[0], finite_vals[1]
+                out[i] = 0.5 * abs(b - a)
+            else:
+                sorted_vals = np.sort(finite_vals)
+                out[i] = _quantile_linear(sorted_vals, 0.75) - _quantile_linear(sorted_vals, 0.25)
+            continue
+
+        if w == 1:
+            out[i] = finite_vals[0]
+        elif w == 2:
+            a, b = finite_vals[0], finite_vals[1]
+            lo, hi = (a, b) if a <= b else (b, a)
+            out[i] = 0.5 * (lo + hi) if q == 0.5 else lo * (1.0 - q) + hi * q
+        else:
+            out[i] = _quantile_linear(np.sort(finite_vals), q)
     return out
 
 
@@ -177,7 +240,6 @@ def freq_pct_change(times_ns: np.ndarray, values: np.ndarray, step_size: int, st
     if not is_valid.all():
         idx = np.where(is_valid, np.arange(n), 0)
         np.maximum.accumulate(idx, out=idx)
-        # keep leading NaNs as NaN
         first_valid = int(np.argmax(is_valid)) if is_valid.any() else n
         filled = filled[idx]
         filled[:first_valid] = np.nan
@@ -223,22 +285,62 @@ def rolling_volatility_values(
     return roll_values(times_ns, returns, window_size, window_unit, "std")
 
 
-def _kernel_on_frame(
-    frame: pd.DataFrame,
-    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-) -> pd.DataFrame:
-    if frame.empty:
-        return frame.iloc[:, [-1]].astype(np.float64) if len(frame.columns) else frame
+def offset_values(
+    times_ns: np.ndarray, values: np.ndarray, offset_size: int, offset_unit: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """Match ``Series.shift(freq=offset)`` aligned onto the same timestamps.
 
-    value_col = frame.columns[-1]
-    series = pd.to_numeric(frame[value_col], errors="coerce").astype(np.float64)
-    index = frame.index
-    if isinstance(index, pd.MultiIndex):
-        times_ns = index.get_level_values(-1).asi8
-    else:
-        times_ns = index.asi8
-    out = kernel(times_ns, series.to_numpy(dtype=np.float64, copy=False))
-    return pd.DataFrame({value_col: out}, index=frame.index, dtype=np.float64)
+    Returns
+    -------
+    out, matched
+        ``out`` is the shifted values (NaN where no exact timestamp match).
+        ``matched`` is True where an exact ``t - offset`` source timestamp existed
+        (same rows kept by pandas ``merge(..., how='inner')`` with ``shift(freq)``).
+    """
+    times_ns = np.asarray(times_ns, dtype=np.int64)
+    values = np.asarray(values, dtype=np.float64)
+    n = len(times_ns)
+    if n == 0 or offset_size == 0:
+        return values.copy(), np.ones(n, dtype=bool)
+
+    offset_ns = _timedelta_ns(offset_size, offset_unit)
+    targets = times_ns - offset_ns
+    idx = np.searchsorted(times_ns, targets, side="left")
+    out = np.full(n, np.nan, dtype=np.float64)
+    matched = np.zeros(n, dtype=bool)
+    in_range = idx < n
+    matched[in_range] = times_ns[idx[in_range]] == targets[in_range]
+    out[matched] = values[idx[matched]]
+    return out, matched
+
+
+def _kernel_on_arrays(
+    times_ns: np.ndarray,
+    values: np.ndarray,
+    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+) -> np.ndarray:
+    return kernel(times_ns, values)
+
+
+def _apply_kernel_by_group_ids(
+    times_ns: np.ndarray,
+    values: np.ndarray,
+    group_ids: np.ndarray,
+    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+) -> np.ndarray:
+    """Apply kernel on contiguous runs of the same group_id (caller must sort by group, then time)."""
+    n = len(values)
+    out = np.empty(n, dtype=np.float64)
+    if n == 0:
+        return out
+
+    # Boundaries where group_id changes
+    changes = np.flatnonzero(group_ids[1:] != group_ids[:-1]) + 1
+    starts = np.concatenate(([0], changes))
+    ends = np.concatenate((changes, [n]))
+    for start, end in zip(starts, ends):
+        out[start:end] = kernel(times_ns[start:end], values[start:end])
+    return out
 
 
 def apply_grouped_kernel(
@@ -247,13 +349,87 @@ def apply_grouped_kernel(
 ) -> pd.DataFrame:
     """Apply ``kernel(times_ns, values) -> values`` on a DatetimeIndex frame or GroupBy."""
     if isinstance(ts, pd.DataFrame):
-        return _kernel_on_frame(ts, kernel)
+        if ts.empty:
+            return ts.iloc[:, [-1]].astype(np.float64) if len(ts.columns) else ts
+        value_col = ts.columns[-1]
+        series = pd.to_numeric(ts[value_col], errors="coerce").astype(np.float64)
+        index = ts.index
+        times_ns = index.get_level_values(-1).asi8 if isinstance(index, pd.MultiIndex) else index.asi8
+        out = kernel(times_ns, series.to_numpy(dtype=np.float64, copy=False))
+        return pd.DataFrame({value_col: out}, index=ts.index, dtype=np.float64)
 
-    try:
-        applied = ts.apply(lambda g: _kernel_on_frame(g, kernel), include_groups=False)
-    except TypeError:
-        # pandas without include_groups
-        applied = ts.apply(lambda g: _kernel_on_frame(g, kernel))
-    if isinstance(applied, pd.Series):
-        return applied.to_frame()
-    return applied.iloc[:, [-1]] if getattr(applied, "shape", (0, 0))[1] > 1 else applied
+    # DataFrameGroupBy — avoid GroupBy.apply; use positional indices
+    obj = ts.obj
+    keys = ts.keys
+    if isinstance(keys, list):
+        grouper_keys = keys
+    elif isinstance(keys, tuple):
+        grouper_keys = list(keys)
+    else:
+        grouper_keys = [keys]
+
+    value_col = obj.columns[-1]
+    values = pd.to_numeric(obj[value_col], errors="coerce").to_numpy(dtype=np.float64, copy=False)
+    index = obj.index
+    times_ns = index.get_level_values(-1).asi8 if isinstance(index, pd.MultiIndex) else index.asi8
+    out = np.empty(len(obj), dtype=np.float64)
+
+    for indexer in ts.indices.values():
+        idx = np.asarray(indexer, dtype=np.intp)
+        order = np.argsort(times_ns[idx], kind="mergesort")
+        sorted_idx = idx[order]
+        out[sorted_idx] = kernel(times_ns[sorted_idx], values[sorted_idx])
+
+    # MultiIndex (group keys..., date) so TimeSeriesBase.reindex works with duplicate dates
+    date_level = index.get_level_values(-1) if isinstance(index, pd.MultiIndex) else index
+    levels = [obj[c].to_numpy() for c in grouper_keys] + [date_level]
+    mi = pd.MultiIndex.from_arrays(levels, names=list(grouper_keys) + [date_level.name])
+    return pd.DataFrame({value_col: out}, index=mi, dtype=np.float64)
+
+
+def apply_offset_grouped(
+    ts: pd.DataFrame,
+    group_cols: Sequence[str],
+    value_col: str,
+    offset_size: int,
+    offset_unit: str,
+) -> pd.DataFrame:
+    """Apply frequency offset within groups without ``groupby.apply``.
+
+    Matches ``DataFrame.merge(series.shift(freq=...), how='inner')`` used by the
+    legacy ``_shift`` helper: rows without an exact offset match are dropped
+    before aggregation (then restored as NaN by the final ``reindex``).
+    """
+    if offset_size <= 0:
+        return ts
+
+    date_name = ts.index.name or "index"
+    if not group_cols:
+        times_ns = np.asarray(ts.index.asi8, dtype=np.int64)
+        values = pd.to_numeric(ts[value_col], errors="coerce").to_numpy(dtype=np.float64, copy=False)
+        out_vals, matched = offset_values(times_ns, values, offset_size, offset_unit)
+        result = ts.copy()
+        result[value_col] = out_vals
+        return result.loc[matched]
+
+    flat = ts.reset_index()
+    flat = flat.sort_values(list(group_cols) + [date_name], kind="mergesort")
+    times_ns = np.asarray(pd.DatetimeIndex(pd.to_datetime(flat[date_name])).asi8, dtype=np.int64)
+    values = pd.to_numeric(flat[value_col], errors="coerce").to_numpy(dtype=np.float64, copy=False)
+    group_ids = pd.factorize(pd.MultiIndex.from_arrays([flat[c].to_numpy() for c in group_cols]), sort=False)[0]
+
+    out_vals = np.empty(len(flat), dtype=np.float64)
+    matched = np.zeros(len(flat), dtype=bool)
+    changes = np.flatnonzero(group_ids[1:] != group_ids[:-1]) + 1
+    starts = np.concatenate(([0], changes))
+    ends = np.concatenate((changes, [len(flat)]))
+    for start, end in zip(starts, ends):
+        group_out, group_matched = offset_values(
+            times_ns[start:end], values[start:end], offset_size, offset_unit
+        )
+        out_vals[start:end] = group_out
+        matched[start:end] = group_matched
+
+    flat[value_col] = out_vals
+    flat = flat.loc[matched]
+    return flat.set_index(date_name)[list(group_cols) + [value_col]]
