@@ -553,6 +553,11 @@ def test_metrics_cache_key_isolates_outliers_and_exclude(requests_mock: Mocker):
     assert "outliers_removed=True" in key_default
     assert "outliers_removed=False" in key_keep_outliers
     assert "exclude=ads_a" in key_exclude
+    assert "exclude_oot=False" in key_default
+
+    key_exclude_oot = enricher._get_metrics_cache_key(X, y, None, exclude_oot=True)
+    assert key_default != key_exclude_oot
+    assert "exclude_oot=True" in key_exclude_oot
 
     # Non-regression: explicit outlier flags are no-ops and share a key
     enricher.model_task_type = ModelTaskType.BINARY
@@ -830,3 +835,111 @@ def test_metrics_cache_as_input_uses_validated_key(requests_mock: Mocker):
     assert "" not in cache
     assert len(result1.eval_set_sampled_dict) == 1
     assert len(result2.eval_set_sampled_dict) == 1
+
+
+def test_metrics_cache_exclude_oot_does_not_poison_full_entry(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    y = pd.Series([0, 1])
+    eval_X = pd.DataFrame({"phone": ["+10000000003"], "f": [3.0]})
+    eval_y = pd.Series([0])
+    oot_X = pd.DataFrame({"phone": ["+10000000004"], "f": [4.0]})
+    oot_y = pd.Series([np.nan])
+    eval_set = [(eval_X, eval_y), (oot_X, oot_y)]
+
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = eval_set
+    enricher.feature_names_ = ["ads_feature"]
+
+    with_oot_hash = enricher._get_metrics_cache_key(X, y, eval_set, exclude_oot=False)
+    without_oot_hash = enricher._get_metrics_cache_key(X, y, eval_set, exclude_oot=True)
+    assert with_oot_hash != without_oot_hash
+
+    X_sampled = X.copy()
+    y_sampled = y.copy()
+    enriched = X.copy()
+    enriched["ads_feature"] = [10.0, 20.0]
+    eval_enriched = eval_X.copy()
+    eval_enriched["ads_feature"] = [30.0]
+    oot_enriched = oot_X.copy()
+    oot_enriched["ads_feature"] = [40.0]
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    cache[with_oot_hash] = (
+        X_sampled,
+        y_sampled,
+        enriched,
+        {
+            0: (eval_X.copy(), eval_enriched, eval_y.copy()),
+            1: (oot_X.copy(), oot_enriched, oot_y.copy()),
+        },
+        {"phone": SearchKey.PHONE},
+        {},
+        [],
+    )
+
+    result = enricher._get_enriched_datasets(
+        validated_X=X,
+        validated_y=y,
+        validated_eval_set=eval_set,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+        is_for_metrics=True,
+    )
+
+    assert 1 not in result.eval_set_sampled_dict
+    assert 0 in result.eval_set_sampled_dict
+    assert len(result.eval_set_sampled_dict[0][0]) == 1
+    # With-OOT (PSI) entry must remain intact
+    assert 1 in cache[with_oot_hash][3]
+    assert len(cache[with_oot_hash][3][1][0]) == 1
+    # Metrics view stored under exclude_oot=True without empty OOT slot
+    assert without_oot_hash in cache
+    assert 1 not in cache[without_oot_hash][3]
+
+
+def test_extract_eval_data_skips_empty_oot_when_requested(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    enriched_df = pd.DataFrame(
+        {
+            "phone": ["+1", "+2", "+3"],
+            "f": [1.0, 2.0, 3.0],
+            TARGET: [0.0, 1.0, np.nan],
+            EVAL_SET_INDEX: [0, 1, 2],
+        }
+    )
+    # Eval index 2 is OOT (all-NaN target) and would be empty if stripped from df
+    enriched_without_oot = enriched_df[enriched_df[EVAL_SET_INDEX] != 2]
+    x_columns = ["phone", "f"]
+    result = enricher._FeaturesEnricher__extract_eval_data(
+        enriched_without_oot,
+        x_columns,
+        x_columns,
+        eval_set_len=2,
+        skip_empty_or_oot=True,
+    )
+    assert list(result.keys()) == [0]
+    assert len(result[0][0]) == 1
