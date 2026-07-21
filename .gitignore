@@ -138,6 +138,7 @@ dmypy.json
 # IDE
 .vscode/
 .idea/
+.cursor/
 
 # macOS
 .DS_Store

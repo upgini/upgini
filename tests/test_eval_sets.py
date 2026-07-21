@@ -614,3 +614,79 @@ def test_metrics_cache_exclude_does_not_poison_full_entry(requests_mock: Mocker)
     # Excluded view may be stored under its own key
     assert exclude_hash in cache
     assert "ads_feature" not in cache[exclude_hash][2].columns
+
+
+def test_metrics_cache_derives_outliers_removed_from_psi_entry(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.REGRESSION,
+    )
+
+    X = pd.DataFrame(
+        {
+            "phone": ["+10000000001", "+10000000002", "+10000000003"],
+            "f": [1.0, 2.0, 3.0],
+            ENTITY_SYSTEM_RECORD_ID: [101, 102, 103],
+        }
+    )
+    y = pd.Series([0.1, 0.2, 99.0], name=TARGET)
+    enricher.X = X.drop(columns=[ENTITY_SYSTEM_RECORD_ID])
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.df_with_original_index = X.assign(**{TARGET: y.values})
+
+    search_task = MagicMock()
+    search_task.get_target_outliers.return_value = pd.DataFrame({ENTITY_SYSTEM_RECORD_ID: [103]})
+    enricher._search_task = search_task
+
+    keep_hash = enricher._get_metrics_cache_key(enricher.X, enricher.y, None, remove_outliers_calc_metrics=False)
+    drop_hash = enricher._get_metrics_cache_key(enricher.X, enricher.y, None, remove_outliers_calc_metrics=None)
+    assert keep_hash != drop_hash
+
+    X_sampled = X.copy()
+    y_sampled = y.copy()
+    enriched = X.copy()
+    enriched["ads_feature"] = [10.0, 20.0, 30.0]
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    cache[keep_hash] = (
+        X_sampled,
+        y_sampled,
+        enriched,
+        {},
+        {"phone": SearchKey.PHONE},
+        {},
+        [],
+    )
+
+    result = enricher._get_enriched_datasets(
+        validated_X=enricher.X,
+        validated_y=enricher.y,
+        validated_eval_set=None,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+    )
+
+    assert len(result.enriched_X) == 2
+    assert 103 not in set(result.enriched_X[ENTITY_SYSTEM_RECORD_ID])
+    assert len(result.X_sampled) == 2
+    assert len(result.y_sampled) == 2
+    # Keep-outliers (PSI) entry must remain intact
+    assert len(cache[keep_hash][2]) == 3
+    assert 103 in set(cache[keep_hash][2][ENTITY_SYSTEM_RECORD_ID])
+    # Outliers-removed view stored under its own key
+    assert drop_hash in cache
+    assert len(cache[drop_hash][2]) == 2
+    assert 103 not in set(cache[drop_hash][2][ENTITY_SYSTEM_RECORD_ID])

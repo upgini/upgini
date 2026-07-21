@@ -2340,6 +2340,29 @@ class FeaturesEnricher(TransformerMixin):
                     write_hash=datasets_hash,
                 )
 
+        # Reuse PSI / keep-outliers cache by dropping target outlier rows
+        if is_input_same_as_fit and self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics):
+            keep_outliers_hash = self._get_metrics_cache_key(
+                validated_X,
+                validated_y,
+                validated_eval_set,
+                remove_outliers_calc_metrics=False,
+                exclude_features_sources=exclude_features_sources,
+            )
+            if keep_outliers_hash in self.__cached_sampled_datasets:
+                enriched_peek = self.__cached_sampled_datasets[keep_outliers_hash][2]
+                rows_to_drop = self.__resolve_target_outlier_rows()
+                drop_ids = (
+                    set(rows_to_drop[ENTITY_SYSTEM_RECORD_ID]) if rows_to_drop is not None else set()
+                )
+                if not drop_ids or ENTITY_SYSTEM_RECORD_ID in enriched_peek.columns:
+                    self.logger.info("Cached keep-outliers dataset found - derive outliers-removed view")
+                    return self.__get_sampled_cached_enriched(
+                        keep_outliers_hash,
+                        write_hash=datasets_hash,
+                        drop_entity_ids=drop_ids,
+                    )
+
         if len(self.feature_names_) == 0 or all([f in validated_X.columns for f in self.feature_names_]):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__get_enriched_as_input(
@@ -2369,11 +2392,33 @@ class FeaturesEnricher(TransformerMixin):
                 datasets_hash=datasets_hash,
             )
 
+    def __resolve_target_outlier_rows(self) -> pd.DataFrame | None:
+        """Return fit rows matching target outliers, or None. Prints the standard warning when dropping."""
+        if self._search_task is None or self.df_with_original_index is None:
+            return None
+        target_outliers_df = self._search_task.get_target_outliers(self._get_trace_id())
+        if target_outliers_df is None or len(target_outliers_df) == 0:
+            return None
+        outliers = pd.merge(
+            self.df_with_original_index,
+            target_outliers_df,
+            on=ENTITY_SYSTEM_RECORD_ID,
+            how="inner",
+        )
+        if len(outliers) == 0:
+            return None
+        top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
+        msg = self.bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers, "")
+        print(msg)
+        self.logger.warning(msg)
+        return outliers
+
     def __get_sampled_cached_enriched(
         self,
         datasets_hash: str,
         exclude_features_sources: list[str] | None = None,
         write_hash: str | None = None,
+        drop_entity_ids: set | None = None,
     ) -> _EnrichedDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features = (
             self.__cached_sampled_datasets[datasets_hash]
@@ -2388,6 +2433,21 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_eval_X.drop(columns=exclude_features_sources, errors="ignore"),
                     eval_y_sampled,
                 )
+            eval_set_sampled_dict = updated_eval_set
+
+        if drop_entity_ids:
+            enriched_X = enriched_X.loc[~enriched_X[ENTITY_SYSTEM_RECORD_ID].isin(drop_entity_ids)].copy()
+            X_sampled = X_sampled.loc[X_sampled.index.isin(enriched_X.index)].copy()
+            y_sampled = y_sampled.loc[y_sampled.index.isin(enriched_X.index)].copy()
+            updated_eval_set = {}
+            for idx, (eval_X_sampled, enriched_eval_X, eval_y_sampled) in eval_set_sampled_dict.items():
+                if ENTITY_SYSTEM_RECORD_ID in enriched_eval_X.columns:
+                    enriched_eval_X = enriched_eval_X.loc[
+                        ~enriched_eval_X[ENTITY_SYSTEM_RECORD_ID].isin(drop_entity_ids)
+                    ].copy()
+                eval_X_sampled = eval_X_sampled.loc[eval_X_sampled.index.isin(enriched_eval_X.index)].copy()
+                eval_y_sampled = eval_y_sampled.loc[eval_y_sampled.index.isin(enriched_eval_X.index)].copy()
+                updated_eval_set[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
             eval_set_sampled_dict = updated_eval_set
 
         cache_hash = write_hash or datasets_hash
@@ -2536,20 +2596,7 @@ class FeaturesEnricher(TransformerMixin):
             self.df_with_original_index[TARGET], has_date, self.logger, silent=True
         )
         if self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics):
-            target_outliers_df = self._search_task.get_target_outliers(self._get_trace_id())
-            if target_outliers_df is not None and len(target_outliers_df) > 0:
-                outliers = pd.merge(
-                    self.df_with_original_index,
-                    target_outliers_df,
-                    on=ENTITY_SYSTEM_RECORD_ID,
-                    how="inner",
-                )
-                top_outliers = outliers.sort_values(by=TARGET, ascending=False)[TARGET].head(3)
-                rows_to_drop = outliers
-                not_msg = ""
-                msg = self.bundle.get("target_outliers_warning").format(len(target_outliers_df), top_outliers, not_msg)
-                print(msg)
-                self.logger.warning(msg)
+            rows_to_drop = self.__resolve_target_outlier_rows()
 
         # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
         # can differs from it
