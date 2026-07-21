@@ -900,7 +900,7 @@ def test_metrics_cache_exclude_oot_does_not_poison_full_entry(requests_mock: Moc
         remove_outliers_calc_metrics=None,
         progress_bar=None,
         progress_callback=None,
-        is_for_metrics=True,
+        exclude_oot=True,
     )
 
     assert 1 not in result.eval_set_sampled_dict
@@ -912,6 +912,102 @@ def test_metrics_cache_exclude_oot_does_not_poison_full_entry(requests_mock: Moc
     # Metrics view stored under exclude_oot=True without empty OOT slot
     assert without_oot_hash in cache
     assert 1 not in cache[without_oot_hash][3]
+
+
+def test_metrics_cache_derives_multi_dimension_from_fullest_entry(requests_mock: Mocker):
+    """PSI fullest entry must satisfy metrics that need outliers removed and OOT dropped together."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.REGRESSION,
+    )
+
+    X = pd.DataFrame(
+        {
+            "phone": ["+10000000001", "+10000000002", "+10000000003"],
+            "f": [1.0, 2.0, 3.0],
+            ENTITY_SYSTEM_RECORD_ID: [101, 102, 103],
+        }
+    )
+    y = pd.Series([0.1, 0.2, 99.0], name=TARGET)
+    eval_X = pd.DataFrame({"phone": ["+10000000004"], "f": [4.0], ENTITY_SYSTEM_RECORD_ID: [104]})
+    eval_y = pd.Series([0.5])
+    oot_X = pd.DataFrame({"phone": ["+10000000005"], "f": [5.0], ENTITY_SYSTEM_RECORD_ID: [105]})
+    oot_y = pd.Series([np.nan])
+    eval_set = [(eval_X.drop(columns=[ENTITY_SYSTEM_RECORD_ID]), eval_y), (oot_X.drop(columns=[ENTITY_SYSTEM_RECORD_ID]), oot_y)]
+
+    enricher.X = X.drop(columns=[ENTITY_SYSTEM_RECORD_ID])
+    enricher.y = y
+    enricher.eval_set = eval_set
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.df_with_original_index = X.assign(**{TARGET: y.values})
+
+    search_task = MagicMock()
+    search_task.get_target_outliers.return_value = pd.DataFrame({ENTITY_SYSTEM_RECORD_ID: [103]})
+    enricher._search_task = search_task
+
+    fullest_hash = enricher._get_metrics_cache_key(
+        enricher.X, y, eval_set, remove_outliers_calc_metrics=False, exclude_oot=False
+    )
+    wanted_hash = enricher._get_metrics_cache_key(
+        enricher.X, y, eval_set, remove_outliers_calc_metrics=None, exclude_oot=True
+    )
+    assert fullest_hash != wanted_hash
+    assert "outliers_removed=False" in fullest_hash
+    assert "exclude_oot=False" in fullest_hash
+    assert "outliers_removed=True" in wanted_hash
+    assert "exclude_oot=True" in wanted_hash
+
+    enriched = X.copy()
+    enriched["ads_feature"] = [10.0, 20.0, 30.0]
+    eval_enriched = eval_X.copy()
+    eval_enriched["ads_feature"] = [40.0]
+    oot_enriched = oot_X.copy()
+    oot_enriched["ads_feature"] = [50.0]
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    cache[fullest_hash] = (
+        X.copy(),
+        y.copy(),
+        enriched,
+        {
+            0: (eval_X.copy(), eval_enriched, eval_y.copy()),
+            1: (oot_X.copy(), oot_enriched, oot_y.copy()),
+        },
+        {"phone": SearchKey.PHONE},
+        {},
+        [],
+    )
+
+    result = enricher._get_enriched_datasets(
+        validated_X=enricher.X,
+        validated_y=y,
+        validated_eval_set=eval_set,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+        exclude_oot=True,
+    )
+
+    assert len(result.enriched_X) == 2
+    assert 103 not in set(result.enriched_X[ENTITY_SYSTEM_RECORD_ID])
+    assert 1 not in result.eval_set_sampled_dict
+    assert 0 in result.eval_set_sampled_dict
+    # Fullest PSI entry unchanged
+    assert len(cache[fullest_hash][2]) == 3
+    assert 1 in cache[fullest_hash][3]
+    assert wanted_hash in cache
+    assert len(cache[wanted_hash][2]) == 2
+    assert 1 not in cache[wanted_hash][3]
 
 
 def test_extract_eval_data_skips_empty_oot_when_requested(requests_mock: Mocker):

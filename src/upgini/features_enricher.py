@@ -1032,7 +1032,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress_bar=progress_bar,
                     progress_callback=progress_callback,
                     client_cat_features=client_cat_features,
-                    is_for_metrics=True,
+                    exclude_oot=True,
                 )
                 if prepared_data is None:
                     return None
@@ -2026,7 +2026,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: ProgressBar | None = None,
         progress_callback: Callable[[SearchProgress], Any] | None = None,
         client_cat_features: list[str] | None = None,
-        is_for_metrics: bool = False,
+        exclude_oot: bool = False,
     ):
         is_input_same_as_fit, X, y, eval_set = self._is_input_same_as_fit(X, y, eval_set)
         is_demo_dataset = hash_input(X, y, eval_set) in DEMO_DATASET_HASHES
@@ -2043,7 +2043,7 @@ class FeaturesEnricher(TransformerMixin):
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             progress_bar=progress_bar,
             progress_callback=progress_callback,
-            is_for_metrics=is_for_metrics,
+            exclude_oot=exclude_oot,
         )
         (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features) = (
             dataclasses.astuple(sampled_data)
@@ -2275,10 +2275,42 @@ class FeaturesEnricher(TransformerMixin):
         columns_renaming: dict[str, str]
         generated_features: list[str]
 
+    @dataclass(frozen=True)
+    class _MetricsCacheOptions:
+        outliers_removed: bool
+        exclude_features: tuple[str, ...]
+        exclude_oot: bool
+
     def _effective_remove_outliers_for_metrics(self, remove_outliers_calc_metrics: bool | None) -> bool:
         if self.model_task_type != ModelTaskType.REGRESSION:
             return False
         return True if remove_outliers_calc_metrics is None else bool(remove_outliers_calc_metrics)
+
+    def _metrics_cache_options(
+        self,
+        remove_outliers_calc_metrics: bool | None = None,
+        exclude_features_sources: list[str] | None = None,
+        exclude_oot: bool = False,
+    ) -> _MetricsCacheOptions:
+        return self._MetricsCacheOptions(
+            outliers_removed=self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics),
+            exclude_features=tuple(sorted(exclude_features_sources or [])),
+            exclude_oot=bool(exclude_oot),
+        )
+
+    def _metrics_cache_key(
+        self,
+        validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
+        validated_y: pd.DataFrame | pd.Series | np.ndarray | list | None,
+        validated_eval_set: list[tuple] | None,
+        opts: _MetricsCacheOptions,
+    ) -> str:
+        base = hash_input(validated_X, validated_y, validated_eval_set)
+        exclude_key = ",".join(opts.exclude_features)
+        return (
+            f"{base}|outliers_removed={opts.outliers_removed}"
+            f"|exclude={exclude_key}|exclude_oot={opts.exclude_oot}"
+        )
 
     def _get_metrics_cache_key(
         self,
@@ -2289,17 +2321,87 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None = None,
         exclude_oot: bool = False,
     ) -> str:
-        """Cache key for enriched metrics datasets.
-
-        Includes effective outlier removal, excluded feature sources, and whether OOT
-        eval sets were stripped so different prepare options cannot poison each other.
-        """
-        base = hash_input(validated_X, validated_y, validated_eval_set)
-        outliers_removed = self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics)
-        exclude_key = ",".join(sorted(exclude_features_sources or []))
-        return (
-            f"{base}|outliers_removed={outliers_removed}|exclude={exclude_key}|exclude_oot={exclude_oot}"
+        """Cache key for enriched metrics datasets (convenience wrapper for tests/callers)."""
+        return self._metrics_cache_key(
+            validated_X,
+            validated_y,
+            validated_eval_set,
+            self._metrics_cache_options(
+                remove_outliers_calc_metrics, exclude_features_sources, exclude_oot
+            ),
         )
+
+    def __try_reuse_metrics_cache(
+        self,
+        validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
+        validated_y: pd.DataFrame | pd.Series | np.ndarray | list | None,
+        validated_eval_set: list[tuple] | None,
+        wanted: _MetricsCacheOptions,
+        is_input_same_as_fit: bool,
+    ) -> _EnrichedDataForMetrics | None:
+        if not is_input_same_as_fit:
+            return None
+
+        wanted_hash = self._metrics_cache_key(validated_X, validated_y, validated_eval_set, wanted)
+        if wanted_hash in self.__cached_sampled_datasets:
+            self.logger.info("Cached enriched dataset found - use it")
+            return self.__get_sampled_cached_enriched(wanted_hash)
+
+        # Prefer single-dimension siblings, then the maximally full entry (PSI-style).
+        candidates: list[FeaturesEnricher._MetricsCacheOptions] = []
+        if wanted.exclude_features:
+            candidates.append(dataclasses.replace(wanted, exclude_features=()))
+        if wanted.outliers_removed:
+            candidates.append(dataclasses.replace(wanted, outliers_removed=False))
+        if wanted.exclude_oot:
+            candidates.append(dataclasses.replace(wanted, exclude_oot=False))
+        fullest = self._MetricsCacheOptions(outliers_removed=False, exclude_features=(), exclude_oot=False)
+        if fullest != wanted and fullest not in candidates:
+            candidates.append(fullest)
+
+        for source in candidates:
+            if not self._can_derive_metrics_cache(source, wanted):
+                continue
+            source_hash = self._metrics_cache_key(validated_X, validated_y, validated_eval_set, source)
+            if source_hash not in self.__cached_sampled_datasets:
+                continue
+
+            drop_ids: set | None = None
+            if wanted.outliers_removed and not source.outliers_removed:
+                enriched_peek = self.__cached_sampled_datasets[source_hash][2]
+                rows_to_drop = self.__resolve_target_outlier_rows()
+                drop_ids = set(rows_to_drop[ENTITY_SYSTEM_RECORD_ID]) if rows_to_drop is not None else set()
+                if drop_ids and ENTITY_SYSTEM_RECORD_ID not in enriched_peek.columns:
+                    continue
+
+            exclude_to_drop = [f for f in wanted.exclude_features if f not in source.exclude_features]
+            self.logger.info(
+                f"Cached fuller dataset found ({source}) - derive wanted view ({wanted})"
+            )
+            return self.__get_sampled_cached_enriched(
+                source_hash,
+                exclude_features_sources=exclude_to_drop or None,
+                write_hash=wanted_hash,
+                drop_entity_ids=drop_ids,
+                drop_oot_evals=wanted.exclude_oot and not source.exclude_oot,
+            )
+
+        return None
+
+    @staticmethod
+    def _can_derive_metrics_cache(
+        source: _MetricsCacheOptions, wanted: _MetricsCacheOptions
+    ) -> bool:
+        """True if wanted can be derived from source by only dropping columns/rows/OOT evals."""
+        if source == wanted:
+            return True
+        if source.outliers_removed and not wanted.outliers_removed:
+            return False
+        if source.exclude_oot and not wanted.exclude_oot:
+            return False
+        if not set(source.exclude_features).issubset(wanted.exclude_features):
+            return False
+        return True
 
     def _get_enriched_datasets(
         self,
@@ -2312,102 +2414,31 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: bool | None,
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
-        is_for_metrics: bool = False,
+        exclude_oot: bool = False,
     ) -> _EnrichedDataForMetrics:
-        want_exclude_oot = is_for_metrics
-        datasets_hash = self._get_metrics_cache_key(
-            validated_X,
-            validated_y,
-            validated_eval_set,
-            remove_outliers_calc_metrics,
-            exclude_features_sources,
-            exclude_oot=want_exclude_oot,
+        wanted = self._metrics_cache_options(
+            remove_outliers_calc_metrics, exclude_features_sources, exclude_oot
         )
-        cached_sampled_datasets = self.__cached_sampled_datasets.get(datasets_hash)
-        if cached_sampled_datasets is not None and is_input_same_as_fit:
-            self.logger.info("Cached enriched dataset found - use it")
-            return self.__get_sampled_cached_enriched(datasets_hash)
-
-        # Reuse a fuller cache (no exclusions) by dropping excluded columns on read.
-        if exclude_features_sources and is_input_same_as_fit:
-            full_hash = self._get_metrics_cache_key(
-                validated_X,
-                validated_y,
-                validated_eval_set,
-                remove_outliers_calc_metrics,
-                exclude_features_sources=None,
-                exclude_oot=want_exclude_oot,
-            )
-            if full_hash in self.__cached_sampled_datasets:
-                self.logger.info("Cached enriched dataset found without exclusions - drop excluded columns")
-                return self.__get_sampled_cached_enriched(
-                    full_hash,
-                    exclude_features_sources=exclude_features_sources,
-                    write_hash=datasets_hash,
-                )
-
-        # Reuse PSI / keep-outliers cache by dropping target outlier rows
-        if is_input_same_as_fit and self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics):
-            keep_outliers_hash = self._get_metrics_cache_key(
-                validated_X,
-                validated_y,
-                validated_eval_set,
-                remove_outliers_calc_metrics=False,
-                exclude_features_sources=exclude_features_sources,
-                exclude_oot=want_exclude_oot,
-            )
-            if keep_outliers_hash in self.__cached_sampled_datasets:
-                enriched_peek = self.__cached_sampled_datasets[keep_outliers_hash][2]
-                rows_to_drop = self.__resolve_target_outlier_rows()
-                drop_ids = (
-                    set(rows_to_drop[ENTITY_SYSTEM_RECORD_ID]) if rows_to_drop is not None else set()
-                )
-                if not drop_ids or ENTITY_SYSTEM_RECORD_ID in enriched_peek.columns:
-                    self.logger.info("Cached keep-outliers dataset found - derive outliers-removed view")
-                    return self.__get_sampled_cached_enriched(
-                        keep_outliers_hash,
-                        write_hash=datasets_hash,
-                        drop_entity_ids=drop_ids,
-                    )
-
-        # Reuse full (with-OOT) cache for metrics by dropping OOT evals
-        if want_exclude_oot and is_input_same_as_fit:
-            with_oot_hash = self._get_metrics_cache_key(
-                validated_X,
-                validated_y,
-                validated_eval_set,
-                remove_outliers_calc_metrics,
-                exclude_features_sources,
-                exclude_oot=False,
-            )
-            if with_oot_hash in self.__cached_sampled_datasets:
-                self.logger.info("Cached with-OOT dataset found - drop OOT evals for metrics")
-                return self.__get_sampled_cached_enriched(
-                    with_oot_hash,
-                    write_hash=datasets_hash,
-                    drop_oot_evals=True,
-                )
-
-        # as-input / from-fit always keep OOT when present → write under exclude_oot=False
-        producer_hash = self._get_metrics_cache_key(
-            validated_X,
-            validated_y,
-            validated_eval_set,
-            remove_outliers_calc_metrics,
-            exclude_features_sources,
-            exclude_oot=False,
+        reused = self.__try_reuse_metrics_cache(
+            validated_X, validated_y, validated_eval_set, wanted, is_input_same_as_fit
         )
+        if reused is not None:
+            return reused
+
+        # as-input / from-fit keep OOT when present
+        write_opts = dataclasses.replace(wanted, exclude_oot=False)
+        write_hash = self._metrics_cache_key(validated_X, validated_y, validated_eval_set, write_opts)
 
         if len(self.feature_names_) == 0 or all([f in validated_X.columns for f in self.feature_names_]):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
             return self.__get_enriched_as_input(
-                validated_X, validated_y, validated_eval_set, is_demo_dataset, producer_hash
+                validated_X, validated_y, validated_eval_set, is_demo_dataset, write_hash
             )
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
         elif not exclude_features_sources and is_input_same_as_fit and self.df_with_original_index is not None:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__get_enriched_from_fit(
-                validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics, producer_hash
+                validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics, write_hash
             )
         else:
             self.logger.info(
@@ -2415,15 +2446,8 @@ class FeaturesEnricher(TransformerMixin):
                 " Run transform"
             )
             print(self.bundle.get("prepare_data_for_metrics"))
-            # Transform payload matches exclude_oot flag → write under matching key
-            transform_hash = self._get_metrics_cache_key(
-                validated_X,
-                validated_y,
-                validated_eval_set,
-                remove_outliers_calc_metrics,
-                exclude_features_sources,
-                exclude_oot=want_exclude_oot,
-            )
+            # Transform payload matches exclude_oot → write under wanted key
+            write_hash = self._metrics_cache_key(validated_X, validated_y, validated_eval_set, wanted)
             return self.__get_enriched_from_transform(
                 validated_X,
                 validated_y,
@@ -2431,10 +2455,8 @@ class FeaturesEnricher(TransformerMixin):
                 exclude_features_sources,
                 progress_bar,
                 progress_callback,
-                # Exclude OOT eval sets from transform because they are not used for metrics calculation
-                exclude_oot=want_exclude_oot,
-                datasets_hash=transform_hash,
-                remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                exclude_oot=exclude_oot,
+                datasets_hash=write_hash,
             )
 
     def __resolve_target_outlier_rows(self) -> pd.DataFrame | None:
@@ -2748,9 +2770,8 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None,
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
-        exclude_oot: bool = False,
-        datasets_hash: str | None = None,
-        remove_outliers_calc_metrics: bool | None = None,
+        exclude_oot: bool,
+        datasets_hash: str,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -2802,16 +2823,6 @@ class FeaturesEnricher(TransformerMixin):
 
         search_keys = {columns_renaming.get(k, k): v for k, v in search_keys.items()}
 
-        # Cache and return results
-        if datasets_hash is None:
-            datasets_hash = self._get_metrics_cache_key(
-                validated_X,
-                validated_y,
-                eval_set,
-                remove_outliers_calc_metrics=remove_outliers_calc_metrics,
-                exclude_features_sources=exclude_features_sources,
-                exclude_oot=exclude_oot,
-            )
         return self.__cache_and_return_results(
             datasets_hash,
             X_sampled,
