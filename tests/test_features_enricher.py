@@ -2404,10 +2404,17 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     )
     mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
 
-    transformed = enricher.transform(train_features)
+    # Same object as fit — reuse fit enrichment, no validation search
+    history_before = len(requests_mock.request_history)
+    transformed_from_fit = enricher.transform(train_features)
+    transform_url = url + "/public/api/v2/search/validation?initialSearchTaskId=" + search_task_id
+    assert not any(elem.url == transform_url for elem in requests_mock.request_history[history_before:])
+    assert transformed_from_fit.shape == (10000, 5)
+
+    # A copy is treated as new input and still goes through validation with runtime parameters
+    transformed = enricher.transform(train_features.copy())
 
     transform_req = None
-    transform_url = url + "/public/api/v2/search/validation?initialSearchTaskId=" + search_task_id
     for elem in requests_mock.request_history:
         if elem.url == transform_url:
             transform_req = elem

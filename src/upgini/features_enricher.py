@@ -1710,6 +1710,161 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.info("Passed X, y and eval_set that differs from passed on fit. Transform will be used")
             return False, X, y, checked_eval_set
 
+    def _find_fit_dataset_index(self, X: pd.DataFrame) -> int | None:
+        if self.X is not None and X is self.X:
+            return 0
+        for i, (eval_x, _) in enumerate(self.eval_set or []):
+            if X is eval_x:
+                return i + 1
+        return None
+
+    def __enrich_df_with_fit_features(
+        self,
+        rows_to_drop: pd.DataFrame | None = None,
+    ) -> tuple[pd.DataFrame, list[str], dict[str, SearchKey]] | None:
+        if self.df_with_original_index is None or self._search_task is None:
+            return None
+        if self.fit_columns_renaming is None or self.fit_search_keys is None:
+            return None
+
+        fit_features = self._search_task.get_all_initial_raw_features(self._get_trace_id(), metrics_calculation=True)
+        if fit_features is None or len(fit_features) == 0:
+            return None
+
+        if rows_to_drop is not None:
+            self.logger.info(f"Before dropping target outliers size: {len(fit_features)}")
+            fit_features = fit_features[
+                ~fit_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
+            ]
+            self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
+
+        enriched_Xy = self.__enrich(
+            self.df_with_original_index,
+            fit_features,
+            how="inner",
+            drop_system_record_id=False,
+        )
+        enriched_Xy = enriched_Xy.rename(columns=self.fit_columns_renaming)
+        generated_features = [self.fit_columns_renaming.get(c, c) for c in (self.fit_generated_features or [])]
+        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+        return enriched_Xy, generated_features, search_keys
+
+    def __finalize_transform_result(
+        self,
+        result: pd.DataFrame,
+        validated_Xy: pd.DataFrame,
+        generated_features: list[str],
+        columns_renaming: dict[str, str],
+        search_keys: dict[str, SearchKey],
+        keep_input: bool,
+        add_fit_system_record_id: bool,
+    ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
+        selecting_columns = self._selecting_input_and_generated_columns(
+            validated_Xy, generated_features, keep_input, is_transform=True
+        )
+        selecting_columns.extend(
+            c
+            for c in result.columns
+            if c in self.feature_names_ and c not in selecting_columns and c not in validated_Xy.columns
+        )
+        if add_fit_system_record_id:
+            selecting_columns.append(SORT_ID)
+
+        selecting_columns = list(set(selecting_columns))
+        # sorting: first columns from X, then generated features, then enriched features
+        sorted_selecting_columns = [c for c in validated_Xy.columns if c in selecting_columns]
+        for c in generated_features:
+            if c in selecting_columns and c not in sorted_selecting_columns:
+                sorted_selecting_columns.append(c)
+        for c in result.columns:
+            if c in selecting_columns and c not in sorted_selecting_columns:
+                sorted_selecting_columns.append(c)
+
+        self.logger.info(f"Transform sorted_selecting_columns: {sorted_selecting_columns}")
+
+        result = result[sorted_selecting_columns]
+
+        if self.country_added:
+            result = result.drop(columns=COUNTRY, errors="ignore")
+
+        if add_fit_system_record_id:
+            result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
+
+        return result, columns_renaming, generated_features, search_keys
+
+    def __get_transform_from_fit(
+        self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series | None,
+        fit_dataset_index: int,
+        exclude_features_sources: list[str] | None,
+        keep_input: bool,
+        add_fit_system_record_id: bool,
+    ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]] | None:
+        """Reuse fit enrichment for transform when X was already sent on fit.
+
+        Returns None when coverage is incomplete (sampling/dedup) so the caller can
+        fall back to a normal validation search.
+        """
+        enriched = self.__enrich_df_with_fit_features()
+        if enriched is None:
+            return None
+        enriched_Xy, generated_features, search_keys = enriched
+
+        if EVAL_SET_INDEX in enriched_Xy.columns:
+            enriched_Xy = enriched_Xy.loc[enriched_Xy[EVAL_SET_INDEX] == fit_dataset_index].copy()
+        elif fit_dataset_index != 0:
+            return None
+
+        if len(enriched_Xy) != len(validated_X) or sorted(enriched_Xy.index.to_list()) != sorted(
+            validated_X.index.to_list()
+        ):
+            self.logger.info(
+                "Fit enrichment does not cover all transform rows "
+                f"({len(enriched_Xy)} vs {len(validated_X)}) — falling back to transform"
+            )
+            return None
+
+        system_cols = [
+            TARGET,
+            EVAL_SET_INDEX,
+            SYSTEM_RECORD_ID,
+            ENTITY_SYSTEM_RECORD_ID,
+            SORT_ID,
+            DateTimeConverter.DATETIME_COL,
+        ]
+        features_to_join = enriched_Xy.drop(
+            columns=[c for c in system_cols if c in enriched_Xy.columns], errors="ignore"
+        )
+        overlap = [c for c in features_to_join.columns if c in validated_X.columns]
+        features_to_join = features_to_join.drop(columns=overlap, errors="ignore")
+
+        # Preserve input row order/index; coverage check above ensures 1:1 index alignment.
+        result = validated_X.join(features_to_join, how="left")
+        if exclude_features_sources:
+            result = result.drop(columns=exclude_features_sources, errors="ignore")
+
+        validated_Xy = validated_X.copy()
+        if validated_y is not None:
+            validated_Xy[TARGET] = validated_y
+            result[TARGET] = validated_y
+
+        if add_fit_system_record_id and SYSTEM_RECORD_ID in enriched_Xy.columns:
+            result[SORT_ID] = enriched_Xy[SYSTEM_RECORD_ID]
+
+        self.logger.info(
+            f"Reusing fit enrichment for transform (dataset index {fit_dataset_index}), skipping validation search"
+        )
+        return self.__finalize_transform_result(
+            result,
+            validated_Xy,
+            generated_features,
+            dict(self.fit_columns_renaming),
+            search_keys,
+            keep_input,
+            add_fit_system_record_id,
+        )
+
     def _get_cv_and_groups(
         self,
         X: pd.DataFrame,
@@ -2320,26 +2475,10 @@ class FeaturesEnricher(TransformerMixin):
 
         # index in each dataset (X, eval set) may be reordered and non unique, but index in validated datasets
         # can differs from it
-        fit_features = self._search_task.get_all_initial_raw_features(self._get_trace_id(), metrics_calculation=True)
-
-        # Pre-process features if we need to drop outliers
-        if rows_to_drop is not None:
-            self.logger.info(f"Before dropping target outliers size: {len(fit_features)}")
-            fit_features = fit_features[
-                ~fit_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
-            ]
-            self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
-
-        enriched_Xy = self.__enrich(
-            self.df_with_original_index,
-            fit_features,
-            how="inner",
-            drop_system_record_id=False,
-        )
-
-        enriched_Xy.rename(columns=self.fit_columns_renaming, inplace=True)
-        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in search_keys.items()}
-        generated_features = [self.fit_columns_renaming.get(c, c) for c in self.fit_generated_features]
+        enriched = self.__enrich_df_with_fit_features(rows_to_drop=rows_to_drop)
+        if enriched is None:
+            raise RuntimeError(self.bundle.get("features_wasnt_returned"))
+        enriched_Xy, generated_features, search_keys = enriched
 
         validated_Xy = validated_X.copy()
         validated_Xy[TARGET] = validated_y
@@ -2777,6 +2916,21 @@ if response.status_code == 200:
             self.__display_support_link(msg)
             return None, {}, [], search_keys
 
+        # Reuse fit enrichment when transforming the same train / eval / OOT object
+        # that was already uploaded on fit (avoids a second backend search + quota use).
+        fit_dataset_index = self._find_fit_dataset_index(X)
+        if fit_dataset_index is not None:
+            from_fit = self.__get_transform_from_fit(
+                validated_X,
+                validated_y,
+                fit_dataset_index,
+                exclude_features_sources,
+                keep_input,
+                add_fit_system_record_id,
+            )
+            if from_fit is not None:
+                return from_fit
+
         online_api_features = [fm.name for fm in features_meta if fm.from_online_api and fm.shap_value > 0]
         if len(online_api_features) > 0:
             self.logger.warning(
@@ -3146,38 +3300,15 @@ if response.status_code == 200:
             how="left",
         )
 
-        selecting_columns = self._selecting_input_and_generated_columns(
-            validated_Xy, generated_features, keep_input, is_transform=True
+        return self.__finalize_transform_result(
+            result,
+            validated_Xy,
+            generated_features,
+            columns_renaming,
+            search_keys,
+            keep_input,
+            add_fit_system_record_id,
         )
-        selecting_columns.extend(
-            c
-            for c in result.columns
-            if c in self.feature_names_ and c not in selecting_columns and c not in validated_Xy.columns
-        )
-        if add_fit_system_record_id:
-            selecting_columns.append(SORT_ID)
-
-        selecting_columns = list(set(selecting_columns))
-        # sorting: first columns from X, then generated features, then enriched features
-        sorted_selecting_columns = [c for c in validated_Xy.columns if c in selecting_columns]
-        for c in generated_features:
-            if c in selecting_columns and c not in sorted_selecting_columns:
-                sorted_selecting_columns.append(c)
-        for c in result.columns:
-            if c in selecting_columns and c not in sorted_selecting_columns:
-                sorted_selecting_columns.append(c)
-
-        self.logger.info(f"Transform sorted_selecting_columns: {sorted_selecting_columns}")
-
-        result = result[sorted_selecting_columns]
-
-        if self.country_added:
-            result = result.drop(columns=COUNTRY, errors="ignore")
-
-        if add_fit_system_record_id:
-            result = result.rename(columns={SORT_ID: SYSTEM_RECORD_ID})
-
-        return result, columns_renaming, generated_features, search_keys
 
     def _selecting_input_and_generated_columns(
         self,

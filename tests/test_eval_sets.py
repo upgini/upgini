@@ -5,7 +5,8 @@ from requests_mock.mocker import Mocker
 from upgini.dataset import Dataset
 from upgini.features_enricher import FeaturesEnricher
 from upgini.http import _RestClient
-from upgini.metadata import EVAL_SET_INDEX, TARGET, SearchKey
+from upgini.metadata import EVAL_SET_INDEX, TARGET, SearchKey, ENTITY_SYSTEM_RECORD_ID, AddInfo
+from unittest.mock import MagicMock
 
 from .test_features_enricher import DataFrameWrapper, TestException
 from .utils import mock_default_requests
@@ -406,3 +407,113 @@ def test_eval_sets_with_oot(requests_mock: Mocker):
     finally:
         _RestClient.initial_search_v2 = original_initial_search
         Dataset.MIN_ROWS_COUNT = old_min_rows_count
+
+
+def test_find_fit_dataset_index_for_train_and_oot(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    train_y = pd.Series([0, 1])
+    oot_X = pd.DataFrame({"phone": ["+10000000003", "+10000000004"], "f": [3.0, 4.0]})
+    eval_X = pd.DataFrame({"phone": ["+10000000005", "+10000000006"], "f": [5.0, 6.0]})
+    eval_y = pd.Series([1, 0])
+
+    enricher.X = train_X
+    enricher.y = train_y
+    enricher.eval_set = enricher._check_eval_set([(eval_X, eval_y), oot_X], train_X)
+
+    assert enricher._find_fit_dataset_index(train_X) == 0
+    assert enricher._find_fit_dataset_index(eval_X) == 1
+    assert enricher._find_fit_dataset_index(oot_X) == 2
+    assert enricher._find_fit_dataset_index(train_X.copy()) is None
+    assert enricher._find_fit_dataset_index(oot_X.copy()) is None
+
+
+def test_transform_from_fit_reuses_enrichment_for_train_and_oot(requests_mock: Mocker):
+    """transform(train) / transform(oot) after fit should reuse fit features, not validation search."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    oot_X = pd.DataFrame({"phone": ["+10000000003", "+10000000004"], "f": [3.0, 4.0]}, index=[10, 11])
+
+    enricher.X = train_X
+    enricher.y = pd.Series([0, 1])
+    enricher.eval_set = enricher._check_eval_set([oot_X], train_X)
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.external_source_feature_names = ["ads_feature"]
+    enricher.fit_columns_renaming = {"phone_abc": "phone", "f_def": "f"}
+    enricher.fit_search_keys = {"phone_abc": SearchKey.PHONE}
+    enricher.fit_generated_features = []
+    enricher.fit_select_features = False
+    enricher.country_added = False
+    enricher.add_info = AddInfo()
+
+    # Simulate df kept on fit: hashed column names + entity ids + eval_set_index
+    df_fit = pd.DataFrame(
+        {
+            "phone_abc": ["+10000000001", "+10000000002", "+10000000003", "+10000000004"],
+            "f_def": [1.0, 2.0, 3.0, 4.0],
+            TARGET: [0.0, 1.0, np.nan, np.nan],
+            EVAL_SET_INDEX: [0, 0, 1, 1],
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0, 201.0, 202.0],
+        },
+        index=[0, 1, 10, 11],
+    )
+    enricher.df_with_original_index = df_fit
+
+    fit_features = pd.DataFrame(
+        {
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0, 201.0, 202.0],
+            "ads_feature": [10.0, 20.0, 30.0, 40.0],
+        }
+    )
+
+    search_task = MagicMock()
+    fm = MagicMock()
+    fm.name = "ads_feature"
+    fm.shap_value = 1.0
+    fm.source = "ads"
+    fm.from_online_api = False
+    search_task.get_all_features_metadata_v2.return_value = [fm]
+    search_task.get_all_initial_raw_features.return_value = fit_features
+    col_phone = MagicMock(originalName="phone", name="phone_abc")
+    col_f = MagicMock(originalName="f", name="f_def")
+    search_task.get_file_metadata.return_value = MagicMock(columns=[col_phone, col_f], droppedColumns=[])
+    enricher._search_task = search_task
+    enricher.search_id = "fake_search"
+
+    def fail_if_validation(*args, **kwargs):
+        raise AssertionError("validation search should not be called when reusing fit enrichment")
+
+    original_validation = Dataset.validation
+    Dataset.validation = fail_if_validation
+    try:
+        enriched_train = enricher.transform(train_X, keep_input=True)
+        assert enriched_train is not None
+        assert len(enriched_train) == len(train_X)
+        assert "ads_feature" in enriched_train.columns
+        assert list(enriched_train["ads_feature"]) == [10.0, 20.0]
+
+        enriched_oot = enricher.transform(oot_X, keep_input=True)
+        assert enriched_oot is not None
+        assert len(enriched_oot) == len(oot_X)
+        assert "ads_feature" in enriched_oot.columns
+        assert list(enriched_oot["ads_feature"]) == [30.0, 40.0]
+    finally:
+        Dataset.validation = original_validation
