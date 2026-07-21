@@ -2390,6 +2390,7 @@ class FeaturesEnricher(TransformerMixin):
                 # Exclude OOT eval sets from transform because they are not used for metrics calculation
                 exclude_oot=is_for_metrics,
                 datasets_hash=datasets_hash,
+                remove_outliers_calc_metrics=remove_outliers_calc_metrics,
             )
 
     def __resolve_target_outlier_rows(self) -> pd.DataFrame | None:
@@ -2697,6 +2698,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Callable[[SearchProgress], Any] | None,
         exclude_oot: bool = False,
         datasets_hash: str | None = None,
+        remove_outliers_calc_metrics: bool | None = None,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -2747,7 +2749,11 @@ class FeaturesEnricher(TransformerMixin):
         # Cache and return results
         if datasets_hash is None:
             datasets_hash = self._get_metrics_cache_key(
-                validated_X, validated_y, eval_set, exclude_features_sources=exclude_features_sources
+                validated_X,
+                validated_y,
+                eval_set,
+                remove_outliers_calc_metrics=remove_outliers_calc_metrics,
+                exclude_features_sources=exclude_features_sources,
             )
         return self.__cache_and_return_results(
             datasets_hash,

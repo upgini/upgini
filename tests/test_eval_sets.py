@@ -520,7 +520,6 @@ def test_transform_from_fit_reuses_enrichment_for_train_and_oot(requests_mock: M
 
 
 def test_metrics_cache_key_isolates_outliers_and_exclude(requests_mock: Mocker):
-    """Cache entries for different prepare options must not share a key (Bug 3)."""
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
@@ -690,3 +689,84 @@ def test_metrics_cache_derives_outliers_removed_from_psi_entry(requests_mock: Mo
     assert drop_hash in cache
     assert len(cache[drop_hash][2]) == 2
     assert 103 not in set(cache[drop_hash][2][ENTITY_SYSTEM_RECORD_ID])
+
+
+def test_metrics_cache_uses_validated_key_not_raw(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.features_enricher import hash_input
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+        exclude_columns=["noise"],
+    )
+
+    raw_X = pd.DataFrame(
+        {
+            "phone": ["+10000000001", "+10000000002"],
+            "f": [1.0, 2.0],
+            "noise": [9.0, 9.0],
+        }
+    )
+    y = pd.Series([0, 1])
+    validated_X = enricher._validate_X(raw_X)
+    assert "noise" not in validated_X.columns
+    assert hash_input(raw_X, y) != hash_input(validated_X, y)
+
+    raw_key = enricher._get_metrics_cache_key(raw_X, y, None)
+    validated_key = enricher._get_metrics_cache_key(validated_X, y, None)
+    assert raw_key != validated_key
+
+    enricher.X = raw_X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.df_with_original_index = validated_X.assign(**{TARGET: y.values, ENTITY_SYSTEM_RECORD_ID: [1, 2]})
+
+    from_fit_calls = []
+
+    def fake_from_fit(vX, vY, eval_set, remove_outliers_calc_metrics, datasets_hash):
+        from_fit_calls.append(datasets_hash)
+        X_sampled = vX.copy()
+        y_sampled = vY.copy()
+        enriched = vX.copy()
+        enriched["ads_feature"] = [10.0, 20.0]
+        return enricher._FeaturesEnricher__cache_and_return_results(
+            datasets_hash,
+            X_sampled,
+            y_sampled,
+            enriched,
+            {},
+            {},
+            {"phone": SearchKey.PHONE},
+            [],
+        )
+
+    enricher._FeaturesEnricher__get_enriched_from_fit = fake_from_fit
+
+    kwargs = dict(
+        validated_X=validated_X,
+        validated_y=y,
+        validated_eval_set=None,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+    )
+    result1 = enricher._get_enriched_datasets(**kwargs)
+    result2 = enricher._get_enriched_datasets(**kwargs)
+
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    assert from_fit_calls == [validated_key]
+    assert validated_key in cache
+    assert raw_key not in cache
+    assert "ads_feature" in result1.enriched_X.columns
+    assert "ads_feature" in result2.enriched_X.columns
