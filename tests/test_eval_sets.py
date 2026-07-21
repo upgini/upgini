@@ -770,3 +770,63 @@ def test_metrics_cache_uses_validated_key_not_raw(requests_mock: Mocker):
     assert raw_key not in cache
     assert "ads_feature" in result1.enriched_X.columns
     assert "ads_feature" in result2.enriched_X.columns
+
+
+def test_metrics_cache_as_input_uses_validated_key(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    y = pd.Series([0, 1])
+    eval_X = pd.DataFrame({"phone": ["+10000000003"], "f": [3.0]})
+    eval_y = pd.Series([0])
+    eval_set = [(eval_X, eval_y)]
+
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = eval_set
+    enricher.feature_names_ = []
+    enricher.add_info = AddInfo()
+
+    expected_key = enricher._get_metrics_cache_key(X, y, eval_set)
+    assert expected_key != ""
+
+    as_input_calls = []
+    original_as_input = enricher._FeaturesEnricher__get_enriched_as_input
+
+    def counting_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset, datasets_hash):
+        as_input_calls.append(datasets_hash)
+        return original_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset, datasets_hash)
+
+    enricher._FeaturesEnricher__get_enriched_as_input = counting_as_input
+
+    kwargs = dict(
+        validated_X=X,
+        validated_y=y,
+        validated_eval_set=eval_set,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+    )
+    result1 = enricher._get_enriched_datasets(**kwargs)
+    result2 = enricher._get_enriched_datasets(**kwargs)
+
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    assert as_input_calls == [expected_key]
+    assert expected_key in cache
+    assert "" not in cache
+    assert len(result1.eval_set_sampled_dict) == 1
+    assert len(result2.eval_set_sampled_dict) == 1
