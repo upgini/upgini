@@ -517,3 +517,100 @@ def test_transform_from_fit_reuses_enrichment_for_train_and_oot(requests_mock: M
         assert list(enriched_oot["ads_feature"]) == [30.0, 40.0]
     finally:
         Dataset.validation = original_validation
+
+
+def test_metrics_cache_key_isolates_outliers_and_exclude(requests_mock: Mocker):
+    """Cache entries for different prepare options must not share a key (Bug 3)."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.REGRESSION,
+    )
+
+    X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    y = pd.Series([0.1, 0.2])
+
+    key_default = enricher._get_metrics_cache_key(X, y, None)
+    key_keep_outliers = enricher._get_metrics_cache_key(X, y, None, remove_outliers_calc_metrics=False)
+    key_exclude = enricher._get_metrics_cache_key(X, y, None, exclude_features_sources=["ads_a"])
+    key_exclude_other_order = enricher._get_metrics_cache_key(
+        X, y, None, exclude_features_sources=["ads_b", "ads_a"]
+    )
+    key_exclude_sorted = enricher._get_metrics_cache_key(
+        X, y, None, exclude_features_sources=["ads_a", "ads_b"]
+    )
+
+    assert key_default != key_keep_outliers
+    assert key_default != key_exclude
+    assert key_keep_outliers != key_exclude
+    assert key_exclude_other_order == key_exclude_sorted
+    assert "outliers_removed=True" in key_default
+    assert "outliers_removed=False" in key_keep_outliers
+    assert "exclude=ads_a" in key_exclude
+
+    # Non-regression: explicit outlier flags are no-ops and share a key
+    enricher.model_task_type = ModelTaskType.BINARY
+    binary_none = enricher._get_metrics_cache_key(X, y, None, remove_outliers_calc_metrics=None)
+    binary_true = enricher._get_metrics_cache_key(X, y, None, remove_outliers_calc_metrics=True)
+    binary_false = enricher._get_metrics_cache_key(X, y, None, remove_outliers_calc_metrics=False)
+    assert binary_none == binary_true == binary_false
+    assert "outliers_removed=False" in binary_none
+
+
+def test_metrics_cache_exclude_does_not_poison_full_entry(requests_mock: Mocker):
+    """Reading with exclude from a full cache must not overwrite the full entry."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    y = pd.Series([0, 1])
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+
+    full_hash = enricher._get_metrics_cache_key(X, y, None)
+    exclude_hash = enricher._get_metrics_cache_key(X, y, None, exclude_features_sources=["ads_feature"])
+
+    X_sampled = X.copy()
+    y_sampled = y.copy()
+    enriched_full = X.copy()
+    enriched_full["ads_feature"] = [10.0, 20.0]
+    cache = enricher._FeaturesEnricher__cached_sampled_datasets
+    cache[full_hash] = (
+        X_sampled,
+        y_sampled,
+        enriched_full,
+        {},
+        {},
+        {},
+        [],
+    )
+
+    result = enricher._FeaturesEnricher__get_sampled_cached_enriched(
+        full_hash,
+        exclude_features_sources=["ads_feature"],
+        write_hash=exclude_hash,
+    )
+    assert "ads_feature" not in result.enriched_X.columns
+    # Full cache entry must remain intact
+    assert "ads_feature" in cache[full_hash][2].columns
+    # Excluded view may be stored under its own key
+    assert exclude_hash in cache
+    assert "ads_feature" not in cache[exclude_hash][2].columns

@@ -2275,6 +2275,29 @@ class FeaturesEnricher(TransformerMixin):
         columns_renaming: dict[str, str]
         generated_features: list[str]
 
+    def _effective_remove_outliers_for_metrics(self, remove_outliers_calc_metrics: bool | None) -> bool:
+        if self.model_task_type != ModelTaskType.REGRESSION:
+            return False
+        return True if remove_outliers_calc_metrics is None else bool(remove_outliers_calc_metrics)
+
+    def _get_metrics_cache_key(
+        self,
+        validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
+        validated_y: pd.DataFrame | pd.Series | np.ndarray | list | None,
+        validated_eval_set: list[tuple] | None,
+        remove_outliers_calc_metrics: bool | None = None,
+        exclude_features_sources: list[str] | None = None,
+    ) -> str:
+        """Cache key for enriched metrics datasets.
+
+        Includes effective outlier removal and excluded feature sources so different
+        prepare options cannot poison each other's entries.
+        """
+        base = hash_input(validated_X, validated_y, validated_eval_set)
+        outliers_removed = self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics)
+        exclude_key = ",".join(sorted(exclude_features_sources or []))
+        return f"{base}|outliers_removed={outliers_removed}|exclude={exclude_key}"
+
     def _get_enriched_datasets(
         self,
         validated_X: pd.DataFrame | pd.Series | np.ndarray | None,
@@ -2288,19 +2311,45 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Callable[[SearchProgress], Any] | None,
         is_for_metrics: bool = False,
     ) -> _EnrichedDataForMetrics:
-        datasets_hash = hash_input(validated_X, validated_y, validated_eval_set)
+        datasets_hash = self._get_metrics_cache_key(
+            validated_X,
+            validated_y,
+            validated_eval_set,
+            remove_outliers_calc_metrics,
+            exclude_features_sources,
+        )
         cached_sampled_datasets = self.__cached_sampled_datasets.get(datasets_hash)
-        if cached_sampled_datasets is not None and is_input_same_as_fit and remove_outliers_calc_metrics is None:
+        if cached_sampled_datasets is not None and is_input_same_as_fit:
             self.logger.info("Cached enriched dataset found - use it")
-            return self.__get_sampled_cached_enriched(datasets_hash, exclude_features_sources)
-        elif len(self.feature_names_) == 0 or all([f in validated_X.columns for f in self.feature_names_]):
+            return self.__get_sampled_cached_enriched(datasets_hash)
+
+        # Reuse a fuller cache (no exclusions) by dropping excluded columns on read.
+        if exclude_features_sources and is_input_same_as_fit:
+            full_hash = self._get_metrics_cache_key(
+                validated_X,
+                validated_y,
+                validated_eval_set,
+                remove_outliers_calc_metrics,
+                exclude_features_sources=None,
+            )
+            if full_hash in self.__cached_sampled_datasets:
+                self.logger.info("Cached enriched dataset found without exclusions - drop excluded columns")
+                return self.__get_sampled_cached_enriched(
+                    full_hash,
+                    exclude_features_sources=exclude_features_sources,
+                    write_hash=datasets_hash,
+                )
+
+        if len(self.feature_names_) == 0 or all([f in validated_X.columns for f in self.feature_names_]):
             self.logger.info("No external features selected. So use only input datasets for metrics calculation")
-            return self.__get_enriched_as_input(validated_X, validated_y, validated_eval_set, is_demo_dataset)
+            return self.__get_enriched_as_input(
+                validated_X, validated_y, validated_eval_set, is_demo_dataset, datasets_hash
+            )
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
         elif not exclude_features_sources and is_input_same_as_fit and self.df_with_original_index is not None:
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__get_enriched_from_fit(
-                validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics
+                validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics, datasets_hash
             )
         else:
             self.logger.info(
@@ -2317,19 +2366,45 @@ class FeaturesEnricher(TransformerMixin):
                 progress_callback,
                 # Exclude OOT eval sets from transform because they are not used for metrics calculation
                 exclude_oot=is_for_metrics,
+                datasets_hash=datasets_hash,
             )
 
     def __get_sampled_cached_enriched(
-        self, datasets_hash: str, exclude_features_sources: list[str] | None
+        self,
+        datasets_hash: str,
+        exclude_features_sources: list[str] | None = None,
+        write_hash: str | None = None,
     ) -> _EnrichedDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features = (
             self.__cached_sampled_datasets[datasets_hash]
         )
         if exclude_features_sources:
             enriched_X = enriched_X.drop(columns=exclude_features_sources, errors="ignore")
+            # Keep eval enriched frames consistent with train exclusions.
+            updated_eval_set = {}
+            for idx, (eval_X_sampled, enriched_eval_X, eval_y_sampled) in eval_set_sampled_dict.items():
+                updated_eval_set[idx] = (
+                    eval_X_sampled,
+                    enriched_eval_X.drop(columns=exclude_features_sources, errors="ignore"),
+                    eval_y_sampled,
+                )
+            eval_set_sampled_dict = updated_eval_set
+
+        cache_hash = write_hash or datasets_hash
+        # Never overwrite a fuller cache entry with an excluded view of the same key.
+        if cache_hash == datasets_hash and exclude_features_sources:
+            return self.__mk_sampled_data_tuple(
+                X_sampled,
+                y_sampled,
+                enriched_X,
+                eval_set_sampled_dict,
+                search_keys,
+                columns_renaming,
+                generated_features,
+            )
 
         return self.__cache_and_return_results(
-            datasets_hash,
+            cache_hash,
             X_sampled,
             y_sampled,
             enriched_X,
@@ -2340,7 +2415,12 @@ class FeaturesEnricher(TransformerMixin):
         )
 
     def __get_enriched_as_input(
-        self, validated_X: pd.DataFrame, validated_y: pd.Series, eval_set: list[tuple] | None, is_demo_dataset: bool
+        self,
+        validated_X: pd.DataFrame,
+        validated_y: pd.Series,
+        eval_set: list[tuple] | None,
+        is_demo_dataset: bool,
+        datasets_hash: str,
     ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
 
@@ -2427,7 +2507,6 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_X = eval_X_sampled
                 eval_set_sampled_dict[idx] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
-        datasets_hash = hash_input(X_sampled, y_sampled, eval_set_sampled_dict)
         return self.__cache_and_return_results(
             datasets_hash,
             X_sampled,
@@ -2445,6 +2524,7 @@ class FeaturesEnricher(TransformerMixin):
         validated_y: pd.Series,
         eval_set: list[tuple] | None,
         remove_outliers_calc_metrics: bool | None,
+        datasets_hash: str,
     ) -> _EnrichedDataForMetrics:
         eval_set_sampled_dict = {}
         search_keys = self.fit_search_keys.copy()
@@ -2455,9 +2535,7 @@ class FeaturesEnricher(TransformerMixin):
         self.model_task_type = self.model_task_type or define_task(
             self.df_with_original_index[TARGET], has_date, self.logger, silent=True
         )
-        if remove_outliers_calc_metrics is None:
-            remove_outliers_calc_metrics = True
-        if self.model_task_type == ModelTaskType.REGRESSION and remove_outliers_calc_metrics:
+        if self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics):
             target_outliers_df = self._search_task.get_target_outliers(self._get_trace_id())
             if target_outliers_df is not None and len(target_outliers_df) > 0:
                 outliers = pd.merge(
@@ -2551,7 +2629,6 @@ class FeaturesEnricher(TransformerMixin):
                 enriched_eval_X = enriched_eval_sets[idx][enriched_X_columns].copy()
                 eval_set_sampled_dict[idx - 1] = (eval_X_sampled, enriched_eval_X, eval_y_sampled)
 
-        datasets_hash = hash_input(self.X, self.y, self.eval_set)
         return self.__cache_and_return_results(
             datasets_hash,
             X_sampled,
@@ -2572,6 +2649,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
         exclude_oot: bool = False,
+        datasets_hash: str | None = None,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -2620,7 +2698,10 @@ class FeaturesEnricher(TransformerMixin):
         search_keys = {columns_renaming.get(k, k): v for k, v in search_keys.items()}
 
         # Cache and return results
-        datasets_hash = hash_input(validated_X, validated_y, eval_set)
+        if datasets_hash is None:
+            datasets_hash = self._get_metrics_cache_key(
+                validated_X, validated_y, eval_set, exclude_features_sources=exclude_features_sources
+            )
         return self.__cache_and_return_results(
             datasets_hash,
             X_sampled,

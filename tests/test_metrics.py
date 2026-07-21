@@ -14,7 +14,7 @@ from sklearn.model_selection import KFold, TimeSeriesSplit
 
 from upgini.autofe.utils import pydantic_parse_method
 from upgini.errors import ValidationError
-from upgini.features_enricher import FeaturesEnricher, hash_input
+from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import (
     CVType,
     FeaturesMetadataV2,
@@ -189,7 +189,7 @@ def test_real_case_metric_binary(requests_mock: Mocker, update_metrics_flag: boo
 
     columns_renaming = {c: c for c in enriched_X.columns}
 
-    datasets_hash = hash_input(enricher.X, enricher.y, enricher.eval_set)
+    datasets_hash = enricher._get_metrics_cache_key(enricher.X, enricher.y, enricher.eval_set)
     enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         sampled_X,
         sampled_y,
@@ -262,7 +262,7 @@ def test_demo_metrics(requests_mock: Mocker, update_metrics_flag: bool):
 
     columns_renaming = {c: c for c in x_sampled.columns}
 
-    datasets_hash = hash_input(enricher.X, enricher.y)
+    datasets_hash = enricher._get_metrics_cache_key(enricher.X, enricher.y, enricher.eval_set)
     enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
         x_sampled,
         y_sampled,
