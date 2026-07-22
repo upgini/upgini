@@ -420,6 +420,12 @@ class FeaturesEnricher(TransformerMixin):
 
     api_key = property(_get_api_key, _set_api_key)
 
+    def _get_or_create_oot_target(self, eval_x: pd.DataFrame) -> pd.Series:
+        for stored_x, stored_y in self.eval_set or []:
+            if eval_x is stored_x:
+                return stored_y
+        return pd.Series(np.nan, index=eval_x.index)
+
     def _check_eval_set(self, eval_set, X):
         checked_eval_set = []
         if eval_set is None:
@@ -431,17 +437,14 @@ class FeaturesEnricher(TransformerMixin):
         for i, eval_pair in enumerate(eval_set or [], 1):
             # Handle OOT
             if isinstance(eval_pair, pd.DataFrame):
-                empty_target = pd.Series([np.nan] * len(eval_pair), index=eval_pair.index)
-                eval_pair = (eval_pair, empty_target)
+                eval_pair = (eval_pair, self._get_or_create_oot_target(eval_pair))
             elif isinstance(eval_pair, tuple) and len(eval_pair) == 1:
-                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
-                eval_pair = (eval_pair[0], empty_target)
+                eval_pair = (eval_pair[0], self._get_or_create_oot_target(eval_pair[0]))
 
             if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
                 raise ValidationError(self.bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
             if eval_pair[1] is None:
-                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
-                eval_pair = (eval_pair[0], empty_target)
+                eval_pair = (eval_pair[0], self._get_or_create_oot_target(eval_pair[0]))
 
             if not is_frames_equal(X, eval_pair[0], self.bundle):
                 checked_eval_set.append(eval_pair)
@@ -3214,7 +3217,6 @@ if response.status_code == 200:
                 generate_cyclical_features=self.generate_search_key_features,
             )
             df = converter.convert(df, keep_time=True)
-            self.logger.info(f"Date column after convertion: {df[date_column]}")
             generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")

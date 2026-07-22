@@ -409,6 +409,152 @@ def test_eval_sets_with_oot(requests_mock: Mocker):
         Dataset.MIN_ROWS_COUNT = old_min_rows_count
 
 
+def test_oot_convenience_formats_reuse_stored_target_for_same_as_fit(requests_mock: Mocker):
+    """OOT passed as DataFrame / 1-tuple / (X, None) must not break is_input_same_as_fit.
+
+    _check_eval_set fabricates an all-NaN target for those formats. Re-checking the
+    same eval_x object after fit must reuse the stored target series so identity
+    comparison in _is_input_same_as_fit still passes (avoiding a redundant transform).
+    """
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    train_y = pd.Series([0, 1])
+    oot_X = pd.DataFrame({"phone": ["+10000000003", "+10000000004"], "f": [3.0, 4.0]})
+    eval_X = pd.DataFrame({"phone": ["+10000000005", "+10000000006"], "f": [5.0, 6.0]})
+    eval_y = pd.Series([1, 0])
+
+    for oot_form in (oot_X, (oot_X,), (oot_X, None)):
+        enricher.X = train_X
+        enricher.y = train_y
+        enricher.eval_set = enricher._check_eval_set([(eval_X, eval_y), oot_form], train_X)
+
+        stored_oot_y = enricher.eval_set[1][1]
+        assert stored_oot_y.isna().all()
+
+        # Same objects + same OOT convenience form as after fit
+        is_same, _, _, returned_eval_set = enricher._is_input_same_as_fit(
+            train_X, train_y, [(eval_X, eval_y), oot_form]
+        )
+        assert is_same is True
+        assert returned_eval_set[1][1] is stored_oot_y
+
+        # Re-checking alone must also reuse the stored target
+        rechecked = enricher._check_eval_set([(eval_X, eval_y), oot_form], train_X)
+        assert rechecked[1][1] is stored_oot_y
+
+    # A different OOT frame must not reuse the previous target
+    other_oot_X = oot_X.copy()
+    rechecked_other = enricher._check_eval_set([(eval_X, eval_y), other_oot_X], train_X)
+    assert rechecked_other[1][1] is not enricher.eval_set[1][1]
+    assert rechecked_other[1][1].isna().all()
+
+
+def test_calculate_metrics_same_objects_with_oot_dataframe_skips_transform(requests_mock: Mocker):
+    """Explicit calculate_metrics(X, y, eval_set) with OOT as DataFrame must reuse fit path."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    from upgini.metadata import ModelTaskType
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    train_y = pd.Series([0, 1])
+    eval_X = pd.DataFrame({"phone": ["+10000000005", "+10000000006"], "f": [5.0, 6.0]})
+    eval_y = pd.Series([1, 0])
+    oot_X = pd.DataFrame({"phone": ["+10000000003", "+10000000004"], "f": [3.0, 4.0]})
+
+    enricher.X = train_X
+    enricher.y = train_y
+    enricher.eval_set = enricher._check_eval_set([(eval_X, eval_y), oot_X], train_X)
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.df_with_original_index = train_X.assign(
+        **{TARGET: train_y.values, ENTITY_SYSTEM_RECORD_ID: [1, 2], EVAL_SET_INDEX: 0}
+    )
+
+    transform_calls = []
+    from_fit_calls = []
+
+    def fake_from_fit(vX, vY, eval_set, remove_outliers_calc_metrics, datasets_hash):
+        from_fit_calls.append(datasets_hash)
+        enriched = vX.copy()
+        enriched["ads_feature"] = [10.0, 20.0]
+        return enricher._FeaturesEnricher__cache_and_return_results(
+            datasets_hash,
+            vX.copy(),
+            vY.copy(),
+            enriched,
+            {
+                0: (eval_X.copy(), eval_X.copy().assign(ads_feature=[30.0, 40.0]), eval_y.copy()),
+                1: (oot_X.copy(), oot_X.copy().assign(ads_feature=[50.0, 60.0]), enricher.eval_set[1][1]),
+            },
+            {},
+            {"phone": SearchKey.PHONE},
+            [],
+        )
+
+    def fake_transform(*args, **kwargs):
+        transform_calls.append(True)
+        raise AssertionError("transform should not run when input is same as fit")
+
+    enricher._FeaturesEnricher__get_enriched_from_fit = fake_from_fit
+    enricher._FeaturesEnricher__get_enriched_from_transform = fake_transform
+
+    # Same call shape as user after fit: OOT still a bare DataFrame
+    is_same, same_X, same_y, same_eval = enricher._is_input_same_as_fit(
+        train_X, train_y, [(eval_X, eval_y), oot_X]
+    )
+    assert is_same is True
+
+    result = enricher._get_enriched_datasets(
+        validated_X=same_X,
+        validated_y=same_y,
+        validated_eval_set=same_eval,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+        exclude_oot=True,
+    )
+    assert result is not None
+    assert transform_calls == []
+    assert len(from_fit_calls) == 1
+
+    # Second call should hit cache (with-OOT → drop OOT), still no transform
+    result2 = enricher._get_enriched_datasets(
+        validated_X=same_X,
+        validated_y=same_y,
+        validated_eval_set=same_eval,
+        exclude_features_sources=None,
+        is_input_same_as_fit=True,
+        is_demo_dataset=False,
+        remove_outliers_calc_metrics=None,
+        progress_bar=None,
+        progress_callback=None,
+        exclude_oot=True,
+    )
+    assert result2 is not None
+    assert transform_calls == []
+    assert len(from_fit_calls) == 1
+
+
 def test_find_fit_dataset_index_for_train_and_oot(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
