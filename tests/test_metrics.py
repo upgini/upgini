@@ -2330,3 +2330,112 @@ def test_other_wrapper_with_different_feature_types():
 
     result = wrapper.cross_val_predict(df.drop("target", axis=1), df["target"])
     assert result.get_display_metric() == "0.750 ± 0.250"
+
+
+def test_column_name_aliases_covers_hashed_and_original():
+    aliases = FeaturesEnricher._column_name_aliases(
+        ["date", "datetime_day_in_quarter_sin_abc123"],
+        {
+            "date_0e8763": "date",
+            "datetime_day_in_quarter_sin_abc123": "datetime_day_in_quarter_sin",
+        },
+    )
+    assert "date" in aliases
+    assert "date_0e8763" in aliases
+    assert "datetime_day_in_quarter_sin_abc123" in aliases
+    assert "datetime_day_in_quarter_sin" in aliases
+
+
+def test_baseline_excludes_date_key_and_cyclical_features(requests_mock: Mocker):
+    """Baseline must not use DATE search key or datetime cyclical generated features."""
+    from unittest.mock import MagicMock, patch
+
+    from upgini.metadata import SYSTEM_RECORD_ID, TARGET
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    n = 20
+    rng = np.random.default_rng(42)
+    X = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", periods=n, freq="D"),
+            "f": rng.normal(size=n),
+        }
+    )
+    y = pd.Series(rng.integers(0, 2, size=n))
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.fit_select_features = False
+    enricher.feature_names_ = ["f", "datetime_day_in_quarter_sin", "ads_feature"]
+    enricher.fit_dropped_features = set()
+    enricher.fit_columns_renaming = {
+        "date_hash": "date",
+        "f_hash": "f",
+        "datetime_day_in_quarter_sin_hash": "datetime_day_in_quarter_sin",
+        "datetime_day_in_quarter_cos_hash": "datetime_day_in_quarter_cos",
+    }
+    enricher.df_with_original_index = pd.DataFrame(
+        {
+            "date_hash": list(range(n)),
+            "f_hash": X["f"].values,
+            "datetime_day_in_quarter_sin_hash": rng.normal(size=n),
+            "datetime_day_in_quarter_cos_hash": rng.normal(size=n),
+            SYSTEM_RECORD_ID: list(range(n)),
+            TARGET: y.values,
+        }
+    )
+
+    sampled = pd.DataFrame(
+        {
+            "date": list(range(n)),  # ms-like ints, not datetime64
+            "f": X["f"].values,
+            "datetime_day_in_quarter_sin": rng.normal(size=n),
+            "datetime_day_in_quarter_cos": rng.normal(size=n),
+            "ads_feature": rng.normal(size=n),
+            SYSTEM_RECORD_ID: list(range(n)),
+        }
+    )
+    generated = ["datetime_day_in_quarter_sin", "datetime_day_in_quarter_cos"]
+    columns_renaming = dict(enricher.fit_columns_renaming)
+    search_keys = {"date": SearchKey.DATE}
+
+    mock_data = FeaturesEnricher._EnrichedDataForMetrics(
+        X_sampled=sampled.copy(),
+        y_sampled=y.copy(),
+        enriched_X=sampled.copy(),
+        eval_set_sampled_dict={},
+        search_keys=search_keys,
+        columns_renaming=columns_renaming,
+        generated_features=generated,
+    )
+
+    enricher._search_task = MagicMock()
+    enricher._search_task.get_file_metadata.return_value = MagicMock(droppedColumns=[])
+    enricher._search_task.get_shuffle_kfold.return_value = True
+
+    with patch.object(enricher, "_get_enriched_datasets", return_value=mock_data):
+        prepared = enricher._get_cached_enriched_data(X=X, y=y, eval_set=None)
+
+    fitting_X = prepared[1]
+    fitting_enriched_X = prepared[3]
+
+    assert "date" not in fitting_X.columns
+    assert "datetime_day_in_quarter_sin" not in fitting_X.columns
+    assert "datetime_day_in_quarter_cos" not in fitting_X.columns
+    assert "f" in fitting_X.columns
+
+    # Enriched path may still keep cyclical features when select_features is off
+    assert "datetime_day_in_quarter_sin" in fitting_enriched_X.columns
+    assert "f" in fitting_enriched_X.columns
+    assert "ads_feature" in fitting_enriched_X.columns
+    assert "date" not in fitting_enriched_X.columns
