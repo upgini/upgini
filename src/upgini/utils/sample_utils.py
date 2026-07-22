@@ -9,7 +9,6 @@ import pandas as pd
 from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
-    TARGET,
     CVType,
     ModelTaskType,
 )
@@ -106,49 +105,49 @@ def sample(
             **kwargs,
         )
 
-    # Combine balanced train with eval sets
-    if len(eval_sets_dfs) > 0:
-        df = pd.concat([train_df] + eval_sets_dfs, ignore_index=False)
-    else:
-        df = train_df
+    # Downsample train and each eval set independently (same cap as former OOT path)
+    parts: List[tuple[str, pd.DataFrame]] = [("Train", train_df)]
+    for eval_df in eval_sets_dfs:
+        eval_idx = eval_df[EVAL_SET_INDEX].iloc[0]
+        parts.append((f"Eval set {int(eval_idx)}", eval_df))
 
-    # separate OOT
-    oot_dfs = []
-    other_dfs = []
-    if EVAL_SET_INDEX in df.columns:
-        for eval_set_index in df[EVAL_SET_INDEX].unique():
-            eval_df = df[df[EVAL_SET_INDEX] == eval_set_index]
-            if TARGET in eval_df.columns and eval_df[TARGET].isna().all():
-                oot_dfs.append(eval_df)
-            else:
-                other_dfs.append(eval_df)
-    if len(oot_dfs) > 0:
-        oot_df = pd.concat(oot_dfs, ignore_index=False)
-        df = pd.concat(other_dfs, ignore_index=False)
-    else:
-        oot_df = None
+    sampled_parts = [
+        _threshold_sample(
+            part_df,
+            fit_sample_threshold,
+            fit_sample_rows,
+            random_state,
+            logger,
+            part_name,
+        )
+        for part_name, part_df in parts
+    ]
+    df = pd.concat(sampled_parts, ignore_index=False) if len(sampled_parts) > 1 else sampled_parts[0]
 
+    if logger is not None:
+        logger.info(f"Dataset size after downsampling: {len(df)}")
+
+    return df
+
+
+def _threshold_sample(
+    df: pd.DataFrame,
+    fit_sample_threshold: int,
+    fit_sample_rows: int,
+    random_state: int,
+    logger: Optional[logging.Logger],
+    part_name: str,
+) -> pd.DataFrame:
     num_samples = _num_samples(df)
     if num_samples > fit_sample_threshold:
-        logger.info(
-            f"Etalon has size {num_samples} more than threshold {fit_sample_threshold} "
-            f"and will be downsampled to {fit_sample_rows}"
-        )
-        df = df.sample(n=fit_sample_rows, random_state=random_state)
-        logger.info(f"Shape after threshold resampling: {df.shape}")
-
-    if oot_df is not None:
-        num_samples_oot = _num_samples(oot_df)
-        if num_samples_oot > fit_sample_threshold:
+        if logger is not None:
             logger.info(
-                f"OOT has size {num_samples_oot} more than threshold {fit_sample_threshold} "
+                f"{part_name} has size {num_samples} more than threshold {fit_sample_threshold} "
                 f"and will be downsampled to {fit_sample_rows}"
             )
-            oot_df = oot_df.sample(n=fit_sample_rows, random_state=random_state)
-        df = pd.concat([df, oot_df], ignore_index=False)
-
-    logger.info(f"Dataset size after downsampling: {len(df)}")
-
+        df = df.sample(n=fit_sample_rows, random_state=random_state)
+        if logger is not None:
+            logger.info(f"Shape after threshold resampling ({part_name}): {df.shape}")
     return df
 
 

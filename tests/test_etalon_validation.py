@@ -655,7 +655,9 @@ def test_downsampling_binary():
     dataset.IMBALANCE_THESHOLD = 0.6
 
     dataset._Dataset__resample()
-    assert len(dataset.data) == 1
+    # Train and each eval set are downsampled independently to fit_sample_rows
+    assert len(dataset.data) == 2
+    assert set(dataset.data["eval_set_index"].unique()) == {0, 1}
 
 
 def test_downsampling_multiclass():
@@ -691,4 +693,6 @@ def test_downsampling_multiclass():
     dataset.IMBALANCE_THESHOLD = 0.8
 
     dataset._Dataset__resample()
-    assert len(dataset.data) == 1
+    # Train and each eval set are downsampled independently to fit_sample_rows
+    assert len(dataset.data) == 2
+    assert set(dataset.data["eval_set_index"].unique()) == {0, 1}
