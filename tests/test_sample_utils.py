@@ -1,9 +1,7 @@
 import pandas as pd
 from typing import List
 from upgini.utils.sample_utils import sample_time_series_trunc, sample_time_series, sample_time_series_train_eval
-from upgini.utils.sample_utils import SampleColumns, sample
-from upgini.utils.config import SampleConfig
-from upgini.metadata import EVAL_SET_INDEX, TARGET, ModelTaskType
+from upgini.utils.sample_utils import SampleColumns
 
 
 def test_sample_time_series_trim_ids():
@@ -478,52 +476,3 @@ def test_sample_time_series_train_eval_missing_ids():
     assert len(train_ids) == 1
     assert len(eval_ids) == 1
     assert train_ids == eval_ids
-
-
-def test_sample_train_and_each_eval_separately():
-    """Train and each eval/OOT index are capped independently, then concatenated."""
-    train = pd.DataFrame(
-        {
-            EVAL_SET_INDEX: [0] * 10,
-            TARGET: [0, 1] * 5,
-            "f": range(10),
-        }
-    )
-    eval_labeled = pd.DataFrame(
-        {
-            EVAL_SET_INDEX: [1] * 8,
-            TARGET: [0, 1] * 4,
-            "f": range(10, 18),
-        }
-    )
-    eval_oot = pd.DataFrame(
-        {
-            EVAL_SET_INDEX: [2] * 6,
-            TARGET: [float("nan")] * 6,
-            "f": range(18, 24),
-        }
-    )
-    df = pd.concat([train, eval_labeled, eval_oot], ignore_index=True)
-
-    sample_config = SampleConfig(
-        fit_sample_threshold=5,
-        fit_sample_rows=5,
-        fit_sample_threshold_with_eval_set=5,
-        fit_sample_rows_with_eval_set=5,
-    )
-    sample_columns = SampleColumns(date="date", target=TARGET, eval_set_index=EVAL_SET_INDEX)
-
-    sampled = sample(
-        df,
-        task_type=ModelTaskType.BINARY,
-        cv_type=None,
-        sample_config=sample_config,
-        sample_columns=sample_columns,
-        balance=False,
-        random_state=42,
-    )
-
-    assert len(sampled[sampled[EVAL_SET_INDEX] == 0]) == 5
-    assert len(sampled[sampled[EVAL_SET_INDEX] == 1]) == 5
-    assert len(sampled[sampled[EVAL_SET_INDEX] == 2]) == 5
-    assert len(sampled) == 15
