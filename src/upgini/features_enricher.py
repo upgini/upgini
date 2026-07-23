@@ -420,6 +420,12 @@ class FeaturesEnricher(TransformerMixin):
 
     api_key = property(_get_api_key, _set_api_key)
 
+    def _get_or_create_oot_target(self, eval_x: pd.DataFrame) -> pd.Series:
+        for stored_x, stored_y in self.eval_set or []:
+            if eval_x is stored_x:
+                return stored_y
+        return pd.Series(np.nan, index=eval_x.index)
+
     def _check_eval_set(self, eval_set, X):
         checked_eval_set = []
         if eval_set is None:
@@ -431,17 +437,14 @@ class FeaturesEnricher(TransformerMixin):
         for i, eval_pair in enumerate(eval_set or [], 1):
             # Handle OOT
             if isinstance(eval_pair, pd.DataFrame):
-                empty_target = pd.Series([np.nan] * len(eval_pair), index=eval_pair.index)
-                eval_pair = (eval_pair, empty_target)
+                eval_pair = (eval_pair, self._get_or_create_oot_target(eval_pair))
             elif isinstance(eval_pair, tuple) and len(eval_pair) == 1:
-                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
-                eval_pair = (eval_pair[0], empty_target)
+                eval_pair = (eval_pair[0], self._get_or_create_oot_target(eval_pair[0]))
 
             if not isinstance(eval_pair, tuple) or len(eval_pair) != 2:
                 raise ValidationError(self.bundle.get("eval_set_invalid_tuple_size").format(len(eval_pair)))
             if eval_pair[1] is None:
-                empty_target = pd.Series([np.nan] * len(eval_pair[0]), index=eval_pair[0].index)
-                eval_pair = (eval_pair[0], empty_target)
+                eval_pair = (eval_pair[0], self._get_or_create_oot_target(eval_pair[0]))
 
             if not is_frames_equal(X, eval_pair[0], self.bundle):
                 checked_eval_set.append(eval_pair)
@@ -2014,6 +2017,18 @@ class FeaturesEnricher(TransformerMixin):
         resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available_columns)
         return resolved
 
+    @staticmethod
+    def _column_name_aliases(names: list[str] | set[str] | tuple[str, ...], columns_renaming: dict[str, str]) -> set[str]:
+        """Return names in both hashed and original forms for exclusion matching."""
+        hashed_to_original = dict(columns_renaming)
+        original_to_hashed = {original: hashed for hashed, original in columns_renaming.items()}
+        aliases: set[str] = set()
+        for name in names:
+            aliases.add(name)
+            aliases.add(hashed_to_original.get(name, name))
+            aliases.add(original_to_hashed.get(name, name))
+        return aliases
+
     def _get_cached_enriched_data(
         self,
         X: pd.DataFrame | pd.Series | np.ndarray | None = None,
@@ -2063,15 +2078,18 @@ class FeaturesEnricher(TransformerMixin):
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
         fit_dropped_features = list(self.fit_dropped_features or file_meta.droppedColumns or [])
         renamed_to_original = dict(columns_renaming)
-        original_to_renamed = {original: hashed for hashed, original in columns_renaming.items()}
-        excluding_search_keys_original = [renamed_to_original.get(sk, sk) for sk in excluding_search_keys]
 
-        excluded_client_columns = (
-            excluding_search_keys_original
+        # Exclude search keys / system cols in both hashed and original name forms.
+        excluded_client_columns = self._column_name_aliases(
+            list(excluding_search_keys)
             + fit_dropped_features
-            + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID]
+            + [DateTimeConverter.DATETIME_COL, SYSTEM_RECORD_ID, ENTITY_SYSTEM_RECORD_ID],
+            columns_renaming,
         )
-        excluded_client_columns_renamed = {original_to_renamed.get(c, c) for c in excluded_client_columns}
+        # Baseline should not use search-key-derived generated features (e.g. datetime cyclical).
+        excluded_baseline_columns = excluded_client_columns | self._column_name_aliases(
+            generated_features, columns_renaming
+        )
 
         # Client columns for enriched metrics (respects select_features).
         client_features = [
@@ -2101,11 +2119,10 @@ class FeaturesEnricher(TransformerMixin):
             if columns_renaming.get(c, c) in enriched_X_sorted.columns
         ]
 
-        # Baseline always uses all etalon columns available in the sample (ignores select_features).
+        etalon_columns_in_sampled = self._get_etalon_columns_renamed(columns_renaming, X_sorted.columns)
+        # Baseline: all etalon columns except search keys and generated (cyclical) features.
         baseline_client_features_in_sampled = [
-            c
-            for c in self._get_etalon_columns_renamed(columns_renaming, X_sorted.columns)
-            if c not in excluded_client_columns_renamed
+            c for c in etalon_columns_in_sampled if c not in excluded_baseline_columns
         ]
         self.logger.info(f"Baseline etalon columns for metrics: {baseline_client_features_in_sampled}")
         if self.fit_select_features:
@@ -2113,7 +2130,10 @@ class FeaturesEnricher(TransformerMixin):
                 client_features, columns_renaming, X_sorted.columns
             )
         else:
-            enriched_client_features_in_sampled = baseline_client_features_in_sampled
+            # Enriched may still use generated features; baseline does not.
+            enriched_client_features_in_sampled = [
+                c for c in etalon_columns_in_sampled if c not in excluded_client_columns
+            ]
             missing_client_features = set()
         if missing_client_features:
             self.logger.warning(
@@ -3214,7 +3234,6 @@ if response.status_code == 200:
                 generate_cyclical_features=self.generate_search_key_features,
             )
             df = converter.convert(df, keep_time=True)
-            self.logger.info(f"Date column after convertion: {df[date_column]}")
             generated_features.extend(converter.generated_features)
         else:
             self.logger.info("Input dataset hasn't date column")
