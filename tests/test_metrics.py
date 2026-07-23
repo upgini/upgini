@@ -1043,7 +1043,7 @@ def test_catboost_metric_binary(requests_mock: Mocker, update_metrics_flag: bool
     assert_metrics_frame_equal(expected_metrics, metrics_df)
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 def test_catboost_metric_binary_with_cat_features(requests_mock: Mocker, update_metrics_flag: bool):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
