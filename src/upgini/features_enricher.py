@@ -5262,7 +5262,6 @@ if response.status_code == 200:
 
                 feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True, unhash=True))
                 if feature_meta is None:
-                    self.logger.warning(f"Feature meta for display index {m.display_index} not found")
                     continue
                 description["shap"] = feature_meta.shap_value
                 description[self.bundle.get("autofe_descriptions_sources")] = feature_meta.data_source.replace(
