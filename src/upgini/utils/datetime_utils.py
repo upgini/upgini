@@ -13,6 +13,10 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.base_search_key_detector import BaseSearchKeyDetector
 
 DATE_FORMATS = [
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%d",
     "%d.%m.%y",
     "%d.%m.%Y",
@@ -24,7 +28,6 @@ DATE_FORMATS = [
     "%d/%m/%y",
     "%m/%d/%Y",
     "%m/%d/%y",
-    "%Y-%m-%dT%H:%M:%S.%f",
 ]
 
 DATETIME_PATTERN = r"^[\d\s\.\-:T/+]+$"
@@ -131,11 +134,14 @@ class DateTimeConverter:
                     raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
             parsed_datetime = parsed_datetime.dt.tz_localize(None)
             return parsed_datetime
+        except ValidationError:
+            if raise_errors:
+                raise
+            return None
         except Exception as e:
             if raise_errors:
                 raise ValidationError(e)
-            else:
-                return None
+            return None
 
     def to_date_string(self, df: pd.DataFrame) -> pd.Series:
         parsed_datetime = self.parse_datetime(df)
@@ -263,11 +269,12 @@ class DateTimeConverter:
         if self.date_format is not None:
             try:
                 return pd.to_datetime(df[self.date_column], format=self.date_format)
-            except ValueError as e:
+            except ValueError:
                 if raise_errors:
-                    raise ValidationError(e)
-                else:
-                    return None
+                    raise ValidationError(
+                        self.bundle.get("invalid_date_format_specified").format(self.date_column, self.date_format)
+                    )
+                return None
         else:
             for date_format in DATE_FORMATS:
                 try:
@@ -287,8 +294,7 @@ class DateTimeConverter:
                 except ValueError:
                     if raise_errors:
                         raise ValidationError(self.bundle.get("invalid_date_format").format(self.date_column))
-                    else:
-                        return None
+                    return None
 
     def clean_old_dates(self, df: pd.DataFrame) -> pd.DataFrame:
         condition = df[self.date_column] <= self.MIN_SUPPORTED_DATE_TS
