@@ -604,6 +604,22 @@ def test_invalid_explicit_date_format_message():
         converter.convert(df)
 
 
+def test_mixed_date_types_raise_validation_error():
+    df = pd.DataFrame({"date": [datetime(2021, 1, 1), "2021-01-02"]})
+    converter = DateTimeConverter("date")
+    with pytest.raises(ValidationError, match=r"Date column `date` contains mixed types: datetime, str"):
+        converter.convert(df)
+
+    df = pd.DataFrame({"date": [1609459200000, "2021-01-02"]})
+    with pytest.raises(ValidationError, match=r"Date column `date` contains mixed types: int, str"):
+        converter.convert(df)
+
+    # date and datetime are treated as homogeneous by pandas infer_dtype
+    df = pd.DataFrame({"date": [date(2021, 1, 1), datetime(2021, 1, 2)]})
+    converted = DateTimeConverter("date").convert(df)
+    assert converted["date"].tolist() == [1609459200000, 1609545600000]
+
+
 def test_columns_renaming():
     df1 = pd.DataFrame(
         {

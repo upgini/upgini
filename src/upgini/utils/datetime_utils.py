@@ -85,6 +85,19 @@ class DateTimeConverter:
         except Exception:
             return None
 
+    def _ensure_homogeneous_date_types(self, date_col: pd.Series, raise_errors: bool) -> bool:
+        if not pd.api.types.is_object_dtype(date_col):
+            return True
+        # pandas treats date+datetime as homogeneous ("date"); flags real mixes as mixed*
+        if pd.api.types.infer_dtype(date_col, skipna=True) not in ("mixed", "mixed-integer"):
+            return True
+
+        type_names = ", ".join(sorted({type(v).__name__ for v in date_col.dropna()}))
+        msg = self.bundle.get("mixed_date_types").format(self.date_column, type_names)
+        if raise_errors:
+            raise ValidationError(msg)
+        return False
+
     def is_datetime(self, df: pd.DataFrame) -> bool:
         if len(df) == 0 or df[self.date_column].isna().all():
             return False
@@ -102,6 +115,9 @@ class DateTimeConverter:
         date_col = df[self.date_column].copy()
 
         try:
+            if not self._ensure_homogeneous_date_types(date_col, raise_errors):
+                return None
+
             if date_col.apply(lambda x: isinstance(x, datetime.datetime)).all():
                 parsed_datetime = date_col.apply(lambda x: x.replace(tzinfo=None))
             elif isinstance(date_col.dropna().values[0], datetime.date):
