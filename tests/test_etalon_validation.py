@@ -580,6 +580,46 @@ def test_datetime_with_ms():
     assert_frame_equal(converted_df, expected_df)
 
 
+def test_datetime_with_space_and_microseconds():
+    df = pd.DataFrame({"date": ["2026-03-06 15:43:34.545162", "2026-03-07 09:12:01.123456"]})
+
+    converted_auto = DateTimeConverter("date").convert(df)
+    assert converted_auto["date"].tolist() == [1772755200000, 1772841600000]
+    assert "datetime_hour_sin_24" in converted_auto.columns
+
+    with pytest.raises(ValidationError, match=r"Failed to parse date in column `date` with date_format=`%Y-%m-%d %H:%M:%S`"):
+        converted_hms = DateTimeConverter("date", "%Y-%m-%d %H:%M:%S").convert(df)
+        assert converted_hms["date"].tolist() == [1772755200000, 1772841600000]
+        assert "datetime_hour_sin_24" in converted_hms.columns
+
+    converted_us = DateTimeConverter("date", "%Y-%m-%d %H:%M:%S.%f").convert(df)
+    assert converted_us["date"].tolist() == [1772755200000, 1772841600000]
+    assert "datetime_hour_sin_24" in converted_us.columns
+
+
+def test_invalid_explicit_date_format_message():
+    df = pd.DataFrame({"date": ["06.03.2026", "07.03.2026"]})
+    converter = DateTimeConverter("date", "%Y-%m-%d")
+    with pytest.raises(ValidationError, match=r"Failed to parse date in column `date` with date_format=`%Y-%m-%d`"):
+        converter.convert(df)
+
+
+def test_mixed_date_types_raise_validation_error():
+    df = pd.DataFrame({"date": [datetime(2021, 1, 1), "2021-01-02"]})
+    converter = DateTimeConverter("date")
+    with pytest.raises(ValidationError, match=r"Date column `date` contains mixed types: datetime, str"):
+        converter.convert(df)
+
+    df = pd.DataFrame({"date": [1609459200000, "2021-01-02"]})
+    with pytest.raises(ValidationError, match=r"Date column `date` contains mixed types: int, str"):
+        converter.convert(df)
+
+    # date and datetime are treated as homogeneous by pandas infer_dtype
+    df = pd.DataFrame({"date": [date(2021, 1, 1), datetime(2021, 1, 2)]})
+    converted = DateTimeConverter("date").convert(df)
+    assert converted["date"].tolist() == [1609459200000, 1609545600000]
+
+
 def test_columns_renaming():
     df1 = pd.DataFrame(
         {
