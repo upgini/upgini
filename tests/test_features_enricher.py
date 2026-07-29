@@ -4157,11 +4157,9 @@ def test_ts_cv_without_date_raises_validation_error(requests_mock: Mocker):
         enricher.fit(df.drop(columns="target"), df.target)
 
 
-def test_adjust_cv_does_not_override_without_date(requests_mock: Mocker, monkeypatch):
+def test_adjust_cv_does_not_override_without_date(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
-
-    monkeypatch.setattr("upgini.features_enricher.is_blocked_time_series", lambda *args, **kwargs: True)
 
     enricher = FeaturesEnricher(
         search_keys={"feature": SearchKey.CUSTOM_KEY},
