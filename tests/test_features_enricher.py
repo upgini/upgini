@@ -2135,6 +2135,7 @@ def test_features_enricher_with_complex_feature_names(requests_mock: Mocker, upd
         date_format="%Y-%m-%d",
         cv=CVType.time_series,
         logs_enabled=False,
+        add_date_if_missing=True,
     )
 
     enricher.fit(
@@ -2549,6 +2550,7 @@ def test_search_with_only_personal_keys(requests_mock: Mocker):
         endpoint=url,
         logs_enabled=False,
         raise_validation_error=True,
+        add_date_if_missing=True,
     )
     original_search = Dataset.search
     original_min_count = Dataset.MIN_ROWS_COUNT
@@ -3359,6 +3361,7 @@ def test_email_search_key(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         logs_enabled=False,
+        add_date_if_missing=True,
     )
 
     df = pd.DataFrame({"email": ["test1@gmail.com", "test2@mail.com", "test3@yahoo.com"], "target": [0, 1, 0]})
@@ -3412,6 +3415,7 @@ def test_composit_index_search_key(requests_mock: Mocker):
         endpoint=url,
         api_key="fake_api_key",
         logs_enabled=False,
+        add_date_if_missing=True,
     )
 
     df = pd.DataFrame(
@@ -4130,18 +4134,53 @@ def test_id_columns_validation(requests_mock: Mocker):
         )
 
 
-def test_adjusting_cv():
-    # TODO
-    assert True
-    # enricher = FeaturesEnricher(
-    #     search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
-    #     endpoint=url,
-    #     api_key="fake_api_key",
-    #     date_format="%Y-%m-%d",
-    #     cv=CVType.time_series,
-    #     logs_enabled=False,
-    # )
-    # enricher._FeaturesEnricher__adjust_cv(df)
+def test_ts_cv_without_date_raises_validation_error(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    df = pd.DataFrame(
+        {
+            "phone": ["1234567890", "2345678901", "3456789012"],
+            "target": [0.1, 0.2, 0.3],
+        }
+    )
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        api_key="fake_api_key",
+        cv=CVType.time_series,
+        logs_enabled=False,
+        raise_validation_error=True,
+    )
+
+    with pytest.raises(ValidationError, match=bundle.get("ts_cv_without_date")):
+        enricher.fit(df.drop(columns="target"), df.target)
+
+
+def test_adjust_cv_does_not_override_without_date(requests_mock: Mocker, monkeypatch):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    monkeypatch.setattr("upgini.features_enricher.is_blocked_time_series", lambda *args, **kwargs: True)
+
+    enricher = FeaturesEnricher(
+        search_keys={"feature": SearchKey.CUSTOM_KEY},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    enricher.model_task_type = ModelTaskType.REGRESSION
+    enricher.fit_search_keys = {"feature": SearchKey.CUSTOM_KEY}
+    df = pd.DataFrame(
+        {
+            "feature": list(range(10)),
+            "target": list(range(10)),
+        }
+    )
+
+    enricher._FeaturesEnricher__adjust_cv(df)
+
+    assert enricher.cv is None
 
 
 def test_eval_x_intersection_with_x(requests_mock: Mocker):

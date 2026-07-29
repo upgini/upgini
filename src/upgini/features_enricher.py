@@ -237,7 +237,7 @@ class FeaturesEnricher(TransformerMixin):
         client_ip: str | None = None,
         client_visitorid: str | None = None,
         custom_bundle_config: str | None = None,
-        add_date_if_missing: bool = True,
+        add_date_if_missing: bool = False,
         disable_force_downsampling: bool = False,
         id_columns: list[str] | None = None,
         generate_search_key_features: bool = True,
@@ -3239,6 +3239,8 @@ if response.status_code == 200:
             self.logger.info("Input dataset hasn't date column")
             if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, search_keys, self.bundle, silent=True)
+            else:
+                self.__validate_ts_cv_requires_date()
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
         if email_columns and self.generate_search_key_features:
@@ -3832,6 +3834,8 @@ if response.status_code == 200:
             # TODO remove when this logic will be implemented on the back
             if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.bundle)
+            else:
+                self.__validate_ts_cv_requires_date()
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
         if email_columns and self.generate_search_key_features:
@@ -4238,7 +4242,11 @@ if response.status_code == 200:
         return df
 
     def __should_add_date_column(self):
-        return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
+        return self.add_date_if_missing
+
+    def __validate_ts_cv_requires_date(self):
+        if self.cv is not None and self.cv.is_time_series():
+            raise ValidationError(self.bundle.get("ts_cv_without_date"))
 
     def __get_renamed_id_columns(self, renaming: dict[str, str] | None = None):
         renaming = renaming or self.fit_columns_renaming

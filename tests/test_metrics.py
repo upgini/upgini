@@ -918,6 +918,7 @@ def test_blocked_timeseries_rmsle(requests_mock: Mocker, update_metrics_flag: bo
         api_key="fake_api_key",
         cv=CVType.blocked_time_series,
         logs_enabled=False,
+        add_date_if_missing=True,
     )
 
     enriched_X = enricher.fit_transform(X, y, eval_set, calculate_metrics=False)
