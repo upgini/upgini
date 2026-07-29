@@ -2440,3 +2440,128 @@ def test_baseline_excludes_date_key_and_cyclical_features(requests_mock: Mocker)
     assert "f" in fitting_enriched_X.columns
     assert "ads_feature" in fitting_enriched_X.columns
     assert "date" not in fitting_enriched_X.columns
+
+
+def test_baseline_includes_country_and_postal_code_keys(requests_mock: Mocker):
+    from unittest.mock import MagicMock, patch
+
+    from upgini.metadata import SYSTEM_RECORD_ID, TARGET
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    n = 20
+    rng = np.random.default_rng(42)
+    X = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", periods=n, freq="D"),
+            "country": ["BR" if i % 2 == 0 else "US" for i in range(n)],
+            "zipcode": [f"{80010000 + (i % 5)}" for i in range(n)],
+            "f": rng.normal(size=n),
+        }
+    )
+    y = pd.Series(rng.integers(0, 2, size=n))
+
+    enricher = FeaturesEnricher(
+        search_keys={
+            "date": SearchKey.DATE,
+            "country": SearchKey.COUNTRY,
+            "zipcode": SearchKey.POSTAL_CODE,
+        },
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.fit_select_features = False
+    enricher.feature_names_ = ["f", "ads_feature"]
+    enricher.fit_dropped_features = set()
+    enricher.fit_columns_renaming = {
+        "date_hash": "date",
+        "country_hash": "country",
+        "zipcode_hash": "zipcode",
+        "f_hash": "f",
+    }
+    enricher.df_with_original_index = pd.DataFrame(
+        {
+            "date_hash": list(range(n)),
+            "country_hash": X["country"].values,
+            "zipcode_hash": X["zipcode"].values,
+            "f_hash": X["f"].values,
+            SYSTEM_RECORD_ID: list(range(n)),
+            TARGET: y.values,
+        }
+    )
+
+    sampled = pd.DataFrame(
+        {
+            "date": list(range(n)),
+            "country": X["country"].values,
+            "zipcode": X["zipcode"].values,
+            "f": X["f"].values,
+            "ads_feature": rng.normal(size=n),
+            SYSTEM_RECORD_ID: list(range(n)),
+        }
+    )
+    search_keys = {
+        "date": SearchKey.DATE,
+        "country": SearchKey.COUNTRY,
+        "zipcode": SearchKey.POSTAL_CODE,
+    }
+    mock_data = FeaturesEnricher._EnrichedDataForMetrics(
+        X_sampled=sampled.copy(),
+        y_sampled=y.copy(),
+        enriched_X=sampled.copy(),
+        eval_set_sampled_dict={},
+        search_keys=search_keys,
+        columns_renaming=dict(enricher.fit_columns_renaming),
+        generated_features=[],
+    )
+
+    enricher._search_task = MagicMock()
+    enricher._search_task.get_file_metadata.return_value = MagicMock(droppedColumns=[])
+    enricher._search_task.get_shuffle_kfold.return_value = True
+
+    search_keys_for_metrics = enricher._collect_search_keys_for_metrics(search_keys, X)
+    assert search_keys_for_metrics == ["country", "zipcode"]
+
+    with patch.object(enricher, "_get_enriched_datasets", return_value=mock_data):
+        prepared = enricher._get_cached_enriched_data(
+            X=X, y=y, eval_set=None, search_keys_for_metrics=search_keys_for_metrics
+        )
+
+    fitting_X = prepared[1]
+    fitting_enriched_X = prepared[3]
+
+    assert "date" not in fitting_X.columns
+    assert "country" in fitting_X.columns
+    assert "zipcode" in fitting_X.columns
+    assert "f" in fitting_X.columns
+
+    assert "date" not in fitting_enriched_X.columns
+    assert "country" in fitting_enriched_X.columns
+    assert "zipcode" in fitting_enriched_X.columns
+    assert "f" in fitting_enriched_X.columns
+    assert "ads_feature" in fitting_enriched_X.columns
+
+
+def test_collect_search_keys_for_metrics_skips_keys_absent_from_x(requests_mock: Mocker):
+    """System-added country (not in client X) must not be kept for baseline metrics."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    X = pd.DataFrame({"date": [1, 2], "zipcode": ["10001", "10002"], "f": [0.1, 0.2]})
+    search_keys = {
+        "date": SearchKey.DATE,
+        "country_iso_code": SearchKey.COUNTRY,
+        "zipcode": SearchKey.POSTAL_CODE,
+    }
+    assert enricher._collect_search_keys_for_metrics(search_keys, X) == ["zipcode"]

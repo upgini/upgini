@@ -1016,12 +1016,14 @@ class FeaturesEnricher(TransformerMixin):
                             c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                         ]
                 for cat_feature in cat_features_from_backend:
-                    if cat_feature in self.search_keys:
-                        if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
-                            search_keys_for_metrics.append(cat_feature)
-                        else:
-                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
-                search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
+                    if cat_feature in search_keys and search_keys[cat_feature] not in [
+                        SearchKey.COUNTRY,
+                        SearchKey.POSTAL_CODE,
+                    ]:
+                        self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
+                search_keys_for_metrics = self._collect_search_keys_for_metrics(
+                    search_keys, validated_X, search_keys_for_metrics
+                )
                 self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
                 prepared_data = self._get_cached_enriched_data(
@@ -1414,6 +1416,9 @@ class FeaturesEnricher(TransformerMixin):
                 client_cat_features = [
                     c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                 ]
+        search_keys_for_metrics = self._collect_search_keys_for_metrics(
+            search_keys, validated_X, search_keys_for_metrics
+        )
 
         prepared_data = self._get_cached_enriched_data(
             X=X,
@@ -1930,6 +1935,23 @@ class FeaturesEnricher(TransformerMixin):
                         else:
                             raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
         return cat_features, search_keys_for_metrics
+
+    def _collect_search_keys_for_metrics(
+        self,
+        search_keys: dict[str, SearchKey],
+        X: pd.DataFrame,
+        search_keys_for_metrics: list[str] | None = None,
+    ) -> list[str]:
+        result = list(search_keys_for_metrics or [])
+        for col, key_type in search_keys.items():
+            if (
+                key_type in (SearchKey.COUNTRY, SearchKey.POSTAL_CODE)
+                and col in X.columns
+                and col not in result
+            ):
+                result.append(col)
+        result.extend([c for c in self.id_columns or [] if c not in result])
+        return result
 
     def _get_renamed_baseline_score_column(self, columns_renaming: dict[str, str] | None = None) -> str | None:
         if self.baseline_score_column is None:
