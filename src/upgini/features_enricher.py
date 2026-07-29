@@ -1356,17 +1356,22 @@ class FeaturesEnricher(TransformerMixin):
         self.add_info.autodetected_search_keys = self.autodetected_search_keys
         return self.autodetected_search_keys
 
-    def _get_fit_search_keys_with_original_names(self):
-        if self.fit_search_keys is None and self._search_task is not None:
-            fit_search_keys = dict()
+    def _get_fit_search_keys_with_original_names(self) -> dict[str, SearchKey]:
+        fit_search_keys: dict[str, SearchKey] = {}
+        if self.fit_search_keys is not None:
+            renaming = self.fit_columns_renaming or {}
+            fit_search_keys = {renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+        elif self._search_task is not None:
             meta = self._search_task.get_file_metadata(self._get_trace_id())
             for column in meta.columns:
                 # TODO check for EMAIL->HEM and multikeys
                 search_key_type = SearchKey.from_meaning_type(column.meaningType)
                 if search_key_type is not None:
                     fit_search_keys[column.originalName] = search_key_type
-        else:
-            fit_search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+        # Autodetected keys (e.g. POSTAL_CODE) are omitted from constructor search_keys on restore.
+        for name, key_type in (self._get_autodetected_search_keys() or {}).items():
+            if name not in fit_search_keys:
+                fit_search_keys[name] = key_type
         return fit_search_keys
 
     def _select_features_by_psi(

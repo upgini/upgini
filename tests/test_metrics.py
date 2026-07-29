@@ -2654,3 +2654,29 @@ def test_collect_search_keys_for_metrics_skips_keys_absent_from_x(requests_mock:
         "zipcode": SearchKey.POSTAL_CODE,
     }
     assert enricher._collect_search_keys_for_metrics(search_keys, X) == ["zipcode"]
+
+
+def test_fit_search_keys_include_autodetected_postal_on_restore(requests_mock: Mocker):
+    """Restored enricher constructor keys omit autodected postal; autodetection must still supply it."""
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={"country": SearchKey.COUNTRY, "date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    enricher.fit_columns_renaming = {
+        "country_hash": "country",
+        "date_hash": "date",
+        "zipcode_hash": "zipcode",
+    }
+    enricher.autodetected_search_keys = {"zipcode": SearchKey.POSTAL_CODE}
+
+    keys = enricher._get_fit_search_keys_with_original_names()
+    assert keys["country"] == SearchKey.COUNTRY
+    assert keys["date"] == SearchKey.DATE
+    assert keys["zipcode"] == SearchKey.POSTAL_CODE
+
+    X = pd.DataFrame({"country": ["BR"], "date": [1], "zipcode": ["10001"], "feature": [10]})
+    assert enricher._collect_search_keys_for_metrics(keys, X) == ["country", "zipcode"]
