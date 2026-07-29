@@ -335,6 +335,10 @@ class SearchTask:
     def get_add_info(self, trace_id: str) -> AddInfo:
         add_info_dict = self.rest_client.get_add_info(trace_id, self.search_task_id)
         if add_info_dict is not None:
+            add_info_dict = dict(add_info_dict)
+            # Do not load autodetected_search_keys from add_info JSON since they won't be parsed correctly.
+            # We restore them later from FileMetadata.autodetectedSearchKeys instead.
+            add_info_dict.pop("autodetected_search_keys", None)
             return AddInfo(**add_info_dict)
         return AddInfo()
 
