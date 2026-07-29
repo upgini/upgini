@@ -13,7 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -1988,7 +1988,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         client_features: list[str],
         columns_renaming: dict[str, str],
-        available_columns: pd.Index,
+        available_columns: Iterable[str],
     ) -> tuple[list[str], set[str]]:
         available_columns_set = set(available_columns)
         resolved: list[str] = []
@@ -2029,14 +2029,17 @@ class FeaturesEnricher(TransformerMixin):
     def _get_etalon_columns_renamed(
         self,
         columns_renaming: dict[str, str],
-        available_columns: pd.Index,
+        available_columns: Iterable[str],
     ) -> list[str]:
-        if self.df_with_original_index is None:
-            return []
-        etalon_columns = [
-            c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
-        ]
-        resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available_columns)
+        available = list(available_columns)
+        if self.df_with_original_index is not None:
+            etalon_columns = [
+                c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
+            ]
+        else:
+            # Restored-from-search_id enrichers have no df_with_original_index; use sampled X columns.
+            etalon_columns = [c for c in available if c not in [EVAL_SET_INDEX, TARGET]]
+        resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available)
         return resolved
 
     @staticmethod
@@ -2742,7 +2745,9 @@ class FeaturesEnricher(TransformerMixin):
                 selecting_columns_renamed.append(renamed_column)
                 seen_selecting_columns.add(renamed_column)
 
-        etalon_columns_renamed = self._get_etalon_columns_renamed(self.fit_columns_renaming or {}, enriched_Xy.columns)
+        etalon_columns_renamed = self._get_etalon_columns_renamed(
+            self.fit_columns_renaming or {}, enriched_Xy.columns
+        )
         columns_for_metrics = []
         seen_metrics_columns = set()
         for column in etalon_columns_renamed + selecting_columns_renamed:
