@@ -2637,6 +2637,125 @@ def test_baseline_uses_available_columns_when_restored_without_df_with_original_
     assert "date" not in fitting_X.columns
 
 
+def test_metrics_transform_keeps_unselected_client_features_for_baseline(requests_mock: Mocker):
+    """select_features must not strip unselected client cols from metrics transform / baseline."""
+    from unittest.mock import MagicMock
+
+    from upgini.metadata import FileColumnMeaningType
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    enricher.fit_select_features = True
+    enricher.feature_names_ = ["f1", "ads_feature"]
+    enricher.fit_columns_renaming = {}
+    enricher.fit_dropped_features = set()
+    enricher.add_info = MagicMock(true_one_hot_groups=None, pseudo_one_hot_groups=None)
+    enricher._search_task = MagicMock()
+    enricher._search_task.get_file_metadata.return_value = MagicMock(
+        droppedColumns=[],
+        columns=[
+            MagicMock(originalName="date", meaningType=FileColumnMeaningType.DATE),
+            MagicMock(originalName="f1", meaningType=FileColumnMeaningType.FEATURE),
+            MagicMock(originalName="f2", meaningType=FileColumnMeaningType.FEATURE),
+        ],
+    )
+
+    validated_Xy = pd.DataFrame({"date": [1, 2], "f1": [0.1, 0.2], "f2": [0.3, 0.4]})
+
+    without_metrics = enricher._selecting_input_and_generated_columns(
+        validated_Xy, generated_features=[], keep_input=True, is_transform=True, metrics_calculation=False
+    )
+    assert "f1" in without_metrics
+    assert "f2" not in without_metrics
+
+    with_metrics = enricher._selecting_input_and_generated_columns(
+        validated_Xy, generated_features=[], keep_input=True, is_transform=True, metrics_calculation=True
+    )
+    assert "f1" in with_metrics
+    assert "f2" in with_metrics
+    assert "date" in with_metrics
+
+
+def test_baseline_includes_unselected_client_feature_with_select_features(requests_mock: Mocker):
+    """Baseline uses all client features; enriched respects select_features."""
+    from unittest.mock import MagicMock, patch
+
+    from upgini.metadata import SYSTEM_RECORD_ID
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    n = 20
+    rng = np.random.default_rng(42)
+    X = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", periods=n, freq="D"),
+            "f1": rng.normal(size=n),
+            "f2": rng.normal(size=n),
+        }
+    )
+    y = pd.Series(rng.integers(0, 2, size=n))
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        model_task_type=ModelTaskType.BINARY,
+    )
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.fit_select_features = True
+    enricher.feature_names_ = ["f1", "ads_feature"]
+    enricher.fit_dropped_features = set()
+    enricher.fit_columns_renaming = {"date_hash": "date", "f1_hash": "f1", "f2_hash": "f2"}
+    enricher.df_with_original_index = None
+
+    sampled = pd.DataFrame(
+        {
+            "date": list(range(n)),
+            "f1": X["f1"].values,
+            "f2": X["f2"].values,
+            "ads_feature": rng.normal(size=n),
+            SYSTEM_RECORD_ID: list(range(n)),
+        }
+    )
+    search_keys = {"date": SearchKey.DATE}
+    mock_data = FeaturesEnricher._EnrichedDataForMetrics(
+        X_sampled=sampled[["date", "f1", "f2", SYSTEM_RECORD_ID]].copy(),
+        y_sampled=y.copy(),
+        enriched_X=sampled.copy(),
+        eval_set_sampled_dict={},
+        search_keys=search_keys,
+        columns_renaming=dict(enricher.fit_columns_renaming),
+        generated_features=[],
+    )
+
+    enricher._search_task = MagicMock()
+    enricher._search_task.get_file_metadata.return_value = MagicMock(droppedColumns=[])
+    enricher._search_task.get_shuffle_kfold.return_value = True
+
+    with patch.object(enricher, "_get_enriched_datasets", return_value=mock_data):
+        prepared = enricher._get_cached_enriched_data(X=X, y=y, eval_set=None, search_keys_for_metrics=[])
+
+    fitting_X = prepared[1]
+    fitting_enriched_X = prepared[3]
+    assert "f1" in fitting_X.columns
+    assert "f2" in fitting_X.columns
+    assert "date" not in fitting_X.columns
+    assert "f1" in fitting_enriched_X.columns
+    assert "ads_feature" in fitting_enriched_X.columns
+    assert "f2" not in fitting_enriched_X.columns
+
+
 def test_collect_search_keys_for_metrics_skips_keys_absent_from_x(requests_mock: Mocker):
     """System-added country (not in client X) must not be kept for baseline metrics."""
     url = "http://fake_url2"

@@ -1771,9 +1771,14 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: dict[str, SearchKey],
         keep_input: bool,
         add_fit_system_record_id: bool,
+        metrics_calculation: bool = False,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
         selecting_columns = self._selecting_input_and_generated_columns(
-            validated_Xy, generated_features, keep_input, is_transform=True
+            validated_Xy,
+            generated_features,
+            keep_input,
+            is_transform=True,
+            metrics_calculation=metrics_calculation,
         )
         selecting_columns.extend(
             c
@@ -1813,6 +1818,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None,
         keep_input: bool,
         add_fit_system_record_id: bool,
+        metrics_calculation: bool = False,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]] | None:
         """Reuse fit enrichment for transform when X was already sent on fit.
 
@@ -1876,6 +1882,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys,
             keep_input,
             add_fit_system_record_id,
+            metrics_calculation=metrics_calculation,
         )
 
     def _get_cv_and_groups(
@@ -3191,6 +3198,7 @@ if response.status_code == 200:
                 exclude_features_sources,
                 keep_input,
                 add_fit_system_record_id,
+                metrics_calculation=metrics_calculation,
             )
             if from_fit is not None:
                 return from_fit
@@ -3297,7 +3305,11 @@ if response.status_code == 200:
             generated_features = [columns_renaming.get(c, c) for c in generated_features]
             search_keys = {columns_renaming.get(c, c): t for c, t in search_keys.items()}
             selecting_columns = self._selecting_input_and_generated_columns(
-                validated_Xy, generated_features, keep_input, is_transform=True
+                validated_Xy,
+                generated_features,
+                keep_input,
+                is_transform=True,
+                metrics_calculation=metrics_calculation,
             )
             self.logger.warning(f"Filtered columns by existance in dataframe: {selecting_columns}")
             if add_fit_system_record_id:
@@ -3573,6 +3585,7 @@ if response.status_code == 200:
             search_keys,
             keep_input,
             add_fit_system_record_id,
+            metrics_calculation=metrics_calculation,
         )
 
     def _selecting_input_and_generated_columns(
@@ -3581,6 +3594,7 @@ if response.status_code == 200:
         generated_features: list[str],
         keep_input: bool,
         is_transform: bool = False,
+        metrics_calculation: bool = False,
     ):
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
         fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
@@ -3621,10 +3635,13 @@ if response.status_code == 200:
         )
 
         if keep_input is True:
+            # Metrics baseline needs all client columns regardless of select_features
+            # (same as fit path keeping all etalon columns for baseline).
             selected_input_columns = [
                 c
                 for c in validated_Xy.columns
-                if not self.fit_select_features
+                if metrics_calculation
+                or not self.fit_select_features
                 or c in self.feature_names_
                 or (c in new_columns_on_transform and is_transform)
                 or c in fit_original_search_keys
