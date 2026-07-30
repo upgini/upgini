@@ -13,7 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -237,7 +237,7 @@ class FeaturesEnricher(TransformerMixin):
         client_ip: str | None = None,
         client_visitorid: str | None = None,
         custom_bundle_config: str | None = None,
-        add_date_if_missing: bool = True,
+        add_date_if_missing: bool = False,
         disable_force_downsampling: bool = False,
         id_columns: list[str] | None = None,
         generate_search_key_features: bool = True,
@@ -1016,12 +1016,14 @@ class FeaturesEnricher(TransformerMixin):
                             c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                         ]
                 for cat_feature in cat_features_from_backend:
-                    if cat_feature in self.search_keys:
-                        if self.search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
-                            search_keys_for_metrics.append(cat_feature)
-                        else:
-                            self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
-                search_keys_for_metrics.extend([c for c in self.id_columns or [] if c not in search_keys_for_metrics])
+                    if cat_feature in search_keys and search_keys[cat_feature] not in [
+                        SearchKey.COUNTRY,
+                        SearchKey.POSTAL_CODE,
+                    ]:
+                        self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
+                search_keys_for_metrics = self._collect_search_keys_for_metrics(
+                    search_keys, validated_X, search_keys_for_metrics
+                )
                 self.logger.info(f"Search keys for metrics: {search_keys_for_metrics}")
 
                 prepared_data = self._get_cached_enriched_data(
@@ -1354,17 +1356,22 @@ class FeaturesEnricher(TransformerMixin):
         self.add_info.autodetected_search_keys = self.autodetected_search_keys
         return self.autodetected_search_keys
 
-    def _get_fit_search_keys_with_original_names(self):
-        if self.fit_search_keys is None and self._search_task is not None:
-            fit_search_keys = dict()
+    def _get_fit_search_keys_with_original_names(self) -> dict[str, SearchKey]:
+        fit_search_keys: dict[str, SearchKey] = {}
+        if self.fit_search_keys is not None:
+            renaming = self.fit_columns_renaming or {}
+            fit_search_keys = {renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+        elif self._search_task is not None:
             meta = self._search_task.get_file_metadata(self._get_trace_id())
             for column in meta.columns:
                 # TODO check for EMAIL->HEM and multikeys
                 search_key_type = SearchKey.from_meaning_type(column.meaningType)
                 if search_key_type is not None:
                     fit_search_keys[column.originalName] = search_key_type
-        else:
-            fit_search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+        # Autodetected keys (e.g. POSTAL_CODE) are omitted from constructor search_keys on restore.
+        for name, key_type in (self._get_autodetected_search_keys() or {}).items():
+            if name not in fit_search_keys:
+                fit_search_keys[name] = key_type
         return fit_search_keys
 
     def _select_features_by_psi(
@@ -1414,6 +1421,9 @@ class FeaturesEnricher(TransformerMixin):
                 client_cat_features = [
                     c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                 ]
+        search_keys_for_metrics = self._collect_search_keys_for_metrics(
+            search_keys, validated_X, search_keys_for_metrics
+        )
 
         prepared_data = self._get_cached_enriched_data(
             X=X,
@@ -1761,9 +1771,14 @@ class FeaturesEnricher(TransformerMixin):
         search_keys: dict[str, SearchKey],
         keep_input: bool,
         add_fit_system_record_id: bool,
+        metrics_calculation: bool = False,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]]:
         selecting_columns = self._selecting_input_and_generated_columns(
-            validated_Xy, generated_features, keep_input, is_transform=True
+            validated_Xy,
+            generated_features,
+            keep_input,
+            is_transform=True,
+            metrics_calculation=metrics_calculation,
         )
         selecting_columns.extend(
             c
@@ -1803,6 +1818,7 @@ class FeaturesEnricher(TransformerMixin):
         exclude_features_sources: list[str] | None,
         keep_input: bool,
         add_fit_system_record_id: bool,
+        metrics_calculation: bool = False,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]] | None:
         """Reuse fit enrichment for transform when X was already sent on fit.
 
@@ -1866,6 +1882,7 @@ class FeaturesEnricher(TransformerMixin):
             search_keys,
             keep_input,
             add_fit_system_record_id,
+            metrics_calculation=metrics_calculation,
         )
 
     def _get_cv_and_groups(
@@ -1931,6 +1948,23 @@ class FeaturesEnricher(TransformerMixin):
                             raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
         return cat_features, search_keys_for_metrics
 
+    def _collect_search_keys_for_metrics(
+        self,
+        search_keys: dict[str, SearchKey],
+        X: pd.DataFrame,
+        search_keys_for_metrics: list[str] | None = None,
+    ) -> list[str]:
+        result = list(search_keys_for_metrics or [])
+        for col, key_type in search_keys.items():
+            if (
+                key_type in (SearchKey.COUNTRY, SearchKey.POSTAL_CODE)
+                and col in X.columns
+                and col not in result
+            ):
+                result.append(col)
+        result.extend([c for c in self.id_columns or [] if c not in result])
+        return result
+
     def _get_renamed_baseline_score_column(self, columns_renaming: dict[str, str] | None = None) -> str | None:
         if self.baseline_score_column is None:
             return None
@@ -1966,7 +2000,7 @@ class FeaturesEnricher(TransformerMixin):
         self,
         client_features: list[str],
         columns_renaming: dict[str, str],
-        available_columns: pd.Index,
+        available_columns: Iterable[str],
     ) -> tuple[list[str], set[str]]:
         available_columns_set = set(available_columns)
         resolved: list[str] = []
@@ -2007,14 +2041,17 @@ class FeaturesEnricher(TransformerMixin):
     def _get_etalon_columns_renamed(
         self,
         columns_renaming: dict[str, str],
-        available_columns: pd.Index,
+        available_columns: Iterable[str],
     ) -> list[str]:
-        if self.df_with_original_index is None:
-            return []
-        etalon_columns = [
-            c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
-        ]
-        resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available_columns)
+        available = list(available_columns)
+        if self.df_with_original_index is not None:
+            etalon_columns = [
+                c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
+            ]
+        else:
+            # Restored-from-search_id enrichers have no df_with_original_index; use sampled X columns.
+            etalon_columns = [c for c in available if c not in [EVAL_SET_INDEX, TARGET]]
+        resolved, _ = self._resolve_client_features_in_sampled(etalon_columns, columns_renaming, available)
         return resolved
 
     @staticmethod
@@ -2720,7 +2757,9 @@ class FeaturesEnricher(TransformerMixin):
                 selecting_columns_renamed.append(renamed_column)
                 seen_selecting_columns.add(renamed_column)
 
-        etalon_columns_renamed = self._get_etalon_columns_renamed(self.fit_columns_renaming or {}, enriched_Xy.columns)
+        etalon_columns_renamed = self._get_etalon_columns_renamed(
+            self.fit_columns_renaming or {}, enriched_Xy.columns
+        )
         columns_for_metrics = []
         seen_metrics_columns = set()
         for column in etalon_columns_renamed + selecting_columns_renamed:
@@ -3159,6 +3198,7 @@ if response.status_code == 200:
                 exclude_features_sources,
                 keep_input,
                 add_fit_system_record_id,
+                metrics_calculation=metrics_calculation,
             )
             if from_fit is not None:
                 return from_fit
@@ -3239,6 +3279,8 @@ if response.status_code == 200:
             self.logger.info("Input dataset hasn't date column")
             if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, search_keys, self.bundle, silent=True)
+            else:
+                self.__validate_ts_cv_requires_date()
 
         email_columns = SearchKey.find_all_keys(search_keys, SearchKey.EMAIL)
         if email_columns and self.generate_search_key_features:
@@ -3263,7 +3305,11 @@ if response.status_code == 200:
             generated_features = [columns_renaming.get(c, c) for c in generated_features]
             search_keys = {columns_renaming.get(c, c): t for c, t in search_keys.items()}
             selecting_columns = self._selecting_input_and_generated_columns(
-                validated_Xy, generated_features, keep_input, is_transform=True
+                validated_Xy,
+                generated_features,
+                keep_input,
+                is_transform=True,
+                metrics_calculation=metrics_calculation,
             )
             self.logger.warning(f"Filtered columns by existance in dataframe: {selecting_columns}")
             if add_fit_system_record_id:
@@ -3539,6 +3585,7 @@ if response.status_code == 200:
             search_keys,
             keep_input,
             add_fit_system_record_id,
+            metrics_calculation=metrics_calculation,
         )
 
     def _selecting_input_and_generated_columns(
@@ -3547,6 +3594,7 @@ if response.status_code == 200:
         generated_features: list[str],
         keep_input: bool,
         is_transform: bool = False,
+        metrics_calculation: bool = False,
     ):
         file_meta = self._search_task.get_file_metadata(self._get_trace_id())
         fit_dropped_features = self.fit_dropped_features or file_meta.droppedColumns or []
@@ -3587,10 +3635,13 @@ if response.status_code == 200:
         )
 
         if keep_input is True:
+            # Metrics baseline needs all client columns regardless of select_features
+            # (same as fit path keeping all etalon columns for baseline).
             selected_input_columns = [
                 c
                 for c in validated_Xy.columns
-                if not self.fit_select_features
+                if metrics_calculation
+                or not self.fit_select_features
                 or c in self.feature_names_
                 or (c in new_columns_on_transform and is_transform)
                 or c in fit_original_search_keys
@@ -3832,6 +3883,8 @@ if response.status_code == 200:
             # TODO remove when this logic will be implemented on the back
             if self.__should_add_date_column():
                 df = self._add_current_date_as_key(df, self.fit_search_keys, self.bundle)
+            else:
+                self.__validate_ts_cv_requires_date()
 
         email_columns = SearchKey.find_all_keys(self.fit_search_keys, SearchKey.EMAIL)
         if email_columns and self.generate_search_key_features:
@@ -4238,7 +4291,11 @@ if response.status_code == 200:
         return df
 
     def __should_add_date_column(self):
-        return self.add_date_if_missing or (self.cv is not None and self.cv.is_time_series())
+        return self.add_date_if_missing
+
+    def __validate_ts_cv_requires_date(self):
+        if self.cv is not None and self.cv.is_time_series():
+            raise ValidationError(self.bundle.get("ts_cv_without_date"))
 
     def __get_renamed_id_columns(self, renaming: dict[str, str] | None = None):
         renaming = renaming or self.fit_columns_renaming
