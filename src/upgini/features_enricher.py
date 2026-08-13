@@ -1578,6 +1578,8 @@ class FeaturesEnricher(TransformerMixin):
         psi_values = calculate_features_psi(
             psi_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
         )
+        if baseline_score_column:
+            psi_values[baseline_score_column] = None
 
         self.logger.info(f"PSI values by value: {psi_values}")
 
