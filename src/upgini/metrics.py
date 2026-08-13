@@ -547,6 +547,7 @@ class EstimatorWrapper:
         x, y, _ = self._prepare_to_calculate(x, y)
         if baseline_score_column is not None and self.metric_name == "GINI":
             metric, metric_std = roc_auc_score(y, x[baseline_score_column]), None
+            metric = self.post_process_metric(metric)
         else:
             metrics = []
             for est, cat_encoder in zip(self.cv_estimators, self.cv_cat_encoders):
