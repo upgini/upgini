@@ -58,6 +58,7 @@ from .utils import (
 
 feature_name_header = bundle.get("features_info_name")
 shap_value_header = bundle.get("features_info_shap")
+source_header = bundle.get("features_info_source")
 
 SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0
@@ -4228,6 +4229,8 @@ def test_select_features_false_shows_client_features_in_report(requests_mock: Mo
 
     assert "client_feature" in enricher.feature_names_
     assert "client_feature" in set(enricher.features_info[feature_name_header])
+    client_row = enricher.features_info.loc[enricher.features_info[feature_name_header] == "client_feature"].iloc[0]
+    assert client_row[source_header] == "Training dataset"
 
 
 def _drifting_stability_frames():
