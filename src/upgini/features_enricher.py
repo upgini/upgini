@@ -504,6 +504,7 @@ class FeaturesEnricher(TransformerMixin):
         select_features: bool, optional (default=False)
             If True, return only selected features both from input and data sources.
             Otherwise, return all features from input and only selected features from data sources.
+            Important client features are always shown in the features report.
 
         stability_threshold: float, optional (default=0.2)
             Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
@@ -655,6 +656,7 @@ class FeaturesEnricher(TransformerMixin):
         select_features: bool, optional (default=False)
             If True, return only selected features both from input and data sources.
             Otherwise, return all features from input and only selected features from data sources.
+            Important client features are always shown in the features report.
 
         stability_threshold: float, optional (default=0.2)
             Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
@@ -3033,7 +3035,10 @@ class FeaturesEnricher(TransformerMixin):
         return self._search_task.search_task_id if self._search_task else None
 
     def get_features_info(self) -> pd.DataFrame:
-        """Returns pandas.DataFrame with SHAP values and other info for each feature."""
+        """Returns pandas.DataFrame with SHAP values and other info for each feature.
+
+        Includes important client features and selected features from data sources.
+        """
         if self._search_task is None or self._search_task.summary is None:
             msg = self.bundle.get("features_unfitted_enricher")
             self.logger.warning(msg)
@@ -5168,6 +5173,9 @@ if response.status_code == 200:
         internal_features_info = []
 
         original_shaps = {original_names_dict.get(fm.name, fm.name): fm.shap_value for fm in features_meta}
+        generated_aliases = self._column_name_aliases(
+            self.fit_generated_features or [], self.fit_columns_renaming or {}
+        )
 
         selected_features_meta = []
         for feature_meta in features_meta:
@@ -5177,16 +5185,19 @@ if response.status_code == 200:
             file_meta = file_meta_by_orig_name.get(original_name)
             is_generated_feature = (
                 file_meta is not None and file_meta.meaningType == FileColumnMeaningType.GENERATED_FEATURE
-            )
+            ) or original_name in generated_aliases
             is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
 
-            if selected_features is not None and feature_meta.name not in selected_features:
+            if (
+                selected_features is not None
+                and feature_meta.name not in selected_features
+                and not (is_client_feature and not self.fit_select_features)
+            ):
                 continue
 
             selected_features_meta.append(feature_meta)
 
-            # Show and update shap values for client features only if select_features is True
-            if updated_shaps is not None and (not is_client_feature or self.fit_select_features):
+            if updated_shaps is not None:
                 updating_shap = updated_shaps.get(feature_meta.name)
                 if updating_shap is None:
                     if feature_meta.shap_value != 0.0:
@@ -5203,7 +5214,7 @@ if response.status_code == 200:
             file_meta = file_meta_by_orig_name.get(original_name)
             is_generated_feature = (
                 file_meta is not None and file_meta.meaningType == FileColumnMeaningType.GENERATED_FEATURE
-            )
+            ) or original_name in generated_aliases
             is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
 
             if not is_client_feature and not is_generated_feature:
@@ -5220,14 +5231,7 @@ if response.status_code == 200:
             if original_shaps.get(feature_meta.name, 0.0) == 0.0:
                 continue
 
-            # Use only important features
-            # If select_features is False, we don't show etalon features in the report
-            if (
-                # feature_meta.name in self.fit_generated_features or
-                feature_meta.name == COUNTRY  # constant synthetic column
-                # In select_features mode we select also from etalon features and need to show them
-                or (not self.fit_select_features and is_client_feature)
-            ):
+            if feature_meta.name == COUNTRY:  # constant synthetic column
                 continue
 
             # Temporary workaround for duplicate features metadata
