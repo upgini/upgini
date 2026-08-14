@@ -58,6 +58,7 @@ from .utils import (
 
 feature_name_header = bundle.get("features_info_name")
 shap_value_header = bundle.get("features_info_shap")
+source_header = bundle.get("features_info_source")
 
 SearchTask.PROTECT_FROM_RATE_LIMIT = False
 SearchTask.POLLING_DELAY_SECONDS = 0
@@ -4106,6 +4107,228 @@ def test_select_features(requests_mock: Mocker, update_metrics_flag: bool):
     )
 
     assert_metrics_frame_equal(expected_metrics, metrics)
+
+
+def test_select_features_false_shows_client_features_in_report(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+    if pd.__version__ >= "2.2.0":
+        features_file = "validation_features_v3_with_entity_system_record_id.parquet"
+    elif pd.__version__ >= "2.0.0":
+        features_file = "validation_features_v2_with_entity_system_record_id.parquet"
+    else:
+        features_file = "validation_features_v1_with_entity_system_record_id.parquet"
+    path_to_mock_features_validation = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), f"test_data/binary/{features_file}"
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=99.0, shap_value=0.2
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=1000, max_hit_count=1000, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+            ],
+        ),
+    )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+    mock_validation_raw_features(requests_mock, url, validation_search_task_id, path_to_mock_features_validation)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_df = df.head(10000)
+    train_features = train_df.drop(columns="target")
+    train_target = train_df["target"]
+    eval1_df = df[10000:11000].reset_index(drop=True)
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        eval_set=[(eval1_df.drop(columns="target"), eval1_df["target"].reset_index(drop=True))],
+        calculate_metrics=False,
+        select_features=False,
+    )
+
+    assert "client_feature" in enricher.feature_names_
+    assert "client_feature" in set(enricher.features_info[feature_name_header])
+    client_row = enricher.features_info.loc[enricher.features_info[feature_name_header] == "client_feature"].iloc[0]
+    assert client_row[source_header] == "Training dataset"
+
+
+def _drifting_stability_frames():
+    n_eval = 1200
+    dates = pd.date_range("2021-01-01", periods=n_eval, freq="D")
+    half = n_eval // 2
+    drift = np.concatenate([np.zeros(half), np.ones(n_eval - half) * 100.0])
+    rng = np.random.default_rng(0)
+    y = pd.Series(rng.integers(0, 2, n_eval), name="target")
+    renaming = {
+        "client_feature_abc123": "client_feature",
+        "baseline_score_def456": "baseline_score",
+        "external_feature_ghi789": "external_feature",
+    }
+    enriched = pd.DataFrame(
+        {
+            "client_feature_abc123": drift,
+            "external_feature_ghi789": drift,
+            "baseline_score_def456": drift,
+        }
+    )
+    train_x = pd.DataFrame(
+        {
+            "rep_date": pd.date_range("2020-01-01", periods=200, freq="D"),
+            "client_feature": np.zeros(200),
+            "baseline_score": np.zeros(200),
+        }
+    )
+    eval_x = pd.DataFrame({"rep_date": dates, "client_feature": drift, "baseline_score": drift})
+    return train_x, eval_x, y, enriched, pd.Series(dates, name="rep_date"), renaming
+
+
+def test_check_stability_calculates_psi_for_all_and_keeps_client_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    train_x, eval_x, y, enriched, eval_dates, renaming = _drifting_stability_frames()
+    search_keys = {"rep_date": SearchKey.DATE}
+
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        baseline_score_column="baseline_score",
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher.X = train_x
+    enricher.fit_columns_renaming = renaming
+    enricher.fit_select_features = False
+
+    dropped = enricher._check_stability(
+        X=train_x,
+        eval_set=[(eval_x, y)],
+        enriched_eval_set={0: (eval_x, y, enriched, y)},
+        eval_set_dates={0: eval_dates},
+        search_keys=search_keys,
+        stability_threshold=0.2,
+        stability_agg_func="max",
+        cat_features=[],
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    assert enricher.psi_values is not None
+    for name in [
+        "client_feature",
+        "client_feature_abc123",
+        "external_feature",
+        "external_feature_ghi789",
+        "baseline_score",
+        "baseline_score_def456",
+    ]:
+        assert name in enricher.psi_values
+        assert enricher.psi_values[name] is not None
+        assert enricher.psi_values[name] > 0.2
+
+    assert "external_feature" in dropped
+    assert "client_feature" not in dropped
+    assert "baseline_score" not in dropped
+    assert "external_feature" in enricher.unstable_features
+    assert "client_feature" not in enricher.unstable_features
+    assert "baseline_score" not in enricher.unstable_features
+
+    enricher.fit_select_features = True
+    dropped_selected = enricher._check_stability(
+        X=train_x,
+        eval_set=[(eval_x, y)],
+        enriched_eval_set={0: (eval_x, y, enriched, y)},
+        eval_set_dates={0: eval_dates},
+        search_keys=search_keys,
+        stability_threshold=0.2,
+        stability_agg_func="max",
+        cat_features=[],
+        model_task_type=ModelTaskType.BINARY,
+    )
+    assert "client_feature" in dropped_selected
+    assert "external_feature" in dropped_selected
+    assert "baseline_score" not in dropped_selected
+    assert "baseline_score" in enricher.psi_values
+    assert enricher.psi_values["baseline_score"] is not None
 
 
 def test_id_columns_validation(requests_mock: Mocker):

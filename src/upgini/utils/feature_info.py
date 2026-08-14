@@ -9,6 +9,8 @@ from upgini.metadata import FeaturesMetadataV2
 from upgini.resource_bundle import ResourceBundle
 
 LLM_SOURCE = "LLM with external data augmentation"
+CLIENT_SOURCE = "Training dataset"
+GENERATED_SOURCE = "AutoFE: features from Training dataset"
 
 
 @dataclass
@@ -152,7 +154,9 @@ def _get_internal_provider(feature_meta: FeaturesMetadataV2, is_client_feature: 
 
 def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool, is_generated_feature: bool) -> str:
     if is_generated_feature:
-        return "AutoFE: features from Training dataset"
+        return GENERATED_SOURCE
+    if is_client_feature:
+        return CLIENT_SOURCE
 
     sources = _list_or_single(feature_meta.data_sources, feature_meta.data_source)
     source_links = _list_or_single(feature_meta.data_source_links, feature_meta.data_source_link)
@@ -165,7 +169,9 @@ def _get_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool, is_ge
 
 def _get_internal_source(feature_meta: FeaturesMetadataV2, is_client_feature: bool, is_generated_feature: bool) -> str:
     if is_generated_feature:
-        return "AutoFE: features from Training dataset"
+        return GENERATED_SOURCE
+    if is_client_feature:
+        return CLIENT_SOURCE
 
     sources = _list_or_single(feature_meta.data_sources, feature_meta.data_source)
     if sources:

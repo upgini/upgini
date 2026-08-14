@@ -730,7 +730,7 @@ enriched_df = enricher.fit_transform(
 ```
 
 **Stability parameters:**
-- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI above this threshold will be excluded from the final feature set. Lower values mean stricter stability requirements.
+- `stability_threshold` (float, default=0.2): PSI threshold value. Features with PSI above this threshold will be excluded from the final feature set, except original client features when `select_features=False`. Lower values mean stricter stability requirements.
 - `stability_agg_func` (str, default="max"): Function to aggregate PSI values across time intervals. Options: "max" (most conservative), "min" (least conservative), "mean" (balanced approach).
 
 **PSI (Population Stability Index)** measures how much feature distribution changes over time. Lower PSI values indicate more stable features, which are generally more reliable for production ML models. PSI is calculated on the eval_set, which should contain the most recent dates relative to the training dataset.
