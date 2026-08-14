@@ -304,7 +304,8 @@ class FeaturesEnricher(TransformerMixin):
         self.feature_names_ = []
         self.external_source_feature_names = []
         self.feature_importances_ = []
-        self.psi_values: dict[str, float] | None = None
+        self.psi_values: dict[str, float | None] | None = None
+        self.unstable_features: set[str] = set()
         self.search_id = search_id
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
@@ -507,8 +508,8 @@ class FeaturesEnricher(TransformerMixin):
             Important client features are always shown in the features report.
 
         stability_threshold: float, optional (default=0.2)
-            Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
-            then feature will be dropped.
+            PSI threshold for feature stability. Features with PSI above this threshold are dropped from
+            the report, except original client features when select_features=False.
 
         stability_agg_func: str, optional (default="max")
             Function to aggregate stability values. Can be "max", "min", "mean".
@@ -659,8 +660,8 @@ class FeaturesEnricher(TransformerMixin):
             Important client features are always shown in the features report.
 
         stability_threshold: float, optional (default=0.2)
-            Stability threshold for selected features PSI calculation. If PSI is less than this threshold,
-            then feature will be dropped.
+            PSI threshold for feature stability. Features with PSI above this threshold are dropped from
+            the report, except original client features when select_features=False.
 
         stability_agg_func: str, optional (default="max")
             Function to aggregate stability values. Can be "max", "min", "mean".
@@ -1560,43 +1561,51 @@ class FeaturesEnricher(TransformerMixin):
 
         checking_eval_set_df[date_column] = date_converter.to_date_ms(eval_set_dates[selected_eval_set_idx].to_frame())
 
-        baseline_score_column = self._get_renamed_baseline_score_column()
-        psi_df = checking_eval_set_df
-        if baseline_score_column and baseline_score_column in psi_df.columns:
-            psi_df = psi_df.drop(columns=[baseline_score_column])
-
-        cat_features = [c for c in cat_features if c in psi_df.columns]
+        cat_features = [c for c in cat_features if c in checking_eval_set_df.columns]
 
         psi_values_sparse = calculate_sparsity_psi(
-            psi_df, cat_features, date_column, self.logger, model_task_type
+            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type
         )
 
         self.logger.info(f"PSI values by sparsity: {psi_values_sparse}")
 
-        unstable_by_sparsity = [feature for feature, psi in psi_values_sparse.items() if psi > stability_threshold]
+        unstable_by_sparsity = [
+            feature
+            for feature, psi in psi_values_sparse.items()
+            if self._psi_exceeds_threshold(psi, stability_threshold)
+        ]
         if unstable_by_sparsity:
             self.logger.info(f"Unstable by sparsity features ({stability_threshold}): {sorted(unstable_by_sparsity)}")
 
         psi_values = calculate_features_psi(
-            psi_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
+            checking_eval_set_df, cat_features, date_column, self.logger, model_task_type, stability_agg_func
         )
 
         self.logger.info(f"PSI values by value: {psi_values}")
 
-        unstable_by_value = [feature for feature, psi in psi_values.items() if psi > stability_threshold]
+        unstable_by_value = [
+            feature
+            for feature, psi in psi_values.items()
+            if self._psi_exceeds_threshold(psi, stability_threshold)
+        ]
         if unstable_by_value:
             self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
 
-        self.psi_values = {
-            feature: psi_value for feature, psi_value in psi_values.items() if psi_value <= stability_threshold
-        }
+        renaming = self.fit_columns_renaming or {}
+        self.psi_values = {}
+        for feature, psi_value in psi_values.items():
+            for alias in self._column_name_aliases([feature], renaming):
+                self.psi_values[alias] = psi_value
 
-        total_unstable_features = sorted(set(unstable_by_sparsity + unstable_by_value))
-        if baseline_score_column:
-            total_unstable_features = [f for f in total_unstable_features if f != baseline_score_column]
-            self.psi_values[baseline_score_column] = None
+        keepers = self._psi_stability_keepers()
+        all_unstable = set(unstable_by_sparsity + unstable_by_value)
+        kept_unstable = sorted({renaming.get(f, f) for f in all_unstable if f in keepers})
+        if kept_unstable:
+            self.logger.info(f"Unstable features kept in the report: {kept_unstable}")
 
-        return total_unstable_features
+        dropped = sorted({renaming.get(f, f) for f in all_unstable if f not in keepers})
+        self.unstable_features = self._column_name_aliases(dropped, renaming)
+        return dropped
 
     def _update_shap_values(self, df: pd.DataFrame, new_shaps: dict[str, float], silent: bool = False):
         renaming = self.fit_columns_renaming or {}
@@ -1977,6 +1986,26 @@ class FeaturesEnricher(TransformerMixin):
             return self.fit_columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
         return self.baseline_score_column
 
+    def _psi_exceeds_threshold(self, psi: float | None, threshold: float) -> bool:
+        return psi is not None and not pd.isna(psi) and psi > threshold
+
+    def _psi_stability_keepers(self) -> set[str]:
+        """Features that stay in the report even when PSI is above the stability threshold."""
+        renaming = self.fit_columns_renaming or {}
+        keepers: set[str] = set()
+        if self.baseline_score_column:
+            keepers |= self._column_name_aliases([self.baseline_score_column], renaming)
+        if self.fit_select_features:
+            return keepers
+
+        generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
+        if isinstance(self.X, pd.DataFrame):
+            client = [c for c in self.X.columns if c not in generated]
+            keepers |= self._column_name_aliases(client, renaming)
+        elif self.X is not None:
+            keepers |= self._column_name_aliases([str(i) for i in range(np.shape(self.X)[1])], renaming)
+        return keepers
+
     def _get_cat_features_for_psi(
         self,
         client_cat_features: list[str] | None,
@@ -2058,7 +2087,9 @@ class FeaturesEnricher(TransformerMixin):
         return resolved
 
     @staticmethod
-    def _column_name_aliases(names: list[str] | set[str] | tuple[str, ...], columns_renaming: dict[str, str]) -> set[str]:
+    def _column_name_aliases(
+        names: list[str] | set[str] | tuple[str, ...], columns_renaming: dict[str, str]
+    ) -> set[str]:
         """Return names in both hashed and original forms for exclusion matching."""
         hashed_to_original = dict(columns_renaming)
         original_to_hashed = {original: hashed for hashed, original in columns_renaming.items()}
@@ -3773,6 +3804,7 @@ if response.status_code == 200:
         self.fit_dropped_features = set()
         self.fit_generated_features = []
         self.psi_values = None
+        self.unstable_features = set()
         self.add_info = AddInfo()
 
         validated_X, validated_y, validated_eval_set = self._validate_train_eval(X, y, eval_set)
@@ -5208,6 +5240,7 @@ if response.status_code == 200:
                 feature_meta.shap_value = updating_shap
 
         selected_features_meta.sort(key=lambda m: (-m.shap_value, m.name))
+        psi_keepers = self._psi_stability_keepers() if self.psi_values is not None else set()
 
         for feature_meta in selected_features_meta:
             original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
@@ -5223,7 +5256,12 @@ if response.status_code == 200:
             if self.psi_values is not None:
                 if original_name in self.psi_values:
                     feature_meta.psi_value = self.psi_values[original_name]
-                else:
+                elif feature_meta.name in self.psi_values:
+                    feature_meta.psi_value = self.psi_values[feature_meta.name]
+                elif original_name not in psi_keepers and feature_meta.name not in psi_keepers:
+                    continue
+
+                if original_name in self.unstable_features or feature_meta.name in self.unstable_features:
                     continue
 
             # TODO make a decision about selected features based on special flag from mlb

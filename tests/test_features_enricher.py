@@ -4230,6 +4230,104 @@ def test_select_features_false_shows_client_features_in_report(requests_mock: Mo
     assert "client_feature" in set(enricher.features_info[feature_name_header])
 
 
+def _drifting_stability_frames():
+    n_eval = 1200
+    dates = pd.date_range("2021-01-01", periods=n_eval, freq="D")
+    half = n_eval // 2
+    drift = np.concatenate([np.zeros(half), np.ones(n_eval - half) * 100.0])
+    rng = np.random.default_rng(0)
+    y = pd.Series(rng.integers(0, 2, n_eval), name="target")
+    renaming = {
+        "client_feature_abc123": "client_feature",
+        "baseline_score_def456": "baseline_score",
+        "external_feature_ghi789": "external_feature",
+    }
+    enriched = pd.DataFrame(
+        {
+            "client_feature_abc123": drift,
+            "external_feature_ghi789": drift,
+            "baseline_score_def456": drift,
+        }
+    )
+    train_x = pd.DataFrame(
+        {
+            "rep_date": pd.date_range("2020-01-01", periods=200, freq="D"),
+            "client_feature": np.zeros(200),
+            "baseline_score": np.zeros(200),
+        }
+    )
+    eval_x = pd.DataFrame({"rep_date": dates, "client_feature": drift, "baseline_score": drift})
+    return train_x, eval_x, y, enriched, pd.Series(dates, name="rep_date"), renaming
+
+
+def test_check_stability_calculates_psi_for_all_and_keeps_client_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    train_x, eval_x, y, enriched, eval_dates, renaming = _drifting_stability_frames()
+    search_keys = {"rep_date": SearchKey.DATE}
+
+    enricher = FeaturesEnricher(
+        search_keys=search_keys,
+        baseline_score_column="baseline_score",
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher.X = train_x
+    enricher.fit_columns_renaming = renaming
+    enricher.fit_select_features = False
+
+    dropped = enricher._check_stability(
+        X=train_x,
+        eval_set=[(eval_x, y)],
+        enriched_eval_set={0: (eval_x, y, enriched, y)},
+        eval_set_dates={0: eval_dates},
+        search_keys=search_keys,
+        stability_threshold=0.2,
+        stability_agg_func="max",
+        cat_features=[],
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    assert enricher.psi_values is not None
+    for name in [
+        "client_feature",
+        "client_feature_abc123",
+        "external_feature",
+        "external_feature_ghi789",
+        "baseline_score",
+        "baseline_score_def456",
+    ]:
+        assert name in enricher.psi_values
+        assert enricher.psi_values[name] is not None
+        assert enricher.psi_values[name] > 0.2
+
+    assert "external_feature" in dropped
+    assert "client_feature" not in dropped
+    assert "baseline_score" not in dropped
+    assert "external_feature" in enricher.unstable_features
+    assert "client_feature" not in enricher.unstable_features
+    assert "baseline_score" not in enricher.unstable_features
+
+    enricher.fit_select_features = True
+    dropped_selected = enricher._check_stability(
+        X=train_x,
+        eval_set=[(eval_x, y)],
+        enriched_eval_set={0: (eval_x, y, enriched, y)},
+        eval_set_dates={0: eval_dates},
+        search_keys=search_keys,
+        stability_threshold=0.2,
+        stability_agg_func="max",
+        cat_features=[],
+        model_task_type=ModelTaskType.BINARY,
+    )
+    assert "client_feature" in dropped_selected
+    assert "external_feature" in dropped_selected
+    assert "baseline_score" not in dropped_selected
+    assert "baseline_score" in enricher.psi_values
+    assert enricher.psi_values["baseline_score"] is not None
+
+
 def test_id_columns_validation(requests_mock: Mocker):
     url = "http://fake_url2"
 
