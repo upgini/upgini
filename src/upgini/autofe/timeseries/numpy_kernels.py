@@ -132,9 +132,9 @@ def roll_values(
 
     # pandas rolling skipna=True: ignore NaNs inside the window
     finite = np.isfinite(values)
-    safe = np.where(finite, values, 0.0)
 
-    if aggregation in {"mean", "norm_mean", "std"}:
+    if aggregation in {"mean", "norm_mean"}:
+        safe = np.where(finite, values, 0.0)
         csum = np.empty(n + 1, dtype=np.float64)
         csum[0] = 0.0
         np.cumsum(safe, out=csum[1:])
@@ -150,19 +150,12 @@ def roll_values(
         if aggregation == "mean":
             out[valid] = means[valid]
             return out
-        if aggregation == "norm_mean":
-            # last finite observation in window / mean; if current value NaN → NaN
-            out[valid & finite] = values[valid & finite] / means[valid & finite]
-            return out
-        # std ddof=1
-        csum2 = np.empty(n + 1, dtype=np.float64)
-        csum2[0] = 0.0
-        np.cumsum(safe * safe, out=csum2[1:])
-        window_sum2 = csum2[1:] - csum2[lefts]
-        multi = counts >= 2
-        var = (window_sum2[multi] - window_sum[multi] * window_sum[multi] / counts[multi]) / (counts[multi] - 1)
-        out[multi] = np.sqrt(np.maximum(var, 0.0))
+        # last finite observation in window / mean; if current value NaN → NaN
+        out[valid & finite] = values[valid & finite] / means[valid & finite]
         return out
+
+    if aggregation == "std":
+        return _roll_std_skipna(values, lefts, finite)
 
     if aggregation in {"q25", "q75", "iqr", "median"}:
         return _roll_order_stats_skipna(values, lefts, aggregation)
@@ -189,6 +182,51 @@ def roll_values(
         window = values[lefts[i] : i + 1]
         finite_window = window[np.isfinite(window)]
         out[i] = agg(finite_window) if len(finite_window) else np.nan
+    return out
+
+
+def _roll_std_skipna(values: np.ndarray, lefts: np.ndarray, finite: np.ndarray) -> np.ndarray:
+    """Sliding Welford std (ddof=1), skipna=True; same add/remove as pandas rolling.std."""
+    n = len(values)
+    out = np.full(n, np.nan, dtype=np.float64)
+    mean = 0.0
+    m2 = 0.0
+    count = 0
+    left = 0
+
+    for i in range(n):
+        new_left = int(lefts[i])
+        for j in range(left, new_left):
+            if not finite[j]:
+                continue
+            if count <= 1:
+                mean = 0.0
+                m2 = 0.0
+                count = 0
+                continue
+            x = values[j]
+            if count == 2:
+                mean = 2.0 * mean - x
+                m2 = 0.0
+                count = 1
+                continue
+            count_new = count - 1
+            delta = x - mean
+            mean = mean - delta / count_new
+            m2 -= delta * (x - mean)
+            count = count_new
+        left = new_left
+
+        if finite[i]:
+            count += 1
+            x = values[i]
+            delta = x - mean
+            mean += delta / count
+            m2 += delta * (x - mean)
+
+        if count >= 2:
+            out[i] = np.sqrt(m2 / (count - 1)) if m2 > 0.0 else 0.0
+
     return out
 
 
@@ -372,7 +410,8 @@ def apply_grouped_kernel(
     values = pd.to_numeric(obj[value_col], errors="coerce").to_numpy(dtype=np.float64, copy=False)
     index = obj.index
     times_ns = index.get_level_values(-1).asi8 if isinstance(index, pd.MultiIndex) else index.asi8
-    out = np.empty(len(obj), dtype=np.float64)
+    # GroupBy.indices skips null keys (dropna=True); NaN preserves those rows.
+    out = np.full(len(obj), np.nan, dtype=np.float64)
 
     for indexer in ts.indices.values():
         idx = np.asarray(indexer, dtype=np.intp)

@@ -72,6 +72,67 @@ def test_roll_date_groups():
     check_period(2, "norm_mean", [1.0, 1.0, np.nan, 1.6, 1.6, 1.0])
 
 
+def _pandas_roll_std(dates, values, window_size: int, window_unit: str = "D") -> pd.Series:
+    idx = pd.DatetimeIndex(pd.to_datetime(dates))
+    rolled = pd.Series(values, index=idx).rolling(f"{window_size}{window_unit}", min_periods=1).std()
+    return pd.Series(rolled.to_numpy(), name="value")
+
+
+def test_roll_std_large_magnitude():
+    dates = pd.date_range("2024-05-01", periods=4, freq="D")
+    for baseline in (1e8, 1e12):
+        values = baseline + np.arange(4, dtype=np.float64)
+        df = pd.DataFrame({"date": dates, "value": values})
+        result = Feature(
+            op=Roll(window_size=10, aggregation="std"),
+            children=[Column("date"), Column("value")],
+        ).calculate(df)
+        assert_series_equal(result, _pandas_roll_std(dates, values, 10))
+
+
+def test_roll_std_skipna_and_window_bounds():
+    dates = pd.to_datetime(["2024-05-01", "2024-05-02", "2024-05-03", "2024-05-04", "2024-05-06"])
+    values = np.array([1.0, np.nan, 3.0, 4.0, 6.0])
+    df = pd.DataFrame({"date": dates, "value": values})
+    result = Feature(
+        op=Roll(window_size=3, aggregation="std"),
+        children=[Column("date"), Column("value")],
+    ).calculate(df)
+    assert_series_equal(result, _pandas_roll_std(dates, values, 3))
+
+
+def test_roll_null_group_keys():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-07", "2024-05-08"],
+            "group": ["a", None, "a"],
+            "value": [1.0, 2.0, 3.0],
+        }
+    )
+    feature = Feature(
+        op=Roll(window_size=2, aggregation="mean"),
+        children=[Column("date"), Column("group"), Column("value")],
+    )
+    assert_series_equal(feature.calculate(df), pd.Series([1.0, np.nan, 3.0], name="value"))
+
+    df_composite = pd.DataFrame(
+        {
+            "date": ["2024-05-06", "2024-05-07", "2024-05-08", "2024-05-08"],
+            "f1": ["a", "a", None, "b"],
+            "f2": [1, None, 1, 2],
+            "value": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    feature_composite = Feature(
+        op=Roll(window_size=2, aggregation="mean"),
+        children=[Column("date"), Column("f1"), Column("f2"), Column("value")],
+    )
+    assert_series_equal(
+        feature_composite.calculate(df_composite),
+        pd.Series([1.0, np.nan, np.nan, 4.0], name="value"),
+    )
+
+
 def test_roll_from_formula():
     roll = Roll.from_formula("roll_3d_mean")
     assert roll.window_size == 3
