@@ -6,23 +6,81 @@ Window semantics match pandas time-based rolling with a left-open interval
 
 from __future__ import annotations
 
-from typing import Callable, Sequence, Union
+import warnings
+from functools import lru_cache
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
+from pandas.tseries.frequencies import to_offset
 
 # Aggregation applied to values in a time window (may be length 1+).
 WindowAgg = Callable[[np.ndarray], float]
 
 
-def _timedelta_ns(size: int, unit: str) -> int:
-    return int(pd.Timedelta(size, unit).to_timedelta64().astype("timedelta64[ns]").astype(np.int64))
+@lru_cache(maxsize=64)
+def _tick_ns(size: int, unit: str) -> Optional[int]:
+    """Nanoseconds for a fixed duration, or None for calendar/business offsets (M, B, Q, …).
+
+    Cached: grouped kernels call this once per group, not per row, but re-parsing
+    ``Timedelta`` on every group dominated lag/roll time.
+    """
+    try:
+        return int(pd.Timedelta(size, unit).to_timedelta64().astype("timedelta64[ns]").astype(np.int64))
+    except ValueError:
+        return None
 
 
-def window_left_indices(times_ns: np.ndarray, window_ns: int) -> np.ndarray:
+@lru_cache(maxsize=64)
+def _as_offset(size: int, unit: str):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        return to_offset(f"{size}{unit}")
+
+
+def _times_minus_offset(
+    times_ns: np.ndarray,
+    size: int,
+    unit: str,
+    dates: Optional[pd.DatetimeIndex] = None,
+) -> np.ndarray:
+    """``times - offset`` as int64 ns. Tick units use integer arithmetic; others use DateOffset."""
+    if dates is None:
+        tick_ns = _tick_ns(size, unit)
+        if tick_ns is not None:
+            return times_ns - tick_ns
+        dates = pd.DatetimeIndex(times_ns.astype("datetime64[ns]", copy=False))
+    return _subtract_calendar_offset(dates, size, unit)
+
+
+def _subtract_calendar_offset(dates: pd.DatetimeIndex, size: int, unit: str) -> np.ndarray:
+    """``dates - offset`` as int64 ns.
+
+    ``to_offset('M')`` is MonthEnd, which misses a series sampled on day X of each
+    month (Apr 15 → Mar 31). Non-month-end timestamps use ``DateOffset(months=)``
+    so the same day-of-month matches; month-end timestamps keep MonthEnd so
+    Jan 31 / Feb 29 / Apr 30 still line up.
+    """
+    if unit.upper() == "M":
+        same_day = dates - pd.DateOffset(months=size)
+        month_end = dates.is_month_end
+        if not bool(np.any(month_end)):
+            return np.asarray(same_day.asi8, dtype=np.int64)
+        anchored = dates - _as_offset(size, unit)
+        return np.asarray(np.where(month_end, anchored.asi8, same_day.asi8), dtype=np.int64)
+    return np.asarray((dates - _as_offset(size, unit)).asi8, dtype=np.int64)
+
+
+def window_left_indices(
+    times_ns: np.ndarray,
+    window_size: int,
+    window_unit: str,
+    dates: Optional[pd.DatetimeIndex] = None,
+) -> np.ndarray:
     """For each t_i, first index j with times[j] > t_i - window (left-open)."""
     times_ns = np.asarray(times_ns, dtype=np.int64)
-    return np.searchsorted(times_ns, times_ns - window_ns, side="right")
+    starts = _times_minus_offset(times_ns, window_size, window_unit, dates)
+    return np.searchsorted(times_ns, starts, side="right")
 
 
 def lag_values(times_ns: np.ndarray, values: np.ndarray, lag_size: int, lag_unit: str) -> np.ndarray:
@@ -33,13 +91,17 @@ def lag_values(times_ns: np.ndarray, values: np.ndarray, lag_size: int, lag_unit
     if n == 0:
         return np.array([], dtype=np.float64)
 
-    lag_ns = _timedelta_ns(lag_size, lag_unit)
-    window_ns = _timedelta_ns(lag_size + 1, lag_unit)
-    lefts = window_left_indices(times_ns, window_ns)
+    dates = (
+        None
+        if _tick_ns(lag_size, lag_unit) is not None
+        else pd.DatetimeIndex(times_ns.astype("datetime64[ns]", copy=False))
+    )
+    lag_targets = _times_minus_offset(times_ns, lag_size, lag_unit, dates)
+    lefts = window_left_indices(times_ns, lag_size + 1, lag_unit, dates)
 
     out = np.full(n, np.nan, dtype=np.float64)
     # Gate: oldest in window is at or before t - lag  <=>  times[left] <= t - lag
-    gate = times_ns[lefts] <= times_ns - lag_ns
+    gate = times_ns[lefts] <= lag_targets
     out[gate] = values[lefts[gate]]
     return out
 
@@ -127,8 +189,7 @@ def roll_values(
     if aggregation not in ROLL_AGGS:
         raise ValueError(f"Unsupported roll aggregation for numpy path: {aggregation}")
 
-    window_ns = _timedelta_ns(window_size, window_unit)
-    lefts = window_left_indices(times_ns, window_ns)
+    lefts = window_left_indices(times_ns, window_size, window_unit)
 
     # pandas rolling skipna=True: ignore NaNs inside the window
     finite = np.isfinite(values)
@@ -278,8 +339,7 @@ def freq_pct_change(times_ns: np.ndarray, values: np.ndarray, step_size: int, st
         filled = filled[idx]
         filled[:first_valid] = np.nan
 
-    step_ns = _timedelta_ns(step_size, step_unit)
-    targets = times_ns - step_ns
+    targets = _times_minus_offset(times_ns, step_size, step_unit)
     idx = np.searchsorted(times_ns, targets, side="left")
     out = np.zeros(n, dtype=np.float64)
     in_range = idx < n
@@ -337,8 +397,7 @@ def offset_values(
     if n == 0 or offset_size == 0:
         return values.copy(), np.ones(n, dtype=bool)
 
-    offset_ns = _timedelta_ns(offset_size, offset_unit)
-    targets = times_ns - offset_ns
+    targets = _times_minus_offset(times_ns, offset_size, offset_unit)
     idx = np.searchsorted(times_ns, targets, side="left")
     out = np.full(n, np.nan, dtype=np.float64)
     matched = np.zeros(n, dtype=bool)

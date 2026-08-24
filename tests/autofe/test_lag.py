@@ -106,6 +106,55 @@ def test_lag_with_offset():
     check_lag(2, "d", 1, [np.nan, np.nan, np.nan, 1.0, 1.0])
 
 
+def test_lag_month():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30"],
+            "value": [1, 2, 3, 4],
+        },
+    )
+    feature = Feature(
+        op=Lag(lag_size=1, lag_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(feature.calculate(df), pd.Series([np.nan, 1.0, 2.0, 3.0], name="value"))
+
+
+def test_lag_month_offset():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30"],
+            "value": [1, 2, 3, 4],
+        },
+    )
+    feature = Feature(
+        op=Lag(lag_size=1, lag_unit="M", offset_size=1, offset_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    # Offset maps each month-end to the previous one, then lag_1M looks one more month back.
+    assert_series_equal(feature.calculate(df), pd.Series([np.nan, np.nan, 1.0, 2.0], name="value"))
+
+
+def test_lag_month_same_day_of_month():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-15", "2024-02-15", "2024-03-15", "2024-04-15"],
+            "value": [1, 2, 3, 4],
+        },
+    )
+    feature = Feature(
+        op=Lag(lag_size=1, lag_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(feature.calculate(df), pd.Series([np.nan, 1.0, 2.0, 3.0], name="value"))
+
+    offset_feature = Feature(
+        op=Lag(lag_size=1, lag_unit="M", offset_size=1, offset_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(offset_feature.calculate(df), pd.Series([np.nan, np.nan, 1.0, 2.0], name="value"))
+
+
 def test_lag_from_formula():
     lag = Lag.from_formula("lag_3d")
     assert lag.lag_size == 3

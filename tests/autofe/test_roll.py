@@ -214,6 +214,68 @@ def test_roll_with_offset():
     check_roll(3, "d", 1, "median", [np.nan, 1.0, 1.5, 2.0, 2.0])
 
 
+def test_roll_month_offset():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30", "2024-05-31"],
+            "value": [1.0, 2.0, 3.0, 4.0, 5.0],
+        },
+    )
+    feature = Feature(
+        op=Roll(window_size=1, window_unit="D", aggregation="mean", offset_size=1, offset_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(feature.calculate(df), pd.Series([np.nan, 1.0, 2.0, 3.0, 4.0], name="value"))
+
+    mid = pd.DataFrame(
+        {
+            "date": ["2024-03-15", "2024-03-31", "2024-04-15", "2024-04-30"],
+            "value": [1.0, 2.0, 3.0, 4.0],
+        },
+    )
+    mid_feature = Feature(
+        op=Roll(window_size=1, window_unit="D", aggregation="mean", offset_size=1, offset_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    # Apr 15 looks up Mar 15; Apr 30 is month-end and looks up Mar 31.
+    assert_series_equal(mid_feature.calculate(mid), pd.Series([np.nan, np.nan, 1.0, 2.0], name="value"))
+
+
+def test_roll_month_same_day_of_month():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-15", "2024-02-15", "2024-03-15", "2024-04-15"],
+            "value": [1.0, 2.0, 3.0, 4.0],
+        },
+    )
+    offset_feature = Feature(
+        op=Roll(window_size=1, window_unit="D", aggregation="mean", offset_size=1, offset_unit="M"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(offset_feature.calculate(df), pd.Series([np.nan, 1.0, 2.0, 3.0], name="value"))
+
+    window_feature = Feature(
+        op=Roll(window_size=2, window_unit="M", aggregation="mean"),
+        children=[Column("date"), Column("value")],
+    )
+    assert_series_equal(window_feature.calculate(df), pd.Series([1.0, 1.5, 2.5, 3.5], name="value"))
+
+
+def test_roll_month_window():
+    df = pd.DataFrame(
+        {
+            "date": ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30"],
+            "value": [1.0, 3.0, 5.0, 7.0],
+        },
+    )
+    feature = Feature(
+        op=Roll(window_size=2, window_unit="M", aggregation="mean"),
+        children=[Column("date"), Column("value")],
+    )
+    # Left-open (t - 2M, t]: previous month-end is excluded, current + one prior month-end remain.
+    assert_series_equal(feature.calculate(df), pd.Series([1.0, 2.0, 4.0, 6.0], name="value"))
+
+
 def test_roll_with_offset_and_groups():
     df = pd.DataFrame(
         {
