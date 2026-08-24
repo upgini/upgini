@@ -72,9 +72,10 @@ def test_roll_date_groups():
     check_period(2, "norm_mean", [1.0, 1.0, np.nan, 1.6, 1.6, 1.0])
 
 
-def _pandas_roll_std(dates, values, window_size: int, window_unit: str = "D") -> pd.Series:
+def _pandas_rolling(dates, values, window_size: int, aggregation: str, window_unit: str = "D") -> pd.Series:
     idx = pd.DatetimeIndex(pd.to_datetime(dates))
-    rolled = pd.Series(values, index=idx).rolling(f"{window_size}{window_unit}", min_periods=1).std()
+    roller = pd.Series(values, index=idx).rolling(f"{window_size}{window_unit}", min_periods=1)
+    rolled = getattr(roller, aggregation)()
     return pd.Series(rolled.to_numpy(), name="value")
 
 
@@ -87,7 +88,7 @@ def test_roll_std_large_magnitude():
             op=Roll(window_size=10, aggregation="std"),
             children=[Column("date"), Column("value")],
         ).calculate(df)
-        assert_series_equal(result, _pandas_roll_std(dates, values, 10))
+        assert_series_equal(result, _pandas_rolling(dates, values, 10, "std"))
 
 
 def test_roll_std_skipna_and_window_bounds():
@@ -98,7 +99,28 @@ def test_roll_std_skipna_and_window_bounds():
         op=Roll(window_size=3, aggregation="std"),
         children=[Column("date"), Column("value")],
     ).calculate(df)
-    assert_series_equal(result, _pandas_roll_std(dates, values, 3))
+    assert_series_equal(result, _pandas_rolling(dates, values, 3, "std"))
+
+
+def test_roll_minmax_nonfinite():
+    dates = pd.date_range("2024-05-01", periods=4, freq="D")
+    values_inf = np.array([1.0, np.inf, 3.0, 4.0])
+    df_inf = pd.DataFrame({"date": dates, "value": values_inf})
+    assert_series_equal(
+        Feature(op=Roll(window_size=10, aggregation="max"), children=[Column("date"), Column("value")]).calculate(
+            df_inf
+        ),
+        _pandas_rolling(dates, values_inf, 10, "max"),
+    )
+
+    values_ninf = np.array([1.0, -np.inf, 3.0, 4.0])
+    df_ninf = pd.DataFrame({"date": dates, "value": values_ninf})
+    assert_series_equal(
+        Feature(op=Roll(window_size=10, aggregation="min"), children=[Column("date"), Column("value")]).calculate(
+            df_ninf
+        ),
+        _pandas_rolling(dates, values_ninf, 10, "min"),
+    )
 
 
 def test_roll_null_group_keys():

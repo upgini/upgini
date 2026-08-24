@@ -160,20 +160,15 @@ def roll_values(
     if aggregation in {"q25", "q75", "iqr", "median"}:
         return _roll_order_stats_skipna(values, lefts, aggregation)
 
-    if aggregation == "min":
+    if aggregation in {"min", "max"}:
+        # pandas rolling min/max skip NaN and ±inf
+        reducer = np.min if aggregation == "min" else np.max
         out = np.full(n, np.nan, dtype=np.float64)
         for i in range(n):
-            window = values[lefts[i] : i + 1]
-            if np.isfinite(window).any():
-                out[i] = np.nanmin(window)
-        return out
-
-    if aggregation == "max":
-        out = np.full(n, np.nan, dtype=np.float64)
-        for i in range(n):
-            window = values[lefts[i] : i + 1]
-            if np.isfinite(window).any():
-                out[i] = np.nanmax(window)
+            sl = slice(int(lefts[i]), i + 1)
+            finite_window = values[sl][finite[sl]]
+            if finite_window.size:
+                out[i] = reducer(finite_window)
         return out
 
     agg = ROLL_AGGS[aggregation]
@@ -272,13 +267,14 @@ def freq_pct_change(times_ns: np.ndarray, values: np.ndarray, step_size: int, st
     if n == 0:
         return np.array([], dtype=np.float64)
 
-    # pandas pct_change default fill_method='pad' forward-fills before differencing
+    # pandas pct_change fill_method='pad': forward-fill NaN only, then fillna(0) (NaN only)
     filled = values.copy()
-    is_valid = np.isfinite(filled)
-    if not is_valid.all():
-        idx = np.where(is_valid, np.arange(n), 0)
+    is_na = np.isnan(filled)
+    if is_na.any():
+        not_na = ~is_na
+        idx = np.where(not_na, np.arange(n), 0)
         np.maximum.accumulate(idx, out=idx)
-        first_valid = int(np.argmax(is_valid)) if is_valid.any() else n
+        first_valid = int(np.argmax(not_na)) if not_na.any() else n
         filled = filled[idx]
         filled[:first_valid] = np.nan
 
@@ -294,7 +290,7 @@ def freq_pct_change(times_ns: np.ndarray, values: np.ndarray, step_size: int, st
     with np.errstate(divide="ignore", invalid="ignore"):
         pct = cur / prev - 1.0
     out[matches] = pct
-    out[~np.isfinite(out)] = 0.0
+    out[np.isnan(out)] = 0.0
     return out
 
 
