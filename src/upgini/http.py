@@ -316,7 +316,13 @@ class _RestClient:
         # self.silent_mode = silent_mode
         self.client_ip = client_ip
         self.client_visitorid = client_visitorid
-        self._access_token = self._refresh_access_token()
+        # If UPGINI_NO_AUTH is set, skip the refresh_access_token exchange entirely and
+        # use the configured token as-is for the Authorization header. For use against
+        # an ADSM deployment running with auth/authz disabled (e.g. an air-gapped
+        # internal installation).
+        self._access_token = (
+            self._refresh_token if os.environ.get("UPGINI_NO_AUTH") else self._refresh_access_token()
+        )
         # self._access_token: Optional[str] = None  # self._refresh_access_token()
         self.last_refresh_time = time.time()
 
