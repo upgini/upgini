@@ -86,22 +86,24 @@ def test_roll_pandas_aggs_match_pandas():
     values = np.sin(np.arange(200, dtype=np.float64) / 10.0)
     values[::17] = np.nan
     df = pd.DataFrame({"date": dates, "value": values})
-    for agg in ("min", "max", "median"):
+    children = [Column("date"), Column("value")]
+    for agg in ("mean", "std", "min", "max", "median"):
         result = Feature(
             op=Roll(window_size=2, window_unit="D", aggregation=agg),
-            children=[Column("date"), Column("value")],
+            children=children,
         ).calculate(df)
         assert_series_equal(result, _pandas_rolling(dates, values, 2, agg, "D"))
 
     roller = pd.Series(values, index=dates).rolling("2D", min_periods=1)
     for agg, expected in (
+        ("norm_mean", pd.Series(values, index=dates) / roller.mean()),
         ("q25", roller.quantile(0.25)),
         ("q75", roller.quantile(0.75)),
         ("iqr", roller.quantile(0.75) - roller.quantile(0.25)),
     ):
         result = Feature(
             op=Roll(window_size=2, window_unit="D", aggregation=agg),
-            children=[Column("date"), Column("value")],
+            children=children,
         ).calculate(df)
         assert_series_equal(result, pd.Series(expected.to_numpy(), name="value"))
 
