@@ -3,7 +3,13 @@ from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
-from upgini.autofe.timeseries.numpy_kernels import ROLL_AGGS, apply_grouped_kernel, roll_values
+from upgini.autofe.timeseries.numpy_kernels import (
+    ROLL_AGGS,
+    apply_grouped_kernel,
+    apply_pandas_rolling,
+    roll_values,
+    uses_pandas_rolling,
+)
 from upgini.autofe.utils import pydantic_validator
 
 # Names kept for compatibility; computation uses numpy ROLL_AGGS.
@@ -86,6 +92,8 @@ class Roll(TimeSeriesBase, ParametrizedOperator):
         window_size = self.window_size
         window_unit = self.window_unit
         aggregation = self.aggregation
+        if uses_pandas_rolling(window_size, window_unit, aggregation):
+            return apply_pandas_rolling(ts, window_size, window_unit, aggregation)
         if aggregation not in ROLL_AGGS:
             return ts.rolling(f"{window_size}{window_unit}", min_periods=1).agg(aggregation)
         return apply_grouped_kernel(

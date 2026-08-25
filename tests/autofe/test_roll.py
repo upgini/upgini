@@ -69,6 +69,8 @@ def test_roll_date_groups():
 
     check_period(1, "mean", [1.0, 2.0, np.nan, 4.0, 4.0, 5.0])
     check_period(2, "mean", [1.0, 2.0, np.nan, 2.5, 2.5, 5.0])
+    check_period(2, "min", [1.0, 2.0, np.nan, 1.0, 1.0, 5.0])
+    check_period(2, "median", [1.0, 2.0, np.nan, 2.5, 2.5, 5.0])
     check_period(2, "norm_mean", [1.0, 1.0, np.nan, 1.6, 1.6, 1.0])
 
 
@@ -77,6 +79,29 @@ def _pandas_rolling(dates, values, window_size: int, aggregation: str, window_un
     roller = pd.Series(values, index=idx).rolling(f"{window_size}{window_unit}", min_periods=1)
     rolled = getattr(roller, aggregation)()
     return pd.Series(rolled.to_numpy(), name="value")
+
+
+def test_roll_pandas_aggs_match_pandas():
+    dates = pd.date_range("2024-01-01", periods=200, freq="h")
+    values = np.sin(np.arange(200, dtype=np.float64) / 10.0)
+    values[::17] = np.nan
+    df = pd.DataFrame({"date": dates, "value": values})
+    for agg in ("min", "max", "median"):
+        result = Feature(
+            op=Roll(window_size=2, window_unit="D", aggregation=agg),
+            children=[Column("date"), Column("value")],
+        ).calculate(df)
+        assert_series_equal(result, _pandas_rolling(dates, values, 2, agg, "D"))
+
+    q25 = Feature(
+        op=Roll(window_size=2, window_unit="D", aggregation="q25"),
+        children=[Column("date"), Column("value")],
+    ).calculate(df)
+    expected_q25 = pd.Series(
+        pd.Series(values, index=dates).rolling("2D", min_periods=1).quantile(0.25).to_numpy(),
+        name="value",
+    )
+    assert_series_equal(q25, expected_q25)
 
 
 def test_roll_std_large_magnitude():

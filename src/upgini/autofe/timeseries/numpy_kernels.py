@@ -171,6 +171,26 @@ ROLL_AGGS: dict[str, WindowAgg] = {
     "iqr": _rolling_iqr,
 }
 
+# Per-window Python scans are quadratic in width; pandas' Cython kernels are used
+# for these on fixed Tick windows. Calendar offsets (M, B, …) stay on numpy.
+PANDAS_ROLL_AGGS = frozenset({"min", "max", "median", "q25", "q75", "iqr"})
+
+
+def uses_pandas_rolling(window_size: int, window_unit: str, aggregation: str) -> bool:
+    return aggregation in PANDAS_ROLL_AGGS and _tick_ns(window_size, window_unit) is not None
+
+
+def apply_pandas_rolling(obj, window_size: int, window_unit: str, aggregation: str):
+    """Time-based rolling via pandas (DataFrame, Series, or GroupBy)."""
+    roller = obj.rolling(f"{window_size}{window_unit}", min_periods=1)
+    if aggregation == "q25":
+        return roller.quantile(0.25)
+    if aggregation == "q75":
+        return roller.quantile(0.75)
+    if aggregation == "iqr":
+        return roller.quantile(0.75) - roller.quantile(0.25)
+    return getattr(roller, aggregation)()
+
 
 def roll_values(
     times_ns: np.ndarray,
@@ -188,6 +208,12 @@ def roll_values(
 
     if aggregation not in ROLL_AGGS:
         raise ValueError(f"Unsupported roll aggregation for numpy path: {aggregation}")
+
+    if uses_pandas_rolling(window_size, window_unit, aggregation):
+        series = pd.Series(
+            values, index=pd.DatetimeIndex(times_ns.astype("datetime64[ns]", copy=False))
+        )
+        return np.asarray(apply_pandas_rolling(series, window_size, window_unit, aggregation), dtype=np.float64)
 
     lefts = window_left_indices(times_ns, window_size, window_unit)
 
