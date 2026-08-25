@@ -1,9 +1,8 @@
-import pandas as pd
 from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
-from upgini.autofe.timeseries.numpy_kernels import apply_grouped_kernel, lag_values
+from upgini.autofe.timeseries.numpy_kernels import lag_values
 
 
 class Lag(TimeSeriesBase, ParametrizedOperator):
@@ -57,7 +56,7 @@ class Lag(TimeSeriesBase, ParametrizedOperator):
         )
         return res
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+    def _array_kernel(self):
         lag_size = self.lag_size
         lag_unit = self.lag_unit
-        return apply_grouped_kernel(ts, lambda times, values: lag_values(times, values, lag_size, lag_unit))
+        return lambda times, values: lag_values(times, values, lag_size, lag_unit)

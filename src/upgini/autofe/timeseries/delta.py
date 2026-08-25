@@ -1,9 +1,8 @@
-import pandas as pd
 from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
-from upgini.autofe.timeseries.numpy_kernels import apply_grouped_kernel, delta2_values, delta_values
+from upgini.autofe.timeseries.numpy_kernels import delta2_values, delta_values
 
 
 class DeltaBase(TimeSeriesBase):
@@ -59,12 +58,10 @@ class Delta(DeltaBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+    def _array_kernel(self):
         delta_size = self.delta_size
         delta_unit = self.delta_unit
-        return apply_grouped_kernel(
-            ts, lambda times, values: delta_values(times, values, delta_size, delta_unit)
-        )
+        return lambda times, values: delta_values(times, values, delta_size, delta_unit)
 
 
 class Delta2(DeltaBase, ParametrizedOperator):
@@ -105,9 +102,7 @@ class Delta2(DeltaBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+    def _array_kernel(self):
         delta_size = self.delta_size
         delta_unit = self.delta_unit
-        return apply_grouped_kernel(
-            ts, lambda times, values: delta2_values(times, values, delta_size, delta_unit)
-        )
+        return lambda times, values: delta2_values(times, values, delta_size, delta_unit)

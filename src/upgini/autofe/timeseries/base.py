@@ -1,10 +1,18 @@
 import abc
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from upgini.autofe.operand import OperandValue
 from upgini.autofe.operator import PandasOperator
-from upgini.autofe.timeseries.numpy_kernels import apply_offset_grouped
+from upgini.autofe.timeseries.numpy_kernels import (
+    _apply_kernel_by_group_ids,
+    apply_offset_arrays,
+    apply_offset_grouped,
+    pack_group_ids,
+    scatter_grouped_times,
+    unique_sorted_by_group_time,
+)
 
 
 class TimeSeriesBase(PandasOperator, abc.ABC):
@@ -24,7 +32,55 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         )
         return res
 
+    def _array_kernel(self) -> Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]:
+        """Per-group ``kernel(times_ns, values) -> values``. None keeps the DataFrame path."""
+        return None
+
     def calculate_vector(self, data: List[OperandValue]) -> pd.Series:
+        kernel = self._array_kernel()
+        if kernel is None:
+            return self._calculate_vector_frame(data)
+        return self._calculate_vector_arrays(data, kernel)
+
+    def _calculate_vector_arrays(
+        self,
+        data: List[OperandValue],
+        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    ) -> pd.Series:
+        data = [operand.as_series() for operand in data]
+        date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
+        value_col = data[-1].name
+        n = len(date)
+        times_o = np.asarray(pd.DatetimeIndex(date).asi8, dtype=np.int64)
+        values_o = pd.to_numeric(data[-1], errors="coerce").to_numpy(dtype=np.float64, copy=False)
+        group_cols = [s.to_numpy() for s in data[1:-1]]
+        group_ids_o, null_group = pack_group_ids(group_cols, n)
+        keep = date.notna().to_numpy() & ~null_group
+        times_s, values_s, group_ids_s, scatter_idx, scatter_slot = unique_sorted_by_group_time(
+            times_o, values_o, group_ids_o, keep
+        )
+        if self.offset_size > 0:
+            times_s, values_s, group_ids_s = apply_offset_arrays(
+                times_s, values_s, group_ids_s, self.offset_size, self.offset_unit
+            )
+            scatter_idx = scatter_slot = None
+        if len(values_s) == 0:
+            out = np.full(n, np.nan, dtype=np.float64)
+        else:
+            out_s = _apply_kernel_by_group_ids(times_s, values_s, group_ids_s, kernel)
+            out = scatter_grouped_times(
+                times_s,
+                group_ids_s,
+                out_s,
+                times_o,
+                group_ids_o,
+                keep,
+                scatter_idx=scatter_idx,
+                scatter_slot=scatter_slot,
+            )
+        return pd.Series(out, index=date.index, name=value_col)
+
+    def _calculate_vector_frame(self, data: List[OperandValue]) -> pd.Series:
         data = [operand.as_series() for operand in data]
         # assuming first is date, last is value, rest is group columns
         date = pd.to_datetime(data[0], unit=self.date_unit, errors="coerce")
@@ -39,7 +95,6 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
         if self.offset_size > 0:
             ts = apply_offset_grouped(ts, group_cols, value_col, self.offset_size, self.offset_unit)
         elif group_cols:
-            # Keep a stable group-then-time order for contiguous group kernels
             date_name = ts.index.name or "index"
             ts = (
                 ts.reset_index()
@@ -56,19 +111,9 @@ class TimeSeriesBase(PandasOperator, abc.ABC):
 
         return ts.iloc[:, -1]
 
-    def _shift(self, ts: pd.DataFrame) -> pd.DataFrame:
-        # Kept for compatibility with callers/tests that may still reference it.
-        if self.offset_size > 0:
-            return ts.iloc[:, :-1].merge(
-                ts.iloc[:, -1].shift(freq=f"{self.offset_size}{self.offset_unit}"),
-                left_index=True,
-                right_index=True,
-            )
-        return ts
-
-    @abc.abstractmethod
     def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        pass
+        """DataFrame path used by operators without `_array_kernel` (EWMA, trend, cross)."""
+        raise NotImplementedError(f"{type(self).__name__} must implement _aggregate")
 
     def _add_offset_to_formula(self, base_formula: str) -> str:
         if self.offset_size > 0:

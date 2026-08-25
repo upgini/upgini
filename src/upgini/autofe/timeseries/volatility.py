@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
-from upgini.autofe.timeseries.numpy_kernels import apply_grouped_kernel, rolling_volatility_values
+from upgini.autofe.timeseries.numpy_kernels import rolling_volatility_values
 
 
 class VolatilityBase(TimeSeriesBase):
@@ -139,10 +139,8 @@ class RollingVolatility(RollingVolBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return apply_grouped_kernel(
-            ts, self._rolling_vol_kernel(self.window_size, self.window_unit, abs_returns=self.abs_returns)
-        )
+    def _array_kernel(self):
+        return self._rolling_vol_kernel(self.window_size, self.window_unit, abs_returns=self.abs_returns)
 
 
 class RollingVolatility2(RollingVolBase, ParametrizedOperator):
@@ -183,7 +181,7 @@ class RollingVolatility2(RollingVolBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+    def _array_kernel(self):
         window_size = self.window_size
         window_unit = self.window_unit
         step_size = self.step_size
@@ -197,7 +195,7 @@ class RollingVolatility2(RollingVolBase, ParametrizedOperator):
                 times_ns, vol1, step_size, step_unit, window_size, window_unit, abs_returns=False
             )
 
-        return apply_grouped_kernel(ts, kernel)
+        return kernel
 
 
 class VolatilityRatio(RollingVolBase, ParametrizedOperator):
@@ -258,7 +256,7 @@ class VolatilityRatio(RollingVolBase, ParametrizedOperator):
         )
         return res
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
+    def _array_kernel(self):
         short_window_size = self.short_window_size
         short_window_unit = self.short_window_unit
         window_size = self.window_size
@@ -276,7 +274,7 @@ class VolatilityRatio(RollingVolBase, ParametrizedOperator):
             ratio[~np.isfinite(ratio)] = np.nan
             return np.where(np.isnan(ratio), 1.0, ratio)
 
-        return apply_grouped_kernel(ts, kernel)
+        return kernel
 
     @staticmethod
     def _handle_div_errors(x: pd.Series) -> pd.Series:
