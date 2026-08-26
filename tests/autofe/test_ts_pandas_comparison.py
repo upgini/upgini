@@ -60,6 +60,9 @@ def pandas_vol(
         returns = s.pct_change(freq=f"{step_size}{step_unit}").fillna(0)
     if abs_returns:
         returns = returns.abs()
+    # Kernel std skips ±inf (``isfinite``). Pandas 2.3 rolling.std does too; 1.x–2.2
+    # include inf and can emit huge finite values (e.g. std of ``[-1, inf]``).
+    returns = returns.replace([np.inf, -np.inf], np.nan)
     return returns.rolling(f"{window_size}{window_unit}", min_periods=1).std()
 
 
