@@ -1,9 +1,10 @@
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
+from upgini.autofe.timeseries.numpy_kernels import rolling_volatility_values
 
 
 class VolatilityBase(TimeSeriesBase):
@@ -90,18 +91,16 @@ class RollingVolBase(VolatilityBase):
         )
         return res
 
-    def _rolling_vol(
-        self, x: Union[pd.DataFrame, pd.Series], window_size: int, window_unit: str, abs_returns: bool = False
-    ) -> Union[pd.DataFrame, pd.Series]:
-        return_series = isinstance(x, pd.Series)
-        x = pd.DataFrame(x)
-        value_col = x.columns[-1]
-        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
-        returns = self._get_returns(x.iloc[:, -1], f"{self.step_size}{self.step_unit}")
-        if abs_returns:
-            returns = returns.abs()
-        x.iloc[:, -1] = returns.rolling(f"{window_size}{window_unit}", min_periods=1).std()
-        return x.iloc[:, -1] if return_series else x
+    def _rolling_vol_kernel(self, window_size: int, window_unit: str, abs_returns: bool = False):
+        step_size = self.step_size
+        step_unit = self.step_unit
+
+        def kernel(times_ns: np.ndarray, values: np.ndarray) -> np.ndarray:
+            return rolling_volatility_values(
+                times_ns, values, step_size, step_unit, window_size, window_unit, abs_returns=abs_returns
+            )
+
+        return kernel
 
 
 class RollingVolatility(RollingVolBase, ParametrizedOperator):
@@ -140,10 +139,8 @@ class RollingVolatility(RollingVolBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(
-            self._rolling_vol, window_size=self.window_size, window_unit=self.window_unit, abs_returns=self.abs_returns
-        ).iloc[:, [-1]]
+    def _array_kernel(self):
+        return self._rolling_vol_kernel(self.window_size, self.window_unit, abs_returns=self.abs_returns)
 
 
 class RollingVolatility2(RollingVolBase, ParametrizedOperator):
@@ -184,13 +181,21 @@ class RollingVolatility2(RollingVolBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._vol_on_vol).iloc[:, [-1]]
+    def _array_kernel(self):
+        window_size = self.window_size
+        window_unit = self.window_unit
+        step_size = self.step_size
+        step_unit = self.step_unit
 
-    def _vol_on_vol(self, x: Union[pd.DataFrame, pd.Series]) -> Union[pd.DataFrame, pd.Series]:
-        vol1 = self._rolling_vol(x, self.window_size, self.window_unit, abs_returns=True)
-        vol2 = self._rolling_vol(vol1, self.window_size, self.window_unit, abs_returns=False)
-        return vol2
+        def kernel(times_ns: np.ndarray, values: np.ndarray) -> np.ndarray:
+            vol1 = rolling_volatility_values(
+                times_ns, values, step_size, step_unit, window_size, window_unit, abs_returns=True
+            )
+            return rolling_volatility_values(
+                times_ns, vol1, step_size, step_unit, window_size, window_unit, abs_returns=False
+            )
+
+        return kernel
 
 
 class VolatilityRatio(RollingVolBase, ParametrizedOperator):
@@ -251,14 +256,25 @@ class VolatilityRatio(RollingVolBase, ParametrizedOperator):
         )
         return res
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._vol_ratio).iloc[:, [-1]]
+    def _array_kernel(self):
+        short_window_size = self.short_window_size
+        short_window_unit = self.short_window_unit
+        window_size = self.window_size
+        window_unit = self.window_unit
+        step_size = self.step_size
+        step_unit = self.step_unit
 
-    def _vol_ratio(self, x: Union[pd.DataFrame, pd.Series]) -> Union[pd.DataFrame, pd.Series]:
-        short_vol = self._rolling_vol(x, self.short_window_size, self.short_window_unit)
-        long_vol = self._rolling_vol(x, self.window_size, self.window_unit)
-        ratio = VolatilityRatio._handle_div_errors(short_vol / long_vol)
-        return ratio
+        def kernel(times_ns: np.ndarray, values: np.ndarray) -> np.ndarray:
+            short_vol = rolling_volatility_values(
+                times_ns, values, step_size, step_unit, short_window_size, short_window_unit
+            )
+            long_vol = rolling_volatility_values(times_ns, values, step_size, step_unit, window_size, window_unit)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = short_vol / long_vol
+            ratio[~np.isfinite(ratio)] = np.nan
+            return np.where(np.isnan(ratio), 1.0, ratio)
+
+        return kernel
 
     @staticmethod
     def _handle_div_errors(x: pd.Series) -> pd.Series:

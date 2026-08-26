@@ -1,9 +1,8 @@
-import pandas as pd
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
-from upgini.autofe.timeseries.lag import Lag
+from upgini.autofe.timeseries.numpy_kernels import delta2_values, delta_values
 
 
 class DeltaBase(TimeSeriesBase):
@@ -19,15 +18,6 @@ class DeltaBase(TimeSeriesBase):
             }
         )
         return res
-
-    def _calculate_delta(self, x: Union[pd.DataFrame, pd.Series]) -> Union[pd.DataFrame, pd.Series]:
-        return_series = isinstance(x, pd.Series)
-        x = pd.DataFrame(x)
-        value_col = x.columns[-1]
-        x[value_col] = pd.to_numeric(x[value_col], errors="coerce").astype("float64")
-        lag = Lag(lag_size=self.delta_size, lag_unit=self.delta_unit)
-        x.iloc[:, -1] = x.iloc[:, -1] - lag._aggregate(x.iloc[:, -1])
-        return x.iloc[:, -1] if return_series else x
 
 
 class Delta(DeltaBase, ParametrizedOperator):
@@ -68,8 +58,10 @@ class Delta(DeltaBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._calculate_delta).iloc[:, [-1]]
+    def _array_kernel(self):
+        delta_size = self.delta_size
+        delta_unit = self.delta_unit
+        return lambda times, values: delta_values(times, values, delta_size, delta_unit)
 
 
 class Delta2(DeltaBase, ParametrizedOperator):
@@ -110,12 +102,7 @@ class Delta2(DeltaBase, ParametrizedOperator):
 
         return cls(**params)
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        return ts.apply(self._calculate_delta2).iloc[:, [-1]]
-
-    def _calculate_delta2(self, x):
-        # Calculate first delta
-        first_delta = self._calculate_delta(x)
-
-        # Calculate delta of delta (second derivative)
-        return self._calculate_delta(first_delta)
+    def _array_kernel(self):
+        delta_size = self.delta_size
+        delta_unit = self.delta_unit
+        return lambda times, values: delta2_values(times, values, delta_size, delta_unit)

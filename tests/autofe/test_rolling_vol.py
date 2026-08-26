@@ -103,6 +103,22 @@ def test_rolling_volatility_with_missing_values():
     assert_series_equal(result, expected_result)
 
 
+def test_rolling_volatility_zero_denominator():
+    dates = pd.date_range("2024-05-01", periods=4, freq="D")
+    values = np.array([0.0, 1.0, 2.0, 3.0])
+    df = pd.DataFrame({"date": dates, "value": values})
+    result = Feature(
+        op=RollingVolatility(window_size=3, window_unit="D"),
+        children=[Column("date"), Column("value")],
+    ).calculate(df)
+    # pct_change(1/0) is inf; fillna(0) keeps inf; rolling std skips non-finite.
+    # Replace inf before rolling: pandas 1.x–2.2 include inf in std and can return
+    # huge finite garbage instead of NaN.
+    returns = pd.Series([0.0, np.inf, 1.0, 0.5], index=dates).replace([np.inf, -np.inf], np.nan)
+    expected = pd.Series(returns.rolling("3D", min_periods=1).std().to_numpy(), name="value")
+    assert_series_equal(result, expected)
+
+
 def test_rolling_volatility_formula():
     # Test to_formula
     op = RollingVolatility(window_size=5, window_unit="D")

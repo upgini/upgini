@@ -613,9 +613,9 @@ class EstimatorWrapper:
                     estimator = CatBoostWrapper(CatBoostClassifier(**params), **kwargs)
                 elif target_type == ModelTaskType.REGRESSION:
                     if not isinstance(cv, TimeSeriesSplit) and not isinstance(cv, BlockedTimeSeriesSplit):
-                        params = _get_add_params(params, CATBOOST_TS_PARAMS)
-                    else:
                         params = _get_add_params(params, CATBOOST_REGRESSION_PARAMS)
+                    else:
+                        params = _get_add_params(params, CATBOOST_TS_PARAMS)
                     params = _get_add_params(params, add_params)
                     estimator = CatBoostWrapper(CatBoostRegressor(**params), **kwargs)
                 else:

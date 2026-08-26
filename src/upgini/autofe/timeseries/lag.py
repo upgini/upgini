@@ -1,9 +1,8 @@
-import numpy as np
-import pandas as pd
 from typing import Dict, Optional
 
 from upgini.autofe.operator import ParametrizedOperator
 from upgini.autofe.timeseries.base import TimeSeriesBase
+from upgini.autofe.timeseries.numpy_kernels import lag_values
 
 
 class Lag(TimeSeriesBase, ParametrizedOperator):
@@ -57,12 +56,7 @@ class Lag(TimeSeriesBase, ParametrizedOperator):
         )
         return res
 
-    def _aggregate(self, ts: pd.DataFrame) -> pd.DataFrame:
-        lag_window = self.lag_size + 1
-        return ts.rolling(f"{lag_window}{self.lag_unit}", min_periods=1).agg(self._lag)
-
-    def _lag(self, x):
-        if x.index.min() > (x.index.max() - pd.Timedelta(self.lag_size, self.lag_unit)):
-            return np.nan
-        else:
-            return x[0]
+    def _array_kernel(self):
+        lag_size = self.lag_size
+        lag_unit = self.lag_unit
+        return lambda times, values: lag_values(times, values, lag_size, lag_unit)
