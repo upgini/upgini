@@ -68,6 +68,9 @@ def pandas_vol(
 
 def pandas_vol2(s: pd.Series, window_size: int, window_unit: str, step_size: int = 1, step_unit: str = "D") -> pd.Series:
     vol1 = pandas_vol(s, window_size, window_unit, step_size, step_unit, abs_returns=True)
+    # Compensated std of equal values is 0; pandas 1.x–2.2 rolling.std is ~1e-16, and the
+    # next pct_change overflows to ~1e15. Snap noise-scale vol to 0 before the second step.
+    vol1 = vol1.mask((vol1 > 0) & (vol1 < 1e-12), 0.0)
     return pandas_vol(vol1, window_size, window_unit, step_size, step_unit, abs_returns=False)
 
 
@@ -176,7 +179,7 @@ def _grouped_df() -> pd.DataFrame:
                 "2024-05-04",
             ],
             "group": ["A", "B", "A", "B", "A", "A", "B"],
-            "value": [100.0, 200.0, 110.0, 220.0, 99.0, 121.0, 198.0],
+            "value": [100.0, 200.0, 110.0, 220.0, 90.0, 121.0, 198.0],
         }
     )
 
