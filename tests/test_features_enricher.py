@@ -4233,6 +4233,205 @@ def test_select_features_false_shows_client_features_in_report(requests_mock: Mo
     assert client_row[source_header] == "Training dataset"
 
 
+def test_select_features_false_shows_zero_shap_client_features_in_report(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+                FeaturesMetadataV2(
+                    name="client_feature_8ddf40", type="NUMERIC", source="etalon", hit_rate=99.0, shap_value=0.0
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+        ),
+    )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_features = df.head(10000).drop(columns="target")
+    train_target = df.head(10000)["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        calculate_metrics=False,
+        select_features=False,
+    )
+
+    assert "client_feature" in enricher.feature_names_
+    assert "client_feature" in set(enricher.features_info[feature_name_header])
+
+
+def test_select_features_false_shows_client_features_missing_from_backend_metadata(requests_mock: Mocker):
+    url = "http://fake_url2"
+
+    path_to_mock_features = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "test_data/binary/mock_features_with_entity_system_record_id.parquet",
+    )
+
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    validation_search_task_id = mock_validation_search(requests_mock, url, search_task_id)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    mock_validation_progress(requests_mock, url, validation_search_task_id)
+    ads_search_task_id = mock_initial_and_validation_summary(
+        requests_mock,
+        url,
+        search_task_id,
+        validation_search_task_id,
+    )
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+            {
+                "index": 1,
+                "name": "phone_num_a54a33",
+                "originalName": "phone_num",
+                "dataType": "STRING",
+                "meaningType": "MSISDN",
+            },
+            {
+                "index": 2,
+                "name": "rep_date_f5d6bb",
+                "originalName": "rep_date",
+                "dataType": "INT",
+                "meaningType": "DATE",
+            },
+            {
+                "index": 3,
+                "name": "client_feature_8ddf40",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+        ],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name="feature", type="NUMERIC", source="ads", hit_rate=99.0, shap_value=10.1),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=10000, max_hit_count=9990, hit_rate=0.999, hit_rate_percent=99.9
+            ),
+        ),
+    )
+    mock_get_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_set_selected_features(requests_mock, url, search_task_id, ["feature"])
+    mock_raw_features(requests_mock, url, search_task_id, path_to_mock_features)
+
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_data/binary/data.csv")
+    df = pd.read_csv(path, sep=",")
+    df.drop(columns="SystemRecordId_473310000", inplace=True)
+    train_features = df.head(10000).drop(columns="target")
+    train_target = df.head(10000)["target"]
+
+    enricher = FeaturesEnricher(
+        search_keys={"phone_num": SearchKey.PHONE, "rep_date": SearchKey.DATE},
+        endpoint=url,
+        api_key="fake_api_key",
+        date_format="%Y-%m-%d",
+        cv=CVType.time_series,
+        logs_enabled=False,
+    )
+
+    enricher.fit(
+        train_features,
+        train_target,
+        calculate_metrics=False,
+        select_features=False,
+    )
+
+    assert "client_feature" in enricher.feature_names_
+    assert "client_feature" in set(enricher.features_info[feature_name_header])
+    client_row = enricher.features_info.loc[enricher.features_info[feature_name_header] == "client_feature"].iloc[0]
+    assert client_row[source_header] == "Training dataset"
+
+
 def _drifting_stability_frames():
     n_eval = 1200
     dates = pd.date_range("2021-01-01", periods=n_eval, freq="D")

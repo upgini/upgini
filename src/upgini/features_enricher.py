@@ -1998,14 +1998,25 @@ class FeaturesEnricher(TransformerMixin):
             keepers |= self._column_name_aliases([self.baseline_score_column], renaming)
         if self.fit_select_features:
             return keepers
+        return keepers | self._get_original_client_columns()
 
+    def _get_original_client_columns(self) -> set[str]:
+        renaming = self.fit_columns_renaming or {}
         generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
         if isinstance(self.X, pd.DataFrame):
-            client = [c for c in self.X.columns if c not in generated]
-            keepers |= self._column_name_aliases(client, renaming)
-        elif self.X is not None:
-            keepers |= self._column_name_aliases([str(i) for i in range(np.shape(self.X)[1])], renaming)
-        return keepers
+            client = [
+                c
+                for c in self.X.columns
+                if c not in generated and c not in (TARGET, EVAL_SET_INDEX, DEFAULT_INDEX)
+            ]
+            return self._column_name_aliases(client, renaming)
+        if self.X is not None:
+            return self._column_name_aliases([str(i) for i in range(np.shape(self.X)[1])], renaming)
+        return set()
+
+    @staticmethod
+    def _should_show_client_feature_in_report(is_client_feature: bool, fit_select_features: bool) -> bool:
+        return is_client_feature and not fit_select_features
 
     def _get_cat_features_for_psi(
         self,
@@ -5248,6 +5259,20 @@ if response.status_code == 200:
                     updating_shap = 0.0
                 feature_meta.shap_value = updating_shap
 
+        if not self.fit_select_features:
+            existing_names = {feature_meta.name for feature_meta in selected_features_meta}
+            for client_column in sorted(self._get_original_client_columns()):
+                if client_column not in existing_names:
+                    selected_features_meta.append(
+                        FeaturesMetadataV2(
+                            name=client_column,
+                            type="",
+                            source="etalon",
+                            hit_rate=100.0,
+                            shap_value=0.0,
+                        )
+                    )
+
         selected_features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         psi_keepers = self._psi_stability_keepers() if self.psi_values is not None else set()
 
@@ -5275,7 +5300,9 @@ if response.status_code == 200:
 
             # TODO make a decision about selected features based on special flag from mlb
 
-            if original_shaps.get(feature_meta.name, 0.0) == 0.0:
+            if original_shaps.get(feature_meta.name, 0.0) == 0.0 and not self._should_show_client_feature_in_report(
+                is_client_feature, self.fit_select_features
+            ):
                 continue
 
             if feature_meta.name == COUNTRY:  # constant synthetic column
