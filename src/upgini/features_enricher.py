@@ -1998,20 +1998,19 @@ class FeaturesEnricher(TransformerMixin):
             keepers |= self._column_name_aliases([self.baseline_score_column], renaming)
         if self.fit_select_features:
             return keepers
-        return keepers | self._get_original_client_columns()
+        return keepers | self._column_name_aliases(self._get_original_client_columns(), renaming)
 
     def _get_original_client_columns(self) -> set[str]:
         renaming = self.fit_columns_renaming or {}
         generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
         if isinstance(self.X, pd.DataFrame):
-            client = [
+            return {
                 c
                 for c in self.X.columns
                 if c not in generated and c not in (TARGET, EVAL_SET_INDEX, DEFAULT_INDEX)
-            ]
-            return self._column_name_aliases(client, renaming)
+            }
         if self.X is not None:
-            return self._column_name_aliases([str(i) for i in range(np.shape(self.X)[1])], renaming)
+            return {str(i) for i in range(np.shape(self.X)[1])}
         return set()
 
     @staticmethod
