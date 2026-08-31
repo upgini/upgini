@@ -107,7 +107,7 @@ from upgini.utils.format import Format
 from upgini.utils.hash_utils import file_hash, hash_input
 from upgini.utils.pyarrow_utils import import_pyarrow_modules
 from upgini.utils.ip_utils import IpSearchKeyConverter
-from upgini.utils.search_key_derivations import get_missing_features_for_transform
+from upgini.utils.search_key_derivations import get_derived_search_key_columns
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
@@ -3379,19 +3379,15 @@ if response.status_code == 200:
 
         # Don't pass all features in backend on transform
         runtime_parameters = self._get_copy_of_runtime_parameters()
-        features_for_transform = self._search_task.get_features_for_transform()
+        features_for_transform = [
+            f
+            for f in self._search_task.get_features_for_transform()
+            if f not in get_derived_search_key_columns(search_keys)
+        ]
         if features_for_transform:
-            missing_features_for_transform = get_missing_features_for_transform(
-                features_for_transform,
-                df.columns,
-                search_keys,
-                columns_renaming,
-                source_search_keys={
-                    **self._get_fit_search_keys_with_original_names(),
-                    **self.search_keys,
-                },
-                fit_columns_renaming=self.fit_columns_renaming,
-            )
+            missing_features_for_transform = [
+                columns_renaming.get(f) or f for f in features_for_transform if f not in df.columns
+            ]
             if TARGET in missing_features_for_transform:
                 raise ValidationError(self.bundle.get("missing_target_for_transform"))
 
