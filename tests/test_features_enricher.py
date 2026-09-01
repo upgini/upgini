@@ -4229,6 +4229,8 @@ def test_select_features_false_shows_client_features_in_report(requests_mock: Mo
 
     assert "client_feature" in enricher.feature_names_
     assert "client_feature" in set(enricher.features_info[feature_name_header])
+    assert "phone_num" not in enricher.feature_names_
+    assert "rep_date" not in enricher.feature_names_
     client_row = enricher.features_info.loc[enricher.features_info[feature_name_header] == "client_feature"].iloc[0]
     assert client_row[source_header] == "Training dataset"
 
@@ -4331,6 +4333,8 @@ def test_select_features_false_shows_zero_shap_client_features_in_report(request
 
     assert "client_feature" in enricher.feature_names_
     assert "client_feature" in set(enricher.features_info[feature_name_header])
+    assert "phone_num" not in enricher.feature_names_
+    assert "rep_date" not in enricher.feature_names_
 
 
 def test_select_features_false_shows_client_features_missing_from_backend_metadata(requests_mock: Mocker):
@@ -4428,8 +4432,68 @@ def test_select_features_false_shows_client_features_missing_from_backend_metada
 
     assert "client_feature" in enricher.feature_names_
     assert "client_feature" in set(enricher.features_info[feature_name_header])
+    assert "phone_num" not in enricher.feature_names_
+    assert "rep_date" not in enricher.feature_names_
     client_row = enricher.features_info.loc[enricher.features_info[feature_name_header] == "client_feature"].iloc[0]
     assert client_row[source_header] == "Training dataset"
+
+
+def test_join_only_search_keys_are_not_client_features(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={
+            "phone": SearchKey.PHONE,
+            "rep_date": SearchKey.DATE,
+            "ip": SearchKey.IP,
+            "email": SearchKey.EMAIL,
+            "country": SearchKey.COUNTRY,
+            "postal_code": SearchKey.POSTAL_CODE,
+        },
+        endpoint="http://fake_url2",
+        api_key="fake_api_key",
+        logs_enabled=False,
+    )
+    enricher.X = pd.DataFrame(
+        columns=["phone", "rep_date", "ip", "email", "country", "postal_code", "client_feature"]
+    )
+    enricher.fit_search_keys = {
+        "phone_h": SearchKey.PHONE,
+        "rep_date_h": SearchKey.DATE,
+        "ip_h_binary": SearchKey.IP_BINARY,
+        "ip_h_prefix": SearchKey.IP_PREFIX,
+        "email_h": SearchKey.EMAIL,
+        "country_h": SearchKey.COUNTRY,
+        "postal_h": SearchKey.POSTAL_CODE,
+    }
+    enricher.fit_columns_renaming = {
+        "phone_h": "phone",
+        "rep_date_h": "rep_date",
+        "ip_h_binary": "ip",
+        "ip_h_prefix": "ip",
+        "email_h": "email",
+        "country_h": "country",
+        "postal_h": "postal_code",
+        "feat_h": "client_feature",
+    }
+    enricher.fit_select_features = False
+
+    client_columns = enricher._get_original_client_columns()
+    assert "client_feature" in client_columns
+    assert "postal_code" in client_columns
+    assert "country" in client_columns
+    assert "phone" not in client_columns
+    assert "rep_date" not in client_columns
+    assert "ip" not in client_columns
+    assert "email" not in client_columns
+
+    assert enricher._should_show_client_feature_in_report(True, "postal_code")
+    assert enricher._should_show_client_feature_in_report(True, "country")
+    assert enricher._should_show_client_feature_in_report(True, "client_feature")
+    assert not enricher._should_show_client_feature_in_report(True, "phone")
+    assert not enricher._should_show_client_feature_in_report(True, "rep_date")
+    assert not enricher._should_show_client_feature_in_report(True, "ip")
+    assert not enricher._should_show_client_feature_in_report(True, "email")
 
 
 def _drifting_stability_frames():
