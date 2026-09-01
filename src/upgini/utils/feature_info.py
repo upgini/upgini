@@ -102,16 +102,24 @@ class FeatureInfo:
         }
 
 
+def _column_values(data: pd.DataFrame, name: str) -> pd.Series:
+    values = data[name]
+    if isinstance(values, pd.DataFrame):
+        values = values.iloc[:, 0]
+    return values
+
+
 def _get_feature_sample(feature_meta: FeaturesMetadataV2, data: Optional[pd.DataFrame]) -> str:
     if data is not None and len(data) > 0 and feature_meta.name in data.columns:
+        values = _column_values(data, feature_meta.name)
         if len(data) > 3:
             rand = np.random.RandomState(42)
-            unique_values = sorted(data[feature_meta.name].dropna().unique(), key=str)
+            unique_values = sorted(values.dropna().unique(), key=str)
             feature_sample = (
                 rand.choice(unique_values, 3, replace=False).tolist() if len(unique_values) > 3 else unique_values
             )
         else:
-            feature_sample = data[feature_meta.name].dropna().unique().tolist()
+            feature_sample = values.dropna().unique().tolist()
         if len(feature_sample) > 0 and isinstance(feature_sample[0], float):
             feature_sample = [round(f, 4) for f in feature_sample]
         feature_sample = [str(f) for f in feature_sample]

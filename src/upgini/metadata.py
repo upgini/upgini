@@ -131,8 +131,10 @@ class SearchKey(Enum):
         #     return SearchKey.MSISDN_RANGE_FROM
         # if meaning_type == FileColumnMeaningType.MSISDN_RANGE_TO:
         #     return SearchKey.MSISDN_RANGE_TO
-        if meaning_type == FileColumnMeaningType.IP_BINARY:
+        if meaning_type in (FileColumnMeaningType.IP_BINARY, FileColumnMeaningType.IP_PREFIX):
             return SearchKey.IP
+        if meaning_type == FileColumnMeaningType.EMAIL_ONE_DOMAIN:
+            return SearchKey.EMAIL
         # if meaning_type == FileColumnMeaningType.IP_RANGE_FROM_BINARY:
         #     return SearchKey.IP_RANGE_FROM_BINARY
         # if meaning_type == FileColumnMeaningType.IP_RANGE_TO_BINARY:

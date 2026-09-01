@@ -107,6 +107,7 @@ from upgini.utils.format import Format
 from upgini.utils.hash_utils import file_hash, hash_input
 from upgini.utils.pyarrow_utils import import_pyarrow_modules
 from upgini.utils.ip_utils import IpSearchKeyConverter
+from upgini.utils.search_key_derivations import get_derived_search_key_columns
 from upgini.utils.phone_utils import PhoneSearchKeyDetector
 from upgini.utils.postal_code_utils import PostalCodeSearchKeyDetector
 from upgini.utils.psi import calculate_features_psi, calculate_sparsity_psi
@@ -174,6 +175,9 @@ class FeaturesEnricher(TransformerMixin):
 
     TARGET_NAME = "target"
     RANDOM_STATE = 42
+    # Search keys that are also model features (kept in feature_names_ / metrics).
+    # Phone, date, IP, email are join keys only.
+    _FEATURE_SEARCH_KEY_TYPES = frozenset({SearchKey.COUNTRY, SearchKey.POSTAL_CODE})
     CALCULATE_METRICS_THRESHOLD = 50_000_000
     CALCULATE_METRICS_MIN_THRESHOLD = 500
     GENERATE_FEATURES_LIMIT = 10
@@ -1019,10 +1023,7 @@ class FeaturesEnricher(TransformerMixin):
                             c for c in client_cat_features if c not in self.id_columns_encoder.feature_names_in_
                         ]
                 for cat_feature in cat_features_from_backend:
-                    if cat_feature in search_keys and search_keys[cat_feature] not in [
-                        SearchKey.COUNTRY,
-                        SearchKey.POSTAL_CODE,
-                    ]:
+                    if cat_feature in search_keys and search_keys[cat_feature] not in self._FEATURE_SEARCH_KEY_TYPES:
                         self.logger.warning(self.bundle.get("cat_feature_search_key").format(cat_feature))
                 search_keys_for_metrics = self._collect_search_keys_for_metrics(
                     search_keys, validated_X, search_keys_for_metrics
@@ -1954,7 +1955,7 @@ class FeaturesEnricher(TransformerMixin):
                 self.logger.info(f"Collected categorical features {cat_features} from user estimator")
                 for cat_feature in cat_features:
                     if cat_feature in search_keys:
-                        if search_keys[cat_feature] in [SearchKey.COUNTRY, SearchKey.POSTAL_CODE]:
+                        if search_keys[cat_feature] in self._FEATURE_SEARCH_KEY_TYPES:
                             search_keys_for_metrics.append(cat_feature)
                         else:
                             raise ValidationError(self.bundle.get("cat_feature_search_key").format(cat_feature))
@@ -1968,11 +1969,7 @@ class FeaturesEnricher(TransformerMixin):
     ) -> list[str]:
         result = list(search_keys_for_metrics or [])
         for col, key_type in search_keys.items():
-            if (
-                key_type in (SearchKey.COUNTRY, SearchKey.POSTAL_CODE)
-                and col in X.columns
-                and col not in result
-            ):
+            if key_type in self._FEATURE_SEARCH_KEY_TYPES and col in X.columns and col not in result:
                 result.append(col)
         result.extend([c for c in self.id_columns or [] if c not in result])
         return result
@@ -1997,14 +1994,42 @@ class FeaturesEnricher(TransformerMixin):
             keepers |= self._column_name_aliases([self.baseline_score_column], renaming)
         if self.fit_select_features:
             return keepers
+        return keepers | self._column_name_aliases(self._get_original_client_columns(), renaming)
 
+    def _get_original_client_columns(self) -> set[str]:
+        renaming = self.fit_columns_renaming or {}
         generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
+        join_only_keys = self._join_only_search_key_columns()
         if isinstance(self.X, pd.DataFrame):
-            client = [c for c in self.X.columns if c not in generated]
-            keepers |= self._column_name_aliases(client, renaming)
-        elif self.X is not None:
-            keepers |= self._column_name_aliases([str(i) for i in range(np.shape(self.X)[1])], renaming)
-        return keepers
+            return {
+                c
+                for c in self.X.columns
+                if c not in generated
+                and c not in join_only_keys
+                and c not in (TARGET, EVAL_SET_INDEX, DEFAULT_INDEX)
+            }
+        if self.X is not None:
+            return {str(i) for i in range(np.shape(self.X)[1])}
+        return set()
+
+    def _join_only_search_key_columns(self) -> set[str]:
+        """Search keys that are not model features (phone, date, IP, email, and their hashed aliases)."""
+        renaming = self.fit_columns_renaming or {}
+        names: set[str] = set()
+        for col, key_type in self._get_fit_search_keys_with_original_names().items():
+            if key_type not in self._FEATURE_SEARCH_KEY_TYPES:
+                names |= self._column_name_aliases([col], renaming)
+        for col, key_type in (self.fit_search_keys or {}).items():
+            if key_type not in self._FEATURE_SEARCH_KEY_TYPES:
+                names |= self._column_name_aliases([col], renaming)
+        return names
+
+    def _should_show_client_feature_in_report(self, is_client_feature: bool, column_name: str) -> bool:
+        return (
+            is_client_feature
+            and not self.fit_select_features
+            and column_name not in self._join_only_search_key_columns()
+        )
 
     def _get_cat_features_for_psi(
         self,
@@ -3367,7 +3392,11 @@ if response.status_code == 200:
 
         # Don't pass all features in backend on transform
         runtime_parameters = self._get_copy_of_runtime_parameters()
-        features_for_transform = self._search_task.get_features_for_transform()
+        features_for_transform = [
+            f
+            for f in self._search_task.get_features_for_transform()
+            if f not in get_derived_search_key_columns(search_keys)
+        ]
         if features_for_transform:
             missing_features_for_transform = [
                 columns_renaming.get(f) or f for f in features_for_transform if f not in df.columns
@@ -5239,6 +5268,20 @@ if response.status_code == 200:
                     updating_shap = 0.0
                 feature_meta.shap_value = updating_shap
 
+        if not self.fit_select_features:
+            existing_names = {feature_meta.name for feature_meta in selected_features_meta}
+            for client_column in sorted(self._get_original_client_columns()):
+                if client_column not in existing_names:
+                    selected_features_meta.append(
+                        FeaturesMetadataV2(
+                            name=client_column,
+                            type="",
+                            source="etalon",
+                            hit_rate=100.0,
+                            shap_value=0.0,
+                        )
+                    )
+
         selected_features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         psi_keepers = self._psi_stability_keepers() if self.psi_values is not None else set()
 
@@ -5266,7 +5309,9 @@ if response.status_code == 200:
 
             # TODO make a decision about selected features based on special flag from mlb
 
-            if original_shaps.get(feature_meta.name, 0.0) == 0.0:
+            if original_shaps.get(feature_meta.name, 0.0) == 0.0 and not self._should_show_client_feature_in_report(
+                is_client_feature, feature_meta.name
+            ):
                 continue
 
             if feature_meta.name == COUNTRY:  # constant synthetic column

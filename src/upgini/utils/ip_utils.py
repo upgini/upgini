@@ -14,6 +14,9 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 
 
 class IpSearchKeyConverter:
+    BINARY_SUFFIX = "_binary"
+    PREFIX_SUFFIX = "_prefix"
+
     def __init__(
         self,
         ip_column: str,
@@ -128,9 +131,9 @@ class IpSearchKeyConverter:
         #     .astype("string")
         #     # .str.replace(".0", "", regex=False)
         # )
-        ip_binary = self.ip_column + "_binary"
+        ip_binary = self.ip_column + self.BINARY_SUFFIX
         df[ip_binary] = df[self.ip_column].apply(self._ip_to_binary)
-        ip_prefix_column = self.ip_column + "_prefix"
+        ip_prefix_column = self.ip_column + self.PREFIX_SUFFIX
         df[ip_prefix_column] = df[self.ip_column].apply(self._ip_to_prefix)
 
         df = df.drop(columns=self.ip_column)
