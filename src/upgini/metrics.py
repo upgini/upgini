@@ -473,11 +473,7 @@ class EstimatorWrapper:
 
         shap_values_all_folds = defaultdict(list)
         if baseline_score_column is not None and self.metric_name == "GINI":
-            self.logger.info("Calculate baseline GINI on passed baseline_score_column and target")
-            metric = roc_auc_score(y, x[baseline_score_column])
-            metric = self.post_process_metric(metric)
-            metric_std = None
-            average_shap_values = None
+            metric, metric_std = self._metric_from_score_column(x, y, baseline_score_column)
         else:
             self.logger.info(f"Cross validate with estimeator: {self.estimator}")
             cv_results = cross_validate(
@@ -541,13 +537,19 @@ class EstimatorWrapper:
             metric = 2 * metric - 1
         return metric
 
+    def _metric_from_score_column(
+        self, x: pd.DataFrame, y: np.ndarray, score_column: Any
+    ) -> Tuple[float, Optional[float]]:
+        self.logger.info(f"Calculate GINI on score column '{score_column}' and target")
+        metric = self.post_process_metric(roc_auc_score(y, x[score_column]))
+        return metric, None
+
     def calculate_metric(
         self, x: pd.DataFrame, y: np.ndarray, baseline_score_column: Optional[Any] = None
     ) -> _CrossValResults:
         x, y, _ = self._prepare_to_calculate(x, y)
         if baseline_score_column is not None and self.metric_name == "GINI":
-            metric, metric_std = roc_auc_score(y, x[baseline_score_column]), None
-            metric = self.post_process_metric(metric)
+            metric, metric_std = self._metric_from_score_column(x, y, baseline_score_column)
         else:
             metrics = []
             for est, cat_encoder in zip(self.cv_estimators, self.cv_cat_encoders):

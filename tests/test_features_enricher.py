@@ -18,8 +18,10 @@ from upgini.metadata import (
     EVAL_SET_INDEX,
     SYSTEM_RECORD_ID,
     TARGET,
+    BaseColumnMetadata,
     CVType,
     FeaturesMetadataV2,
+    GeneratedFeatureMetadata,
     HitRateMetrics,
     ModelEvalSet,
     ModelTaskType,
@@ -2666,14 +2668,78 @@ def test_get_renamed_baseline_score_column(requests_mock: Mocker):
     enricher.fit_columns_renaming = {"baseline_score_a1b2c3": "baseline_score"}
 
     assert enricher._get_renamed_baseline_score_column() == "baseline_score"
-    assert (
-        enricher._get_renamed_baseline_score_column({"baseline_score_a1b2c3": "baseline_score"})
-        == "baseline_score"
-    )
+    assert enricher._get_renamed_baseline_score_column({"baseline_score_a1b2c3": "baseline_score"}) == "baseline_score"
     assert enricher._get_renamed_baseline_score_column() == "baseline_score"
 
     enricher_no_baseline = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
     assert enricher_no_baseline._get_renamed_baseline_score_column() is None
+
+
+def test_get_ensemble_score_column(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_ensemble_score_abc123"
+    fitting_X = pd.DataFrame({"baseline_score": [0.1, 0.8], "client_feature": [1, 2]})
+    fitting_enriched_X = fitting_X.copy()
+    fitting_enriched_X[ensemble_col] = [0.2, 0.9]
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
+
+    enricher_no_baseline = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
+    assert enricher_no_baseline._get_ensemble_score_column(fitting_X, fitting_enriched_X) is None
+
+    extra_ads = fitting_enriched_X.copy()
+    extra_ads["ads_feature"] = [3, 4]
+    assert enricher._get_ensemble_score_column(fitting_X, extra_ads) is None
+
+    generated_and_ensemble = fitting_enriched_X.copy()
+    generated_and_ensemble["datetime_day_in_quarter_sin"] = [0.0, 0.5]
+    enricher.fit_generated_features = ["datetime_day_in_quarter_sin"]
+    assert enricher._get_ensemble_score_column(fitting_X, generated_and_ensemble) == ensemble_col
+
+
+def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    fitting_X = pd.DataFrame({"baseline_score": [0.1, 0.8]})
+    fitting_enriched_X = fitting_X.copy()
+    fitting_enriched_X[ensemble_col] = [0.2, 0.9]
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    enricher._search_task = SearchTask("fake_search")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=1.0)
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    alias="upgini_score",
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
+                )
+            ],
+        )
+    ]
+
+    assert "ensemble" not in ensemble_col
+    assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
 
 
 def test_columns_renaming_maps_hashed_to_original_for_client_features():
@@ -4454,9 +4520,7 @@ def test_join_only_search_keys_are_not_client_features(requests_mock: Mocker):
         api_key="fake_api_key",
         logs_enabled=False,
     )
-    enricher.X = pd.DataFrame(
-        columns=["phone", "rep_date", "ip", "email", "country", "postal_code", "client_feature"]
-    )
+    enricher.X = pd.DataFrame(columns=["phone", "rep_date", "ip", "email", "country", "postal_code", "client_feature"])
     enricher.fit_search_keys = {
         "phone_h": SearchKey.PHONE,
         "rep_date_h": SearchKey.DATE,

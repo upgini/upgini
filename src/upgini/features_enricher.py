@@ -32,6 +32,7 @@ from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
+from upgini.autofe.vector import EnsembleModel
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
 from upgini.errors import HttpError, ValidationError
@@ -1132,11 +1133,18 @@ class FeaturesEnricher(TransformerMixin):
                     uplift = None
                     uplift_perc = None
                     enriched_estimator = None
+                    ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                        self.logger.info(
-                            f"Calculate enriched {metric} on train combined "
-                            f"features: {fitting_enriched_X.columns.to_list()}"
-                        )
+                        if ensemble_score_column is not None:
+                            self.logger.info(
+                                f"Only ensemble model returned; calculate enriched {metric} via roc_auc "
+                                f"on ensemble score column: {ensemble_score_column}"
+                            )
+                        else:
+                            self.logger.info(
+                                f"Calculate enriched {metric} on train combined "
+                                f"features: {fitting_enriched_X.columns.to_list()}"
+                            )
                         enriched_estimator = EstimatorWrapper.create(
                             estimator,
                             self.logger,
@@ -1149,7 +1157,9 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=text_features,
                             has_time=has_time,
                         )
-                        enriched_cv_result = enriched_estimator.cross_val_predict(fitting_enriched_X, enriched_y_sorted)
+                        enriched_cv_result = enriched_estimator.cross_val_predict(
+                            fitting_enriched_X, enriched_y_sorted, ensemble_score_column
+                        )
                         enriched_metric = enriched_cv_result.get_display_metric()
                         updating_shaps = enriched_cv_result.shap_values
 
@@ -1232,7 +1242,7 @@ class FeaturesEnricher(TransformerMixin):
                                     f"on combined features: {enriched_eval_X_sorted.columns.to_list()}"
                                 )
                                 enriched_eval_results = enriched_estimator.calculate_metric(
-                                    enriched_eval_X_sorted, enriched_eval_y_sorted
+                                    enriched_eval_X_sorted, enriched_eval_y_sorted, ensemble_score_column
                                 )
                                 enriched_eval_metric = enriched_eval_results.get_display_metric()
                                 self.logger.info(
@@ -1585,9 +1595,7 @@ class FeaturesEnricher(TransformerMixin):
         self.logger.info(f"PSI values by value: {psi_values}")
 
         unstable_by_value = [
-            feature
-            for feature, psi in psi_values.items()
-            if self._psi_exceeds_threshold(psi, stability_threshold)
+            feature for feature, psi in psi_values.items() if self._psi_exceeds_threshold(psi, stability_threshold)
         ]
         if unstable_by_value:
             self.logger.info(f"Unstable by value features ({stability_threshold}): {sorted(unstable_by_value)}")
@@ -1983,6 +1991,48 @@ class FeaturesEnricher(TransformerMixin):
             return self.fit_columns_renaming.get(self.baseline_score_column, self.baseline_score_column)
         return self.baseline_score_column
 
+    def _get_ensemble_score_column(self, fitting_X: pd.DataFrame, fitting_enriched_X: pd.DataFrame) -> str | None:
+        """Ensemble score column when baseline_score_column is set and it is the only returned extra feature."""
+        if self.baseline_score_column is None:
+            return None
+        renaming = self.fit_columns_renaming or {}
+        generated_aliases = self._column_name_aliases(self.fit_generated_features or [], renaming)
+        new_external = [
+            c for c in fitting_enriched_X.columns if c not in fitting_X.columns and c not in generated_aliases
+        ]
+        if len(new_external) != 1:
+            return None
+        column = new_external[0]
+        return column if self._is_ensemble_feature(column) else None
+
+    def _is_ensemble_feature(self, column_name: str) -> bool:
+        renaming = self.fit_columns_renaming or {}
+        aliases = self._column_name_aliases([column_name], renaming)
+        ensemble_names = self._ensemble_feature_names_from_metadata()
+        if not ensemble_names:
+            return False
+        return bool(aliases & self._column_name_aliases(list(ensemble_names), renaming))
+
+    def _ensemble_feature_names_from_metadata(self) -> set[str]:
+        autofe_meta = self._search_task.get_autofe_metadata() if self._search_task else None
+        if not autofe_meta:
+            return set()
+        names: set[str] = set()
+        for meta in autofe_meta:
+            op = EnsembleModel.from_formula(meta.formula.split("(")[0])
+            if op is None:
+                continue
+            feature = (
+                Feature(op, [])
+                .set_display_index(meta.display_index)
+                .set_alias(meta.alias)
+                .set_op_params(meta.operator_params or {})
+            )
+            names.add(feature.get_display_name(shorten=True, unhash=True))
+            if meta.alias:
+                names.add(meta.alias)
+        return names
+
     def _psi_exceeds_threshold(self, psi: float | None, threshold: float) -> bool:
         return psi is not None and not pd.isna(psi) and psi > threshold
 
@@ -2004,9 +2054,7 @@ class FeaturesEnricher(TransformerMixin):
             return {
                 c
                 for c in self.X.columns
-                if c not in generated
-                and c not in join_only_keys
-                and c not in (TARGET, EVAL_SET_INDEX, DEFAULT_INDEX)
+                if c not in generated and c not in join_only_keys and c not in (TARGET, EVAL_SET_INDEX, DEFAULT_INDEX)
             }
         if self.X is not None:
             return {str(i) for i in range(np.shape(self.X)[1])}
@@ -2102,9 +2150,7 @@ class FeaturesEnricher(TransformerMixin):
     ) -> list[str]:
         available = list(available_columns)
         if self.df_with_original_index is not None:
-            etalon_columns = [
-                c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]
-            ]
+            etalon_columns = [c for c in self.df_with_original_index.columns if c not in [EVAL_SET_INDEX, TARGET]]
         else:
             # Restored-from-search_id enrichers have no df_with_original_index; use sampled X columns.
             etalon_columns = [c for c in available if c not in [EVAL_SET_INDEX, TARGET]]
@@ -2156,7 +2202,7 @@ class FeaturesEnricher(TransformerMixin):
             progress_callback=progress_callback,
             exclude_oot=exclude_oot,
         )
-        (X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features) = (
+        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features = (
             dataclasses.astuple(sampled_data)
         )
 
@@ -2424,8 +2470,7 @@ class FeaturesEnricher(TransformerMixin):
         base = hash_input(validated_X, validated_y, validated_eval_set)
         exclude_key = ",".join(opts.exclude_features)
         return (
-            f"{base}|outliers_removed={opts.outliers_removed}"
-            f"|exclude={exclude_key}|exclude_oot={opts.exclude_oot}"
+            f"{base}|outliers_removed={opts.outliers_removed}" f"|exclude={exclude_key}|exclude_oot={opts.exclude_oot}"
         )
 
     def _get_metrics_cache_key(
@@ -2442,9 +2487,7 @@ class FeaturesEnricher(TransformerMixin):
             validated_X,
             validated_y,
             validated_eval_set,
-            self._metrics_cache_options(
-                remove_outliers_calc_metrics, exclude_features_sources, exclude_oot
-            ),
+            self._metrics_cache_options(remove_outliers_calc_metrics, exclude_features_sources, exclude_oot),
         )
 
     def __try_reuse_metrics_cache(
@@ -2491,9 +2534,7 @@ class FeaturesEnricher(TransformerMixin):
                     continue
 
             exclude_to_drop = [f for f in wanted.exclude_features if f not in source.exclude_features]
-            self.logger.info(
-                f"Cached fuller dataset found ({source}) - derive wanted view ({wanted})"
-            )
+            self.logger.info(f"Cached fuller dataset found ({source}) - derive wanted view ({wanted})")
             return self.__get_sampled_cached_enriched(
                 source_hash,
                 exclude_features_sources=exclude_to_drop or None,
@@ -2505,9 +2546,7 @@ class FeaturesEnricher(TransformerMixin):
         return None
 
     @staticmethod
-    def _can_derive_metrics_cache(
-        source: _MetricsCacheOptions, wanted: _MetricsCacheOptions
-    ) -> bool:
+    def _can_derive_metrics_cache(source: _MetricsCacheOptions, wanted: _MetricsCacheOptions) -> bool:
         """True if wanted can be derived from source by only dropping columns/rows/OOT evals."""
         if source == wanted:
             return True
@@ -2532,9 +2571,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Callable[[SearchProgress], Any] | None,
         exclude_oot: bool = False,
     ) -> _EnrichedDataForMetrics:
-        wanted = self._metrics_cache_options(
-            remove_outliers_calc_metrics, exclude_features_sources, exclude_oot
-        )
+        wanted = self._metrics_cache_options(remove_outliers_calc_metrics, exclude_features_sources, exclude_oot)
         reused = self.__try_reuse_metrics_cache(
             validated_X, validated_y, validated_eval_set, wanted, is_input_same_as_fit
         )
@@ -2816,9 +2853,7 @@ class FeaturesEnricher(TransformerMixin):
                 selecting_columns_renamed.append(renamed_column)
                 seen_selecting_columns.add(renamed_column)
 
-        etalon_columns_renamed = self._get_etalon_columns_renamed(
-            self.fit_columns_renaming or {}, enriched_Xy.columns
-        )
+        etalon_columns_renamed = self._get_etalon_columns_renamed(self.fit_columns_renaming or {}, enriched_Xy.columns)
         columns_for_metrics = []
         seen_metrics_columns = set()
         for column in etalon_columns_renamed + selecting_columns_renamed:
@@ -5833,12 +5868,8 @@ if response.status_code == 200:
 
             _ = get_ipython()  # type: ignore
             self.logger.warning(f"Showing support link: {link_text}")
-            display(
-                HTML(
-                    f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
-                    here</a><br/>"""
-                )
-            )
+            display(HTML(f"""{link_text} <a href='{support_link}' target='_blank' rel='noopener noreferrer'>
+                    here</a><br/>"""))
         except (ImportError, NameError):
             print(f"{link_text} at {support_link}")
 

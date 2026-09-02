@@ -10,14 +10,18 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from pandas.testing import assert_frame_equal
 from requests_mock.mocker import Mocker
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold, TimeSeriesSplit
 
 from upgini.autofe.utils import pydantic_parse_method
 from upgini.errors import ValidationError
 from upgini.features_enricher import FeaturesEnricher
 from upgini.metadata import (
+    SYSTEM_RECORD_ID,
+    BaseColumnMetadata,
     CVType,
     FeaturesMetadataV2,
+    GeneratedFeatureMetadata,
     HitRateMetrics,
     ModelEvalSet,
     ModelTaskType,
@@ -2799,3 +2803,226 @@ def test_fit_search_keys_include_autodetected_postal_on_restore(requests_mock: M
 
     X = pd.DataFrame({"country": ["BR"], "date": [1], "zipcode": ["10001"], "feature": [10]})
     assert enricher._collect_search_keys_for_metrics(keys, X) == ["country", "zipcode"]
+
+
+def _gini_from_score(y, scores) -> float:
+    return 2 * roc_auc_score(y, scores) - 1
+
+
+def test_cross_val_predict_gini_on_score_column():
+    df = pd.DataFrame(
+        {
+            "score": [0.1, 0.2, 0.85, 0.9, 0.3, 0.75],
+            "other": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "target": [0, 0, 1, 1, 0, 1],
+        }
+    )
+    scoring, _, multiplier = _get_scorer_by_name("roc_auc")
+    wrapper = CatBoostWrapper(
+        CatBoostClassifier(verbose=False),
+        scorer=scoring,
+        cat_features=[],
+        metric_name="GINI",
+        multiplier=multiplier,
+        cv=KFold(n_splits=2),
+        target_type=ModelTaskType.BINARY,
+    )
+    x = df.drop(columns="target")
+    y = df["target"]
+    result = wrapper.cross_val_predict(x, y, baseline_score_column="score")
+    assert result.metric == pytest.approx(_gini_from_score(y, x["score"]))
+    assert result.metric_std is None
+    assert wrapper.cv_estimators is None
+
+    eval_x = pd.DataFrame({"score": [0.15, 0.88], "other": [1.0, 2.0]})
+    eval_y = pd.Series([0, 1], name="target")
+    eval_result = wrapper.calculate_metric(eval_x, eval_y, baseline_score_column="score")
+    assert eval_result.metric == pytest.approx(_gini_from_score(eval_y, eval_x["score"]))
+    assert eval_result.metric_std is None
+
+
+def test_calculate_metrics_baseline_and_ensemble_roc_auc(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+    search_task_id = mock_initial_search(requests_mock, url)
+    mock_initial_progress(requests_mock, url, search_task_id)
+    ads_search_task_id = mock_initial_summary(requests_mock, url, search_task_id)
+
+    ensemble_col = "f_autofe_ensemble_score_abc123"
+    mock_get_metadata(
+        requests_mock,
+        url,
+        search_task_id,
+        metadata_columns=[
+            {
+                "index": 0,
+                "name": "baseline_score",
+                "originalName": "baseline_score",
+                "dataType": "DECIMAL",
+                "meaningType": "FEATURE",
+            },
+            {
+                "index": 1,
+                "name": "client_feature",
+                "originalName": "client_feature",
+                "dataType": "INT",
+                "meaningType": "FEATURE",
+            },
+            {"index": 2, "name": "target", "originalName": "target", "dataType": "INT", "meaningType": "TARGET"},
+            {
+                "index": 3,
+                "name": "system_record_id",
+                "originalName": "system_record_id",
+                "dataType": "INT",
+                "meaningType": "SYSTEM_RECORD_ID",
+            },
+        ],
+        search_keys=[],
+    )
+    mock_get_task_metadata_v2(
+        requests_mock,
+        url,
+        ads_search_task_id,
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name=ensemble_col,
+                    type="numeric",
+                    source="ads",
+                    hit_rate=100.0,
+                    shap_value=1.5,
+                ),
+                FeaturesMetadataV2(
+                    name="baseline_score",
+                    type="numeric",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.4,
+                ),
+                FeaturesMetadataV2(
+                    name="client_feature",
+                    type="numeric",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.1,
+                ),
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=40, max_hit_count=40, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+            eval_set_metrics=[
+                ModelEvalSet(
+                    eval_set_index=1,
+                    hit_rate=1.0,
+                    hit_rate_metrics=HitRateMetrics(
+                        etalon_row_count=20, max_hit_count=20, hit_rate=1.0, hit_rate_percent=100.0
+                    ),
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
+                )
+            ],
+        ),
+    )
+    mock_get_selected_features(requests_mock, url, search_task_id, [ensemble_col])
+    mock_set_selected_features(requests_mock, url, search_task_id, [ensemble_col])
+    mock_get_add_info(
+        requests_mock,
+        url,
+        search_task_id,
+        {"columns_renaming": {}, "true_one_hot_groups": {}, "pseudo_one_hot_groups": {}},
+    )
+
+    rng = np.random.RandomState(42)
+    n_train, n_eval = 40, 20
+    y_train = pd.Series(np.array([0, 1] * (n_train // 2)), name="target")
+    y_eval = pd.Series(np.array([0, 1] * (n_eval // 2)), name="target")
+    baseline_train = y_train.to_numpy() + rng.normal(0, 0.8, n_train)
+    ensemble_train = y_train.to_numpy() + rng.normal(0, 0.3, n_train)
+    baseline_eval = y_eval.to_numpy() + rng.normal(0, 0.8, n_eval)
+    ensemble_eval = y_eval.to_numpy() + rng.normal(0, 0.3, n_eval)
+    client_train = rng.normal(size=n_train)
+    client_eval = rng.normal(size=n_eval)
+
+    mock_raw_features(
+        requests_mock,
+        url,
+        search_task_id,
+        pd.DataFrame(
+            {
+                SYSTEM_RECORD_ID: np.arange(n_train),
+                ensemble_col: ensemble_train,
+            }
+        ),
+    )
+
+    enricher = FeaturesEnricher(
+        country_code="US",
+        endpoint=url,
+        api_key="fake_api_key",
+        search_id=search_task_id,
+        logs_enabled=False,
+        print_loaded_report=False,
+        baseline_score_column="baseline_score",
+        model_task_type=ModelTaskType.BINARY,
+    )
+
+    X = pd.DataFrame({"client_feature": client_train, "baseline_score": baseline_train})
+    eval_X = pd.DataFrame({"client_feature": client_eval, "baseline_score": baseline_eval})
+    enricher.X = X
+    enricher.y = y_train
+    enricher.eval_set = [(eval_X, y_eval)]
+
+    sampled_X = X.copy()
+    sampled_X[SYSTEM_RECORD_ID] = np.arange(n_train)
+    enriched_X = sampled_X.copy()
+    enriched_X[ensemble_col] = ensemble_train
+
+    sampled_eval_X = eval_X.copy()
+    sampled_eval_X[SYSTEM_RECORD_ID] = np.arange(n_eval)
+    enriched_eval_X = sampled_eval_X.copy()
+    enriched_eval_X[ensemble_col] = ensemble_eval
+
+    columns_renaming = {c: c for c in enriched_X.columns}
+    datasets_hash = enricher._get_metrics_cache_key(enricher.X, enricher.y, enricher.eval_set)
+    enricher._FeaturesEnricher__cached_sampled_datasets[datasets_hash] = (
+        sampled_X,
+        y_train,
+        enriched_X,
+        {0: (sampled_eval_X, enriched_eval_X, y_eval)},
+        {},
+        columns_renaming,
+        [],
+    )
+
+    metrics = enricher.calculate_metrics()
+    assert metrics is not None
+
+    def display_gini(y, scores) -> str:
+        return f"{_gini_from_score(y, scores):.3f}"
+
+    train_baseline = _gini_from_score(y_train, baseline_train)
+    train_enriched = _gini_from_score(y_train, ensemble_train)
+    eval_baseline = _gini_from_score(y_eval, baseline_eval)
+    eval_enriched = _gini_from_score(y_eval, ensemble_eval)
+    train_uplift = train_enriched - train_baseline
+    eval_uplift = eval_enriched - eval_baseline
+
+    assert metrics.loc[0, "Dataset type"] == "Train"
+    assert metrics.loc[0, "Baseline GINI"] == display_gini(y_train, baseline_train)
+    assert metrics.loc[0, "Enriched GINI"] == display_gini(y_train, ensemble_train)
+    assert metrics.loc[0, "Uplift, abs"] == round(train_uplift, 3)
+    assert metrics.loc[0, "Uplift, %"] == f"{round(train_uplift / abs(train_baseline) * 100, 1)}%"
+
+    assert metrics.loc[1, "Dataset type"] == "Eval 1"
+    assert metrics.loc[1, "Baseline GINI"] == display_gini(y_eval, baseline_eval)
+    assert metrics.loc[1, "Enriched GINI"] == display_gini(y_eval, ensemble_eval)
+    assert metrics.loc[1, "Uplift, abs"] == round(eval_uplift, 3)
+    assert metrics.loc[1, "Uplift, %"] == f"{round(eval_uplift / abs(eval_baseline) * 100, 1)}%"
