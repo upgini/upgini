@@ -77,3 +77,24 @@ class CatboostModel(PandasOperator, ParametrizedOperator, metaclass=OperatorRegi
         elif formula == "catboost":  # for OperatorRegistry
             return cls()
         return None
+
+
+class EnsembleModel(PandasOperator, ParametrizedOperator, metaclass=OperatorRegistry):
+    name: str = "ensemble"
+    score_name: str = "score"
+    is_vector: bool = True
+    output_type: Optional[str] = "float"
+
+    def to_formula(self) -> str:
+        return f"ensemble_{self.score_name}"
+
+    @classmethod
+    def from_formula(cls, formula: str) -> Optional["EnsembleModel"]:
+        if "(" in formula:
+            return None
+        if formula.startswith("ensemble_"):
+            score_name = formula[len("ensemble_"):]
+            return cls(score_name=score_name)
+        elif formula == "ensemble":  # for OperatorRegistry
+            return cls()
+        return None
