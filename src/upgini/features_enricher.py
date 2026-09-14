@@ -1135,7 +1135,7 @@ class FeaturesEnricher(TransformerMixin):
                     enriched_estimator = None
                     ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
                     if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                        if ensemble_score_column is not None:
+                        if self.baseline_score_column is not None and ensemble_score_column is not None:
                             self.logger.info(
                                 f"Only ensemble model returned; calculate enriched {metric} via roc_auc "
                                 f"on ensemble score column: {ensemble_score_column}"
@@ -1992,9 +1992,6 @@ class FeaturesEnricher(TransformerMixin):
         return self.baseline_score_column
 
     def _get_ensemble_score_column(self, fitting_X: pd.DataFrame, fitting_enriched_X: pd.DataFrame) -> str | None:
-        """Ensemble score column when baseline_score_column is set and it is the only returned extra feature."""
-        if self.baseline_score_column is None:
-            return None
         renaming = self.fit_columns_renaming or {}
         generated_aliases = self._column_name_aliases(self.fit_generated_features or [], renaming)
         new_external = [

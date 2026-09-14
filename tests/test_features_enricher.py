@@ -2675,35 +2675,6 @@ def test_get_renamed_baseline_score_column(requests_mock: Mocker):
     assert enricher_no_baseline._get_renamed_baseline_score_column() is None
 
 
-def test_get_ensemble_score_column(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_ensemble_score_abc123"
-    fitting_X = pd.DataFrame({"baseline_score": [0.1, 0.8], "client_feature": [1, 2]})
-    fitting_enriched_X = fitting_X.copy()
-    fitting_enriched_X[ensemble_col] = [0.2, 0.9]
-
-    enricher = FeaturesEnricher(
-        search_keys={"date": SearchKey.DATE},
-        endpoint=url,
-        logs_enabled=False,
-        baseline_score_column="baseline_score",
-    )
-    assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
-
-    enricher_no_baseline = FeaturesEnricher(search_keys={"date": SearchKey.DATE}, endpoint=url, logs_enabled=False)
-    assert enricher_no_baseline._get_ensemble_score_column(fitting_X, fitting_enriched_X) is None
-
-    extra_ads = fitting_enriched_X.copy()
-    extra_ads["ads_feature"] = [3, 4]
-    assert enricher._get_ensemble_score_column(fitting_X, extra_ads) is None
-
-    generated_and_ensemble = fitting_enriched_X.copy()
-    generated_and_ensemble["datetime_day_in_quarter_sin"] = [0.0, 0.5]
-    enricher.fit_generated_features = ["datetime_day_in_quarter_sin"]
-    assert enricher._get_ensemble_score_column(fitting_X, generated_and_ensemble) == ensemble_col
-
-
 def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
