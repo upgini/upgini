@@ -32,6 +32,7 @@ from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
+from upgini.autofe.utils import pydantic_dump_method
 from upgini.autofe.vector import EnsembleModel
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
@@ -275,6 +276,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.passed_features: list[str] = []
         self.df_with_original_index: pd.DataFrame | None = None
+        self._fit_match_search_keys: dict[str, SearchKey] | None = None
         self.fit_columns_renaming: dict[str, str] | None = None
         self.country_added = False
         self.fit_generated_features: list[str] = []
@@ -1759,9 +1761,11 @@ class FeaturesEnricher(TransformerMixin):
         rows_to_drop: pd.DataFrame | None = None,
         left_columns: list[str] | None = None,
     ) -> tuple[pd.DataFrame, list[str], dict[str, SearchKey]] | None:
-        if self.df_with_original_index is None or self._search_task is None:
+        if self._search_task is None:
             return None
         if self.fit_columns_renaming is None or self.fit_search_keys is None:
+            return None
+        if self.df_with_original_index is None and not self.__has_persisted_match_hashes():
             return None
 
         fit_features = self._search_task.get_all_initial_raw_features(self._get_trace_id(), metrics_calculation=True)
@@ -1774,6 +1778,12 @@ class FeaturesEnricher(TransformerMixin):
                 ~fit_features[ENTITY_SYSTEM_RECORD_ID].isin(rows_to_drop[ENTITY_SYSTEM_RECORD_ID])
             ]
             self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
+
+        generated_features = [self.fit_columns_renaming.get(c, c) for c in (self.fit_generated_features or [])]
+        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+
+        if self.df_with_original_index is None:
+            return fit_features.rename(columns=self.fit_columns_renaming), generated_features, search_keys
 
         left = self.df_with_original_index
         if left_columns is not None:
@@ -1791,9 +1801,79 @@ class FeaturesEnricher(TransformerMixin):
             drop_system_record_id=False,
         )
         enriched_Xy = enriched_Xy.rename(columns=self.fit_columns_renaming)
-        generated_features = [self.fit_columns_renaming.get(c, c) for c in (self.fit_generated_features or [])]
-        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
         return enriched_Xy, generated_features, search_keys
+
+    def __has_persisted_match_hashes(self) -> bool:
+        if self.add_info is None:
+            return False
+        entity_ids = self.add_info.transform_match_entity_ids
+        hashes = self.add_info.transform_match_hashes
+        return bool(entity_ids) and bool(hashes) and len(entity_ids) == len(hashes)
+
+    def __reuse_match_columns(self, df: pd.DataFrame, search_keys: dict[str, SearchKey]) -> list[str] | None:
+        if self._search_task is None:
+            return None
+        features_for_transform = [
+            f
+            for f in self._search_task.get_features_for_transform()
+            if f not in get_derived_search_key_columns(search_keys)
+        ]
+        renaming = self.fit_columns_renaming or {}
+        reverse = {v: k for k, v in renaming.items()}
+        resolved: list[str] = []
+        for feature in features_for_transform:
+            col = feature if feature in df.columns else reverse.get(feature)
+            if col is None or col not in df.columns:
+                self.logger.info(f"Skip persisting transform match hashes: missing column {feature}")
+                return None
+            if col not in search_keys:
+                resolved.append(col)
+        match_cols = self.__transform_match_columns(search_keys, resolved)
+        missing = [c for c in match_cols if c not in df.columns]
+        if missing:
+            self.logger.info(f"Skip persisting transform match hashes: missing columns {missing}")
+            return None
+        return match_cols
+
+    def __persist_transform_match_hashes(self) -> None:
+        if self.add_info is None or self.df_with_original_index is None or self._search_task is None:
+            return
+        if ENTITY_SYSTEM_RECORD_ID not in self.df_with_original_index.columns:
+            return
+        match_cols = self.__reuse_match_columns(
+            self.df_with_original_index,
+            self._fit_match_search_keys or self.fit_search_keys or {},
+        )
+        if not match_cols:
+            return
+        match_hash = pd.util.hash_pandas_object(self.df_with_original_index[match_cols], index=False).astype("float64")
+        pairs = pd.DataFrame(
+            {
+                ENTITY_SYSTEM_RECORD_ID: self.df_with_original_index[ENTITY_SYSTEM_RECORD_ID].to_numpy(),
+                MATCH_HASH: match_hash.to_numpy(),
+            }
+        )
+        pairs = self.__dedupe_on(pairs, [ENTITY_SYSTEM_RECORD_ID])
+        pairs = self.__dedupe_on(pairs, [MATCH_HASH])
+        self.add_info.transform_match_entity_ids = [float(v) for v in pairs[ENTITY_SYSTEM_RECORD_ID].to_numpy()]
+        self.add_info.transform_match_hashes = [float(v) for v in pairs[MATCH_HASH].to_numpy()]
+        try:
+            payload = pydantic_dump_method(self.add_info)(exclude_none=True)
+            payload.pop("autodetected_search_keys", None)
+            self._search_task.update_add_info(self._get_trace_id(), payload)
+        except Exception:
+            self.logger.exception("Failed to persist transform match hashes in add_info")
+
+    def __persisted_hash_pairs(self) -> pd.DataFrame | None:
+        if not self.__has_persisted_match_hashes():
+            return None
+        pairs = pd.DataFrame(
+            {
+                ENTITY_SYSTEM_RECORD_ID: self.add_info.transform_match_entity_ids,
+                MATCH_HASH: self.add_info.transform_match_hashes,
+            }
+        )
+        return self.__dedupe_on(pairs, [MATCH_HASH])
 
     @staticmethod
     def __transform_match_columns(search_keys: dict[str, SearchKey], features_for_transform: list[str]) -> list[str]:
@@ -1831,41 +1911,50 @@ class FeaturesEnricher(TransformerMixin):
         feature_cols: list[str],
         enriched_Xy: pd.DataFrame,
     ) -> pd.DataFrame | None:
-        if self.df_with_original_index is None or enriched_Xy is None or len(enriched_Xy) == 0:
+        if enriched_Xy is None or len(enriched_Xy) == 0:
             return None
         if not match_columns_hashed or not feature_cols:
             return None
         if ENTITY_SYSTEM_RECORD_ID not in enriched_Xy.columns:
-            return None
-        if ENTITY_SYSTEM_RECORD_ID not in self.df_with_original_index.columns:
             return None
 
         ads_cols = [c for c in feature_cols if c in enriched_Xy.columns]
         if not ads_cols:
             return None
 
-        key_cols = [c for c in match_columns_hashed if c in self.df_with_original_index.columns]
-        if len(key_cols) != len(match_columns_hashed):
-            return None
-
         ads = self.__dedupe_on(enriched_Xy.loc[:, [ENTITY_SYSTEM_RECORD_ID] + ads_cols], [ENTITY_SYSTEM_RECORD_ID])
         covered_ids = ads[ENTITY_SYSTEM_RECORD_ID].to_numpy()
 
-        fit_keys = self.df_with_original_index.loc[:, key_cols + [ENTITY_SYSTEM_RECORD_ID]]
-        covered_mask = fit_keys[ENTITY_SYSTEM_RECORD_ID].isin(covered_ids)
+        if self.df_with_original_index is not None and ENTITY_SYSTEM_RECORD_ID in self.df_with_original_index.columns:
+            key_cols = [c for c in match_columns_hashed if c in self.df_with_original_index.columns]
+            if len(key_cols) != len(match_columns_hashed):
+                return None
+            fit_keys = self.df_with_original_index.loc[:, key_cols + [ENTITY_SYSTEM_RECORD_ID]]
+            covered_mask = fit_keys[ENTITY_SYSTEM_RECORD_ID].isin(covered_ids)
+            if not covered_mask.all():
+                fit_keys = fit_keys.loc[covered_mask]
+            fit_keys = self.__dedupe_on(fit_keys, [ENTITY_SYSTEM_RECORD_ID])
+            if len(fit_keys) == 0:
+                return None
+            aligned = self.__align_match_frame(fit_keys, df_transform, match_columns_hashed)
+            if aligned is None:
+                return None
+            match_hash = pd.util.hash_pandas_object(aligned, index=False).astype("float64")
+            lookup = ads.set_index(ENTITY_SYSTEM_RECORD_ID).reindex(fit_keys[ENTITY_SYSTEM_RECORD_ID].to_numpy())
+            lookup[MATCH_HASH] = match_hash.to_numpy()
+            lookup.reset_index(drop=True, inplace=True)
+            return self.__dedupe_on(lookup, [MATCH_HASH])
+
+        pairs = self.__persisted_hash_pairs()
+        if pairs is None:
+            return None
+        covered_mask = pairs[ENTITY_SYSTEM_RECORD_ID].isin(covered_ids)
         if not covered_mask.all():
-            fit_keys = fit_keys.loc[covered_mask]
-        fit_keys = self.__dedupe_on(fit_keys, [ENTITY_SYSTEM_RECORD_ID])
-        if len(fit_keys) == 0:
+            pairs = pairs.loc[covered_mask]
+        if len(pairs) == 0:
             return None
-
-        aligned = self.__align_match_frame(fit_keys, df_transform, match_columns_hashed)
-        if aligned is None:
-            return None
-
-        match_hash = pd.util.hash_pandas_object(aligned, index=False).astype("float64")
-        lookup = ads.set_index(ENTITY_SYSTEM_RECORD_ID).reindex(fit_keys[ENTITY_SYSTEM_RECORD_ID].to_numpy())
-        lookup[MATCH_HASH] = match_hash.to_numpy()
+        lookup = ads.set_index(ENTITY_SYSTEM_RECORD_ID).reindex(pairs[ENTITY_SYSTEM_RECORD_ID].to_numpy())
+        lookup[MATCH_HASH] = pairs[MATCH_HASH].to_numpy()
         lookup.reset_index(drop=True, inplace=True)
         return self.__dedupe_on(lookup, [MATCH_HASH])
 
@@ -4034,6 +4123,7 @@ if response.status_code == 200:
         self._search_task = None
         self.warning_counter.reset()
         self.df_with_original_index = None
+        self._fit_match_search_keys = None
         self.__cached_sampled_datasets = dict()
         self.metrics = None
         self.fit_columns_renaming = None
@@ -4280,6 +4370,8 @@ if response.status_code == 200:
 
         # TODO check that this is correct for enrichment
         self.df_with_original_index = df.copy()
+        # Search keys at this point are pre-explode; transform hashes the same grain.
+        self._fit_match_search_keys = dict(self.fit_search_keys)
         # TODO check maybe need to drop _time column from df_with_original_index
 
         df, unnest_search_keys = self._explode_multiple_search_keys(df, self.fit_search_keys, self.fit_columns_renaming)
@@ -4443,6 +4535,7 @@ if response.status_code == 200:
                 raise e
 
             self._search_task.poll_result(self._get_trace_id(), quiet=True)
+            self.__persist_transform_match_hashes()
 
             seconds_left = time.time() - start_time
             progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)

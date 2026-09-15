@@ -33,6 +33,7 @@ def mock_default_requests(requests_mock: Mocker, url: str):
         url + "/public/api/v2/user/transform-usage",
         json={"transformedRows": 0, "restRows": 12000, "limit": 12000, "hasLimit": True},
     )
+    requests_mock.post(re.compile(rf"{re.escape(url)}/public/api/v2/search/.+/add-info"), json={})
 
 
 def random_id() -> str:

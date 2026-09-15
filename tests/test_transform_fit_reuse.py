@@ -142,6 +142,7 @@ def _make_reuse_enricher(
     enricher.add_info = AddInfo()
     enricher.autodetected_search_keys = {}
     enricher.df_with_original_index = df_fit
+    enricher._fit_match_search_keys = dict(enricher.fit_search_keys)
     enricher.search_id = "fake_search"
 
     search_task = MagicMock()
@@ -181,6 +182,11 @@ def _stub_validation(search_task: MagicMock, ads_value: float = 99.0) -> dict:
 
     search_task.validation.side_effect = fake_validation
     return captured
+
+
+def _persist_and_drop_snapshot(enricher: FeaturesEnricher) -> None:
+    enricher._FeaturesEnricher__persist_transform_match_hashes()
+    enricher.df_with_original_index = None
 
 
 def test_transform_copy_reuses_fit_enrichment(requests_mock: Mocker):
@@ -365,6 +371,74 @@ def test_transform_restored_enricher_without_fit_snapshot_validates_all(requests
     assert list(result["ads_feature"]) == [33.0, 33.0]
 
 
+def test_transform_restored_enricher_reuses_persisted_match_hashes(requests_mock: Mocker):
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    phone_h = add_hash_suffix("phone")
+    f_h = add_hash_suffix("f")
+    df_fit = pd.DataFrame(
+        {
+            phone_h: _converted_phones(["+10000000001", "+10000000002"]),
+            f_h: [1.0, 2.0],
+            TARGET: [0.0, 1.0],
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0],
+        }
+    )
+    fit_features = pd.DataFrame({ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0], "ads_feature": [10.0, 20.0]})
+    enricher, search_task = _make_reuse_enricher(
+        requests_mock,
+        search_keys={"phone": SearchKey.PHONE},
+        train_X=train_X,
+        df_fit=df_fit,
+        fit_features=fit_features,
+        file_columns=[_file_col("phone", phone_h), _file_col("f", f_h)],
+    )
+    _persist_and_drop_snapshot(enricher)
+    assert enricher.add_info.transform_match_hashes
+    assert len(enricher.add_info.transform_match_hashes) == 2
+    assert all(isinstance(h, float) for h in enricher.add_info.transform_match_hashes)
+    search_task.update_add_info.assert_called()
+    search_task.validation.side_effect = AssertionError(
+        "restored enricher with persisted hashes should not validate matching rows"
+    )
+
+    result = enricher.transform(train_X.copy(), keep_input=True)
+    assert result is not None
+    assert len(result) == 2
+    assert list(result["ads_feature"]) == [10.0, 20.0]
+
+
+def test_transform_restored_enricher_persisted_hashes_mixed_rows(requests_mock: Mocker):
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    phone_h = add_hash_suffix("phone")
+    f_h = add_hash_suffix("f")
+    df_fit = pd.DataFrame(
+        {
+            phone_h: _converted_phones(["+10000000001", "+10000000002"]),
+            f_h: [1.0, 2.0],
+            TARGET: [0.0, 1.0],
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0],
+        }
+    )
+    fit_features = pd.DataFrame({ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0], "ads_feature": [10.0, 20.0]})
+    enricher, search_task = _make_reuse_enricher(
+        requests_mock,
+        search_keys={"phone": SearchKey.PHONE},
+        train_X=train_X,
+        df_fit=df_fit,
+        fit_features=fit_features,
+        file_columns=[_file_col("phone", phone_h), _file_col("f", f_h)],
+    )
+    _persist_and_drop_snapshot(enricher)
+    captured = _stub_validation(search_task, ads_value=77.0)
+
+    mixed = pd.DataFrame({"phone": ["+10000000001", "+19999999999"], "f": [1.0, 9.0]})
+    result = enricher.transform(mixed, keep_input=True)
+    assert result is not None
+    assert len(result) == 2
+    assert captured["df"][ENTITY_SYSTEM_RECORD_ID].nunique() == 1
+    assert list(result["ads_feature"]) == [10.0, 77.0]
+
+
 def test_transform_phone_and_date_match_requires_both_keys(requests_mock: Mocker):
     train_X = pd.DataFrame(
         {"phone": ["+10000000001", "+10000000001"], "rep_date": ["2020-01-01", "2020-01-02"], "f": [1.0, 2.0]}
@@ -467,6 +541,15 @@ def test_transform_two_email_columns_does_not_duplicate_rows(requests_mock: Mock
     assert result is not None
     assert len(result) == len(train_X)
     assert list(result["ads_feature"]) == [10.0, 20.0]
+
+    _persist_and_drop_snapshot(enricher)
+    search_task.validation.side_effect = AssertionError(
+        "restored two-email enricher with persisted hashes should not validate"
+    )
+    restored = enricher.transform(train_X.copy(), keep_input=True)
+    assert restored is not None
+    assert len(restored) == len(train_X)
+    assert list(restored["ads_feature"]) == [10.0, 20.0]
 
 
 def test_align_match_frame_noop_and_missing_column(requests_mock: Mocker):
