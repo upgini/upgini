@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 import pandas as pd
@@ -142,3 +143,33 @@ def test_get_ensemble_score_column_does_not_need_baseline(requests_mock: Mocker)
 
     assert enricher.baseline_score_column is None
     assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
+
+
+def test_report_button_matches_pdf_markup_and_downloads_on_hosted_notebook(tmp_path, monkeypatch):
+    from upgini.utils.display_utils import _html_action_button, _report_button_html
+
+    report = tmp_path / "upgini-report-search-abc.html"
+    report.write_text("<html>ok</html>", encoding="utf-8")
+    monkeypatch.setattr("upgini.utils.track_info.is_hosted_notebook", lambda: True)
+
+    html = _report_button_html(str(report))
+    payload = base64.b64encode(b"<html>ok</html>").decode()
+    assert html == _html_action_button(
+        "Open full report",
+        f"data:text/html;base64,{payload}",
+        download_name="upgini-report-search-abc.html",
+    )
+    assert 'download="upgini-report-search-abc.html"' in html
+    assert "<button>Open full report</button>" in html
+
+
+def test_report_button_opens_local_file(tmp_path, monkeypatch):
+    from upgini.utils.display_utils import _html_action_button, _report_button_html
+
+    report = tmp_path / "upgini-report-search-abc.html"
+    report.write_text("<html>ok</html>", encoding="utf-8")
+    monkeypatch.setattr("upgini.utils.track_info.is_hosted_notebook", lambda: False)
+
+    html = _report_button_html(str(report))
+    assert html == _html_action_button("Open full report", report.resolve().as_uri())
+    assert "download=" not in html

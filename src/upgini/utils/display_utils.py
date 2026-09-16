@@ -5,6 +5,7 @@ import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from io import StringIO
+from pathlib import Path
 from typing import Callable, List, Optional
 
 import pandas as pd
@@ -330,39 +331,41 @@ def prepare_and_show_report(
 def show_button_open_report(
     path: str, title="Open full report", display_id: Optional[str] = None, display_handle=None
 ):
-    import webbrowser
-    from pathlib import Path
+    return _display_html_button(
+        _report_button_html(path, title),
+        display_id=display_id,
+        display_handle=display_handle,
+    )
 
-    from IPython.display import HTML, display
-    from ipywidgets import Button, Layout
+
+def _report_button_html(path: str, title: str = "Open full report") -> str:
+    from upgini.utils.track_info import is_hosted_notebook
 
     resolved = Path(path).resolve()
-    path_html = f'<div style="margin-top:6px;font-size:12px;color:#57534e">{resolved}</div>'
-    link_html = f"""<div>
-        <a href="{resolved.as_uri()}" target="_blank" rel="noopener noreferrer">
-            <button type="button">{title}</button>
-        </a>
-        {path_html}
-    </div>"""
+    if is_hosted_notebook():
+        payload = base64.b64encode(resolved.read_bytes()).decode()
+        return _html_action_button(title, f"data:text/html;base64,{payload}", download_name=resolved.name)
+    return _html_action_button(title, resolved.as_uri())
+
+
+def _html_action_button(title: str, href: str, download_name: Optional[str] = None) -> str:
+    download_attr = f' download="{download_name}"' if download_name else ""
+    return f"""<a{download_attr} href="{href}" target="_blank">
+            <button>{title}</button></a>"""
+
+
+def _display_html_button(html: str, display_id: Optional[str] = None, display_handle=None):
+    from IPython.display import HTML, display
+
     if display_handle is not None:
-        display_handle.update(HTML(link_html))
+        display_handle.update(HTML(html))
         return
-
-    button = Button(description=title, layout=Layout(width="auto"))
-
-    def on_click(b):
-        webbrowser.open(resolved.as_uri())
-
-    button.on_click(on_click)
-    display(button)
-    return display(HTML(path_html), display_id=display_id)
+    return display(HTML(html), display_id=display_id)
 
 
 def show_button_download_pdf(
     source: str, title="\U0001f4ca Download PDF report", display_id: Optional[str] = None, display_handle=None
 ):
-    from IPython.display import HTML, display
-
     file_name = f"upgini-report-{uuid.uuid4()}.pdf"
 
     # from weasyprint import HTML
@@ -375,15 +378,12 @@ def show_button_download_pdf(
         with open(file_name, "wb") as output:
             pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
 
-        with open(file_name, "rb") as f:
-            b64 = base64.b64encode(f.read())
-            payload = b64.decode()
-            html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
-            <button>{title}</button></a>"""
-            if display_handle is not None:
-                display_handle.update(HTML(html))
-            else:
-                return display(HTML(html), display_id=display_id)
+        payload = base64.b64encode(Path(file_name).read_bytes()).decode()
+        return _display_html_button(
+            _html_action_button(title, f"data:application/pdf;base64,{payload}", download_name=file_name),
+            display_id=display_id,
+            display_handle=display_handle,
+        )
     except Exception:
         pass
 

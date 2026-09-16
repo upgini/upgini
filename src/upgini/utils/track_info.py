@@ -52,6 +52,10 @@ def _get_execution_ide() -> str:
         return "other"
 
 
+def is_hosted_notebook() -> bool:
+    return _get_execution_ide() in {"colab", "kaggle", "binder"}
+
+
 _inflight_lock = Lock()
 _inflight_events = {}
 
