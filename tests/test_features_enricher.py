@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
-from requests_mock import NoMockAddress
 from requests_mock.mocker import Mocker
 
 from upgini.dataset import Dataset
@@ -2415,19 +2414,25 @@ def test_features_enricher_fit_transform_runtime_parameters(requests_mock: Mocke
     assert not any(elem.url == transform_url for elem in requests_mock.request_history[history_before:])
     assert transformed_from_fit.shape == (10000, 5)
 
-    # A copy is treated as new input and still goes through validation with runtime parameters
+    # A copy of fit rows should still return the same shape (keys reuse fit enrichment)
     transformed = enricher.transform(train_features.copy())
+    assert transformed.shape == (10000, 5)
 
+    # New search keys still go through validation with runtime parameters
+    history_before_new = len(requests_mock.request_history)
+    new_X = train_features.iloc[:3].copy()
+    new_X["phone_num"] = ["+19990000001", "+19990000002", "+19990000003"]
+    transformed_new = enricher.transform(new_X)
     transform_req = None
-    for elem in requests_mock.request_history:
+    for elem in requests_mock.request_history[history_before_new:]:
         if elem.url == transform_url:
             transform_req = elem
 
     assert transform_req is not None
     assert "runtimeProperty1" in str(transform_req.body)
     assert "runtimeValue1" in str(transform_req.body)
-
-    assert transformed.shape == (10000, 5)
+    assert transformed_new is not None
+    assert len(transformed_new) == 3
 
 
 def test_features_enricher_fit_custom_loss(requests_mock: Mocker):
@@ -3719,8 +3724,19 @@ def test_search_keys_autodetection(requests_mock: Mocker):
 
     Dataset.validation = mock_validation
 
+    # Same keys as fit are reused from the fit snapshot; send a new row so transform
+    # still hits validation and we can assert autodetected search keys there.
+    new_X = pd.DataFrame(
+        {
+            "postal_code": ["111111"],
+            "phone": ["1234567890"],
+            "eml": ["new@mail.com"],
+            "date": ["2024-01-01"],
+            "country": ["GB"],
+        }
+    )
     try:
-        enricher.transform(df.drop(columns="target"))
+        enricher.transform(new_X)
         raise AssertionError("Should fail")
     except TestException:
         pass
@@ -3905,7 +3921,6 @@ def test_unsupported_arguments(requests_mock: Mocker):
     original_min_rows = Dataset.MIN_ROWS_COUNT
     Dataset.MIN_ROWS_COUNT = 3
     try:
-        # with pytest.raises(NoMockAddress):
         enricher.fit(
             df.drop(columns="target"),
             df["target"],
@@ -3914,7 +3929,6 @@ def test_unsupported_arguments(requests_mock: Mocker):
             unsupported_key_argument=False,
         )
 
-        # with pytest.raises(NoMockAddress):
         enricher.fit_transform(
             df.drop(columns="target"),
             df["target"],
@@ -3927,14 +3941,13 @@ def test_unsupported_arguments(requests_mock: Mocker):
             df.drop(columns="target"), df["target"], "unsupported_positional_argument", unsupported_key_argument=False
         )
 
-        with pytest.raises(NoMockAddress):
-            enricher.calculate_metrics(
-                df.drop(columns="target"),
-                df["target"],
-                [(df.drop(columns="target"), df["target"])],
-                "unsupported_positional_argument",
-                unsupported_key_argument=False,
-            )
+        enricher.calculate_metrics(
+            df.drop(columns="target"),
+            df["target"],
+            [(df.drop(columns="target"), df["target"])],
+            "unsupported_positional_argument",
+            unsupported_key_argument=False,
+        )
     finally:
         Dataset.MIN_ROWS_COUNT = original_min_rows
 

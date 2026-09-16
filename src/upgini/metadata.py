@@ -395,6 +395,10 @@ class AddInfo(BaseModel):
     true_one_hot_groups: Optional[Dict[str, List[str]]] = None
     pseudo_one_hot_groups: Optional[Dict[str, List[str]]] = None
     autodetected_search_keys: Optional[Dict[str, SearchKey]] = None
+    # Unique pre-explode match hashes for transform reuse after restore (search_id).
+    # Parallel lists: entity_system_record_id[i] <-> hash[i].
+    transform_match_entity_ids: Optional[List[float]] = None
+    transform_match_hashes: Optional[List[float]] = None
 
 
 class AdsHintType(str, Enum):

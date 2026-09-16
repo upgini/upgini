@@ -32,6 +32,7 @@ from sklearn.preprocessing import OrdinalEncoder
 
 from upgini.autofe.feature import Feature
 from upgini.autofe.timeseries import TimeSeriesBase
+from upgini.autofe.utils import pydantic_dump_method
 from upgini.autofe.vector import EnsembleModel
 from upgini.data_source.data_source_publisher import CommercialSchema
 from upgini.dataset import Dataset
@@ -131,6 +132,8 @@ DEMO_DATASET_HASHES = [
     "7c354d1b1794c53ac7d7e5a2f2574568b660ca9159bc0d2aca9c7127ebcea2f7",  # demo_salary fit
     "2519c9077c559f8975fdcdb5c50e9daae8d50b1d8a3ec72296c65ea7276f8812",  # demo_salary transform
 ]
+
+MATCH_HASH = "_match_hash"
 
 
 class FeaturesEnricher(TransformerMixin):
@@ -273,6 +276,7 @@ class FeaturesEnricher(TransformerMixin):
 
         self.passed_features: list[str] = []
         self.df_with_original_index: pd.DataFrame | None = None
+        self._fit_match_search_keys: dict[str, SearchKey] | None = None
         self.fit_columns_renaming: dict[str, str] | None = None
         self.country_added = False
         self.fit_generated_features: list[str] = []
@@ -1755,10 +1759,13 @@ class FeaturesEnricher(TransformerMixin):
     def __enrich_df_with_fit_features(
         self,
         rows_to_drop: pd.DataFrame | None = None,
+        left_columns: list[str] | None = None,
     ) -> tuple[pd.DataFrame, list[str], dict[str, SearchKey]] | None:
-        if self.df_with_original_index is None or self._search_task is None:
+        if self._search_task is None:
             return None
         if self.fit_columns_renaming is None or self.fit_search_keys is None:
+            return None
+        if self.df_with_original_index is None and not self.__has_persisted_match_hashes():
             return None
 
         fit_features = self._search_task.get_all_initial_raw_features(self._get_trace_id(), metrics_calculation=True)
@@ -1772,16 +1779,229 @@ class FeaturesEnricher(TransformerMixin):
             ]
             self.logger.info(f"After dropping target outliers size: {len(fit_features)}")
 
+        generated_features = [self.fit_columns_renaming.get(c, c) for c in (self.fit_generated_features or [])]
+        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
+
+        if self.df_with_original_index is None:
+            return fit_features.rename(columns=self.fit_columns_renaming), generated_features, search_keys
+
+        left = self.df_with_original_index
+        if left_columns is not None:
+            left = left.loc[:, left_columns]
+            join_keys = {ENTITY_SYSTEM_RECORD_ID, SYSTEM_RECORD_ID, EVAL_SET_INDEX}
+            client_cols = set(self.df_with_original_index.columns) - join_keys
+            right_keep = [c for c in fit_features.columns if c not in client_cols]
+            if len(right_keep) < len(fit_features.columns):
+                fit_features = fit_features.loc[:, right_keep]
+
         enriched_Xy = self.__enrich(
-            self.df_with_original_index,
+            left,
             fit_features,
             how="inner",
             drop_system_record_id=False,
         )
         enriched_Xy = enriched_Xy.rename(columns=self.fit_columns_renaming)
-        generated_features = [self.fit_columns_renaming.get(c, c) for c in (self.fit_generated_features or [])]
-        search_keys = {self.fit_columns_renaming.get(k, k): v for k, v in self.fit_search_keys.items()}
         return enriched_Xy, generated_features, search_keys
+
+    def __has_persisted_match_hashes(self) -> bool:
+        if self.add_info is None:
+            return False
+        entity_ids = self.add_info.transform_match_entity_ids
+        hashes = self.add_info.transform_match_hashes
+        return bool(entity_ids) and bool(hashes) and len(entity_ids) == len(hashes)
+
+    def __reuse_match_columns(self, df: pd.DataFrame, search_keys: dict[str, SearchKey]) -> list[str] | None:
+        if self._search_task is None:
+            return None
+        features_for_transform = [
+            f
+            for f in self._search_task.get_features_for_transform()
+            if f not in get_derived_search_key_columns(search_keys)
+        ]
+        renaming = self.fit_columns_renaming or {}
+        reverse = {v: k for k, v in renaming.items()}
+        resolved: list[str] = []
+        for feature in features_for_transform:
+            col = feature if feature in df.columns else reverse.get(feature)
+            if col is None or col not in df.columns:
+                self.logger.info(f"Skip persisting transform match hashes: missing column {feature}")
+                return None
+            if col not in search_keys:
+                resolved.append(col)
+        match_cols = self.__transform_match_columns(search_keys, resolved)
+        missing = [c for c in match_cols if c not in df.columns]
+        if missing:
+            self.logger.info(f"Skip persisting transform match hashes: missing columns {missing}")
+            return None
+        return match_cols
+
+    def __persist_transform_match_hashes(self) -> None:
+        if self.add_info is None or self.df_with_original_index is None or self._search_task is None:
+            return
+        if ENTITY_SYSTEM_RECORD_ID not in self.df_with_original_index.columns:
+            return
+        match_cols = self.__reuse_match_columns(
+            self.df_with_original_index,
+            self._fit_match_search_keys or self.fit_search_keys or {},
+        )
+        if not match_cols:
+            return
+        match_hash = pd.util.hash_pandas_object(self.df_with_original_index[match_cols], index=False).astype("float64")
+        pairs = pd.DataFrame(
+            {
+                ENTITY_SYSTEM_RECORD_ID: self.df_with_original_index[ENTITY_SYSTEM_RECORD_ID].to_numpy(),
+                MATCH_HASH: match_hash.to_numpy(),
+            }
+        )
+        pairs = self.__dedupe_on(pairs, [ENTITY_SYSTEM_RECORD_ID])
+        pairs = self.__dedupe_on(pairs, [MATCH_HASH])
+        self.add_info.transform_match_entity_ids = [float(v) for v in pairs[ENTITY_SYSTEM_RECORD_ID].to_numpy()]
+        self.add_info.transform_match_hashes = [float(v) for v in pairs[MATCH_HASH].to_numpy()]
+        try:
+            payload = pydantic_dump_method(self.add_info)(exclude_none=True)
+            payload.pop("autodetected_search_keys", None)
+            self._search_task.update_add_info(self._get_trace_id(), payload)
+        except Exception:
+            self.logger.exception("Failed to persist transform match hashes in add_info")
+
+    def __persisted_hash_pairs(self) -> pd.DataFrame | None:
+        if not self.__has_persisted_match_hashes():
+            return None
+        pairs = pd.DataFrame(
+            {
+                ENTITY_SYSTEM_RECORD_ID: self.add_info.transform_match_entity_ids,
+                MATCH_HASH: self.add_info.transform_match_hashes,
+            }
+        )
+        return self.__dedupe_on(pairs, [MATCH_HASH])
+
+    @staticmethod
+    def __transform_match_columns(search_keys: dict[str, SearchKey], features_for_transform: list[str]) -> list[str]:
+        return sorted(dict.fromkeys(list(search_keys.keys()) + list(features_for_transform)))
+
+    def __align_match_frame(self, source: pd.DataFrame, target: pd.DataFrame, cols: list[str]) -> pd.DataFrame | None:
+        missing = [c for c in cols if c not in source.columns or c not in target.columns]
+        if missing:
+            self.logger.info(f"Match columns missing for fit reuse: {missing}")
+            return None
+        needs_cast = any(source[c].dtype != target[c].dtype for c in cols)
+        # List indexing already materializes the subset; copy only when we have to astype.
+        out = source[cols].copy() if needs_cast else source[cols]
+        try:
+            if needs_cast:
+                for c in cols:
+                    if out[c].dtype != target[c].dtype:
+                        out[c] = out[c].astype(target[c].dtype)
+        except (TypeError, ValueError) as e:
+            self.logger.info(f"Failed to align match column dtypes for fit reuse: {e}")
+            return None
+        return out
+
+    @staticmethod
+    def __dedupe_on(df: pd.DataFrame, subset: list[str]) -> pd.DataFrame:
+        duplicated = df.duplicated(subset=subset)
+        if not duplicated.any():
+            return df
+        return df.loc[~duplicated]
+
+    def __fit_feature_lookup(
+        self,
+        df_transform: pd.DataFrame,
+        match_columns_hashed: list[str],
+        feature_cols: list[str],
+        enriched_Xy: pd.DataFrame,
+    ) -> pd.DataFrame | None:
+        if enriched_Xy is None or len(enriched_Xy) == 0:
+            return None
+        if not match_columns_hashed or not feature_cols:
+            return None
+        if ENTITY_SYSTEM_RECORD_ID not in enriched_Xy.columns:
+            return None
+
+        ads_cols = [c for c in feature_cols if c in enriched_Xy.columns]
+        if not ads_cols:
+            return None
+
+        ads = self.__dedupe_on(enriched_Xy.loc[:, [ENTITY_SYSTEM_RECORD_ID] + ads_cols], [ENTITY_SYSTEM_RECORD_ID])
+        covered_ids = ads[ENTITY_SYSTEM_RECORD_ID].to_numpy()
+
+        if self.df_with_original_index is not None and ENTITY_SYSTEM_RECORD_ID in self.df_with_original_index.columns:
+            key_cols = [c for c in match_columns_hashed if c in self.df_with_original_index.columns]
+            if len(key_cols) != len(match_columns_hashed):
+                return None
+            fit_keys = self.df_with_original_index.loc[:, key_cols + [ENTITY_SYSTEM_RECORD_ID]]
+            covered_mask = fit_keys[ENTITY_SYSTEM_RECORD_ID].isin(covered_ids)
+            if not covered_mask.all():
+                fit_keys = fit_keys.loc[covered_mask]
+            fit_keys = self.__dedupe_on(fit_keys, [ENTITY_SYSTEM_RECORD_ID])
+            if len(fit_keys) == 0:
+                return None
+            aligned = self.__align_match_frame(fit_keys, df_transform, match_columns_hashed)
+            if aligned is None:
+                return None
+            match_hash = pd.util.hash_pandas_object(aligned, index=False).astype("float64")
+            lookup = ads.set_index(ENTITY_SYSTEM_RECORD_ID).reindex(fit_keys[ENTITY_SYSTEM_RECORD_ID].to_numpy())
+            lookup[MATCH_HASH] = match_hash.to_numpy()
+            lookup.reset_index(drop=True, inplace=True)
+            return self.__dedupe_on(lookup, [MATCH_HASH])
+
+        pairs = self.__persisted_hash_pairs()
+        if pairs is None:
+            return None
+        covered_mask = pairs[ENTITY_SYSTEM_RECORD_ID].isin(covered_ids)
+        if not covered_mask.all():
+            pairs = pairs.loc[covered_mask]
+        if len(pairs) == 0:
+            return None
+        lookup = ads.set_index(ENTITY_SYSTEM_RECORD_ID).reindex(pairs[ENTITY_SYSTEM_RECORD_ID].to_numpy())
+        lookup[MATCH_HASH] = pairs[MATCH_HASH].to_numpy()
+        lookup.reset_index(drop=True, inplace=True)
+        return self.__dedupe_on(lookup, [MATCH_HASH])
+
+    def __unmatched_transform_mask(self, df: pd.DataFrame, lookup: pd.DataFrame | None) -> np.ndarray:
+        if lookup is None or len(lookup) == 0 or MATCH_HASH not in lookup.columns:
+            return np.ones(len(df), dtype=bool)
+        return ~df[ENTITY_SYSTEM_RECORD_ID].isin(lookup[MATCH_HASH].to_numpy()).to_numpy()
+
+    def __attach_fit_lookup(
+        self,
+        dest: pd.DataFrame,
+        lookup: pd.DataFrame,
+        exclude_features_sources: list[str] | None,
+    ) -> pd.DataFrame:
+        feature_lookup = lookup.set_index(MATCH_HASH)
+        overlap = [c for c in feature_lookup.columns if c in dest.columns]
+        if overlap:
+            feature_lookup = feature_lookup.drop(columns=overlap)
+        if exclude_features_sources:
+            feature_lookup = feature_lookup.drop(columns=exclude_features_sources, errors="ignore")
+        keys = dest[ENTITY_SYSTEM_RECORD_ID]
+        for col in feature_lookup.columns:
+            dest[col] = keys.map(feature_lookup[col])
+        return dest
+
+    def __check_transform_quota(self, row_count: int) -> bool:
+        """Return False when transform should abort because of quota."""
+        if row_count <= 0:
+            return True
+        transform_usage = self.rest_client.get_current_transform_usage(self._get_trace_id())
+        self.logger.info(f"Current transform usage: {transform_usage}. Transforming {row_count} rows")
+        if not transform_usage.has_limit:
+            return True
+        if row_count > transform_usage.rest_rows:
+            rest_rows = max(transform_usage.rest_rows, 0)
+            bundle_msg = (
+                "transform_usage_warning_registered" if self.__is_registered else "transform_usage_warning_demo"
+            )
+            msg = self.bundle.get(bundle_msg).format(rest_rows, row_count)
+            self.logger.warning(msg)
+            print(msg)
+            show_request_quote_button(is_registered=self.__is_registered)
+            return False
+        msg = self.bundle.get("transform_usage_info").format(transform_usage.limit, transform_usage.transformed_rows)
+        self.logger.info(msg)
+        print(msg)
+        return True
 
     def __finalize_transform_result(
         self,
@@ -1840,13 +2060,15 @@ class FeaturesEnricher(TransformerMixin):
         keep_input: bool,
         add_fit_system_record_id: bool,
         metrics_calculation: bool = False,
+        enriched: tuple[pd.DataFrame, list[str], dict[str, SearchKey]] | None = None,
     ) -> tuple[pd.DataFrame, dict[str, str], list[str], dict[str, SearchKey]] | None:
         """Reuse fit enrichment for transform when X was already sent on fit.
 
         Returns None when coverage is incomplete (sampling/dedup) so the caller can
         fall back to a normal validation search.
         """
-        enriched = self.__enrich_df_with_fit_features()
+        if enriched is None:
+            enriched = self.__enrich_df_with_fit_features()
         if enriched is None:
             return None
         enriched_Xy, generated_features, search_keys = enriched
@@ -3281,6 +3503,15 @@ if response.status_code == 200:
             self.__display_support_link(msg)
             return None, {}, [], search_keys
 
+        fit_left_columns = [ENTITY_SYSTEM_RECORD_ID]
+        if self.df_with_original_index is not None:
+            if EVAL_SET_INDEX in self.df_with_original_index.columns:
+                fit_left_columns.append(EVAL_SET_INDEX)
+            for col in self.fit_generated_features or []:
+                if col in self.df_with_original_index.columns:
+                    fit_left_columns.append(col)
+        fit_enriched = self.__enrich_df_with_fit_features(left_columns=fit_left_columns)
+
         # Reuse fit enrichment when transforming the same train / eval / OOT object
         # that was already uploaded on fit (avoids a second backend search + quota use).
         fit_dataset_index = self._find_fit_dataset_index(X)
@@ -3293,6 +3524,7 @@ if response.status_code == 200:
                 keep_input,
                 add_fit_system_record_id,
                 metrics_calculation=metrics_calculation,
+                enriched=fit_enriched,
             )
             if from_fit is not None:
                 return from_fit
@@ -3306,27 +3538,6 @@ if response.status_code == 200:
             self.logger.warning(msg)
             print(msg)
             self.display_transactional_transform_api(only_online_sources=True)
-
-        if not metrics_calculation:
-            transform_usage = self.rest_client.get_current_transform_usage(self._get_trace_id())
-            self.logger.info(f"Current transform usage: {transform_usage}. Transforming {len(X)} rows")
-            if transform_usage.has_limit:
-                if len(X) > transform_usage.rest_rows:
-                    rest_rows = max(transform_usage.rest_rows, 0)
-                    bundle_msg = (
-                        "transform_usage_warning_registered" if self.__is_registered else "transform_usage_warning_demo"
-                    )
-                    msg = self.bundle.get(bundle_msg).format(rest_rows, len(X))
-                    self.logger.warning(msg)
-                    print(msg)
-                    show_request_quote_button(is_registered=self.__is_registered)
-                    return None, {}, [], {}
-                else:
-                    msg = self.bundle.get("transform_usage_info").format(
-                        transform_usage.limit, transform_usage.transformed_rows
-                    )
-                    self.logger.info(msg)
-                    print(msg)
 
         is_demo_dataset = hash_input(df) in DEMO_DATASET_HASHES
 
@@ -3445,7 +3656,7 @@ if response.status_code == 200:
             runtime_parameters.properties["features_for_embeddings"] = ",".join(features_for_embeddings)
         features_for_transform = [f for f in features_for_transform if f not in search_keys.keys()]
 
-        columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
+        columns_for_system_record_id = self.__transform_match_columns(search_keys, features_for_transform)
 
         df[ENTITY_SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
             "float64"
@@ -3468,212 +3679,265 @@ if response.status_code == 200:
             df = df.rename(columns={SYSTEM_RECORD_ID: SORT_ID})
             features_not_to_pass.append(SORT_ID)
 
+        lookup = None
+        unmatched_mask = np.ones(len(df), dtype=bool)
+        if fit_enriched is not None:
+            enriched_Xy, fit_generated, _ = fit_enriched
+            lookup_exclude = {
+                TARGET,
+                EVAL_SET_INDEX,
+                SYSTEM_RECORD_ID,
+                ENTITY_SYSTEM_RECORD_ID,
+                SORT_ID,
+                DateTimeConverter.DATETIME_COL,
+                MATCH_HASH,
+            }
+            generated_set = set(fit_generated)
+            feature_cols = [c for c in enriched_Xy.columns if c not in lookup_exclude and c not in generated_set]
+            lookup = self.__fit_feature_lookup(df, columns_for_system_record_id, feature_cols, enriched_Xy)
+            if lookup is not None and len(lookup) > 0:
+                unmatched_mask = self.__unmatched_transform_mask(df, lookup)
+            del enriched_Xy
+        del fit_enriched
+
+        reused_count = int((~unmatched_mask).sum())
+        unmatched_count = int(unmatched_mask.sum())
+        self.logger.info(f"Fit enrichment reuse: reused={reused_count}, send_to_transform={unmatched_count}")
+
+        if not metrics_calculation and unmatched_count > 0:
+            if not self.__check_transform_quota(unmatched_count):
+                return None, {}, [], {}
+
         system_columns_with_original_index = [ENTITY_SYSTEM_RECORD_ID] + generated_features
         if add_fit_system_record_id:
             system_columns_with_original_index.append(SORT_ID)
 
-        df_before_explode = df[system_columns_with_original_index].copy()
+        df_before_explode = df[system_columns_with_original_index]
 
-        # Explode multiple search keys
-        df, unnest_search_keys = self._explode_multiple_search_keys(df, search_keys, columns_renaming)
+        result_features = None
+        unnest_search_keys: dict[str, list[str]] = {}
+        if unmatched_count > 0:
+            work_df = df if unmatched_mask.all() else df.iloc[unmatched_mask].copy()
 
-        # Convert search keys and generate features on them
+            # Explode multiple search keys
+            work_df, unnest_search_keys = self._explode_multiple_search_keys(work_df, search_keys, columns_renaming)
 
-        email_column = self._get_email_column(search_keys)
-        hem_column = self._get_hem_column(search_keys)
-        if email_column:
-            converter = EmailSearchKeyConverter(
-                email_column,
-                hem_column,
-                search_keys,
-                columns_renaming,
-                list(unnest_search_keys.keys()),
-                self.logger,
+            # Convert search keys and generate features on them
+
+            email_column = self._get_email_column(search_keys)
+            hem_column = self._get_hem_column(search_keys)
+            if email_column:
+                converter = EmailSearchKeyConverter(
+                    email_column,
+                    hem_column,
+                    search_keys,
+                    columns_renaming,
+                    list(unnest_search_keys.keys()),
+                    self.logger,
+                )
+                work_df = converter.convert(work_df)
+
+            ip_column = self._get_ip_column(search_keys)
+            if ip_column:
+                converter = IpSearchKeyConverter(
+                    ip_column,
+                    search_keys,
+                    columns_renaming,
+                    list(unnest_search_keys.keys()),
+                    self.bundle,
+                    self.logger,
+                )
+                work_df = converter.convert(work_df)
+
+            date_features = []
+            for col in features_for_transform:
+                if DateTimeConverter(col).is_datetime(work_df):
+                    work_df[col] = DateTimeConverter(col).to_date_string(work_df)
+                    date_features.append(col)
+
+            meaning_types = {}
+            meaning_types.update(
+                {
+                    col: FileColumnMeaningType.FEATURE
+                    for col in features_for_transform
+                    if col not in date_features and col not in generated_features
+                }
             )
-            df = converter.convert(df)
+            meaning_types.update({col: FileColumnMeaningType.GENERATED_FEATURE for col in generated_features})
+            meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
+            meaning_types.update({col: key.value for col, key in search_keys.items()})
 
-        ip_column = self._get_ip_column(search_keys)
-        if ip_column:
-            converter = IpSearchKeyConverter(
-                ip_column,
-                search_keys,
-                columns_renaming,
-                list(unnest_search_keys.keys()),
-                self.bundle,
-                self.logger,
+            features_not_to_pass.extend(
+                [
+                    c
+                    for c in work_df.columns
+                    if c not in search_keys.keys()
+                    and c not in features_for_transform
+                    and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
+                ]
             )
-            df = converter.convert(df)
 
-        date_features = []
-        for col in features_for_transform:
-            if DateTimeConverter(col).is_datetime(df):
-                df[col] = DateTimeConverter(col).to_date_string(df)
-                date_features.append(col)
+            if DateTimeConverter.DATETIME_COL in work_df.columns:
+                work_df = work_df.drop(columns=DateTimeConverter.DATETIME_COL)
 
-        meaning_types = {}
-        meaning_types.update(
-            {
-                col: FileColumnMeaningType.FEATURE
-                for col in features_for_transform
-                if col not in date_features and col not in generated_features
-            }
-        )
-        meaning_types.update({col: FileColumnMeaningType.GENERATED_FEATURE for col in generated_features})
-        meaning_types.update({col: FileColumnMeaningType.DATE_FEATURE for col in date_features})
-        meaning_types.update({col: key.value for col, key in search_keys.items()})
+            # search keys might be changed after explode
+            columns_for_system_record_id = self.__transform_match_columns(search_keys, features_for_transform)
+            work_df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(
+                work_df[columns_for_system_record_id], index=False
+            ).astype("float64")
+            meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
+            meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
+            if SEARCH_KEY_UNNEST in work_df.columns:
+                meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
 
-        features_not_to_pass.extend(
-            [
-                c
-                for c in df.columns
-                if c not in search_keys.keys()
-                and c not in features_for_transform
-                and c not in [ENTITY_SYSTEM_RECORD_ID, SEARCH_KEY_UNNEST]
-            ]
-        )
+            work_df = work_df.reset_index(drop=True)
 
-        if DateTimeConverter.DATETIME_COL in df.columns:
-            df = df.drop(columns=DateTimeConverter.DATETIME_COL)
+            combined_search_keys = combine_search_keys(search_keys.keys())
 
-        # search keys might be changed after explode
-        columns_for_system_record_id = sorted(list(search_keys.keys()) + features_for_transform)
-        df[SYSTEM_RECORD_ID] = pd.util.hash_pandas_object(df[columns_for_system_record_id], index=False).astype(
-            "float64"
-        )
-        meaning_types[SYSTEM_RECORD_ID] = FileColumnMeaningType.SYSTEM_RECORD_ID
-        meaning_types[ENTITY_SYSTEM_RECORD_ID] = FileColumnMeaningType.ENTITY_SYSTEM_RECORD_ID
-        if SEARCH_KEY_UNNEST in df.columns:
-            meaning_types[SEARCH_KEY_UNNEST] = FileColumnMeaningType.UNNEST_KEY
+            df_without_features = work_df.drop(columns=features_not_to_pass, errors="ignore")
 
-        df = df.reset_index(drop=True)
+            df_without_features, full_duplicates_warning = clean_full_duplicates(
+                df_without_features, is_transform=True, logger=self.logger, bundle=self.bundle
+            )
+            if not silent_mode and full_duplicates_warning:
+                self.__log_warning(full_duplicates_warning)
 
-        combined_search_keys = combine_search_keys(search_keys.keys())
+            del work_df
+            gc.collect()
 
-        df_without_features = df.drop(columns=features_not_to_pass, errors="ignore")
+            def invoke_validation(validation_df: pd.DataFrame):
 
-        df_without_features, full_duplicates_warning = clean_full_duplicates(
-            df_without_features, is_transform=True, logger=self.logger, bundle=self.bundle
-        )
-        if not silent_mode and full_duplicates_warning:
-            self.__log_warning(full_duplicates_warning)
+                dataset = Dataset(
+                    "sample_" + str(uuid.uuid4()),
+                    df=validation_df,
+                    meaning_types=meaning_types,
+                    search_keys=combined_search_keys,
+                    unnest_search_keys=unnest_search_keys,
+                    id_columns=self.__get_renamed_id_columns(columns_renaming),
+                    date_column=self._get_date_column(search_keys),
+                    date_format=self.date_format,
+                    sample_config=self.sample_config,
+                    rest_client=self.rest_client,
+                    logger=self.logger,
+                    bundle=self.bundle,
+                    warning_callback=self.__log_warning,
+                )
+                dataset.columns_renaming = columns_renaming
+
+                validation_task = self._search_task.validation(
+                    self._get_trace_id(),
+                    dataset,
+                    start_time=start_time,
+                    extract_features=True,
+                    runtime_parameters=runtime_parameters,
+                    exclude_features_sources=exclude_features_sources,
+                    metrics_calculation=metrics_calculation,
+                    silent_mode=silent_mode,
+                    progress_bar=progress_bar,
+                    progress_callback=progress_callback,
+                )
+
+                del validation_df, dataset
+                gc.collect()
+
+                if not silent_mode:
+                    print(self.bundle.get("polling_transform_task").format(validation_task.search_task_id))
+                    if not self.__is_registered:
+                        print(self.bundle.get("polling_unregister_information"))
+
+                progress = self.get_progress(validation_task)
+                progress.recalculate_eta(time.time() - start_time)
+                if progress_bar is not None:
+                    progress_bar.progress = progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(progress)
+                prev_progress: SearchProgress | None = None
+                polling_period_seconds = 1
+                try:
+                    while progress.stage != ProgressStage.DOWNLOADING.value:
+                        if prev_progress is None or prev_progress.percent != progress.percent:
+                            progress.recalculate_eta(time.time() - start_time)
+                        else:
+                            progress.update_eta(prev_progress.eta - polling_period_seconds)
+                        prev_progress = progress
+                        if progress_bar is not None:
+                            progress_bar.progress = progress.to_progress_bar()
+                        if progress_callback is not None:
+                            progress_callback(progress)
+                        if progress.stage == ProgressStage.FAILED.value:
+                            raise Exception(progress.error_message)
+                        time.sleep(polling_period_seconds)
+                        progress = self.get_progress(validation_task)
+                except KeyboardInterrupt as e:
+                    print(self.bundle.get("search_stopping"))
+                    self.rest_client.stop_search_task_v2(self._get_trace_id(), validation_task.search_task_id)
+                    self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
+                    print(self.bundle.get("search_stopped"))
+                    raise e
+
+                validation_task.poll_result(self._get_trace_id(), quiet=True)
+
+                seconds_left = time.time() - start_time
+                progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
+                if progress_bar is not None:
+                    progress_bar.progress = progress.to_progress_bar()
+                if progress_callback is not None:
+                    progress_callback(progress)
+
+                if not silent_mode:
+                    print(self.bundle.get("transform_start"))
+
+                return validation_task.get_all_validation_raw_features(self._get_trace_id(), metrics_calculation)
+
+            if len(df_without_features) <= Dataset.MAX_ROWS:
+                result_features = invoke_validation(df_without_features)
+            else:
+                self.logger.warning(
+                    f"Dataset has more than {Dataset.MAX_ROWS} rows: {len(df_without_features)}, "
+                    f"splitting into chunks of {Dataset.MAX_ROWS} rows"
+                )
+                result_features_list = []
+
+                for i in range(0, len(df_without_features), Dataset.MAX_ROWS):
+                    chunk = df_without_features.iloc[i : i + Dataset.MAX_ROWS]
+                    result_features_list.append(invoke_validation(chunk))
+                result_features = pd.concat(result_features_list)
 
         del df
         gc.collect()
 
-        def invoke_validation(df: pd.DataFrame):
-
-            dataset = Dataset(
-                "sample_" + str(uuid.uuid4()),
-                df=df,
-                meaning_types=meaning_types,
-                search_keys=combined_search_keys,
-                unnest_search_keys=unnest_search_keys,
-                id_columns=self.__get_renamed_id_columns(columns_renaming),
-                date_column=self._get_date_column(search_keys),
-                date_format=self.date_format,
-                sample_config=self.sample_config,
-                rest_client=self.rest_client,
-                logger=self.logger,
-                bundle=self.bundle,
-                warning_callback=self.__log_warning,
-            )
-            dataset.columns_renaming = columns_renaming
-
-            validation_task = self._search_task.validation(
-                self._get_trace_id(),
-                dataset,
-                start_time=start_time,
-                extract_features=True,
-                runtime_parameters=runtime_parameters,
-                exclude_features_sources=exclude_features_sources,
-                metrics_calculation=metrics_calculation,
-                silent_mode=silent_mode,
-                progress_bar=progress_bar,
-                progress_callback=progress_callback,
-            )
-
-            del df, dataset
-            gc.collect()
-
-            if not silent_mode:
-                print(self.bundle.get("polling_transform_task").format(validation_task.search_task_id))
-                if not self.__is_registered:
-                    print(self.bundle.get("polling_unregister_information"))
-
-            progress = self.get_progress(validation_task)
-            progress.recalculate_eta(time.time() - start_time)
-            if progress_bar is not None:
-                progress_bar.progress = progress.to_progress_bar()
-            if progress_callback is not None:
-                progress_callback(progress)
-            prev_progress: SearchProgress | None = None
-            polling_period_seconds = 1
-            try:
-                while progress.stage != ProgressStage.DOWNLOADING.value:
-                    if prev_progress is None or prev_progress.percent != progress.percent:
-                        progress.recalculate_eta(time.time() - start_time)
-                    else:
-                        progress.update_eta(prev_progress.eta - polling_period_seconds)
-                    prev_progress = progress
-                    if progress_bar is not None:
-                        progress_bar.progress = progress.to_progress_bar()
-                    if progress_callback is not None:
-                        progress_callback(progress)
-                    if progress.stage == ProgressStage.FAILED.value:
-                        raise Exception(progress.error_message)
-                    time.sleep(polling_period_seconds)
-                    progress = self.get_progress(validation_task)
-            except KeyboardInterrupt as e:
-                print(self.bundle.get("search_stopping"))
-                self.rest_client.stop_search_task_v2(self._get_trace_id(), validation_task.search_task_id)
-                self.logger.warning(f"Search {validation_task.search_task_id} stopped by user")
-                print(self.bundle.get("search_stopped"))
-                raise e
-
-            validation_task.poll_result(self._get_trace_id(), quiet=True)
-
-            seconds_left = time.time() - start_time
-            progress = SearchProgress(97.0, ProgressStage.DOWNLOADING, seconds_left)
-            if progress_bar is not None:
-                progress_bar.progress = progress.to_progress_bar()
-            if progress_callback is not None:
-                progress_callback(progress)
-
-            if not silent_mode:
-                print(self.bundle.get("transform_start"))
-
-            return validation_task.get_all_validation_raw_features(self._get_trace_id(), metrics_calculation)
-
-        if len(df_without_features) <= Dataset.MAX_ROWS:
-            result_features = invoke_validation(df_without_features)
-        else:
-            self.logger.warning(
-                f"Dataset has more than {Dataset.MAX_ROWS} rows: {len(df_without_features)}, "
-                f"splitting into chunks of {Dataset.MAX_ROWS} rows"
-            )
-            result_features_list = []
-
-            for i in range(0, len(df_without_features), Dataset.MAX_ROWS):
-                chunk = df_without_features.iloc[i : i + Dataset.MAX_ROWS]
-                result_features_list.append(invoke_validation(chunk))
-            result_features = pd.concat(result_features_list)
-
-        # Prepare input DataFrame for __enrich by concatenating generated ids and client features
-        df_before_explode = df_before_explode.rename(columns=columns_renaming)
+        # Attach generated ids without a second full-width copy of validated_Xy.
+        df_before_explode.rename(columns=columns_renaming, inplace=True)
         generated_features = [columns_renaming.get(c, c) for c in generated_features]
-        combined_df = pd.concat(
-            [
-                validated_Xy.reset_index(drop=True),
-                df_before_explode.reset_index(drop=True),
-            ],
-            axis=1,
-        ).set_index(validated_Xy.index)
+        combined_df = validated_Xy.copy()
+        for col in df_before_explode.columns:
+            combined_df[col] = df_before_explode[col].to_numpy()
+        del df_before_explode
 
-        result = self.__enrich(
-            combined_df,
-            result_features,
-            how="left",
-        )
+        unmatched_part = None
+        if unmatched_count > 0:
+            unmatched_part = self.__enrich(
+                combined_df.iloc[unmatched_mask],
+                result_features,
+                how="left",
+            )
+
+        if unmatched_mask.all() and unmatched_part is not None:
+            result = unmatched_part
+        else:
+            base_cols = set(combined_df.columns)
+            if reused_count > 0 and lookup is not None:
+                self.__attach_fit_lookup(combined_df, lookup, exclude_features_sources)
+            if unmatched_part is not None:
+                ads_cols = [c for c in unmatched_part.columns if c not in base_cols]
+                pos = np.flatnonzero(unmatched_mask)
+                for col in ads_cols:
+                    if col not in combined_df.columns:
+                        combined_df[col] = np.nan
+                    combined_df.iloc[pos, combined_df.columns.get_loc(col)] = unmatched_part[col].to_numpy()
+            result = combined_df
+        result.index = validated_Xy.index
+        result.index.name = validated_Xy.index.name
 
         return self.__finalize_transform_result(
             result,
@@ -3859,6 +4123,7 @@ if response.status_code == 200:
         self._search_task = None
         self.warning_counter.reset()
         self.df_with_original_index = None
+        self._fit_match_search_keys = None
         self.__cached_sampled_datasets = dict()
         self.metrics = None
         self.fit_columns_renaming = None
@@ -4105,6 +4370,8 @@ if response.status_code == 200:
 
         # TODO check that this is correct for enrichment
         self.df_with_original_index = df.copy()
+        # Search keys at this point are pre-explode; transform hashes the same grain.
+        self._fit_match_search_keys = dict(self.fit_search_keys)
         # TODO check maybe need to drop _time column from df_with_original_index
 
         df, unnest_search_keys = self._explode_multiple_search_keys(df, self.fit_search_keys, self.fit_columns_renaming)
@@ -4268,6 +4535,7 @@ if response.status_code == 200:
                 raise e
 
             self._search_task.poll_result(self._get_trace_id(), quiet=True)
+            self.__persist_transform_match_hashes()
 
             seconds_left = time.time() - start_time
             progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
