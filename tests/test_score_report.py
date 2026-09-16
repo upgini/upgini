@@ -87,10 +87,7 @@ def test_generate_html_report_from_assembled_data():
     assert data.summary.model_features is None
 
 
-def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
+def _ensemble_enricher(url: str, tmp_path: Path, ensemble_col: str = "f_autofe_upgini_score_abc123") -> FeaturesEnricher:
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
@@ -108,6 +105,13 @@ def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path
         }
     )
     enricher.metrics_metric_name = "GINI"
+    return enricher
+
+
+def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = _ensemble_enricher(url, tmp_path)
 
     path = enricher._write_score_report()
 
@@ -116,6 +120,24 @@ def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path
     assert "search-abc" in html
     assert "0.610" in html
     assert "42 sec" in html
+
+
+def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: Path, monkeypatch):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = _ensemble_enricher(url, tmp_path)
+    pdf_calls = []
+    monkeypatch.setattr("upgini.features_enricher.ipython_available", lambda: True)
+    monkeypatch.setattr("upgini.features_enricher.show_button_open_report", lambda *args, **kwargs: "html")
+    monkeypatch.setattr(
+        "upgini.features_enricher.prepare_and_show_report",
+        lambda *args, **kwargs: pdf_calls.append(True) or "pdf",
+    )
+
+    assert enricher._FeaturesEnricher__show_report_button() == "html"
+    assert pdf_calls == []
+    assert (tmp_path / "upgini-report-search-abc.html").exists()
+    assert list(tmp_path.glob("*.pdf")) == []
 
 
 def test_write_score_report_skipped_without_ensemble(requests_mock: Mocker, tmp_path: Path):

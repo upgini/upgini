@@ -1,5 +1,6 @@
 import base64
 import math
+import tempfile
 import textwrap
 import urllib.parse
 import uuid
@@ -366,7 +367,7 @@ def _display_html_button(html: str, display_id: Optional[str] = None, display_ha
 def show_button_download_pdf(
     source: str, title="\U0001f4ca Download PDF report", display_id: Optional[str] = None, display_handle=None
 ):
-    file_name = f"upgini-report-{uuid.uuid4()}.pdf"
+    download_name = f"upgini-report-{uuid.uuid4()}.pdf"
 
     # from weasyprint import HTML
 
@@ -375,12 +376,17 @@ def show_button_download_pdf(
     try:
         from xhtml2pdf import pisa
 
-        with open(file_name, "wb") as output:
-            pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            with tmp_path.open("wb") as output:
+                pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
+            payload = base64.b64encode(tmp_path.read_bytes()).decode()
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
-        payload = base64.b64encode(Path(file_name).read_bytes()).decode()
         return _display_html_button(
-            _html_action_button(title, f"data:application/pdf;base64,{payload}", download_name=file_name),
+            _html_action_button(title, f"data:application/pdf;base64,{payload}", download_name=download_name),
             display_id=display_id,
             display_handle=display_handle,
         )

@@ -4220,6 +4220,7 @@ if response.status_code == 200:
         self.__cached_sampled_datasets = dict()
         self.metrics = None
         self.metrics_metric_name = None
+        self.report_file_path = None
         self.fit_columns_renaming = None
         self.fit_dropped_features = set()
         self.fit_generated_features = []
@@ -6037,8 +6038,8 @@ if response.status_code == 200:
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
-            report_path = self._write_score_report()
-            if report_path is not None:
+            report_path = self._write_score_report() or self.report_file_path
+            if report_path:
                 if not ipython_available():
                     print(f"Full report saved to {report_path}")
                     return
