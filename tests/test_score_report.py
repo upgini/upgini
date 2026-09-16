@@ -180,6 +180,8 @@ def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_pat
 
     assert html is not None
     assert "search-abc" in html
+    assert '"PHONE"' in html
+    assert "SearchKey" not in html
     assert '"enriched": 0.61' in html
     assert "42 sec" in html
     assert '"label": "Used in model"' in html

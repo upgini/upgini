@@ -2308,6 +2308,9 @@ class FeaturesEnricher(TransformerMixin):
             rows += _num_samples(eval_pair[0])
         return rows
 
+    def _search_key_names(self) -> list[str]:
+        return [key.name for key in self.search_keys.values()]
+
     def _report_sample_names(self) -> list[str]:
         samples = [self.bundle.get("quality_metrics_train_segment")]
         for idx, _ in enumerate(self.eval_set or []):
@@ -2318,7 +2321,7 @@ class FeaturesEnricher(TransformerMixin):
         search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
         return assemble_report_data(
             search_id=search_id,
-            search_keys=[str(sk) for sk in self.search_keys.values()],
+            search_keys=self._search_key_names(),
             search_duration_seconds=self.search_duration_seconds,
             reference_rows=self._reference_rows(),
             samples=self._report_sample_names(),
@@ -6092,7 +6095,7 @@ if response.status_code == 200:
                 autofe_descriptions_df=self.get_autofe_features_description(),
                 search_id=self._search_task.search_task_id,
                 email=self.rest_client.get_current_email(),
-                search_keys=[str(sk) for sk in self.search_keys.values()],
+                search_keys=self._search_key_names(),
                 eval_sets_drift_df=eval_sets_drift_df,
                 display_id=display_id,
                 display_handle=display_handle,
