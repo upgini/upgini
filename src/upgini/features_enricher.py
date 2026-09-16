@@ -68,7 +68,13 @@ from upgini.metadata import (
     RuntimeParameters,
     SearchKey,
 )
-from upgini.metrics import EstimatorWrapper, define_scorer, validate_scoring_argument
+from upgini.metrics import (
+    EstimatorWrapper,
+    define_scorer,
+    format_metrics_for_display,
+    put_cv_metric,
+    validate_scoring_argument,
+)
 from upgini.normalizer.normalize_utils import Normalizer
 from upgini.resource_bundle import ResourceBundle, bundle, get_custom_bundle
 from upgini.search_task import SearchTask
@@ -318,6 +324,7 @@ class FeaturesEnricher(TransformerMixin):
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: pd.DataFrame | None = None
+        self.metrics_raw: pd.DataFrame | None = None
         self.metrics_metric_name: str | None = None
         self.feature_names_ = []
         self.external_source_feature_names = []
@@ -1108,8 +1115,8 @@ class FeaturesEnricher(TransformerMixin):
 
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
-                    baseline_metric = None
                     baseline_estimator = None
+                    baseline_cv_result = None
                     updating_shaps = None
                     custom_loss_add_params = get_additional_params_custom_loss(
                         self.loss, model_task_type, logger=self.logger
@@ -1133,22 +1140,23 @@ class FeaturesEnricher(TransformerMixin):
                         baseline_cv_result = baseline_estimator.cross_val_predict(
                             fitting_X, y_sorted, self.baseline_score_column
                         )
-                        baseline_metric = baseline_cv_result.get_display_metric()
-                        if baseline_metric is None:
+                        if baseline_cv_result.metric is None:
                             self.logger.info(
                                 f"Baseline {metric} on train client features is None (maybe all features was removed)"
                             )
                             baseline_estimator = None
                         else:
-                            self.logger.info(f"Baseline {metric} on train client features: {baseline_metric}")
+                            self.logger.info(
+                                f"Baseline {metric} on train client features: {baseline_cv_result.get_display_metric()}"
+                            )
                         updating_shaps = baseline_cv_result.shap_values
 
                     # 2 Fit and predict with KFold estimator on enriched tds
                     # and calculate final metric (and uplift)
-                    enriched_metric = None
                     uplift = None
                     uplift_perc = None
                     enriched_estimator = None
+                    enriched_cv_result = None
                     ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
 
                     def evaluate_enriched(score_column, description: str):
@@ -1167,17 +1175,16 @@ class FeaturesEnricher(TransformerMixin):
                         cv_result = wrapper.cross_val_predict(
                             fitting_enriched_X, enriched_y_sorted, score_column
                         )
-                        display_metric = cv_result.get_display_metric()
-                        if display_metric is None:
+                        if cv_result.metric is None:
                             self.logger.warning(f"Enriched {metric} {description} is None")
-                            return None, None, cv_result.shap_values, None, None
-                        self.logger.info(f"Enriched {metric} {description}: {display_metric}")
+                            return None, cv_result, None, None
+                        self.logger.info(f"Enriched {metric} {description}: {cv_result.get_display_metric()}")
                         sample_uplift = None
                         sample_uplift_perc = None
-                        if baseline_metric is not None:
+                        if baseline_cv_result is not None and baseline_cv_result.metric is not None:
                             sample_uplift = (cv_result.metric - baseline_cv_result.metric) * multiplier
                             sample_uplift_perc = sample_uplift / abs(baseline_cv_result.metric) * 100
-                        return wrapper, display_metric, cv_result.shap_values, sample_uplift, sample_uplift_perc
+                        return wrapper, cv_result, sample_uplift, sample_uplift_perc
 
                     if ensemble_score_column is not None:
                         self.logger.info(
@@ -1186,14 +1193,14 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         (
                             enriched_estimator,
-                            enriched_metric,
-                            updating_shaps,
+                            enriched_cv_result,
                             uplift,
                             uplift_perc,
                         ) = evaluate_enriched(
                             ensemble_score_column,
                             f"on ensemble score column {ensemble_score_column}",
                         )
+                        updating_shaps = enriched_cv_result.shap_values
                     elif set(fitting_X.columns) != set(fitting_enriched_X.columns):
                         self.logger.info(
                             f"Calculate enriched {metric} on train combined "
@@ -1201,11 +1208,11 @@ class FeaturesEnricher(TransformerMixin):
                         )
                         (
                             enriched_estimator,
-                            enriched_metric,
-                            updating_shaps,
+                            enriched_cv_result,
                             uplift,
                             uplift_perc,
                         ) = evaluate_enriched(None, "on train combined features")
+                        updating_shaps = enriched_cv_result.shap_values
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1223,14 +1230,22 @@ class FeaturesEnricher(TransformerMixin):
                             np.mean(y_sorted),
                             4,
                         )
-                    if baseline_metric is not None:
-                        train_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
-                            baseline_metric
-                        )
-                    if enriched_metric is not None:
-                        train_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
-                            enriched_metric
-                        )
+                    put_cv_metric(
+                        train_metrics,
+                        "quality_metrics_baseline_header",
+                        "quality_metrics_baseline_std_header",
+                        baseline_cv_result,
+                        metric,
+                        self.bundle,
+                    )
+                    put_cv_metric(
+                        train_metrics,
+                        "quality_metrics_enriched_header",
+                        "quality_metrics_enriched_std_header",
+                        enriched_cv_result,
+                        metric,
+                        self.bundle,
+                    )
                     if uplift is not None:
                         train_metrics[self.bundle.get("quality_metrics_uplift_header")] = round(uplift, 3)
                         train_metrics[self.bundle.get("quality_metrics_uplift_perc_header")] = (
@@ -1262,12 +1277,13 @@ class FeaturesEnricher(TransformerMixin):
                                 etalon_eval_results = baseline_estimator.calculate_metric(
                                     eval_X_sorted, eval_y_sorted, self.baseline_score_column
                                 )
-                                etalon_eval_metric = etalon_eval_results.get_display_metric()
                                 self.logger.info(
-                                    f"Baseline {metric} on eval set {idx + 1} client features: {etalon_eval_metric}"
+                                    "Baseline {} on eval set {} client features: {}".format(
+                                        metric, idx + 1, etalon_eval_results.get_display_metric()
+                                    )
                                 )
                             else:
-                                etalon_eval_metric = None
+                                etalon_eval_results = None
 
                             if enriched_estimator is not None:
                                 self.logger.info(
@@ -1277,14 +1293,20 @@ class FeaturesEnricher(TransformerMixin):
                                 enriched_eval_results = enriched_estimator.calculate_metric(
                                     enriched_eval_X_sorted, enriched_eval_y_sorted, ensemble_score_column
                                 )
-                                enriched_eval_metric = enriched_eval_results.get_display_metric()
                                 self.logger.info(
-                                    f"Enriched {metric} on eval set {idx + 1} combined features: {enriched_eval_metric}"
+                                    "Enriched {} on eval set {} combined features: {}".format(
+                                        metric, idx + 1, enriched_eval_results.get_display_metric()
+                                    )
                                 )
                             else:
-                                enriched_eval_metric = None
+                                enriched_eval_results = None
 
-                            if etalon_eval_metric is not None and enriched_eval_metric is not None:
+                            if (
+                                etalon_eval_results is not None
+                                and etalon_eval_results.metric is not None
+                                and enriched_eval_results is not None
+                                and enriched_eval_results.metric is not None
+                            ):
                                 eval_uplift = (enriched_eval_results.metric - etalon_eval_results.metric) * multiplier
                                 eval_uplift_perc = eval_uplift / abs(etalon_eval_results.metric) * 100
                             else:
@@ -1308,14 +1330,22 @@ class FeaturesEnricher(TransformerMixin):
                                     np.mean(eval_y_sorted),
                                     4,
                                 )
-                            if etalon_eval_metric is not None:
-                                eval_metrics[self.bundle.get("quality_metrics_baseline_header").format(metric)] = (
-                                    etalon_eval_metric
-                                )
-                            if enriched_eval_metric is not None:
-                                eval_metrics[self.bundle.get("quality_metrics_enriched_header").format(metric)] = (
-                                    enriched_eval_metric
-                                )
+                            put_cv_metric(
+                                eval_metrics,
+                                "quality_metrics_baseline_header",
+                                "quality_metrics_baseline_std_header",
+                                etalon_eval_results,
+                                metric,
+                                self.bundle,
+                            )
+                            put_cv_metric(
+                                eval_metrics,
+                                "quality_metrics_enriched_header",
+                                "quality_metrics_enriched_std_header",
+                                enriched_eval_results,
+                                metric,
+                                self.bundle,
+                            )
                             if eval_uplift is not None:
                                 eval_metrics[self.bundle.get("quality_metrics_uplift_header")] = round(eval_uplift, 3)
                                 eval_metrics[self.bundle.get("quality_metrics_uplift_perc_header")] = (
@@ -1352,8 +1382,9 @@ class FeaturesEnricher(TransformerMixin):
                     elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
                         self.logger.warning("Uplift is negative")
 
+                    self.metrics_raw = metrics_df
                     self.metrics_metric_name = metric
-                    return metrics_df
+                    return format_metrics_for_display(metrics_df, metric, self.bundle)
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
                     " with validation error" if isinstance(e, ValidationError) else ""
@@ -2299,8 +2330,10 @@ class FeaturesEnricher(TransformerMixin):
             search_duration_seconds=self.search_duration_seconds,
             reference_rows=self._reference_rows(),
             samples=self._report_sample_names(),
-            metrics_df=self.metrics,
+            metrics_df=self.metrics_raw if self.metrics_raw is not None else self.metrics,
             metric_name=self.metrics_metric_name,
+            model_features=self._ensemble_model_feature_count(),
+            is_binary=self.model_task_type == ModelTaskType.BINARY,
             bundle=self.bundle,
         )
 
@@ -2325,15 +2358,20 @@ class FeaturesEnricher(TransformerMixin):
             return False
         return bool(aliases & self._column_name_aliases(list(ensemble_names), renaming))
 
-    def _ensemble_feature_names_from_metadata(self) -> set[str]:
+    def _ensemble_generated_metadata(self):
         autofe_meta = self._search_task.get_autofe_metadata() if self._search_task else None
         if not autofe_meta:
-            return set()
-        names: set[str] = set()
+            return []
+        matched = []
         for meta in autofe_meta:
             op = EnsembleModel.from_formula(meta.formula.split("(")[0])
-            if op is None:
-                continue
+            if op is not None:
+                matched.append((meta, op))
+        return matched
+
+    def _ensemble_feature_names_from_metadata(self) -> set[str]:
+        names: set[str] = set()
+        for meta, op in self._ensemble_generated_metadata():
             feature = (
                 Feature(op, [])
                 .set_display_index(meta.display_index)
@@ -2344,6 +2382,14 @@ class FeaturesEnricher(TransformerMixin):
             if meta.alias:
                 names.add(meta.alias)
         return names
+
+    def _ensemble_model_feature_count(self) -> int | None:
+        names = {
+            column.original_name
+            for meta, _ in self._ensemble_generated_metadata()
+            for column in meta.base_columns
+        }
+        return len(names) or None
 
     def _psi_exceeds_threshold(self, psi: float | None, threshold: float) -> bool:
         return psi is not None and not pd.isna(psi) and psi > threshold
@@ -4219,6 +4265,7 @@ if response.status_code == 200:
         self._fit_match_search_keys = None
         self.__cached_sampled_datasets = dict()
         self.metrics = None
+        self.metrics_raw = None
         self.metrics_metric_name = None
         self.report_file_path = None
         self.fit_columns_renaming = None

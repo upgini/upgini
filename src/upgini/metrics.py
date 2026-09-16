@@ -253,12 +253,46 @@ class _CrossValResults:
     shap_values: Optional[Dict[str, float]]
 
     def get_display_metric(self) -> Optional[str]:
-        if self.metric is None:
-            return None
-        elif self.metric_std is None:
-            return f"{self.metric:.3f}"
-        else:
-            return f"{self.metric:.3f} ± {self.metric_std:.3f}"
+        return format_display_metric(self.metric, self.metric_std)
+
+
+def format_display_metric(metric: Optional[float], metric_std: Optional[float] = None) -> Optional[str]:
+    if metric is None or pd.isna(metric):
+        return None
+    if metric_std is None or pd.isna(metric_std):
+        return f"{float(metric):.3f}"
+    return f"{float(metric):.3f} ± {float(metric_std):.3f}"
+
+
+def format_metrics_for_display(metrics_df: pd.DataFrame, metric_name: str, bundle) -> pd.DataFrame:
+    display = metrics_df.copy()
+    drop: list[str] = []
+    for value_key, std_key in (
+        ("quality_metrics_baseline_header", "quality_metrics_baseline_std_header"),
+        ("quality_metrics_enriched_header", "quality_metrics_enriched_std_header"),
+    ):
+        col = bundle.get(value_key).format(metric_name)
+        std_col = bundle.get(std_key).format(metric_name)
+        if col in display.columns:
+            stds = display[std_col] if std_col in display.columns else [None] * len(display)
+            display[col] = [format_display_metric(value, std) for value, std in zip(display[col], stds)]
+        if std_col in display.columns:
+            drop.append(std_col)
+    return display.drop(columns=drop, errors="ignore")
+
+
+def put_cv_metric(
+    row: dict,
+    value_key: str,
+    std_key: str,
+    result: Optional[_CrossValResults],
+    metric_name: str,
+    bundle,
+) -> None:
+    if result is None or result.metric is None:
+        return
+    row[bundle.get(value_key).format(metric_name)] = result.metric
+    row[bundle.get(std_key).format(metric_name)] = result.metric_std
 
 
 def is_numeric_object(x: pd.Series) -> bool:

@@ -13,16 +13,29 @@ class ReportMetadata:
     search_duration: Optional[str] = None
     reference_rows: Optional[int] = None
     samples: list[str] = field(default_factory=list)
+    logo_url: Optional[str] = None
 
 
 @dataclass
 class QualitySample:
     evaluation_scope: str
     metric: str
-    baseline: Optional[str] = None
-    enriched: Optional[str] = None
+    baseline: Optional[float] = None
+    enriched: Optional[float] = None
+    std: Optional[float] = None
     uplift: Optional[float] = None
     relative_uplift: Optional[str] = None
+
+
+@dataclass
+class SampleStats:
+    sample: str
+    rows: Optional[int] = None
+    mean_target: Optional[float] = None
+    date_range: Optional[str] = None
+    labeled: Optional[int] = None
+    unlabeled: Optional[int] = None
+    positive: Optional[int] = None
 
 
 @dataclass
@@ -66,6 +79,8 @@ class ReportData:
     metadata: ReportMetadata
     quality_by_sample: list[QualitySample] = field(default_factory=list)
     summary: SearchResultsSummary = field(default_factory=SearchResultsSummary)
+    sample_stats: list[SampleStats] = field(default_factory=list)
+    is_binary: bool = False
     features: list[FeatureRow] = field(default_factory=list)
     sources: list[SourceRow] = field(default_factory=list)
     autofe: list[dict[str, str]] = field(default_factory=list)

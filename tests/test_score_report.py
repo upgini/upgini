@@ -54,8 +54,8 @@ def test_generate_html_report_from_assembled_data():
             bundle.get("quality_metrics_segment_header"): ["Train", "Eval 1"],
             bundle.get("quality_metrics_rows_header"): [100, 40],
             bundle.get("quality_metrics_mean_target_header"): [0.31, 0.28],
-            bundle.get("quality_metrics_baseline_header").format("GINI"): ["0.400", "0.390"],
-            bundle.get("quality_metrics_enriched_header").format("GINI"): ["0.512", "0.480"],
+            bundle.get("quality_metrics_baseline_header").format("GINI"): [0.4, 0.39],
+            bundle.get("quality_metrics_enriched_header").format("GINI"): [0.512, 0.48],
             bundle.get("quality_metrics_uplift_header"): [0.112, 0.09],
             bundle.get("quality_metrics_uplift_perc_header"): ["28.0%", "23.1%"],
         }
@@ -68,6 +68,8 @@ def test_generate_html_report_from_assembled_data():
         samples=["Train", "Eval 1"],
         metrics_df=metrics_df,
         metric_name="GINI",
+        model_features=2,
+        is_binary=True,
         bundle=bundle,
     )
     html = generate_html_report(data)
@@ -76,15 +78,70 @@ def test_generate_html_report_from_assembled_data():
     assert "PHONE, DATE" in html
     assert "2 min 5 sec" in html
     assert "0.512" in html
-    assert "Features found" not in html
+    assert "140 rows processed" in html
+    assert "FIT completed successfully" in html
+    assert "Download HTML" in html
+    assert "Features found" in html
+    assert '<div class="label">Used in model</div><div class="value">2</div>' in html
+    assert "Positive" in html
+    assert data.summary.model_features == 2
+    assert data.summary.relevant_features is None
+    assert "Sample stats" in html
+    assert "100" in html
+    assert "Monthly rows" in html
+    assert "Performance" in html
+    assert "Score analysis" in html
+    assert "Score distribution" in html
+    assert "Score stability (PSI)" in html
+    assert "Model feature SHAP" in html
+    assert "Search results" in html
+    assert "Feature stability" in html
     assert "f_autofe_ensemble_score_abc123" not in html
     assert data.quality_by_sample[0].metric == "GINI"
-    assert data.quality_by_sample[0].enriched == "0.512"
+    assert data.quality_by_sample[0].enriched == 0.512
+    assert data.quality_by_sample[0].std is None
+    assert data.sample_stats[0].rows == 100
+    assert data.sample_stats[0].mean_target == 0.31
     assert data.features == []
     assert data.sources == []
     assert data.autofe == []
-    assert data.summary.relevant_features is None
-    assert data.summary.model_features is None
+
+
+def test_quality_sample_uses_separate_std_column():
+    metrics_df = pd.DataFrame(
+        {
+            bundle.get("quality_metrics_segment_header"): ["Train"],
+            bundle.get("quality_metrics_enriched_header").format("GINI"): [0.512],
+            bundle.get("quality_metrics_enriched_std_header").format("GINI"): [0.010],
+        }
+    )
+    data = assemble_report_data(
+        search_id="search-abc",
+        search_keys=["PHONE"],
+        metrics_df=metrics_df,
+        metric_name="GINI",
+        bundle=bundle,
+    )
+    assert data.quality_by_sample[0].enriched == 0.512
+    assert data.quality_by_sample[0].std == 0.010
+    html = generate_html_report(data)
+    assert "0.512" in html
+    assert "0.010" in html
+
+
+def test_jupyter_metrics_table_combines_std():
+    from upgini.metrics import format_display_metric, format_metrics_for_display
+
+    assert format_display_metric(0.512, 0.010) == "0.512 ± 0.010"
+    raw = pd.DataFrame(
+        {
+            bundle.get("quality_metrics_enriched_header").format("GINI"): [0.512],
+            bundle.get("quality_metrics_enriched_std_header").format("GINI"): [0.010],
+        }
+    )
+    display = format_metrics_for_display(raw, "GINI", bundle)
+    assert display.loc[0, "Enriched GINI"] == "0.512 ± 0.010"
+    assert "Enriched GINI std" not in display.columns
 
 
 def _ensemble_enricher(url: str, tmp_path: Path, ensemble_col: str = "f_autofe_upgini_score_abc123") -> FeaturesEnricher:
@@ -120,6 +177,7 @@ def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path
     assert "search-abc" in html
     assert "0.610" in html
     assert "42 sec" in html
+    assert '<div class="label">Used in model</div><div class="value">2</div>' in html
 
 
 def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: Path, monkeypatch):
