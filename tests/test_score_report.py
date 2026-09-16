@@ -1,4 +1,5 @@
 import base64
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -73,27 +74,32 @@ def test_generate_html_report_from_assembled_data():
         bundle=bundle,
     )
     html = generate_html_report(data)
+    payload_start = html.index("const REPORT_DATA = ") + len("const REPORT_DATA = ")
+    payload_end = html.index(";\n\n/* =")
+    payload = json.loads(html[payload_start:payload_end])
 
-    assert "search-abc" in html
-    assert "PHONE, DATE" in html
-    assert "2 min 5 sec" in html
-    assert "0.512" in html
-    assert "140 rows processed" in html
-    assert "FIT completed successfully" in html
+    assert payload["meta"]["searchId"] == "search-abc"
+    assert payload["meta"]["searchKeys"] == ["PHONE", "DATE"]
+    assert payload["meta"]["searchDuration"] == "2 min 5 sec"
+    assert payload["meta"]["totalRows"] == 140
+    assert payload["keyResult"]["metrics"]["gini"]["bySample"]["train"]["enriched"] == 0.512
+    assert payload["summaryCards"][1] == {"label": "Used in model", "value": "2", "caption": ""}
+    assert payload["sampleStats"]["rows"][1]["values"]["train"] == "100"
+
+    assert "const REPORT_DATA =" in html
+    assert "__REPORT_DATA__" not in html
     assert "Download HTML" in html
+    assert "FIT completed successfully" in html
     assert "Features found" in html
-    assert '<div class="label">Used in model</div><div class="value">2</div>' in html
-    assert "Positive" in html
+    assert "Count 1's (target)" in html
     assert data.summary.model_features == 2
     assert data.summary.relevant_features is None
     assert "Sample stats" in html
-    assert "100" in html
-    assert "Monthly rows" in html
     assert "Performance" in html
     assert "Score analysis" in html
     assert "Score distribution" in html
     assert "Score stability (PSI)" in html
-    assert "Model feature SHAP" in html
+    assert "Features SHAP" in html
     assert "Search results" in html
     assert "Feature stability" in html
     assert "f_autofe_ensemble_score_abc123" not in html
@@ -125,8 +131,8 @@ def test_quality_sample_uses_separate_std_column():
     assert data.quality_by_sample[0].enriched == 0.512
     assert data.quality_by_sample[0].std == 0.010
     html = generate_html_report(data)
-    assert "0.512" in html
-    assert "0.010" in html
+    assert '"enriched": 0.512' in html
+    assert '"enrichedCi": 0.01' in html
 
 
 def test_jupyter_metrics_table_combines_std():
@@ -175,9 +181,10 @@ def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path
     assert path == str(tmp_path / "upgini-report-search-abc.html")
     html = Path(path).read_text(encoding="utf-8")
     assert "search-abc" in html
-    assert "0.610" in html
+    assert '"enriched": 0.61' in html
     assert "42 sec" in html
-    assert '<div class="label">Used in model</div><div class="value">2</div>' in html
+    assert '"label": "Used in model"' in html
+    assert '"value": "2"' in html
 
 
 def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: Path, monkeypatch):

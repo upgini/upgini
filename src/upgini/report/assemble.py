@@ -79,8 +79,9 @@ def _quality_samples(
                 evaluation_scope=(_as_str(row[segment_col]) or "") if segment_col in metrics_df.columns else "",
                 metric=metric_name or "",
                 baseline=_as_float(row[baseline_col]) if baseline_col in metrics_df.columns else None,
+                baseline_std=_as_float(row[baseline_std_col]) if baseline_std_col in metrics_df.columns else None,
                 enriched=_as_float(row[enriched_col]) if enriched_col in metrics_df.columns else None,
-                std=_metric_std(row, metrics_df.columns, enriched_std_col, baseline_std_col),
+                enriched_std=_as_float(row[enriched_std_col]) if enriched_std_col in metrics_df.columns else None,
                 uplift=_as_float(row[uplift_col]) if uplift_col in metrics_df.columns else None,
                 relative_uplift=_as_str(row[uplift_pct_col]) if uplift_pct_col in metrics_df.columns else None,
             )
@@ -110,16 +111,6 @@ def _sample_stats(
     seen = set(names)
     stats.extend(sample for name, sample in by_name.items() if name not in seen)
     return stats
-
-
-def _metric_std(row, columns, enriched_std_col: Optional[str], baseline_std_col: Optional[str]) -> Optional[float]:
-    if enriched_std_col in columns:
-        std = _as_float(row[enriched_std_col])
-        if std is not None:
-            return std
-    if baseline_std_col in columns:
-        return _as_float(row[baseline_std_col])
-    return None
 
 
 def _as_str(value) -> Optional[str]:

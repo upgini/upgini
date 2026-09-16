@@ -21,10 +21,15 @@ class QualitySample:
     evaluation_scope: str
     metric: str
     baseline: Optional[float] = None
+    baseline_std: Optional[float] = None
     enriched: Optional[float] = None
-    std: Optional[float] = None
+    enriched_std: Optional[float] = None
     uplift: Optional[float] = None
     relative_uplift: Optional[str] = None
+
+    @property
+    def std(self) -> Optional[float]:
+        return self.enriched_std if self.enriched_std is not None else self.baseline_std
 
 
 @dataclass

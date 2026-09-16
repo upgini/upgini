@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Upgini — FIT interactive report</title>
+  <style>
+    :root{--ink:#15211f;--muted:#6f7976;--line:#dce4e1;--paper:#fff;--bg:#f3f6f5;--blue:#1645ee;--green:#53cc61;--cyan:#20aab4;--warn:#e19132;--danger:#d45b5b;--shadow:0 18px 60px rgba(18,45,39,.08)}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}.shell{max-width:1440px;margin:auto;min-height:100vh}.topbar{height:72px;padding:0 42px;display:flex;align-items:center;gap:25px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}.brand{display:flex;align-items:center;gap:14px}.wordmark{font-size:25px;font-weight:800;letter-spacing:-.07em;line-height:1;background:linear-gradient(135deg,#0138f8,#5bd357);-webkit-background-clip:text;background-clip:text;color:transparent}.wordmark b{font-weight:850}.wordmark span{font-weight:650}.wordmark.small{font-size:20px;min-width:66px}.brand-divider{width:1px;height:25px;background:var(--line)}.brand-label{font-weight:700;color:#45514f}.top-meta{display:flex;gap:8px;margin-left:auto;align-items:center}.chip{background:#eef2f1;border:1px solid #e0e7e5;border-radius:999px;padding:7px 11px;color:#53605d;font-size:12px}.button{border:0;border-radius:10px;padding:10px 15px;font:inherit;font-weight:700;cursor:pointer;transition:.18s ease}.button:hover{transform:translateY(-1px)}.button.primary{background:var(--ink);color:white}.button.ghost{background:white;border:1px solid var(--line);color:var(--ink)}.layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:0}.sidenav{position:sticky;top:72px;height:calc(100vh - 72px);padding:30px 22px;border-right:1px solid var(--line);background:#f7f9f8}.nav-title{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#98a29f;margin:0 10px 12px}.nav-link{display:flex;align-items:center;gap:10px;color:#66716f;text-decoration:none;padding:10px;border-radius:9px;margin:2px 0;font-weight:600}.nav-link:hover,.nav-link.active{background:white;color:var(--ink);box-shadow:0 4px 18px rgba(25,49,43,.06)}.nav-dot{width:7px;height:7px;border-radius:50%;background:#c4cecb}.nav-link.active .nav-dot{background:linear-gradient(135deg,var(--blue),var(--green))}.run-note{position:absolute;bottom:24px;left:22px;right:22px;padding:14px;background:white;border:1px solid var(--line);border-radius:12px;font-size:11px;color:var(--muted)}.run-note strong{display:block;color:var(--ink);font-size:12px;margin-bottom:4px}.main{min-width:0;padding:38px 44px 80px}.eyebrow{display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.12em;color:#74807d;font-size:11px;font-weight:800}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px #e7f8e9}.hero-title{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;margin:12px 0 28px}.hero-title h1{font-size:36px;line-height:1.08;letter-spacing:-.04em;margin:0;max-width:720px}.hero-title p{color:var(--muted);margin:10px 0 0;max-width:690px}.run-stamp{text-align:right;min-width:190px;color:var(--muted);font-size:12px}.run-stamp strong{display:block;color:var(--ink);font-size:14px;margin-bottom:3px}.metric-hero{position:relative;overflow:hidden;background:#172421;color:white;border-radius:22px;padding:28px 30px;box-shadow:var(--shadow);margin-bottom:18px}.metric-hero:after{content:"";position:absolute;width:400px;height:400px;right:-150px;top:-250px;border-radius:50%;background:radial-gradient(circle,rgba(71,215,117,.24),transparent 68%)}.metric-head{position:relative;z-index:1;display:flex;justify-content:space-between;gap:20px}.metric-tabs{display:flex;gap:5px;background:rgba(255,255,255,.08);border-radius:11px;padding:4px}.metric-tab{border:0;background:transparent;color:#aebbb7;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer}.metric-tab.active{background:white;color:#13201e}.scores{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:25px;margin-top:32px;align-items:end}.score-label{text-transform:uppercase;letter-spacing:.11em;color:#8fa09b;font-size:10px;font-weight:800}.score-value{font-size:39px;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.04em}.uplift .score-value{color:#73e57b}.uplift p{color:#aebcb8;margin:8px 0 0;font-size:12px}.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 34px}.summary{background:white;border:1px solid var(--line);border-radius:15px;padding:17px 18px}.summary .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em;font-weight:800}.summary .v{font-size:23px;font-weight:750;margin-top:5px;letter-spacing:-.02em}.summary .d{font-size:11px;color:#88928f;margin-top:4px}.section{scroll-margin-top:94px;margin-top:36px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:15px}.section-head h2{font-size:22px;letter-spacing:-.025em;margin:0}.section-head p{color:var(--muted);margin:5px 0 0;font-size:12px}.panel{background:white;border:1px solid var(--line);border-radius:17px;box-shadow:0 4px 20px rgba(18,45,39,.035)}.chart-panel{padding:20px}.chart-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}.legend{display:flex;gap:17px;flex-wrap:wrap;font-size:11px;color:var(--muted)}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.control{border:1px solid var(--line);background:#fafcfb;color:var(--ink);border-radius:9px;padding:8px 10px;font:inherit;font-size:12px}.canvas-wrap{height:280px;position:relative}canvas{width:100%;height:100%}.callout{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;background:#fff8ed;border:1px solid #f1dcc0;border-radius:13px;color:#6b4b20}.callout strong{display:block;color:#4c361a;margin-bottom:2px}.callout-icon{width:27px;height:27px;display:grid;place-items:center;background:#f4c77f;border-radius:8px;font-weight:900;color:#65410c;flex:none}.stability-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.5fr);gap:14px}.heatmap{overflow:auto;padding:16px}.heat-table{border-collapse:separate;border-spacing:5px;width:100%;font-size:11px}.heat-table th{color:var(--muted);font-weight:600;padding:2px 6px;white-space:nowrap}.heat-table th:first-child{text-align:left}.heat-table td:first-child{font-weight:700;padding-right:12px;white-space:nowrap}.heat{height:30px;min-width:47px;text-align:center;border-radius:6px;font-weight:750}.s1{background:#dbf4de;color:#276b2f}.s2{background:#e9f4cf;color:#526826}.s3{background:#fff0c7;color:#7f641b}.s4{background:#f8d5c8;color:#914634}.stability-side{padding:20px}.donut{width:140px;height:140px;border-radius:50%;margin:8px auto 17px;background:conic-gradient(var(--green) 0 72%,#e6b556 72% 91%,#df7474 91%);position:relative}.donut:after{content:"";position:absolute;inset:25px;background:white;border-radius:50%}.donut-label{position:absolute;inset:0;z-index:1;display:grid;place-items:center;text-align:center;font-weight:800;font-size:21px}.donut-label small{display:block;color:var(--muted);font-size:10px;font-weight:600}.stat-list{display:grid;gap:8px}.stat-row{display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #edf1ef;color:var(--muted);font-size:12px}.stat-row b{color:var(--ink)}.toolbar{display:flex;gap:9px;flex-wrap:wrap}.search{min-width:230px;border:1px solid var(--line);background:white;border-radius:9px;padding:9px 11px;font:inherit}.table-wrap{overflow:auto}.data-table{width:100%;border-collapse:collapse;min-width:860px}.data-table th{text-align:left;padding:12px 14px;background:#f8faf9;color:#77827f;text-transform:uppercase;letter-spacing:.07em;font-size:10px;border-bottom:1px solid var(--line)}.data-table td{padding:13px 14px;border-bottom:1px solid #edf1ef;font-size:12px}.data-table tr:last-child td{border-bottom:0}.data-table tbody tr:hover{background:#f8fbfa}.feature-name{font-weight:750;color:#25312f}.source-name{color:#74807d}.bar{height:6px;width:90px;background:#edf1ef;border-radius:99px;overflow:hidden}.bar i{height:100%;display:block;background:linear-gradient(90deg,var(--blue),#43c878);border-radius:99px}.tag{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:750}.tag.good{background:#e8f7ea;color:#337139}.tag.watch{background:#fff1d9;color:#855d18}.tag.risk{background:#fde7e4;color:#984a40}.source-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.source-card{padding:19px}.source-top{display:flex;justify-content:space-between;gap:12px}.source-icon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,#e8eeff,#e8f9e8);font-weight:850;color:var(--blue)}.source-card h3{font-size:14px;margin:12px 0 4px}.source-card p{font-size:11px;color:var(--muted);margin:0}.source-metrics{display:flex;gap:18px;margin-top:17px;padding-top:13px;border-top:1px solid #edf1ef}.source-metrics b{display:block;font-size:16px}.source-metrics span{color:var(--muted);font-size:10px}.notebook{padding:0;overflow:hidden}.cell-head{background:#f8faf9;border-bottom:1px solid var(--line);padding:10px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#68736f;font-size:11px}.cell-output{padding:18px;display:flex;align-items:center;gap:25px;flex-wrap:wrap}.cell-quality{display:flex;gap:24px}.cell-quality span{font-size:11px;color:var(--muted)}.cell-quality b{font-size:17px;color:var(--ink);display:block}.footer{text-align:center;color:#8a9592;font-size:11px;padding:40px 0 10px}.empty{display:none;padding:24px;text-align:center;color:var(--muted)}
+    .sample-table{min-width:700px}.toggle-legend{margin-bottom:10px}.series-toggle{border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:11px;padding:5px 7px;border-radius:6px}.series-toggle:not(.active){opacity:.35;text-decoration:line-through}.threshold-legend{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}.shap-panel{padding:16px}.shap-row{display:grid;grid-template-columns:minmax(170px,1fr) 2fr 60px;gap:12px;align-items:center;padding:9px 4px;border-bottom:1px solid #edf1ef}.shap-row:last-child{border:0}.provider{font-size:9px;margin-left:6px;padding:3px 6px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}.shap-track{height:10px;background:#edf1ef;border-radius:99px;overflow:hidden}.shap-fill{display:block;height:100%;border-radius:99px}.shap-fill.upgini{background:#1645ee}.shap-fill.user{background:#20aab4}.shap-fill.autofe{background:#53cc61}.result-tabs{display:flex;gap:4px;margin-bottom:12px}.result-tab{border:1px solid var(--line);background:#eef2f1;padding:9px 13px;border-radius:9px;font:inherit;cursor:pointer;color:var(--muted)}.result-tab.active{background:var(--ink);color:#fff}.result-tab b{font-size:10px;margin-left:5px}.result-pane{display:none}.result-pane.active{display:block}.table-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:10px}.chart-tooltip{position:absolute;display:none;pointer-events:none;background:#172421;color:white;padding:9px 11px;border-radius:8px;font-size:10px;box-shadow:var(--shadow);white-space:nowrap}.sidenav{overflow:auto}.run-note{position:static;margin-top:22px}.nav-link{font-size:12px;padding:8px 10px}
+    .metric-sample-table{position:relative;z-index:1;margin-top:26px}.metric-sample-head,.metric-sample-row{display:grid;grid-template-columns:minmax(140px,.9fr) 1fr 1fr .8fr .8fr;gap:18px;align-items:center}.metric-sample-ci{display:block;margin-top:6px;color:#8fa09b;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}.metric-note{color:#8fa09b;font-size:11px;margin-top:6px}.partner-logo{height:30px;width:auto;display:block}.metric-sample-head{padding:0 14px 8px;color:#8fa09b;text-transform:uppercase;letter-spacing:.11em;font-size:10px;font-weight:800}.metric-sample-row{padding:15px 14px;border-top:1px solid rgba(255,255,255,.12)}.metric-sample-name{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:760}.metric-sample-name i{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(22,69,238,.18)}.metric-sample-row[data-sample="eval_1"] .metric-sample-name i{background:var(--cyan);box-shadow:0 0 0 4px rgba(32,170,180,.18)}.metric-sample-row[data-sample="eval_2"] .metric-sample-name i{background:var(--green);box-shadow:0 0 0 4px rgba(83,204,97,.18)}.metric-sample-name small{display:block;color:#8fa09b;font-size:10px;font-weight:650;margin-top:2px}.metric-sample-value{font-size:27px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.035em}.metric-sample-uplift .metric-sample-value{color:#73e57b}.metric-sample-uplift p{margin:5px 0 0;color:#aebcb8;font-size:11px}.tall-chart{height:340px}.chart-tooltip b{font-size:11px}.chart-tooltip .tip-label{color:#aebbb7}.canvas-wrap canvas{cursor:crosshair}.search-id-chip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    @media(max-width:980px){.layout{grid-template-columns:1fr}.sidenav{display:none}.main{padding:28px 22px 70px}.topbar{padding:0 22px}.scores{grid-template-columns:1fr 1fr}.uplift{grid-column:1/-1}.summary-grid{grid-template-columns:1fr 1fr}.stability-grid,.sample-grid{grid-template-columns:1fr}.source-cards{grid-template-columns:1fr 1fr}}
+    @media(max-width:650px){.top-meta .chip,.brand-divider,.brand-label{display:none}.topbar{gap:10px}.button{padding:9px 10px}.hero-title{display:block}.run-stamp{text-align:left;margin-top:16px}.hero-title h1{font-size:30px}.metric-head{display:block}.metric-tabs{margin-top:15px;width:max-content}.summary-grid,.source-cards{grid-template-columns:1fr}.scores{gap:14px}.score-value{font-size:32px}.metric-sample-head{display:none}.metric-sample-row{grid-template-columns:1fr 1fr;gap:14px;padding:16px 2px}.metric-sample-name{grid-column:1/-1}.metric-sample-value{font-size:24px}.metric-sample-row>div:not(.metric-sample-name):before{display:block;color:#8fa09b;text-transform:uppercase;letter-spacing:.08em;font-size:8px;font-weight:800;margin-bottom:6px}.metric-sample-row>div:nth-child(2):before{content:"Baseline"}.metric-sample-row>div:nth-child(3):before{content:"Enriched"}.metric-sample-row>div:nth-child(4):before{content:"Uplift, abs"}.metric-sample-row>div:nth-child(5):before{content:"Uplift, %"}.main{padding-left:15px;padding-right:15px}.cell-output{gap:14px}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><img id="partnerLogo" class="partner-logo" alt="" hidden><span class="brand-divider" id="partnerDivider" hidden></span><div class="wordmark" aria-label="Upgini"><b>Up</b><span>gini</span></div><span class="brand-divider"></span><span class="brand-label">FIT report</span></div>
+    <div class="top-meta"><span class="chip search-id-chip" id="searchIdChip" title="Upgini search identifier"></span><button class="button ghost" id="downloadBtn">Download HTML</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidenav" aria-label="Report navigation">
+      <p class="nav-title">Contents</p>
+      <a class="nav-link active" href="#overview"><span class="nav-dot"></span>Overview</a>
+      <a class="nav-link" href="#sample-stats"><span class="nav-dot"></span>Sample stats</a>
+      <a class="nav-link" href="#performance"><span class="nav-dot"></span>Performance</a>
+      <a class="nav-link" href="#score-analysis"><span class="nav-dot"></span>Score analysis</a>
+      <a class="nav-link" href="#score-distribution"><span class="nav-dot"></span>Score distribution</a>
+      <a class="nav-link" href="#score-stability"><span class="nav-dot"></span>Score stability</a>
+      <a class="nav-link" href="#features-shap"><span class="nav-dot"></span>Features SHAP</a>
+      <a class="nav-link" href="#search-results"><span class="nav-dot"></span>Search results</a>
+      <a class="nav-link" href="#feature-stability"><span class="nav-dot"></span>Feature stability</a>
+      <div class="run-note"><strong>Search completed</strong><span id="runNoteDuration"></span><br><span id="runNoteRows"></span></div>
+    </aside>
+    <main class="main">
+      <section id="overview" class="section" style="margin-top:0">
+        <div class="eyebrow"><span class="status-dot"></span><span id="statusLine"></span></div>
+        <div class="hero-title">
+          <div><h1 id="heroTitle"></h1><p id="heroSubtitle"></p></div>
+          <div class="run-stamp"><strong id="runStampDate"></strong><span id="runStampMeta"></span></div>
+        </div>
+        <div class="metric-hero">
+          <div class="metric-head"><div><div class="score-label" id="keyResultLabel"></div><strong id="keyResultHeadline"></strong><div class="metric-note" id="keyResultNote"></div></div><div class="metric-tabs" id="metricTabs" role="tablist"></div></div>
+          <div class="metric-sample-table" id="metricSampleTable" aria-label="Model quality for all samples">
+            <div class="metric-sample-head" id="metricSampleHead"></div>
+          </div>
+        </div>
+        <div class="summary-grid" id="summaryGrid"></div>
+      </section>
+
+      <section id="sample-stats" class="section">
+        <div class="section-head"><div><h2>Sample stats</h2><p>Dataset composition and search-key quality used for FIT evaluation.</p></div><span class="chip" id="totalRowsChip"></span></div>
+        <div class="panel table-wrap"><table class="data-table sample-table"><thead id="sampleStatsHead"></thead><tbody id="sampleStatsBody"></tbody></table></div>
+        <div class="panel chart-panel" style="margin-top:14px"><div class="chart-head"><div><strong>Monthly count and mean target</strong><div class="source-name">Samples may overlap in the same calendar month · statistics use each sample as provided</div></div><button class="button ghost chart-export" data-chart="sampleChart">Save PNG</button></div><div class="legend" id="sampleLegend"></div><div class="canvas-wrap tall-chart"><canvas id="sampleChart" aria-label="Monthly row count and mean target by overlapping samples" width="1596" height="680"></canvas><div class="chart-tooltip" id="sampleTooltip"></div></div></div>
+      </section>
+
+      <section id="performance" class="section">
+        <div class="section-head"><div><h2>Performance</h2><p>Baseline and enriched quality dynamics for the selected sample. 5-fold validation · comparable labeled rows · 95% CI.</p></div><div class="toolbar"><select id="performanceSample" class="control" aria-label="Performance sample"></select><select id="periodSelect" class="control" aria-label="Chart period"></select></div></div>
+        <div class="panel chart-panel"><div class="chart-head"><div class="legend"><span><i style="background:#9ba8a4"></i>Baseline</span><span><i style="background:#1645ee"></i>Enriched</span><span><i style="background:#53cc61"></i>Uplift</span></div><div id="chartHint" style="font-size:11px;color:var(--muted)"></div></div><div class="canvas-wrap"><canvas id="qualityChart" role="img" aria-label="Baseline and enriched quality dynamics" width="1596" height="560"></canvas><div class="chart-tooltip" id="qualityTooltip"></div></div></div>
+      </section>
+
+      <section id="score-analysis" class="section">
+        <div class="section-head"><div><h2>Score analysis</h2><p>Mean score and mean target on the 0–1 scale; labeled and unlabeled counts on the secondary axis.</p></div><div class="toolbar"><select id="scoreSample" class="control" aria-label="Score analysis sample"></select><button class="button ghost chart-export" data-chart="scoreChart">Save PNG</button></div></div>
+        <div class="panel chart-panel"><div class="legend toggle-legend"><button data-series="score" class="series-toggle active"><i style="background:#1645ee"></i>Mean score</button><button data-series="target" class="series-toggle active"><i style="background:#53cc61"></i>Mean target</button><button data-series="labeled" class="series-toggle active"><i style="background:#b6c1be"></i>Labeled</button><button data-series="unlabeled" class="series-toggle active"><i style="background:#f0bb66"></i>Unlabeled</button></div><div class="canvas-wrap"><canvas id="scoreChart" aria-label="Monthly score and target with labeled and unlabeled counts" width="1596" height="560"></canvas><div class="chart-tooltip" id="scoreTooltip"></div></div></div>
+      </section>
+
+      <section id="score-distribution" class="section">
+        <div class="section-head"><div><h2>Score distribution by target</h2><p>Normalized probability of scores by common bins. Unlabeled rows are excluded.</p></div><select id="distributionSample" class="control" aria-label="Distribution sample"></select></div>
+        <div class="panel chart-panel"><div class="legend"><span><i style="background:#8da0ff"></i>target = 0</span><span><i style="background:#53cc61"></i>target = 1</span></div><div class="canvas-wrap"><canvas id="distributionChart" aria-label="Score distribution for target zero and one" width="1596" height="560"></canvas><div class="chart-tooltip" id="distributionTooltip"></div></div></div>
+      </section>
+
+      <section id="score-stability" class="section">
+        <div class="section-head"><div><h2>Score stability (PSI)</h2><p>Monthly PSI of scores · reference: full Train distribution · fixed reference bins.</p></div><div class="toolbar"><select id="psiSample" class="control" aria-label="Score stability sample"></select><button class="button ghost chart-export" data-chart="scorePsiChart">Save PNG</button></div></div>
+        <div class="panel chart-panel"><div class="threshold-legend" id="psiThresholdLegend"></div><div class="canvas-wrap"><canvas id="scorePsiChart" aria-label="Monthly score PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="psiTooltip"></div></div></div>
+      </section>
+
+      <section id="features-shap" class="section">
+        <div class="section-head"><div><h2>Features SHAP</h2><p>Global mean absolute SHAP for features used by the evaluated model.</p></div><button id="showAllShap" class="button ghost"></button></div>
+        <div class="panel shap-panel" id="shapList"></div>
+      </section>
+
+      <section id="search-results" class="section">
+        <div class="section-head"><div><h2>Search results</h2><p>Relevant features, data sources, and generated AutoFE descriptions.</p></div></div>
+        <div class="result-tabs"><button class="result-tab active" data-result="features">Relevant features <b id="countRelevantFeatures"></b></button><button class="result-tab" data-result="sources">Data sources <b id="countDataSources"></b></button><button class="result-tab" data-result="autofe">AutoFE <b id="countAutofe"></b></button></div>
+        <div class="result-pane active" id="result-features"><div class="table-actions"><input id="featureSearch" class="search" type="search" placeholder="Find a feature or source" aria-label="Feature search"><select id="statusFilter" class="control" aria-label="Stability filter"><option value="all">All statuses</option><option value="good">Stable</option><option value="watch">Watch</option><option value="risk">At risk</option></select><button class="button ghost copy-table" data-copy="featureBody">Copy</button><button class="button ghost csv-table" data-table="featureBody">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Feature</th><th>Provider</th><th>Source</th><th>SHAP</th><th>PSI</th><th>Drift</th><th>Coverage</th></tr></thead><tbody id="featureBody"></tbody></table><div id="emptyState" class="empty">No features match the selected filters.</div></div></div>
+        <div class="result-pane" id="result-sources"><div class="table-actions"><button class="button ghost copy-table" data-copy="sourceTable">Copy</button><button class="button ghost csv-table" data-table="sourceTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Provider</th><th>Source</th><th>Aggregate SHAP</th><th>Relevant features</th><th>Action</th></tr></thead><tbody id="sourceTable"></tbody></table></div></div>
+        <div class="result-pane" id="result-autofe"><div class="table-actions"><button class="button ghost copy-table" data-copy="autofeTable">Copy</button><button class="button ghost csv-table" data-table="autofeTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Sources</th><th>Generated feature</th><th>Source features</th><th>Functions</th></tr></thead><tbody id="autofeTable"></tbody></table></div></div>
+      </section>
+
+      <section id="feature-stability" class="section">
+        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and direction-invariant univariate ROC-AUC for model features only.</p></div><div class="toolbar"><select id="stabilityFeature" class="control" aria-label="Model feature"></select><button class="button ghost chart-export" data-chart="featureStabilityChart">Save PNG</button></div></div>
+        <div class="panel chart-panel"><div class="legend"><span><i style="background:#1645ee"></i>Monthly PSI</span><span><i style="background:#53cc61"></i>Univariate ROC-AUC</span></div><div class="canvas-wrap"><canvas id="featureStabilityChart" aria-label="Feature monthly PSI and ROC AUC" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureTooltip"></div></div></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   REPORT DATA — the only place with report values.
+   Replace this object with data produced by the backend / PyLib.
+   Everything below (layout, tables, charts, tooltips) is rendered from it.
+   ========================================================================= */
+const REPORT_DATA = __REPORT_DATA__;
+
+/* =========================================================================
+   Rendering layer. No numbers below this line — everything comes from
+   REPORT_DATA above. Vanilla JS only, no frameworks, no build step.
+   ========================================================================= */
+(function () {
+  const D = REPORT_DATA;
+  const SAMPLES = D.samples || [];
+  const sampleById = {};
+  SAMPLES.forEach(s => { sampleById[s.id] = s; });
+
+  /* Shared monthly timeline. Every monthly chart takes its months, its number of
+     points and its period options from here — change REPORT_DATA.timeline.months
+     and all of them follow. align() keeps a series in step with the timeline:
+     longer series are cut to the last N months, shorter ones are padded with
+     nulls at the front and those points are simply not drawn. */
+  const MONTHS = (D.timeline && D.timeline.months) || [];
+  const MONTH_COUNT = MONTHS.length;
+  const align = arr => {
+    const a = arr || [];
+    if (a.length === MONTH_COUNT) return a;
+    if (a.length > MONTH_COUNT) return a.slice(-MONTH_COUNT);
+    return new Array(MONTH_COUNT - a.length).fill(null).concat(a);
+  };
+
+  const fmt3 = v => (v == null ? '—' : Number(v).toFixed(3));
+  const fmt2 = v => (v == null ? '—' : Number(v).toFixed(2));
+  const num = v => Number(v).toLocaleString('en-US');
+  const pct1 = v => (v == null ? '—' : Number(v).toFixed(1) + '%');
+  const signed3 = v => (v >= 0 ? '+' : '') + Number(v).toFixed(3);
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  function rgba(hex, alpha) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  }
+
+  /* ---------------------------------------------------------------- header */
+  function renderHeader() {
+    const m = D.meta;
+    const logo = m.partnerLogo || {};
+    if (logo.src) {
+      const img = document.getElementById('partnerLogo');
+      img.src = logo.src;
+      img.alt = logo.alt || '';
+      if (logo.height) img.style.height = logo.height + 'px';
+      img.hidden = false;
+      document.getElementById('partnerDivider').hidden = false;
+      // if the logo cannot be loaded, drop the slot instead of showing a broken image
+      img.addEventListener('error', () => {
+        img.hidden = true;
+        document.getElementById('partnerDivider').hidden = true;
+      });
+    }
+    setText('searchIdChip', 'search_id=' + m.searchId);
+    const sources = m.sourcesCount == null ? '—' : m.sourcesCount;
+    const rows = m.totalRows == null ? '—' : num(m.totalRows);
+    setText('runNoteDuration', `${m.searchDuration || '—'} · ${sources} sources`);
+    setText('runNoteRows', `${rows} rows processed`);
+    setText('statusLine', m.statusLine);
+    setText('heroTitle', m.reportTitle);
+    setText('heroSubtitle', m.reportSubtitle);
+    setText('runStampDate', m.generatedAt);
+    document.getElementById('runStampMeta').innerHTML =
+      `PyLib version: ${m.pylibVersion || '—'}<br>Keys: ${(m.searchKeys || []).join(', ') || '—'}<br>Samples: ${(m.sampleNames || []).join(', ') || '—'}`;
+    setText('totalRowsChip', `${m.totalRows == null ? '—' : num(m.totalRows)} total rows`);
+  }
+
+  /* ------------------------------------------------------------ key result */
+  let activeMetric = (D.keyResult && D.keyResult.defaultMetric) || '';
+  const metricFor = (key, sampleId) => {
+    const metrics = D.keyResult && D.keyResult.metrics;
+    return metrics && metrics[key] && metrics[key].bySample ? metrics[key].bySample[sampleId] : null;
+  };
+
+  function renderMetricHero() {
+    if (!D.keyResult) return;
+    const col = D.keyResult.columns || {};
+    setText('keyResultLabel', D.keyResult.title);
+    setText('keyResultHeadline', D.keyResult.headline);
+    setText('keyResultNote', D.keyResult.confidenceNote || '');
+    document.getElementById('metricTabs').innerHTML = Object.keys(D.keyResult.metrics || {})
+      .map(k => `<button class="metric-tab${k === activeMetric ? ' active' : ''}" data-metric="${k}">${D.keyResult.metrics[k].name}</button>`)
+      .join('');
+    document.getElementById('metricSampleHead').innerHTML =
+      `<span>${col.sample}</span><span>${col.baseline}</span><span>${col.enriched}</span><span>${col.upliftAbs}</span><span>${col.upliftPct}</span>`;
+    const table = document.getElementById('metricSampleTable');
+    table.querySelectorAll('.metric-sample-row').forEach(r => r.remove());
+    table.insertAdjacentHTML('beforeend', SAMPLES.map(s => `
+      <div class="metric-sample-row" data-sample="${s.id}">
+        <div class="metric-sample-name"><i style="background:${s.color};box-shadow:0 0 0 4px ${rgba(s.color, .18)}"></i><div>${s.label}${s.caption ? `<small>${s.caption}</small>` : ''}</div></div>
+        <div><div class="metric-sample-value" data-value="base"></div><span class="metric-sample-ci" data-value="baseCi"></span></div>
+        <div><div class="metric-sample-value" data-value="enriched"></div><span class="metric-sample-ci" data-value="enrichedCi"></span></div>
+        <div class="metric-sample-uplift"><div class="metric-sample-value" data-value="uplift"></div></div>
+        <div class="metric-sample-uplift"><div class="metric-sample-value" data-value="upliftPct"></div></div>
+      </div>`).join(''));
+    document.querySelectorAll('.metric-tab').forEach(b => b.addEventListener('click', () => setMetric(b.dataset.metric)));
+  }
+
+  function setMetric(key) {
+    activeMetric = key;
+    document.querySelectorAll('.metric-tab').forEach(x => x.classList.toggle('active', x.dataset.metric === key));
+    SAMPLES.forEach(s => {
+      const d = metricFor(key, s.id);
+      const row = document.querySelector(`.metric-sample-row[data-sample="${s.id}"]`);
+      if (!row || !d) return;
+      const uplift = (d.enriched == null || d.baseline == null) ? null : d.enriched - d.baseline;
+      row.querySelector('[data-value="base"]').textContent = fmt3(d.baseline);
+      row.querySelector('[data-value="enriched"]').textContent = fmt3(d.enriched);
+      row.querySelector('[data-value="baseCi"]').textContent =
+        d.baselineCi == null ? '' : `± ${fmt3(d.baselineCi)}`;
+      row.querySelector('[data-value="enrichedCi"]').textContent =
+        d.enrichedCi == null ? '' : `± ${fmt3(d.enrichedCi)}`;
+      row.querySelector('[data-value="uplift"]').textContent = uplift == null ? '—' : signed3(uplift);
+      row.querySelector('[data-value="upliftPct"]').textContent =
+        (uplift == null || !d.baseline) ? '—' : ((uplift >= 0 ? '+' : '') + ((d.enriched / d.baseline - 1) * 100).toFixed(1) + '%');
+    });
+    drawChart();
+  }
+
+  /* --------------------------------------------------------- summary cards */
+  function renderSummary() {
+    document.getElementById('summaryGrid').innerHTML = (D.summaryCards || []).map(c =>
+      `<div class="summary"><div class="k">${c.label}</div><div class="v">${c.value}</div>${c.caption ? `<div class="d">${c.caption}</div>` : ''}</div>`
+    ).join('');
+  }
+
+  /* ---------------------------------------------------------- sample stats */
+  function renderSampleStats() {
+    document.getElementById('sampleStatsHead').innerHTML =
+      `<tr><th>Statistic</th>${SAMPLES.map(s => `<th>${s.label}</th>`).join('')}</tr>`;
+    const statsRows = (D.sampleStats && D.sampleStats.rows) || [];
+    document.getElementById('sampleStatsBody').innerHTML = statsRows.map(r =>
+      `<tr><td><b>${r.label}</b></td>${SAMPLES.map(s => `<td>${r.values && r.values[s.id] != null ? r.values[s.id] : '—'}</td>`).join('')}</tr>`
+    ).join('');
+    document.getElementById('sampleLegend').innerHTML = SAMPLES.map(s =>
+      `<span><i style="background:${s.color}"></i>${s.label}</span>`).join('') +
+      '<span style="margin-left:auto">Bars: count</span><span>Lines: mean target</span>';
+  }
+
+  /* --------------------------------------------------------------- selects */
+  function fillSampleSelects() {
+    ['performanceSample', 'scoreSample', 'distributionSample', 'psiSample'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = SAMPLES.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    });
+    const period = document.getElementById('periodSelect');
+    const timeline = D.timeline || {};
+    const options = [...new Set([MONTH_COUNT, ...(timeline.periodOptions || [])])]
+      .filter(p => p > 0 && p <= MONTH_COUNT).sort((a, b) => b - a);
+    const preset = Math.min(timeline.defaultPeriod || MONTH_COUNT, MONTH_COUNT);
+    if (!options.length) { period.innerHTML = ''; return; }
+    const selected = options.includes(preset) ? preset : options[0];
+    period.innerHTML = options.map(p =>
+      `<option value="${p}"${p === selected ? ' selected' : ''}>${p} months</option>`).join('');
+  }
+
+  /* ------------------------------------------------------- performance chart */
+  const hits = {};
+  function drawChart() {
+    const canvas = document.getElementById('qualityChart');
+    const box = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = box.width * dpr; canvas.height = box.height * dpr;
+    const c = canvas.getContext('2d'); c.scale(dpr, dpr);
+    const w = box.width, h = box.height, p = { l: 48, r: 18, t: 18, b: 44 };
+    c.clearRect(0, 0, w, h);
+    const metric = D.keyResult && D.keyResult.metrics ? D.keyResult.metrics[activeMetric] : null;
+    const sampleId = document.getElementById('performanceSample').value;
+    const sample = sampleById[sampleId];
+    const series = metric && metric.bySample ? metric.bySample[sampleId] : null;
+    if (!MONTH_COUNT || !metric || !series || !sample) return;
+    const count = Math.min(+document.getElementById('periodSelect').value || MONTH_COUNT, MONTH_COUNT);
+    const base = align(series.baselineSeries).slice(-count);
+    const enr = align(series.enrichedSeries).slice(-count);
+    const labs = MONTHS.slice(-count);
+    document.getElementById('chartHint').textContent =
+      metric.name + ' · ' + sample.label + (sample.caption ? ' · ' + sample.caption : '');
+    const all = base.concat(enr).filter(v => v != null);
+    if (!all.length) return;
+    const min = Math.min(...all) - .015, max = Math.max(...all) + .015;
+    const x = i => p.l + (count === 1 ? (w - p.l - p.r) / 2 : i * (w - p.l - p.r) / (count - 1));
+    const y = v => p.t + (max - v) * (h - p.t - p.b) / (max - min);
+    hits.quality = [];
+    c.clearRect(0, 0, w, h);
+    c.strokeStyle = '#e8eeec'; c.lineWidth = 1; c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      const yy = p.t + i * (h - p.t - p.b) / 4;
+      c.beginPath(); c.moveTo(p.l, yy); c.lineTo(w - p.r, yy); c.stroke();
+      c.fillText((max - i * (max - min) / 4).toFixed(2), 5, yy + 4);
+    }
+    labs.forEach((m, i) => { c.fillText(m.split(' ')[0], x(i) - 10, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9); });
+    function line(vals, color, seriesName) {
+      strokeSeries(c, vals.map((v, i) => v == null ? null : { x: x(i), y: y(v) }), color, 4);
+      vals.forEach((v, i) => {
+        if (v == null) return;
+        hits.quality.push({
+          x: x(i), y: y(v), r: 10,
+          html: `<b>${labs[i]} · ${sample.label} · ${seriesName}</b><br>${metric.name}: ${fmt3(v)}` +
+            (seriesName === 'Enriched' && base[i] != null
+              ? `<br>Absolute uplift: ${fmt3(v - base[i])}<br>Relative uplift: ${((v / base[i] - 1) * 100).toFixed(1)}%`
+              : '')
+        });
+      });
+    }
+    line(base, '#9ba8a4', 'Baseline');
+    line(enr, '#1645ee', 'Enriched');
+  }
+
+  /* ------------------------------------------------------ canvas utilities */
+  function setupCanvas(id) {
+    const cv = document.getElementById(id), b = cv.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = b.width * dpr; cv.height = b.height * dpr;
+    const c = cv.getContext('2d'); c.scale(dpr, dpr); c.clearRect(0, 0, b.width, b.height);
+    return { cv, c, w: b.width, h: b.height };
+  }
+  /* Draws a polyline whose points may contain nulls (missing months are skipped). */
+  function strokeSeries(c, pts, color, radius, dotColor) {
+    c.beginPath();
+    let pen = false;
+    pts.forEach(p => { if (!p) { pen = false; return; } pen ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); pen = true; });
+    c.strokeStyle = color; c.lineWidth = 2.5; c.lineJoin = 'round'; c.stroke();
+    if (!radius) return;
+    pts.forEach((p, i) => {
+      if (!p) return;
+      c.beginPath(); c.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      c.fillStyle = dotColor ? dotColor(i) : color; c.fill();
+    });
+  }
+
+  function axes(c, w, h, max, rightPad) {
+    const right = w - (rightPad == null ? 15 : rightPad);
+    c.strokeStyle = '#e8eeec'; c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      const y = 18 + i * (h - 52) / 4;
+      c.beginPath(); c.moveTo(40, y); c.lineTo(right, y); c.stroke();
+      c.fillText((max - i * max / 4).toFixed(max <= 1 ? 2 : 0), 4, y + 3);
+    }
+  }
+
+  /* ------------------------------------------------ monthly sample composition */
+  let sampleHitAreas = [];
+  function drawSample() {
+    const cfg = D.sampleStats || {};
+    const { c, w, h } = setupCanvas('sampleChart');
+    if (!cfg.monthlyAxis || !cfg.monthlyAxis.length || !cfg.monthlyPoints || !cfg.monthlyPoints.length) return;
+    const labelGutter = 46;                    // room for the mean-target axis labels
+    const seriesGutter = 30;                   // keeps the last group of bars off those labels
+    axes(c, w, h, cfg.monthlyCountMax, labelGutter);
+    const axis = cfg.monthlyAxis;
+    const plotRight = w - labelGutter - seriesGutter;
+    const x = i => 55 + i * (plotRight - 55) / (axis.length - 1);
+    const barBottom = h - 46;
+
+    // secondary (right) axis for mean target: min − padding … max + padding
+    const means = cfg.monthlyPoints.map(p => p.mean);
+    const pad = cfg.monthlyMeanAxisPadding;
+    const meanLo = Math.min(...means) * (1 - pad);
+    const meanHi = Math.max(...means) * (1 + pad);
+    const yMean = v => 18 + (meanHi - v) / (meanHi - meanLo) * (h - 52);
+    c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      c.fillText((meanHi - i * (meanHi - meanLo) / 4).toFixed(3), w - labelGutter + 8, 18 + i * (h - 52) / 4 + 3);
+    }
+    const offset = {};
+    SAMPLES.forEach((s, i) => { offset[s.id] = (i - (SAMPLES.length - 1) / 2) * 18; });
+    sampleHitAreas = [];
+    cfg.monthlyPoints.forEach((p, i) => {
+      const mi = axis.indexOf(p.month);
+      const bh = p.total / cfg.monthlyCountMax * (h - 80);
+      const bx = x(mi) + offset[p.sample] - 7, by = barBottom - bh;
+      c.fillStyle = rgba(sampleById[p.sample].color, .26);
+      c.fillRect(bx, by, 14, bh);
+      sampleHitAreas.push({ type: 'bar', x: bx, y: by, w: 14, h: bh, index: i });
+    });
+    SAMPLES.forEach(s => {
+      const pts = cfg.monthlyPoints.map((p, i) => ({ ...p, index: i, mi: axis.indexOf(p.month) })).filter(p => p.sample === s.id);
+      if (!pts.length) return;
+      const py = p => yMean(p.mean);
+      c.beginPath();
+      pts.forEach((p, k) => { const px = x(p.mi) + offset[s.id]; k ? c.lineTo(px, py(p)) : c.moveTo(px, py(p)); });
+      c.strokeStyle = s.color; c.lineWidth = 2.5; c.stroke();
+      pts.forEach(p => {
+        const px = x(p.mi) + offset[s.id];
+        c.beginPath(); c.arc(px, py(p), 4, 0, Math.PI * 2); c.fillStyle = s.color; c.fill();
+        sampleHitAreas.push({ type: 'point', x: px - 8, y: py(p) - 8, w: 16, h: 16, index: p.index });
+      });
+    });
+    axis.forEach((m, i) => {
+      const parts = m.split(' ');
+      c.fillStyle = '#7d8885'; c.fillText(parts[0], x(i) - 9, h - 25); c.fillText(parts[1], x(i) - 12, h - 10);
+    });
+  }
+
+  /* ------------------------------------------------------- score analysis */
+  const chartState = { score: true, target: true, labeled: true, unlabeled: true };
+  let scoreRows = [];
+  function drawScore() {
+    const cfg = D.scoreAnalysis || {};
+    const { c, w, h } = setupCanvas('scoreChart');
+    const sampleId = document.getElementById('scoreSample').value;
+    const s = cfg.bySample && cfg.bySample[sampleId];
+    if (!s || !MONTH_COUNT) return;
+    const meanScore = align(s.meanScore), meanTarget = align(s.meanTarget);
+    const labeled = align(s.labeled), unlabeled = align(s.unlabeled);
+    scoreRows = MONTHS.map((month, i) => ({
+      month, score: meanScore[i], target: meanTarget[i],
+      labeled: labeled[i], unlabeled: unlabeled[i], total: (labeled[i] || 0) + (unlabeled[i] || 0)
+    }));
+    hits.score = [];
+    axes(c, w, h, 1);
+    const x = i => 48 + (MONTH_COUNT === 1 ? (w - 70) / 2 : i * (w - 70) / (MONTH_COUNT - 1));
+    if (chartState.labeled || chartState.unlabeled) {
+      labeled.forEach((v, i) => {
+        const base = h - 42;
+        if (chartState.labeled && v != null) {
+          const bh = v / cfg.countAxisMax * (h - 80);
+          c.fillStyle = 'rgba(135,150,146,.34)'; c.fillRect(x(i) - 8, base - bh, 16, bh);
+        }
+        if (chartState.unlabeled && unlabeled[i] != null) {
+          const bh = unlabeled[i] / cfg.countAxisMax * (h - 80);
+          const off = chartState.labeled && v != null ? v / cfg.countAxisMax * (h - 80) : 0;
+          c.fillStyle = 'rgba(240,187,102,.65)'; c.fillRect(x(i) - 8, base - off - bh, 16, bh);
+        }
+        hits.score.push({ x: x(i), y: 18, w: 18, h: h - 55, index: i });
+      });
+    }
+    const line = (vals, col) =>
+      strokeSeries(c, vals.map((v, i) => v == null ? null : { x: x(i), y: 18 + (1 - v) * (h - 62) }), col, 4);
+    if (chartState.score) line(meanScore, '#1645ee');
+    if (chartState.target) line(meanTarget, '#53cc61');
+    MONTHS.forEach((m, i) => {
+      c.fillStyle = '#7d8885'; c.fillText(m.split(' ')[0], x(i) - 9, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
+    });
+  }
+
+  /* --------------------------------------------------- score distribution */
+  function drawDistribution() {
+    const cfg = D.scoreDistribution || {};
+    const { c, w, h } = setupCanvas('distributionChart');
+    const sampleId = document.getElementById('distributionSample').value;
+    const s = cfg.bySample && cfg.bySample[sampleId];
+    if (!s || !s.target0 || !s.target0.length) return;
+    hits.distribution = [];
+    axes(c, w, h, cfg.densityAxisMax);
+    const bins = s.target0.length;
+    const gap = (w - 65) / bins;
+    s.target0.forEach((v, i) => {
+      const x = 45 + i * gap;
+      const y = h - 32 - v / cfg.densityAxisMax * (h - 60);
+      c.fillStyle = 'rgba(141,160,255,.72)'; c.fillRect(x, y, gap * .35, h - 32 - y);
+      const y2 = h - 32 - s.target1[i] / cfg.densityAxisMax * (h - 60);
+      c.fillStyle = 'rgba(83,204,97,.72)'; c.fillRect(x + gap * .38, y2, gap * .35, h - 32 - y2);
+      c.fillStyle = '#7d8885'; c.fillText(cfg.binEdges[i].toFixed(1), x, h - 10);
+      hits.distribution.push({ x, y: 10, w: gap * .78, h: h - 40, index: i });
+    });
+  }
+
+  /* -------------------------------------------------------- score stability */
+  function drawPsi() {
+    const cfg = D.scoreStability || {};
+    const { c, w, h } = setupCanvas('scorePsiChart');
+    const sampleId = document.getElementById('psiSample').value;
+    const samplePsi = cfg.bySample && cfg.bySample[sampleId];
+    if (!samplePsi || !MONTH_COUNT) return;
+    const v = align(samplePsi.psi);
+    hits.psi = [];
+    const max = cfg.psiAxisMax, th = cfg.thresholds;
+    const x = i => 48 + (MONTH_COUNT === 1 ? (w - 70) / 2 : i * (w - 70) / (MONTH_COUNT - 1));
+    const y = val => 18 + (max - val) / max * (h - 62);
+    c.fillStyle = 'rgba(83,204,97,.08)'; c.fillRect(40, y(th.warning), w - 55, y(0) - y(th.warning));
+    c.fillStyle = 'rgba(225,145,50,.08)'; c.fillRect(40, y(th.critical), w - 55, y(th.warning) - y(th.critical));
+    c.fillStyle = 'rgba(212,91,91,.08)'; c.fillRect(40, 18, w - 55, y(th.critical) - 18);
+    [th.warning, th.critical].forEach(t => {
+      c.strokeStyle = t === th.warning ? '#53cc61' : '#d45b5b';
+      c.setLineDash([4, 4]); c.beginPath(); c.moveTo(40, y(t)); c.lineTo(w - 15, y(t)); c.stroke();
+    });
+    c.setLineDash([]);
+    strokeSeries(c, v.map((val, i) => val == null ? null : { x: x(i), y: y(val) }), '#1645ee', 4,
+      i => v[i] > th.critical ? '#d45b5b' : v[i] >= th.warning ? '#e19132' : '#53cc61');
+    MONTHS.forEach((m, i) => {
+      if (v[i] != null) hits.psi.push({ x: x(i), y: y(v[i]), r: 12, index: i });
+      c.fillStyle = '#7d8885';
+      c.fillText(m.split(' ')[0], x(i) - 8, h - 22);
+      c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
+    });
+  }
+  function renderPsiLegend() {
+    const th = D.scoreStability && D.scoreStability.thresholds;
+    if (!th) return;
+    document.getElementById('psiThresholdLegend').innerHTML =
+      `<span class="tag good">&lt; ${th.warning.toFixed(2)} stable</span>` +
+      `<span class="tag watch">${th.warning.toFixed(2)}–${th.critical.toFixed(2)} warning</span>` +
+      `<span class="tag risk">&gt; ${th.critical.toFixed(2)} critical</span>`;
+  }
+
+  /* ------------------------------------------------------------ SHAP list */
+  let shapAll = false;
+  function renderShap() {
+    const features = D.features || [];
+    if (!features.length) {
+      document.getElementById('shapList').innerHTML = '';
+      const btn = document.getElementById('showAllShap');
+      if (btn) btn.textContent = '';
+      return;
+    }
+    const maxImportance = Math.max(...features.map(f => f.importance)) || 1;
+    const list = shapAll ? features : features.slice(0, (D.shap && D.shap.topN) || features.length);
+    document.getElementById('shapList').innerHTML = list.map((f, i) =>
+      `<div class="shap-row"><div><b>#${i + 1} ${f.name}</b><span class="provider">${f.provider}</span></div>` +
+      `<div class="shap-track"><i class="shap-fill ${f.provider.toLowerCase()}" style="width:${(f.importance / maxImportance * 100).toFixed(2)}%"></i></div>` +
+      `<b>${fmt3(Math.abs(f.shap))}</b></div>`).join('');
+    document.getElementById('showAllShap').textContent = shapAll ? `Show top ${(D.shap && D.shap.topN) || features.length}` : `Show all ${features.length}`;
+  }
+
+  /* ------------------------------------------------------- search results */
+  function renderSearchResults() {
+    const sr = D.searchResults || {};
+    setText('countRelevantFeatures', sr.relevantFeaturesCount);
+    setText('countDataSources', sr.dataSourcesCount);
+    setText('countAutofe', sr.autofeCount);
+    document.getElementById('sourceTable').innerHTML = (sr.sources || []).map(s =>
+      `<tr><td>${s.provider}</td><td>${s.source}</td><td>${fmt3(s.aggregateShap)}</td><td>${s.relevantFeatures}</td><td><button class="button ghost">Request a quote</button></td></tr>`).join('');
+    document.getElementById('autofeTable').innerHTML = (sr.autofe || []).map(a =>
+      `<tr><td>${a.sources}</td><td>${a.generatedFeature}</td><td>${a.sourceFeatures}</td><td>${a.functions}</td></tr>`).join('');
+  }
+
+  const shapLabel = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(3);
+  function renderFeatures() {
+    const q = document.getElementById('featureSearch').value.toLowerCase();
+    const s = document.getElementById('statusFilter').value;
+    const rows = (D.features || []).filter(f =>
+      (s === 'all' || f.status === s) && (f.name.toLowerCase().includes(q) || f.source.toLowerCase().includes(q)));
+    const body = document.getElementById('featureBody');
+    body.innerHTML = rows.map(f =>
+      `<tr data-name="${f.name}"><td><span class="feature-name" title="${f.name}">${f.name}</span></td>` +
+      `<td><span class="provider">${f.provider}</span></td><td class="source-name">${f.source}</td>` +
+      `<td>${shapLabel(f.shap)}</td><td><span class="tag ${f.status}">${fmt2(f.psi)}</span></td>` +
+      `<td>${f.drift == null ? '—' : fmt2(f.drift)}</td><td>${pct1(f.coverage)}</td></tr>`).join('');
+    document.getElementById('emptyState').style.display = rows.length ? 'none' : 'block';
+  }
+
+  /* ---------------------------------------------------- feature stability */
+  function renderFeatureSelect() {
+    const s = document.getElementById('stabilityFeature');
+    s.innerHTML = (D.features || []).map((f, i) => `<option value="${i}">#${i + 1} ${f.name}</option>`).join('');
+    s.addEventListener('change', drawFeatureStability);
+  }
+  function currentStabilityFeature() {
+    return D.features[+document.getElementById('stabilityFeature').value || 0];
+  }
+  function drawFeatureStability() {
+    const cfg = D.featureStability || {};
+    const { c, w, h } = setupCanvas('featureStabilityChart');
+    const feature = currentStabilityFeature();
+    const s = feature && cfg.bySample ? cfg.bySample[feature.name] : null;
+    if (!feature || !s || !MONTH_COUNT) return;
+    const psi = align(s.psi), auc = align(s.auc);
+    hits.feature = [];
+    const labelGutter = 46;                    // room for the ROC-AUC axis labels
+    const seriesGutter = 22;                   // keeps the last point off those labels
+    const plotRight = w - labelGutter - seriesGutter;
+    const x = i => 48 + (MONTH_COUNT === 1 ? (plotRight - 48) / 2 : i * (plotRight - 48) / (MONTH_COUNT - 1));
+    const yp = v => 18 + (cfg.psiAxisMax - v) / cfg.psiAxisMax * (h - 62);
+    const ya = v => 18 + (cfg.aucAxis.max - v) / cfg.aucAxis.range * (h - 62);
+
+    // grid + dual axis labels: PSI on the left, univariate ROC-AUC on the right
+    c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      const y = 18 + i * (h - 62) / 4;
+      c.strokeStyle = '#e8eeec'; c.beginPath(); c.moveTo(40, y); c.lineTo(w - labelGutter, y); c.stroke();
+      c.fillStyle = '#5f79c9';
+      c.fillText((cfg.psiAxisMax - i * cfg.psiAxisMax / 4).toFixed(2), 4, y + 3);
+      c.fillStyle = '#5aa86a';
+      c.fillText((cfg.aucAxis.max - i * cfg.aucAxis.range / 4).toFixed(2), w - labelGutter + 10, y + 3);
+    }
+    strokeSeries(c, psi.map((v, i) => v == null ? null : { x: x(i), y: yp(v) }), '#1645ee', 4);
+    strokeSeries(c, auc.map((v, i) => v == null ? null : { x: x(i), y: ya(v) }), '#53cc61', 4);
+    MONTHS.forEach((m, i) => {
+      hits.feature.push({ x: x(i), y: 18, w: 18, h: h - 55, index: i });
+      c.fillStyle = '#7d8885'; c.fillText(m.split(' ')[0], x(i) - 8, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
+    });
+  }
+
+  /* -------------------------------------------------------------- tooltips */
+  function bindTooltip(canvasId, tooltipId, hitKey, htmlFor) {
+    const cv = document.getElementById(canvasId), tip = document.getElementById(tooltipId);
+    cv.addEventListener('mousemove', e => {
+      const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      const hit = (hits[hitKey] || []).find(a => a.r
+        ? Math.hypot(mx - a.x, my - a.y) <= a.r
+        : mx >= a.x && mx <= a.x + (a.w || 0) && my >= a.y && my <= a.y + (a.h || 0));
+      if (!hit) { tip.style.display = 'none'; return; }
+      tip.innerHTML = htmlFor(hit.index, hit);
+      tip.style.display = 'block';
+      tip.style.left = Math.min(mx + 12, r.width - 225) + 'px';
+      tip.style.top = Math.max(5, my - 70) + 'px';
+    });
+    cv.addEventListener('mouseleave', () => tip.style.display = 'none');
+  }
+  const selectedLabel = id => document.getElementById(id).selectedOptions[0].text;
+
+  function bindAllTooltips() {
+    bindTooltip('qualityChart', 'qualityTooltip', 'quality', (_, hit) => hit.html);
+    bindTooltip('scoreChart', 'scoreTooltip', 'score', i => {
+      const p = scoreRows[i];
+      return `<b>${p.month} · ${selectedLabel('scoreSample')}</b><br>Mean score: ${fmt3(p.score)}<br>Mean target: ${fmt3(p.target)}` +
+        `<br>Total: ${num(p.total)}<br>Labeled: ${num(p.labeled)}<br>Unlabeled: ${num(p.unlabeled)}` +
+        `<br>Label share: ${(p.labeled / p.total * 100).toFixed(1)}%`;
+    });
+    bindTooltip('distributionChart', 'distributionTooltip', 'distribution', i => {
+      const cfg = D.scoreDistribution, s = cfg.bySample[document.getElementById('distributionSample').value];
+      return `<b>${selectedLabel('distributionSample')}</b><br>Score bin: ${cfg.binEdges[i].toFixed(1)}–${cfg.binEdges[i + 1].toFixed(1)}` +
+        `<br>target = 0 density: ${fmt3(s.target0[i])}<br>target = 1 density: ${fmt3(s.target1[i])}` +
+        `<br>Counts: ${Math.round(s.target0[i] * cfg.countScale.target0)} / ${Math.round(s.target1[i] * cfg.countScale.target1)}`;
+    });
+    bindTooltip('scorePsiChart', 'psiTooltip', 'psi', i => {
+      const cfg = D.scoreStability, s = cfg.bySample[document.getElementById('psiSample').value];
+      return `<b>${MONTHS[i]} · ${selectedLabel('psiSample')}</b><br>PSI: ${fmt3(s.psi[i])}` +
+        `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: full Train distribution`;
+    });
+    bindTooltip('featureStabilityChart', 'featureTooltip', 'feature', i => {
+      const cfg = D.featureStability, f = currentStabilityFeature(), s = cfg.bySample[f.name];
+      const auc = s.auc[i], raw = i % 3 === 0 ? 1 - auc : auc;
+      return `<b>${f.name} · ${MONTHS[i]}</b><br>SHAP rank/value: #${D.features.indexOf(f) + 1} / ${fmt3(Math.abs(f.shap))}` +
+        `<br>PSI: ${fmt3(s.psi[i])}<br>AUC: ${fmt3(auc)}<br>Raw AUC / direction: ${fmt3(raw)} / ${raw < .5 ? 'inverse' : 'direct'}` +
+        `<br>Rows: ${num(s.rows[i])}<br>Labeled: ${num(s.labeled[i])}<br>Positive count: ${num(Math.round(s.labeled[i] * D.meta.targetRate))}` +
+        `<br>Coverage: ${pct1(f.coverage)}<br>Missing rate: ${(100 - f.coverage).toFixed(1)}%`;
+    });
+  }
+
+  /* -------------------------------------------------------- sample tooltip */
+  function bindSampleTooltip() {
+    const cv = document.getElementById('sampleChart'), tip = document.getElementById('sampleTooltip');
+    cv.addEventListener('mousemove', e => {
+      const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      const hit = [...sampleHitAreas].reverse().find(a => mx >= a.x && mx <= a.x + a.w && my >= a.y && my <= a.y + a.h);
+      if (!hit) { tip.style.display = 'none'; return; }
+      const p = D.sampleStats.monthlyPoints[hit.index];
+      tip.innerHTML = `<b>${p.month} · ${sampleById[p.sample].label}</b><br>Total count: ${num(p.total)}` +
+        `<br>Labeled count: ${num(p.labeled)}<br>Unlabeled count: ${num(p.unlabeled)}` +
+        `<br>Positive count: ${num(p.positive)}<br>Mean target: ${fmt3(p.mean)}`;
+      tip.style.display = 'block';
+      tip.style.left = Math.min(mx + 12, r.width - 190) + 'px';
+      tip.style.top = Math.max(5, my - 80) + 'px';
+    });
+    cv.addEventListener('mouseleave', () => tip.style.display = 'none');
+  }
+
+  /* ------------------------------------------------------- tables / export */
+  function tableText(id, sep) {
+    const rows = [...document.getElementById(id).closest('table').rows];
+    return rows.map(r => [...r.cells].map(c => c.innerText.trim()).join(sep || '\t')).join('\n');
+  }
+
+  function bindControls() {
+    document.getElementById('periodSelect').addEventListener('change', drawChart);
+    document.getElementById('performanceSample').addEventListener('change', drawChart);
+    document.getElementById('scoreSample').addEventListener('change', drawScore);
+    document.getElementById('distributionSample').addEventListener('change', drawDistribution);
+    document.getElementById('psiSample').addEventListener('change', drawPsi);
+    document.getElementById('featureSearch').addEventListener('input', renderFeatures);
+    document.getElementById('statusFilter').addEventListener('change', renderFeatures);
+    document.getElementById('showAllShap').addEventListener('click', () => { shapAll = !shapAll; renderShap(); });
+    document.querySelectorAll('.series-toggle').forEach(b => b.addEventListener('click', () => {
+      chartState[b.dataset.series] = !chartState[b.dataset.series];
+      b.classList.toggle('active', chartState[b.dataset.series]);
+      drawScore();
+    }));
+    document.querySelectorAll('.result-tab').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.result-tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.result-pane').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('result-' + b.dataset.result).classList.add('active');
+    }));
+    document.querySelectorAll('.copy-table').forEach(b => b.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(tableText(b.dataset.copy));
+      const old = b.textContent; b.textContent = 'Copied'; setTimeout(() => b.textContent = old, 1200);
+    }));
+    document.querySelectorAll('.csv-table').forEach(b => b.addEventListener('click', () => {
+      const blob = new Blob([tableText(b.dataset.table, ',')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = b.dataset.table + '.csv'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }));
+    document.querySelectorAll('.chart-export').forEach(b => b.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = document.getElementById(b.dataset.chart).toDataURL('image/png');
+      a.download = b.dataset.chart + '.png'; a.click();
+    }));
+    document.querySelectorAll('.nav-link').forEach(a => a.addEventListener('click', () => {
+      document.querySelectorAll('.nav-link').forEach(x => x.classList.remove('active'));
+      a.classList.add('active');
+    }));
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const source = '<!doctype html>\n' + document.documentElement.outerHTML;
+      const blob = new Blob([source], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = D.meta.downloadFileName; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+  }
+
+  function drawAll() { drawChart(); drawSample(); drawScore(); drawDistribution(); drawPsi(); drawFeatureStability(); }
+
+  /* ------------------------------------------------------------------ init */
+  renderHeader();
+  renderMetricHero();
+  renderSummary();
+  renderSampleStats();
+  fillSampleSelects();
+  renderPsiLegend();
+  renderSearchResults();
+  renderFeatures();
+  renderShap();
+  renderFeatureSelect();
+  bindControls();
+  bindAllTooltips();
+  bindSampleTooltip();
+  setMetric(activeMetric);
+  drawAll();
+  window.addEventListener('resize', drawAll);
+})();
+</script>
+</body>
+</html>
