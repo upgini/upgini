@@ -185,9 +185,6 @@ class FeaturesEnricher(TransformerMixin):
 
     shared_datasets: list of str, optional (default=None)
         list of private shared dataset ids for custom search
-
-    reports_path: str, optional (default=None)
-        Directory for the HTML search report. Defaults to a `reports` folder in the current working directory.
     """
 
     TARGET_NAME = "target"
@@ -265,7 +262,6 @@ class FeaturesEnricher(TransformerMixin):
         sample_config: SampleConfig | None = None,
         print_trace_id: bool = False,
         print_loaded_report: bool = True,
-        reports_path: str | None = None,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -335,9 +331,8 @@ class FeaturesEnricher(TransformerMixin):
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
         self.add_info: AddInfo | None = None
-        self.reports_path = reports_path
         self.search_duration_seconds: float | None = None
-        self.report_file_path: str | None = None
+        self.report_html: str | None = None
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -2305,9 +2300,6 @@ class FeaturesEnricher(TransformerMixin):
             return None
         return ensemble[0]
 
-    def _reports_dir(self) -> Path:
-        return Path(self.reports_path) if self.reports_path else Path.cwd() / "reports"
-
     def _reference_rows(self) -> int | None:
         if self.X is None:
             return None
@@ -2337,18 +2329,12 @@ class FeaturesEnricher(TransformerMixin):
             bundle=self.bundle,
         )
 
-    def _write_score_report(self) -> str | None:
+    def _score_report_html(self) -> str | None:
         if self._search_task is None or not self._has_single_ensemble_score():
             return None
         report_data = self._assemble_report_data()
-        html = generate_html_report(report_data)
-        reports_dir = self._reports_dir()
-        reports_dir.mkdir(parents=True, exist_ok=True)
-        path = reports_dir / f"upgini-report-{report_data.metadata.search_id}.html"
-        path.write_text(html, encoding="utf-8")
-        self.report_file_path = str(path)
-        self.logger.info(f"Score report saved to {path}")
-        return self.report_file_path
+        self.report_html = generate_html_report(report_data)
+        return self.report_html
 
     def _is_ensemble_feature(self, column_name: str) -> bool:
         renaming = self.fit_columns_renaming or {}
@@ -4267,7 +4253,7 @@ if response.status_code == 200:
         self.metrics = None
         self.metrics_raw = None
         self.metrics_metric_name = None
-        self.report_file_path = None
+        self.report_html = None
         self.fit_columns_renaming = None
         self.fit_dropped_features = set()
         self.fit_generated_features = []
@@ -6085,13 +6071,16 @@ if response.status_code == 200:
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
-            report_path = self._write_score_report() or self.report_file_path
-            if report_path:
+            report_html = self._score_report_html() or self.report_html
+            if report_html:
                 if not ipython_available():
-                    print(f"Full report saved to {report_path}")
                     return
+                search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
                 return show_button_open_report(
-                    report_path, display_id=display_id, display_handle=display_handle
+                    report_html,
+                    download_name=f"upgini-report-{search_id}.html",
+                    display_id=display_id,
+                    display_handle=display_handle,
                 )
 
             eval_sets_drift_df = self._get_eval_sets_drift_summary()

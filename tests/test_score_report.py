@@ -150,12 +150,11 @@ def test_jupyter_metrics_table_combines_std():
     assert "Enriched GINI std" not in display.columns
 
 
-def _ensemble_enricher(url: str, tmp_path: Path, ensemble_col: str = "f_autofe_upgini_score_abc123") -> FeaturesEnricher:
+def _ensemble_enricher(url: str, ensemble_col: str = "f_autofe_upgini_score_abc123") -> FeaturesEnricher:
     enricher = FeaturesEnricher(
         search_keys={"phone": SearchKey.PHONE},
         endpoint=url,
         logs_enabled=False,
-        reports_path=str(tmp_path),
     )
     enricher._search_task = SearchTask("search-abc")
     enricher._search_task.provider_metadata_v2 = [_ensemble_metadata(ensemble_col)]
@@ -171,29 +170,36 @@ def _ensemble_enricher(url: str, tmp_path: Path, ensemble_col: str = "f_autofe_u
     return enricher
 
 
-def test_write_score_report_to_custom_path(requests_mock: Mocker, tmp_path: Path):
+def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_path: Path, monkeypatch):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
-    enricher = _ensemble_enricher(url, tmp_path)
+    monkeypatch.chdir(tmp_path)
+    enricher = _ensemble_enricher(url)
 
-    path = enricher._write_score_report()
+    html = enricher._score_report_html()
 
-    assert path == str(tmp_path / "upgini-report-search-abc.html")
-    html = Path(path).read_text(encoding="utf-8")
+    assert html is not None
     assert "search-abc" in html
     assert '"enriched": 0.61' in html
     assert "42 sec" in html
     assert '"label": "Used in model"' in html
     assert '"value": "2"' in html
+    assert not (tmp_path / "reports").exists()
+    assert list(tmp_path.glob("*.html")) == []
 
 
 def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: Path, monkeypatch):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
-    enricher = _ensemble_enricher(url, tmp_path)
+    monkeypatch.chdir(tmp_path)
+    enricher = _ensemble_enricher(url)
     pdf_calls = []
+    opened = []
     monkeypatch.setattr("upgini.features_enricher.ipython_available", lambda: True)
-    monkeypatch.setattr("upgini.features_enricher.show_button_open_report", lambda *args, **kwargs: "html")
+    monkeypatch.setattr(
+        "upgini.features_enricher.show_button_open_report",
+        lambda source, **kwargs: opened.append((source, kwargs.get("download_name"))) or "html",
+    )
     monkeypatch.setattr(
         "upgini.features_enricher.prepare_and_show_report",
         lambda *args, **kwargs: pdf_calls.append(True) or "pdf",
@@ -201,19 +207,21 @@ def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: 
 
     assert enricher._FeaturesEnricher__show_report_button() == "html"
     assert pdf_calls == []
-    assert (tmp_path / "upgini-report-search-abc.html").exists()
+    assert opened[0][1] == "upgini-report-search-abc.html"
+    assert "search-abc" in opened[0][0]
+    assert not (tmp_path / "reports").exists()
+    assert list(tmp_path.glob("*.html")) == []
     assert list(tmp_path.glob("*.pdf")) == []
 
 
-def test_write_score_report_skipped_without_ensemble(requests_mock: Mocker, tmp_path: Path):
+def test_score_report_skipped_without_ensemble(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
-    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False, reports_path=str(tmp_path))
+    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
     enricher._search_task = SearchTask("search-abc")
     enricher.feature_names_ = ["ads_feature"]
 
-    assert enricher._write_score_report() is None
-    assert list(tmp_path.iterdir()) == []
+    assert enricher._score_report_html() is None
 
 
 def test_get_ensemble_score_column_does_not_need_baseline(requests_mock: Mocker):
@@ -232,14 +240,10 @@ def test_get_ensemble_score_column_does_not_need_baseline(requests_mock: Mocker)
     assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
 
 
-def test_report_button_matches_pdf_markup_and_downloads_on_hosted_notebook(tmp_path, monkeypatch):
+def test_report_button_downloads_html_like_pdf():
     from upgini.utils.display_utils import _html_action_button, _report_button_html
 
-    report = tmp_path / "upgini-report-search-abc.html"
-    report.write_text("<html>ok</html>", encoding="utf-8")
-    monkeypatch.setattr("upgini.utils.track_info.is_hosted_notebook", lambda: True)
-
-    html = _report_button_html(str(report))
+    html = _report_button_html("<html>ok</html>", download_name="upgini-report-search-abc.html")
     payload = base64.b64encode(b"<html>ok</html>").decode()
     assert html == _html_action_button(
         "Open full report",
@@ -248,15 +252,3 @@ def test_report_button_matches_pdf_markup_and_downloads_on_hosted_notebook(tmp_p
     )
     assert 'download="upgini-report-search-abc.html"' in html
     assert "<button>Open full report</button>" in html
-
-
-def test_report_button_opens_local_file(tmp_path, monkeypatch):
-    from upgini.utils.display_utils import _html_action_button, _report_button_html
-
-    report = tmp_path / "upgini-report-search-abc.html"
-    report.write_text("<html>ok</html>", encoding="utf-8")
-    monkeypatch.setattr("upgini.utils.track_info.is_hosted_notebook", lambda: False)
-
-    html = _report_button_html(str(report))
-    assert html == _html_action_button("Open full report", report.resolve().as_uri())
-    assert "download=" not in html

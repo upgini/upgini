@@ -330,23 +330,38 @@ def prepare_and_show_report(
 
 
 def show_button_open_report(
-    path: str, title="Open full report", display_id: Optional[str] = None, display_handle=None
+    source: str,
+    title="Open full report",
+    download_name: Optional[str] = None,
+    display_id: Optional[str] = None,
+    display_handle=None,
 ):
-    return _display_html_button(
-        _report_button_html(path, title),
-        display_id=display_id,
-        display_handle=display_handle,
-    )
+    if not ipython_available():
+        return
+    try:
+        return _display_html_button(
+            _report_button_html(source, title, download_name),
+            display_id=display_id,
+            display_handle=display_handle,
+        )
+    except Exception:
+        pass
 
 
-def _report_button_html(path: str, title: str = "Open full report") -> str:
-    from upgini.utils.track_info import is_hosted_notebook
+def _report_button_html(source: str, title: str = "Open full report", download_name: Optional[str] = None) -> str:
+    download_name = download_name or f"upgini-report-{uuid.uuid4()}.html"
+    payload = _base64_from_tempfile(".html", lambda path: path.write_text(source, encoding="utf-8"))
+    return _html_action_button(title, f"data:text/html;base64,{payload}", download_name=download_name)
 
-    resolved = Path(path).resolve()
-    if is_hosted_notebook():
-        payload = base64.b64encode(resolved.read_bytes()).decode()
-        return _html_action_button(title, f"data:text/html;base64,{payload}", download_name=resolved.name)
-    return _html_action_button(title, resolved.as_uri())
+
+def _base64_from_tempfile(suffix: str, write) -> str:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        write(tmp_path)
+        return base64.b64encode(tmp_path.read_bytes()).decode()
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _html_action_button(title: str, href: str, download_name: Optional[str] = None) -> str:
@@ -376,15 +391,11 @@ def show_button_download_pdf(
     try:
         from xhtml2pdf import pisa
 
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-        try:
-            with tmp_path.open("wb") as output:
+        def write_pdf(path: Path):
+            with path.open("wb") as output:
                 pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
-            payload = base64.b64encode(tmp_path.read_bytes()).decode()
-        finally:
-            tmp_path.unlink(missing_ok=True)
 
+        payload = _base64_from_tempfile(".pdf", write_pdf)
         return _display_html_button(
             _html_action_button(title, f"data:application/pdf;base64,{payload}", download_name=download_name),
             display_id=display_id,
