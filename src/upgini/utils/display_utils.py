@@ -327,6 +327,37 @@ def prepare_and_show_report(
         return show_button_download_pdf(report, display_id=display_id, display_handle=display_handle)
 
 
+def show_button_open_report(
+    path: str, title="Open full report", display_id: Optional[str] = None, display_handle=None
+):
+    import webbrowser
+    from pathlib import Path
+
+    from IPython.display import HTML, display
+    from ipywidgets import Button, Layout
+
+    resolved = Path(path).resolve()
+    path_html = f'<div style="margin-top:6px;font-size:12px;color:#57534e">{resolved}</div>'
+    link_html = f"""<div>
+        <a href="{resolved.as_uri()}" target="_blank" rel="noopener noreferrer">
+            <button type="button">{title}</button>
+        </a>
+        {path_html}
+    </div>"""
+    if display_handle is not None:
+        display_handle.update(HTML(link_html))
+        return
+
+    button = Button(description=title, layout=Layout(width="auto"))
+
+    def on_click(b):
+        webbrowser.open(resolved.as_uri())
+
+    button.on_click(on_click)
+    display(button)
+    return display(HTML(path_html), display_id=display_id)
+
+
 def show_button_download_pdf(
     source: str, title="\U0001f4ca Download PDF report", display_id: Optional[str] = None, display_handle=None
 ):

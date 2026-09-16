@@ -92,10 +92,14 @@ from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
+from upgini.report.assemble import assemble_report_data
+from upgini.report.html import generate_html_report
 from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
+    ipython_available,
     prepare_and_show_report,
+    show_button_open_report,
     show_request_quote_button,
 )
 from upgini.utils.email_utils import (
@@ -175,6 +179,9 @@ class FeaturesEnricher(TransformerMixin):
 
     shared_datasets: list of str, optional (default=None)
         list of private shared dataset ids for custom search
+
+    reports_path: str, optional (default=None)
+        Directory for the HTML search report. Defaults to a `reports` folder in the current working directory.
     """
 
     TARGET_NAME = "target"
@@ -252,6 +259,7 @@ class FeaturesEnricher(TransformerMixin):
         sample_config: SampleConfig | None = None,
         print_trace_id: bool = False,
         print_loaded_report: bool = True,
+        reports_path: str | None = None,
         **kwargs,
     ):
         self.bundle = get_custom_bundle(custom_bundle_config)
@@ -310,6 +318,7 @@ class FeaturesEnricher(TransformerMixin):
         self.relevant_data_sources: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self._relevant_data_sources_wo_links: pd.DataFrame = self.EMPTY_DATA_SOURCES
         self.metrics: pd.DataFrame | None = None
+        self.metrics_metric_name: str | None = None
         self.feature_names_ = []
         self.external_source_feature_names = []
         self.feature_importances_ = []
@@ -319,6 +328,9 @@ class FeaturesEnricher(TransformerMixin):
         self.disable_force_downsampling = disable_force_downsampling
         self.print_trace_id = print_trace_id
         self.add_info: AddInfo | None = None
+        self.reports_path = reports_path
+        self.search_duration_seconds: float | None = None
+        self.report_file_path: str | None = None
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -1138,18 +1150,9 @@ class FeaturesEnricher(TransformerMixin):
                     uplift_perc = None
                     enriched_estimator = None
                     ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
-                    if set(fitting_X.columns) != set(fitting_enriched_X.columns):
-                        if self.baseline_score_column is not None and ensemble_score_column is not None:
-                            self.logger.info(
-                                f"Only ensemble model returned; calculate enriched {metric} via roc_auc "
-                                f"on ensemble score column: {ensemble_score_column}"
-                            )
-                        else:
-                            self.logger.info(
-                                f"Calculate enriched {metric} on train combined "
-                                f"features: {fitting_enriched_X.columns.to_list()}"
-                            )
-                        enriched_estimator = EstimatorWrapper.create(
+
+                    def evaluate_enriched(score_column, description: str):
+                        wrapper = EstimatorWrapper.create(
                             estimator,
                             self.logger,
                             model_task_type,
@@ -1161,22 +1164,48 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=text_features,
                             has_time=has_time,
                         )
-                        enriched_cv_result = enriched_estimator.cross_val_predict(
-                            fitting_enriched_X, enriched_y_sorted, ensemble_score_column
+                        cv_result = wrapper.cross_val_predict(
+                            fitting_enriched_X, enriched_y_sorted, score_column
                         )
-                        enriched_metric = enriched_cv_result.get_display_metric()
-                        updating_shaps = enriched_cv_result.shap_values
+                        display_metric = cv_result.get_display_metric()
+                        if display_metric is None:
+                            self.logger.warning(f"Enriched {metric} {description} is None")
+                            return None, None, cv_result.shap_values, None, None
+                        self.logger.info(f"Enriched {metric} {description}: {display_metric}")
+                        sample_uplift = None
+                        sample_uplift_perc = None
+                        if baseline_metric is not None:
+                            sample_uplift = (cv_result.metric - baseline_cv_result.metric) * multiplier
+                            sample_uplift_perc = sample_uplift / abs(baseline_cv_result.metric) * 100
+                        return wrapper, display_metric, cv_result.shap_values, sample_uplift, sample_uplift_perc
 
-                        if enriched_metric is None:
-                            self.logger.warning(
-                                f"Enriched {metric} on train combined features is None (maybe all features was removed)"
-                            )
-                            enriched_estimator = None
-                        else:
-                            self.logger.info(f"Enriched {metric} on train combined features: {enriched_metric}")
-                        if baseline_metric is not None and enriched_metric is not None:
-                            uplift = (enriched_cv_result.metric - baseline_cv_result.metric) * multiplier
-                            uplift_perc = uplift / abs(baseline_cv_result.metric) * 100
+                    if ensemble_score_column is not None:
+                        self.logger.info(
+                            f"Only ensemble model returned; calculate enriched {metric} via roc_auc "
+                            f"on ensemble score column: {ensemble_score_column}"
+                        )
+                        (
+                            enriched_estimator,
+                            enriched_metric,
+                            updating_shaps,
+                            uplift,
+                            uplift_perc,
+                        ) = evaluate_enriched(
+                            ensemble_score_column,
+                            f"on ensemble score column {ensemble_score_column}",
+                        )
+                    elif set(fitting_X.columns) != set(fitting_enriched_X.columns):
+                        self.logger.info(
+                            f"Calculate enriched {metric} on train combined "
+                            f"features: {fitting_enriched_X.columns.to_list()}"
+                        )
+                        (
+                            enriched_estimator,
+                            enriched_metric,
+                            updating_shaps,
+                            uplift,
+                            uplift_perc,
+                        ) = evaluate_enriched(None, "on train combined features")
 
                     train_metrics = {
                         self.bundle.get("quality_metrics_segment_header"): self.bundle.get(
@@ -1323,6 +1352,7 @@ class FeaturesEnricher(TransformerMixin):
                     elif uplift_col in metrics_df.columns and (metrics_df[uplift_col] < 0).any():
                         self.logger.warning("Uplift is negative")
 
+                    self.metrics_metric_name = metric
                     return metrics_df
             except Exception as e:
                 error_message = "Failed to calculate metrics" + (
@@ -2223,6 +2253,69 @@ class FeaturesEnricher(TransformerMixin):
             return None
         column = new_external[0]
         return column if self._is_ensemble_feature(column) else None
+
+    def _has_single_ensemble_score(self) -> bool:
+        return self._get_single_ensemble_score_name() is not None
+
+    def _get_single_ensemble_score_name(self) -> str | None:
+        selected = list(self.feature_names_ or [])
+        ensemble = [name for name in selected if self._is_ensemble_feature(name)]
+        if len(ensemble) != 1:
+            return None
+        etalon_columns = set()
+        if self._search_task is not None:
+            etalon_columns = {
+                meta.name
+                for meta in (self._search_task.get_all_features_metadata_v2() or [])
+                if meta.source == "etalon"
+            }
+        extras = [name for name in selected if name != ensemble[0] and name not in etalon_columns]
+        if extras:
+            return None
+        return ensemble[0]
+
+    def _reports_dir(self) -> Path:
+        return Path(self.reports_path) if self.reports_path else Path.cwd() / "reports"
+
+    def _reference_rows(self) -> int | None:
+        if self.X is None:
+            return None
+        rows = _num_samples(self.X)
+        for eval_pair in self.eval_set or []:
+            rows += _num_samples(eval_pair[0])
+        return rows
+
+    def _report_sample_names(self) -> list[str]:
+        samples = [self.bundle.get("quality_metrics_train_segment")]
+        for idx, _ in enumerate(self.eval_set or []):
+            samples.append(self.bundle.get("quality_metrics_eval_segment").format(idx + 1))
+        return samples
+
+    def _assemble_report_data(self):
+        search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
+        return assemble_report_data(
+            search_id=search_id,
+            search_keys=[str(sk) for sk in self.search_keys.values()],
+            search_duration_seconds=self.search_duration_seconds,
+            reference_rows=self._reference_rows(),
+            samples=self._report_sample_names(),
+            metrics_df=self.metrics,
+            metric_name=self.metrics_metric_name,
+            bundle=self.bundle,
+        )
+
+    def _write_score_report(self) -> str | None:
+        if self._search_task is None or not self._has_single_ensemble_score():
+            return None
+        report_data = self._assemble_report_data()
+        html = generate_html_report(report_data)
+        reports_dir = self._reports_dir()
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        path = reports_dir / f"upgini-report-{report_data.metadata.search_id}.html"
+        path.write_text(html, encoding="utf-8")
+        self.report_file_path = str(path)
+        self.logger.info(f"Score report saved to {path}")
+        return self.report_file_path
 
     def _is_ensemble_feature(self, column_name: str) -> bool:
         renaming = self.fit_columns_renaming or {}
@@ -4126,6 +4219,7 @@ if response.status_code == 200:
         self._fit_match_search_keys = None
         self.__cached_sampled_datasets = dict()
         self.metrics = None
+        self.metrics_metric_name = None
         self.fit_columns_renaming = None
         self.fit_dropped_features = set()
         self.fit_generated_features = []
@@ -4536,6 +4630,7 @@ if response.status_code == 200:
 
             self._search_task.poll_result(self._get_trace_id(), quiet=True)
             self.__persist_transform_match_hashes()
+            self.search_duration_seconds = time.time() - start_time
 
             seconds_left = time.time() - start_time
             progress = SearchProgress(97.0, ProgressStage.GENERATING_REPORT, seconds_left)
@@ -5942,6 +6037,15 @@ if response.status_code == 200:
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
         try:
+            report_path = self._write_score_report()
+            if report_path is not None:
+                if not ipython_available():
+                    print(f"Full report saved to {report_path}")
+                    return
+                return show_button_open_report(
+                    report_path, display_id=display_id, display_handle=display_handle
+                )
+
             eval_sets_drift_df = self._get_eval_sets_drift_summary()
 
             return prepare_and_show_report(
