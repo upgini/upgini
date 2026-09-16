@@ -13,7 +13,7 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
     SearchKey,
 )
-from upgini.report.assemble import assemble_report_data, format_search_duration
+from upgini.report.assemble import UPGINI_REPORT_BRANDING_URL, assemble_report_data, format_search_duration
 from upgini.report.html import generate_html_report
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
@@ -42,11 +42,37 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
     )
 
 
+def _parse_report_data(html: str) -> dict:
+    payload_start = html.index("const REPORT_DATA = ") + len("const REPORT_DATA = ")
+    payload_end = html.index(";\n\n/* =")
+    return json.loads(html[payload_start:payload_end])
+
+
 def test_format_search_duration():
     assert format_search_duration(None) is None
     assert format_search_duration(9) == "9 sec"
     assert format_search_duration(62) == "1 min 2 sec"
     assert format_search_duration(3723) == "1 h 2 min 3 sec"
+
+
+def test_report_without_branding_url_shows_only_upgini(monkeypatch):
+    monkeypatch.delenv(UPGINI_REPORT_BRANDING_URL, raising=False)
+    data = assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle)
+    assert data.metadata.logo_url is None
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    assert "partnerLogo" not in payload["meta"]
+    assert 'aria-label="Upgini"' in html
+
+
+def test_report_uses_branding_url_from_env(monkeypatch):
+    monkeypatch.setenv(UPGINI_REPORT_BRANDING_URL, " https://cdn.example.com/logo.svg ")
+    data = assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle)
+    assert data.metadata.logo_url == "https://cdn.example.com/logo.svg"
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    assert payload["meta"]["partnerLogo"]["src"] == "https://cdn.example.com/logo.svg"
+    assert 'aria-label="Upgini"' in html
 
 
 def test_generate_html_report_from_assembled_data():
@@ -74,9 +100,7 @@ def test_generate_html_report_from_assembled_data():
         bundle=bundle,
     )
     html = generate_html_report(data)
-    payload_start = html.index("const REPORT_DATA = ") + len("const REPORT_DATA = ")
-    payload_end = html.index(";\n\n/* =")
-    payload = json.loads(html[payload_start:payload_end])
+    payload = _parse_report_data(html)
 
     assert payload["meta"]["searchId"] == "search-abc"
     assert payload["meta"]["searchKeys"] == ["PHONE", "DATE"]

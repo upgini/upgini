@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -8,6 +9,8 @@ import pandas as pd
 from upgini.__about__ import __version__
 from upgini.report.data import QualitySample, ReportData, ReportMetadata, SampleStats, SearchResultsSummary
 from upgini.resource_bundle import ResourceBundle
+
+UPGINI_REPORT_BRANDING_URL = "UPGINI_REPORT_BRANDING_URL"
 
 
 def format_search_duration(seconds: Optional[float]) -> Optional[str]:
@@ -36,7 +39,6 @@ def assemble_report_data(
     metric_name: Optional[str] = None,
     model_features: Optional[int] = None,
     is_binary: bool = False,
-    logo_url: Optional[str] = None,
     bundle: ResourceBundle,
 ) -> ReportData:
     generated_at = generated_at or datetime.now(timezone.utc)
@@ -50,13 +52,20 @@ def assemble_report_data(
             search_duration=format_search_duration(search_duration_seconds),
             reference_rows=reference_rows,
             samples=sample_names,
-            logo_url=logo_url or None,
+            logo_url=_branding_url(),
         ),
         quality_by_sample=_quality_samples(metrics_df, metric_name, bundle),
         summary=SearchResultsSummary(model_features=model_features),
         sample_stats=_sample_stats(sample_names, metrics_df, bundle),
         is_binary=is_binary,
     )
+
+
+def _branding_url() -> Optional[str]:
+    env_url = os.getenv(UPGINI_REPORT_BRANDING_URL)
+    if env_url and env_url.strip():
+        return env_url.strip()
+    return None
 
 
 def _quality_samples(
