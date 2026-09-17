@@ -79,7 +79,7 @@ def _samples(data: ReportData) -> list[dict]:
         {
             "id": _slug(name),
             "label": name,
-            "caption": "",
+            "caption": "OOF validation" if index == 0 else "",
             "color": _SAMPLE_COLORS[index % len(_SAMPLE_COLORS)],
         }
         for index, name in enumerate(names)

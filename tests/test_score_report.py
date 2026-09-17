@@ -108,6 +108,13 @@ def test_generate_html_report_from_assembled_data():
     assert payload["meta"]["searchDuration"] == "2 min 5 sec"
     assert payload["meta"]["totalRows"] == 140
     assert payload["keyResult"]["metrics"]["gini"]["bySample"]["train"]["enriched"] == 0.512
+    assert payload["samples"][0] == {
+        "id": "train",
+        "label": "Train",
+        "caption": "OOF validation",
+        "color": "#1645ee",
+    }
+    assert payload["samples"][1]["caption"] == ""
     assert payload["summaryCards"][1] == {"label": "Used in model", "value": "2", "caption": ""}
     assert payload["sampleStats"]["rows"][1]["values"]["train"] == "100"
 
