@@ -124,6 +124,7 @@ def test_generate_html_report_from_assembled_data():
     assert "Score analysis" in html
     assert "Score distribution" in html
     assert "Score stability (PSI)" in html
+    assert "reference: first period (baseline month)" in html
     assert "Features SHAP" in html
     assert "Search results" in html
     assert "Feature stability" in html

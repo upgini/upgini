@@ -71,7 +71,7 @@
       </section>
 
       <section id="score-stability" class="section">
-        <div class="section-head"><div><h2>Score stability (PSI)</h2><p>Monthly PSI of scores · reference: full Train distribution · fixed reference bins.</p></div><div class="toolbar"><select id="psiSample" class="control" aria-label="Score stability sample"></select><button class="button ghost chart-export" data-chart="scorePsiChart">Save PNG</button></div></div>
+        <div class="section-head"><div><h2>Score stability (PSI)</h2><p>Monthly PSI of scores · reference: first period (baseline month) · fixed reference bins.</p></div><div class="toolbar"><select id="psiSample" class="control" aria-label="Score stability sample"></select><button class="button ghost chart-export" data-chart="scorePsiChart">Save PNG</button></div></div>
         <div class="panel chart-panel"><div class="threshold-legend" id="psiThresholdLegend"></div><div class="canvas-wrap"><canvas id="scorePsiChart" aria-label="Monthly score PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="psiTooltip"></div></div></div>
       </section>
 
@@ -628,7 +628,7 @@ const REPORT_DATA = __REPORT_DATA__;
     bindTooltip('scorePsiChart', 'psiTooltip', 'psi', i => {
       const cfg = D.scoreStability, s = cfg.bySample[document.getElementById('psiSample').value];
       return `<b>${MONTHS[i]} · ${selectedLabel('psiSample')}</b><br>PSI: ${fmt3(s.psi[i])}` +
-        `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: full Train distribution`;
+        `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: first period (baseline month)`;
     });
     bindTooltip('featureStabilityChart', 'featureTooltip', 'feature', i => {
       const cfg = D.featureStability, f = currentStabilityFeature(), s = cfg.bySample[f.name];

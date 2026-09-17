@@ -112,9 +112,9 @@ def test_quality_and_score_series_from_sampled_scores():
 
 def test_score_histogram_equal_bins_and_psi_reference():
     train = make_report_frame(
-        [0, 0, 0, 1, 1, 1],
-        date=["2024-01-01"] * 6,
-        score=[0.05, 0.08, 0.09, 0.91, 0.94, 0.97],
+        [0, 0, 0, 1, 1, 1, 0, 1],
+        date=["2024-01-01"] * 6 + ["2024-02-01"] * 2,
+        score=[0.05, 0.08, 0.09, 0.91, 0.94, 0.97, 0.92, 0.95],
     )
     eval1 = make_report_frame(
         [0, 1, 0, 1],
@@ -130,10 +130,9 @@ def test_score_histogram_equal_bins_and_psi_reference():
 
     assert charts.histogram_bin_edges == [round(i / HISTOGRAM_BINS, 1) for i in range(HISTOGRAM_BINS + 1)]
     train_hist = next(row for row in charts.histograms if row.sample == "Train")
-    assert train_hist.n_target_0 == 3
-    assert train_hist.n_target_1 == 3
-    assert train_hist.target_0[0] == 1.0
-    assert sum(train_hist.target_0[1:]) == 0
+    assert train_hist.n_target_0 == 4
+    assert train_hist.n_target_1 == 4
+    assert train_hist.target_0[0] == 0.75
     assert train_hist.target_1[-1] == 1.0
 
     train_psi = next(row for row in charts.score_psi if row.sample == "Train")
@@ -141,7 +140,7 @@ def test_score_histogram_equal_bins_and_psi_reference():
     assert train_psi.psi[0] == 0
     assert train_psi.rows[0] == 6
     assert train_psi.coverage[0] == 100.0
-    assert train_psi.psi[1] is None
+    assert train_psi.psi[1] > PSI_WARNING
     assert eval_psi.psi[0] is None
     assert eval_psi.psi[1] > PSI_WARNING
     assert charts.psi_warning == PSI_WARNING
@@ -202,5 +201,5 @@ def test_html_payload_includes_pylib_chart_series():
     assert payload["scoreAnalysis"]["bySample"]["train"]["meanScore"][0] == 0.5
     assert sum(payload["scoreDistribution"]["bySample"]["train"]["target0"]) == 1
     assert payload["scoreStability"]["thresholds"] == {"warning": 0.1, "critical": 0.25}
-    assert len(payload["scoreStability"]["bySample"]["train"]["psi"]) == 2
+    assert payload["scoreStability"]["bySample"]["train"]["psi"][0] == 0
     assert payload["scoreStability"]["bySample"]["train"]["rows"][0] == 2

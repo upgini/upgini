@@ -344,10 +344,17 @@ def _score_psi(names: list[str], scored_samples: dict[str, pd.DataFrame], timeli
     if not timeline or not scored_samples:
         return []
     train = scored_samples.get(names[0]) if names else None
-    if train is None or SCORE not in train.columns:
+    if train is None or SCORE not in train.columns or DATE not in train.columns:
         return []
-    reference = pd.to_numeric(train[SCORE], errors="coerce").dropna()
-    if reference.empty:
+    train_scores = pd.to_numeric(train[SCORE], errors="coerce")
+    train_months = _month_keys(train[DATE])
+    reference = None
+    for month in timeline:
+        month_scores = train_scores[train_months == month].dropna()
+        if not month_scores.empty:
+            reference = month_scores
+            break
+    if reference is None:
         return []
     bins = _get_bin_edges(reference, HISTOGRAM_BINS)
     rows = []
