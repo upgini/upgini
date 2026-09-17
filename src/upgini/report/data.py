@@ -69,6 +69,8 @@ class SearchResultsSummary:
     model_features: Optional[int] = None
     data_sources: Optional[int] = None
     stable_features_share: Optional[float] = None
+    contributed_sources: Optional[int] = None
+    stable_features: Optional[int] = None
 
 
 @dataclass

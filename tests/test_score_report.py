@@ -27,7 +27,29 @@ SearchTask.PROTECT_FROM_RATE_LIMIT = False
 def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
     return ProviderTaskMetadataV2(
         features=[
-            FeaturesMetadataV2(name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=1.0)
+            FeaturesMetadataV2(name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=1.0),
+            FeaturesMetadataV2(
+                name="f_model1_abc",
+                type="numeric",
+                source="ads",
+                hit_rate=98.7,
+                shap_value=0.08,
+                data_provider="Upgini",
+                data_source="Usage Data",
+                psi_value=0.05,
+                drift_score=0.03,
+            ),
+            FeaturesMetadataV2(
+                name="f_model2_xyz",
+                type="numeric",
+                source="ads",
+                hit_rate=96.9,
+                shap_value=-0.15,
+                data_provider="Upgini",
+                data_source="Accounts Availability",
+                psi_value=0.22,
+                drift_score=0.11,
+            ),
         ],
         generated_features=[
             GeneratedFeatureMetadata(
@@ -35,8 +57,8 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
                 formula="ensemble_score(model1,model2)",
                 display_index="abc123",
                 base_columns=[
-                    BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
-                    BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    BaseColumnMetadata(original_name="model1", hashed_name="f_model1_abc", is_augmented=False),
+                    BaseColumnMetadata(original_name="model2", hashed_name="f_model2_xyz", is_augmented=False),
                 ],
             )
         ],
@@ -116,6 +138,8 @@ def test_generate_html_report_from_assembled_data():
     }
     assert payload["samples"][1]["caption"] == ""
     assert payload["summaryCards"][1] == {"label": "Used in model", "value": "2", "caption": ""}
+    assert payload["summaryCards"][2]["caption"] == ""
+    assert payload["summaryCards"][3]["caption"] == ""
     assert payload["sampleStats"]["rows"][1]["values"]["train"] == "100"
 
     assert "const REPORT_DATA =" in html
@@ -335,6 +359,52 @@ def test_assemble_report_data_uses_dataset_and_cached_scores(requests_mock: Mock
     assert data.charts.quality_monthly[0].enriched[0] is not None
     assert data.charts.histograms[0].n_target_0 == 2
     assert data.charts.score_psi[0].rows[0] == 2
+    assert [row.name for row in data.features] == ["model2", "model1"]
+    assert data.summary.model_features == 2
+    assert data.summary.relevant_features == 2
+
+
+def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+
+    assert enricher._has_single_ensemble_score()
+    assert enricher.feature_names_ == [ensemble_col]
+
+    data = enricher._assemble_report_data()
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    names = [row["name"] for row in payload["features"]]
+
+    assert names == ["model2", "model1"]
+    assert ensemble_col not in names
+    assert "f_model1_abc" not in names
+    assert "f_model2_xyz" not in names
+    assert payload["features"][0]["shap"] == -0.15
+    assert payload["features"][0]["importance"] == 0.15
+    assert payload["features"][0]["status"] == "watch"
+    assert payload["features"][0]["provider"] == "Upgini"
+    assert payload["features"][0]["source"] == "Accounts Availability"
+    assert payload["features"][0]["coverage"] == 96.9
+    assert payload["features"][0]["psi"] == 0.22
+    assert payload["features"][1]["shap"] == 0.08
+    assert payload["features"][1]["status"] == "good"
+    assert payload["summaryCards"][0] == {"label": "Features found", "value": "2", "caption": ""}
+    assert payload["summaryCards"][1] == {"label": "Used in model", "value": "2", "caption": ""}
+    assert payload["summaryCards"][2] == {"label": "Data sources", "value": "2", "caption": "2 contributed"}
+    assert payload["summaryCards"][3] == {"label": "Stability", "value": "50%", "caption": "1 of 2 are stable"}
+    assert payload["searchResults"]["autofe"] == []
+    assert {row["source"] for row in payload["searchResults"]["sources"]} == {
+        "Accounts Availability",
+        "Usage Data",
+    }
+    assert data.model_feature_shap[0].feature == "model2"
+    assert data.model_feature_shap[0].mean_abs_shap == 0.15
+    assert data.model_feature_shap[1].feature == "model1"
+    assert "ensemble_score(model1,model2)" not in html
+    assert ensemble_col not in html
 
 
 def test_report_button_downloads_html_like_pdf():

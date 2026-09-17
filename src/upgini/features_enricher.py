@@ -98,7 +98,7 @@ from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
-from upgini.report.assemble import assemble_report_data
+from upgini.report.assemble import assemble_report_data, autofe_rows_from_description, build_search_results
 from upgini.report.html import generate_html_report
 from upgini.report.stats import make_report_frame
 from upgini.utils.display_utils import (
@@ -2437,6 +2437,7 @@ class FeaturesEnricher(TransformerMixin):
         return max(self.__cached_sampled_datasets.values(), key=lambda item: len(item[0]) if item[0] is not None else 0)
 
     def _assemble_report_data(self):
+        features, sources, model_shap, summary, autofe = self._report_search_results()
         search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
         return assemble_report_data(
             search_id=search_id,
@@ -2446,12 +2447,30 @@ class FeaturesEnricher(TransformerMixin):
             samples=self._report_sample_names(),
             metrics_df=self.metrics_raw if self.metrics_raw is not None else self.metrics,
             metric_name=self.metrics_metric_name,
-            model_features=self._ensemble_model_feature_count(),
+            model_features=summary.model_features,
             is_binary=self.model_task_type == ModelTaskType.BINARY,
             dataset_samples=self._report_dataset_samples(),
             scored_samples=self._report_scored_samples(),
             bundle=self.bundle,
+            summary=summary,
+            features=features,
+            sources=sources,
+            autofe=autofe,
+            model_feature_shap=model_shap,
         )
+
+    def _report_search_results(self):
+        features_meta = []
+        if self._search_task is not None:
+            features_meta = list(self._search_task.get_all_features_metadata_v2() or [])
+        features, sources, model_shap, summary = build_search_results(
+            model_names=self._ensemble_model_feature_names(),
+            features_meta=features_meta,
+            base_columns=self._ensemble_base_columns(),
+            is_ensemble=self._is_ensemble_feature,
+        )
+        autofe = autofe_rows_from_description(self.get_autofe_features_description(), self.bundle)
+        return features, sources, model_shap, summary, autofe
 
     def _score_report_html(self) -> str | None:
         if self._search_task is None or not self._has_single_ensemble_score():
@@ -2493,13 +2512,24 @@ class FeaturesEnricher(TransformerMixin):
                 names.add(meta.alias)
         return names
 
-    def _ensemble_model_feature_count(self) -> int | None:
-        names = {
-            column.original_name
+    def _ensemble_base_columns(self) -> list[tuple[str, str]]:
+        return [
+            (column.original_name, column.hashed_name)
             for meta, _ in self._ensemble_generated_metadata()
             for column in meta.base_columns
-        }
-        return len(names) or None
+        ]
+
+    def _ensemble_model_feature_names(self) -> list[str]:
+        return sorted(
+            {
+                original
+                for original, hashed in self._ensemble_base_columns()
+                if not self._is_ensemble_feature(original) and not self._is_ensemble_feature(hashed)
+            }
+        )
+
+    def _ensemble_model_feature_count(self) -> int | None:
+        return len(self._ensemble_model_feature_names()) or None
 
     def _psi_exceeds_threshold(self, psi: float | None, threshold: float) -> bool:
         return psi is not None and not pd.isna(psi) and psi > threshold

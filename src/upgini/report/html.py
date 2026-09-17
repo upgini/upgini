@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from upgini.report.data import ReportCharts, ReportData, SampleStats, SearchResultsSummary
+from upgini.report.data import FeatureRow, ReportCharts, ReportData, SampleStats, SearchResultsSummary, SourceRow
 from upgini.report.stats import MEAN_AXIS_PADDING
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
@@ -37,14 +37,14 @@ def _report_payload(data: ReportData) -> dict:
         "scoreAnalysis": _score_analysis_payload(charts, samples),
         "scoreDistribution": _score_distribution_payload(charts, samples),
         "scoreStability": _score_stability_payload(charts, samples),
-        "features": [],
+        "features": _features_payload(data.features),
         "shap": {"topN": 5},
         "searchResults": {
             "relevantFeaturesCount": _dash(data.summary.relevant_features),
             "dataSourcesCount": _dash(data.summary.data_sources),
-            "autofeCount": _dash(len(data.autofe) if data.autofe else None),
-            "sources": [],
-            "autofe": [],
+            "autofeCount": _dash(len(data.autofe)),
+            "sources": _sources_payload(data.sources),
+            "autofe": list(data.autofe),
         },
     }
 
@@ -140,11 +140,46 @@ def _summary_cards(summary: SearchResultsSummary) -> list[dict]:
     stability = None
     if summary.stable_features_share is not None:
         stability = f"{summary.stable_features_share * 100:.0f}%"
+    sources_caption = ""
+    if summary.contributed_sources is not None:
+        sources_caption = f"{summary.contributed_sources} contributed"
+    stability_caption = ""
+    if summary.stable_features is not None and summary.model_features is not None:
+        stability_caption = f"{summary.stable_features} of {summary.model_features} are stable"
     return [
         {"label": "Features found", "value": _dash(summary.relevant_features), "caption": ""},
         {"label": "Used in model", "value": _dash(summary.model_features), "caption": ""},
-        {"label": "Data sources", "value": _dash(summary.data_sources), "caption": ""},
-        {"label": "Stability", "value": _dash(stability), "caption": ""},
+        {"label": "Data sources", "value": _dash(summary.data_sources), "caption": sources_caption},
+        {"label": "Stability", "value": _dash(stability), "caption": stability_caption},
+    ]
+
+
+def _features_payload(features: list[FeatureRow]) -> list[dict]:
+    return [
+        {
+            "name": row.name,
+            "provider": row.provider,
+            "source": row.source,
+            "importance": abs(row.shap) if row.shap is not None else 0,
+            "shap": row.shap,
+            "coverage": row.coverage,
+            "status": row.stability_status,
+            "psi": row.psi,
+            "drift": row.drift,
+        }
+        for row in features
+    ]
+
+
+def _sources_payload(sources: list[SourceRow]) -> list[dict]:
+    return [
+        {
+            "provider": row.provider,
+            "source": row.source,
+            "aggregateShap": row.shap_sum,
+            "relevantFeatures": row.feature_count,
+        }
+        for row in sources
     ]
 
 

@@ -2,16 +2,28 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 import pandas as pd
 
 from upgini.__about__ import __version__
-from upgini.report.data import QualitySample, ReportData, ReportMetadata, SampleStats, SearchResultsSummary
-from upgini.report.stats import compute_report_charts
+from upgini.metadata import FeaturesMetadataV2
+from upgini.report.data import (
+    FeatureRow,
+    ModelFeatureShap,
+    QualitySample,
+    ReportData,
+    ReportMetadata,
+    SampleStats,
+    SearchResultsSummary,
+    SourceRow,
+)
+from upgini.report.stats import PSI_CRITICAL, PSI_WARNING, compute_report_charts
 from upgini.resource_bundle import ResourceBundle
+from upgini.utils.feature_info import FeatureInfo
 
 UPGINI_REPORT_BRANDING_URL = "UPGINI_REPORT_BRANDING_URL"
+_STABILITY_PSI = 0.2
 
 
 def format_search_duration(seconds: Optional[float]) -> Optional[str]:
@@ -43,6 +55,11 @@ def assemble_report_data(
     dataset_samples: Optional[dict[str, pd.DataFrame]] = None,
     scored_samples: Optional[dict[str, pd.DataFrame]] = None,
     bundle: ResourceBundle,
+    summary: Optional[SearchResultsSummary] = None,
+    features: Optional[list[FeatureRow]] = None,
+    sources: Optional[list[SourceRow]] = None,
+    autofe: Optional[list[dict[str, str]]] = None,
+    model_feature_shap: Optional[list[ModelFeatureShap]] = None,
 ) -> ReportData:
     generated_at = generated_at or datetime.now(timezone.utc)
     sample_names = list(samples or [])
@@ -53,6 +70,9 @@ def assemble_report_data(
         metric_name=metric_name,
         is_binary=is_binary,
     )
+    summary = summary or SearchResultsSummary(model_features=model_features)
+    if summary.model_features is None:
+        summary.model_features = model_features
     return ReportData(
         metadata=ReportMetadata(
             search_id=search_id,
@@ -65,11 +85,80 @@ def assemble_report_data(
             logo_url=_branding_url(),
         ),
         quality_by_sample=_quality_samples(metrics_df, metric_name, bundle),
-        summary=SearchResultsSummary(model_features=model_features),
+        summary=summary,
         sample_stats=chart_stats or _sample_stats(sample_names, metrics_df, bundle),
         is_binary=is_binary,
+        features=list(features or []),
+        sources=list(sources or []),
+        autofe=list(autofe or []),
+        model_feature_shap=list(model_feature_shap or []),
         charts=charts,
     )
+
+
+def build_search_results(
+    *,
+    model_names: list[str],
+    features_meta: list[FeaturesMetadataV2],
+    base_columns: list[tuple[str, str]],
+    is_ensemble: Callable[[str], bool],
+) -> tuple[list[FeatureRow], list[SourceRow], list[ModelFeatureShap], SearchResultsSummary]:
+    meta_by_name = _features_meta_index(features_meta, base_columns)
+    model_rows = [_feature_row(name, meta_by_name.get(name)) for name in model_names]
+    model_rows.sort(key=lambda row: (row.shap is None, -abs(row.shap or 0.0), row.name))
+    model_shap = [
+        ModelFeatureShap(
+            rank=index,
+            feature=row.name,
+            provider=row.provider,
+            mean_abs_shap=None if row.shap is None else abs(row.shap),
+        )
+        for index, row in enumerate(model_rows, start=1)
+    ]
+    join_rows = [
+        _feature_row(meta.name, meta)
+        for meta in features_meta
+        if meta.source != "etalon" and not is_ensemble(meta.name)
+    ]
+    sources = _source_rows(join_rows)
+    relevant = sum(1 for row in join_rows if _has_nonzero_shap(row))
+    contributed = len({(row.provider, row.source) for row in join_rows if row.provider and _has_nonzero_shap(row)})
+    model_count = len(model_names) or None
+    stable = sum(1 for row in model_rows if row.psi is not None and row.psi < _STABILITY_PSI)
+    summary = SearchResultsSummary(
+        relevant_features=relevant,
+        model_features=model_count,
+        data_sources=len(sources),
+        stable_features_share=(stable / len(model_rows)) if model_rows else None,
+        contributed_sources=contributed,
+        stable_features=stable if model_rows else None,
+    )
+    return model_rows, sources, model_shap, summary
+
+
+def autofe_rows_from_description(df: Optional[pd.DataFrame], bundle: ResourceBundle) -> list[dict[str, str]]:
+    if df is None or df.empty:
+        return []
+    sources_col = bundle.get("autofe_descriptions_sources")
+    name_col = bundle.get("autofe_descriptions_feature_name")
+    func_col = bundle.get("autofe_descriptions_function")
+    rows: list[dict[str, str]] = []
+    for _, row in df.iterrows():
+        source_features = []
+        for index in (1, 2):
+            col = bundle.get("autofe_descriptions_feature").format(index)
+            value = _as_str(row[col]) if col in df.columns else None
+            if value:
+                source_features.append(value)
+        rows.append(
+            {
+                "sources": (_as_str(row[sources_col]) or "") if sources_col in df.columns else "",
+                "generatedFeature": (_as_str(row[name_col]) or "") if name_col in df.columns else "",
+                "sourceFeatures": ", ".join(source_features),
+                "functions": (_as_str(row[func_col]) or "") if func_col in df.columns else "",
+            }
+        )
+    return rows
 
 
 def _branding_url() -> Optional[str]:
@@ -143,3 +232,65 @@ def _as_float(value) -> Optional[float]:
 
 def _as_int(value) -> Optional[int]:
     return None if pd.isna(value) else int(value)
+
+
+def _features_meta_index(
+    features_meta: list[FeaturesMetadataV2], base_columns: list[tuple[str, str]]
+) -> dict[str, FeaturesMetadataV2]:
+    index = {meta.name: meta for meta in features_meta}
+    for original, hashed in base_columns:
+        matched = index.get(hashed) or index.get(original)
+        if matched is None:
+            continue
+        index[original] = matched
+        index[hashed] = matched
+    return index
+
+
+def _feature_row(name: str, meta: Optional[FeaturesMetadataV2]) -> FeatureRow:
+    if meta is None:
+        return FeatureRow(name=name)
+    info = FeatureInfo.from_metadata(meta, None, meta.source == "etalon", False)
+    return FeatureRow(
+        name=name,
+        shap=meta.shap_value,
+        psi=meta.psi_value,
+        drift=meta.drift_score,
+        coverage=meta.hit_rate,
+        provider=info.internal_provider,
+        source=info.internal_source,
+        stability_status=_psi_status(meta.psi_value),
+    )
+
+
+def _source_rows(rows: list[FeatureRow]) -> list[SourceRow]:
+    grouped: dict[tuple[str, str], list[FeatureRow]] = {}
+    for row in rows:
+        if not row.provider:
+            continue
+        grouped.setdefault((row.provider, row.source), []).append(row)
+    sources = [
+        SourceRow(
+            provider=provider,
+            source=source,
+            shap_sum=sum(item.shap for item in items if item.shap is not None),
+            feature_count=len(items),
+        )
+        for (provider, source), items in grouped.items()
+    ]
+    sources.sort(key=lambda row: (-(row.shap_sum or 0.0), row.provider, row.source))
+    return sources
+
+
+def _psi_status(psi: Optional[float]) -> Optional[str]:
+    if psi is None or pd.isna(psi):
+        return None
+    if psi > PSI_CRITICAL:
+        return "risk"
+    if psi >= PSI_WARNING:
+        return "watch"
+    return "good"
+
+
+def _has_nonzero_shap(row: FeatureRow) -> bool:
+    return row.shap is not None and row.shap != 0
