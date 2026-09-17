@@ -507,7 +507,7 @@ const REPORT_DATA = __REPORT_DATA__;
     const maxImportance = Math.max(...features.map(f => f.importance)) || 1;
     const list = shapAll ? features : features.slice(0, (D.shap && D.shap.topN) || features.length);
     document.getElementById('shapList').innerHTML = list.map((f, i) =>
-      `<div class="shap-row"><div><b>#${i + 1} ${f.name}</b><span class="provider">${f.provider}</span></div>` +
+      `<div class="shap-row"><div><b>#${i + 1} ${f.name}</b>${f.provider ? `<span class="provider">${f.provider}</span>` : ''}</div>` +
       `<div class="shap-track"><i class="shap-fill ${f.shapClass || 'upgini'}" style="width:${(f.importance / maxImportance * 100).toFixed(2)}%"></i></div>` +
       `<b>${fmt3(Math.abs(f.shap))}</b></div>`).join('');
     document.getElementById('showAllShap').textContent = shapAll ? `Show top ${(D.shap && D.shap.topN) || features.length}` : `Show all ${features.length}`;
@@ -534,7 +534,7 @@ const REPORT_DATA = __REPORT_DATA__;
     const body = document.getElementById('featureBody');
     body.innerHTML = rows.map(f =>
       `<tr data-name="${f.name}"><td><span class="feature-name" title="${f.name}">${f.name}</span></td>` +
-      `<td><span class="provider">${f.provider}</span></td><td class="source-name">${f.source}</td>` +
+      `<td>${f.provider ? `<span class="provider">${f.provider}</span>` : ''}</td><td class="source-name">${f.source}</td>` +
       `<td>${shapLabel(f.shap)}</td><td><span class="tag ${f.status}">${fmt2(f.psi)}</span></td>` +
       `<td>${f.drift == null ? '—' : fmt2(f.drift)}</td><td>${pct1(f.coverage)}</td></tr>`).join('');
     document.getElementById('emptyState').style.display = rows.length ? 'none' : 'block';

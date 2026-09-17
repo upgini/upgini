@@ -511,7 +511,7 @@ def test_shap_fill_class_maps_provider_source():
         bundle=bundle,
         features=[
             FeatureRow(name="client_feat", shap=0.7, provider="", source=CLIENT_SOURCE),
-            FeatureRow(name="autofe_feat", shap=0.2, provider="AutoFE", source=GENERATED_SOURCE),
+            FeatureRow(name="autofe_feat", shap=0.2, provider="Upgini", source=GENERATED_SOURCE),
             FeatureRow(name="upgini_feat", shap=0.056, provider="Upgini", source="Usage Data"),
             FeatureRow(name="ext_feat", shap=0.04, provider="Experian", source="Credit Bureau"),
         ],
@@ -521,9 +521,13 @@ def test_shap_fill_class_maps_provider_source():
     by_name = {row["name"]: row for row in payload["features"]}
 
     assert by_name["client_feat"]["shapClass"] == "user"
+    assert by_name["client_feat"]["provider"] == ""
     assert by_name["autofe_feat"]["shapClass"] == "autofe"
+    assert by_name["autofe_feat"]["provider"] == "Upgini"
     assert by_name["upgini_feat"]["shapClass"] == "upgini"
+    assert by_name["upgini_feat"]["provider"] == "Upgini"
     assert by_name["ext_feat"]["shapClass"] == "external"
+    assert by_name["ext_feat"]["provider"] == "Experian"
     assert ".shap-fill.external{background:#7b5cff}" in html
     assert "f.shapClass || 'upgini'" in html
 

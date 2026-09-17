@@ -2478,6 +2478,9 @@ class FeaturesEnricher(TransformerMixin):
             features_meta=features_meta,
             base_columns=self._ensemble_base_columns(),
             is_ensemble=self._is_ensemble_feature,
+            generated_names=self._column_name_aliases(
+                self.fit_generated_features or [], self.fit_columns_renaming or {}
+            ),
         )
         autofe = autofe_rows_from_description(self.get_autofe_features_description(), self.bundle)
         return features, sources, model_shap, summary, autofe

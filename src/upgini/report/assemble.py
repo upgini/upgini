@@ -102,9 +102,11 @@ def build_search_results(
     features_meta: list[FeaturesMetadataV2],
     base_columns: list[tuple[str, str]],
     is_ensemble: Callable[[str], bool],
+    generated_names: Optional[set[str]] = None,
 ) -> tuple[list[FeatureRow], list[SourceRow], list[ModelFeatureShap], SearchResultsSummary]:
+    generated_names = generated_names or set()
     meta_by_name = _features_meta_index(features_meta, base_columns)
-    model_rows = [_feature_row(name, meta_by_name.get(name)) for name in model_names]
+    model_rows = [_feature_row(name, meta_by_name.get(name), generated_names) for name in model_names]
     model_rows.sort(key=lambda row: (row.shap is None, -abs(row.shap or 0.0), row.name))
     model_shap = [
         ModelFeatureShap(
@@ -116,7 +118,7 @@ def build_search_results(
         for index, row in enumerate(model_rows, start=1)
     ]
     join_rows = [
-        _feature_row(meta.name, meta)
+        _feature_row(meta.name, meta, generated_names)
         for meta in features_meta
         if meta.source != "etalon" and not is_ensemble(meta.name)
     ]
@@ -247,10 +249,15 @@ def _features_meta_index(
     return index
 
 
-def _feature_row(name: str, meta: Optional[FeaturesMetadataV2]) -> FeatureRow:
+def _feature_row(
+    name: str, meta: Optional[FeaturesMetadataV2], generated_names: Optional[set[str]] = None
+) -> FeatureRow:
     if meta is None:
         return FeatureRow(name=name)
-    info = FeatureInfo.from_metadata(meta, None, meta.source == "etalon", False)
+    generated_names = generated_names or set()
+    is_generated = name in generated_names
+    is_client = meta.source == "etalon" and not is_generated
+    info = FeatureInfo.from_metadata(meta, None, is_client, is_generated)
     return FeatureRow(
         name=name,
         shap=meta.shap_value,
