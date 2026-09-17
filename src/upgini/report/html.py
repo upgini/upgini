@@ -38,7 +38,6 @@ def _report_payload(data: ReportData) -> dict:
         "scoreDistribution": _score_distribution_payload(charts, samples),
         "scoreStability": _score_stability_payload(charts, samples),
         "features": [],
-        "featureStability": {"bySample": {}},
         "shap": {"topN": 5},
         "searchResults": {
             "relevantFeaturesCount": _dash(data.summary.relevant_features),

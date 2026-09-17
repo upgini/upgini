@@ -30,8 +30,6 @@
       <a class="nav-link" href="#score-stability"><span class="nav-dot"></span>Score stability</a>
       <a class="nav-link" href="#features-shap"><span class="nav-dot"></span>Features SHAP</a>
       <a class="nav-link" href="#search-results"><span class="nav-dot"></span>Search results</a>
-      <a class="nav-link" href="#feature-stability"><span class="nav-dot"></span>Feature stability</a>
-      <div class="run-note"><strong>Search completed</strong><span id="runNoteDuration"></span><br><span id="runNoteRows"></span></div>
     </aside>
     <main class="main">
       <section id="overview" class="section" style="margin-top:0">
@@ -86,11 +84,6 @@
         <div class="result-pane active" id="result-features"><div class="table-actions"><input id="featureSearch" class="search" type="search" placeholder="Find a feature or source" aria-label="Feature search"><select id="statusFilter" class="control" aria-label="Stability filter"><option value="all">All statuses</option><option value="good">Stable</option><option value="watch">Watch</option><option value="risk">At risk</option></select><button class="button ghost copy-table" data-copy="featureBody">Copy</button><button class="button ghost csv-table" data-table="featureBody">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Feature</th><th>Provider</th><th>Source</th><th>SHAP</th><th>PSI</th><th>Drift</th><th>Coverage</th></tr></thead><tbody id="featureBody"></tbody></table><div id="emptyState" class="empty">No features match the selected filters.</div></div></div>
         <div class="result-pane" id="result-sources"><div class="table-actions"><button class="button ghost copy-table" data-copy="sourceTable">Copy</button><button class="button ghost csv-table" data-table="sourceTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Provider</th><th>Source</th><th>Aggregate SHAP</th><th>Relevant features</th><th>Action</th></tr></thead><tbody id="sourceTable"></tbody></table></div></div>
         <div class="result-pane" id="result-autofe"><div class="table-actions"><button class="button ghost copy-table" data-copy="autofeTable">Copy</button><button class="button ghost csv-table" data-table="autofeTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Sources</th><th>Generated feature</th><th>Source features</th><th>Functions</th></tr></thead><tbody id="autofeTable"></tbody></table></div></div>
-      </section>
-
-      <section id="feature-stability" class="section">
-        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and direction-invariant univariate ROC-AUC for model features only.</p></div><div class="toolbar"><select id="stabilityFeature" class="control" aria-label="Model feature"></select><button class="button ghost chart-export" data-chart="featureStabilityChart">Save PNG</button></div></div>
-        <div class="panel chart-panel"><div class="legend"><span><i style="background:#1645ee"></i>Monthly PSI</span><span><i style="background:#53cc61"></i>Univariate ROC-AUC</span></div><div class="canvas-wrap"><canvas id="featureStabilityChart" aria-label="Feature monthly PSI and ROC AUC" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureTooltip"></div></div></div>
       </section>
     </main>
   </div>
@@ -158,10 +151,6 @@ const REPORT_DATA = __REPORT_DATA__;
       });
     }
     setText('searchIdChip', 'search_id=' + m.searchId);
-    const sources = m.sourcesCount == null ? '—' : m.sourcesCount;
-    const rows = m.totalRows == null ? '—' : num(m.totalRows);
-    setText('runNoteDuration', `${m.searchDuration || '—'} · ${sources} sources`);
-    setText('runNoteRows', `${rows} rows processed`);
     setText('statusLine', m.statusLine);
     setText('heroTitle', m.reportTitle);
     setText('heroSubtitle', m.reportSubtitle);
@@ -551,48 +540,6 @@ const REPORT_DATA = __REPORT_DATA__;
     document.getElementById('emptyState').style.display = rows.length ? 'none' : 'block';
   }
 
-  /* ---------------------------------------------------- feature stability */
-  function renderFeatureSelect() {
-    const s = document.getElementById('stabilityFeature');
-    s.innerHTML = (D.features || []).map((f, i) => `<option value="${i}">#${i + 1} ${f.name}</option>`).join('');
-    s.addEventListener('change', drawFeatureStability);
-  }
-  function currentStabilityFeature() {
-    return D.features[+document.getElementById('stabilityFeature').value || 0];
-  }
-  function drawFeatureStability() {
-    const cfg = D.featureStability || {};
-    const { c, w, h } = setupCanvas('featureStabilityChart');
-    const feature = currentStabilityFeature();
-    const s = feature && cfg.bySample ? cfg.bySample[feature.name] : null;
-    if (!feature || !s || !MONTH_COUNT) return;
-    const psi = align(s.psi), auc = align(s.auc);
-    hits.feature = [];
-    const labelGutter = 46;                    // room for the ROC-AUC axis labels
-    const seriesGutter = 22;                   // keeps the last point off those labels
-    const plotRight = w - labelGutter - seriesGutter;
-    const x = i => 48 + (MONTH_COUNT === 1 ? (plotRight - 48) / 2 : i * (plotRight - 48) / (MONTH_COUNT - 1));
-    const yp = v => 18 + (cfg.psiAxisMax - v) / cfg.psiAxisMax * (h - 62);
-    const ya = v => 18 + (cfg.aucAxis.max - v) / cfg.aucAxis.range * (h - 62);
-
-    // grid + dual axis labels: PSI on the left, univariate ROC-AUC on the right
-    c.font = '10px Inter, sans-serif';
-    for (let i = 0; i < 5; i++) {
-      const y = 18 + i * (h - 62) / 4;
-      c.strokeStyle = '#e8eeec'; c.beginPath(); c.moveTo(40, y); c.lineTo(w - labelGutter, y); c.stroke();
-      c.fillStyle = '#5f79c9';
-      c.fillText((cfg.psiAxisMax - i * cfg.psiAxisMax / 4).toFixed(2), 4, y + 3);
-      c.fillStyle = '#5aa86a';
-      c.fillText((cfg.aucAxis.max - i * cfg.aucAxis.range / 4).toFixed(2), w - labelGutter + 10, y + 3);
-    }
-    strokeSeries(c, psi.map((v, i) => v == null ? null : { x: x(i), y: yp(v) }), '#1645ee', 4);
-    strokeSeries(c, auc.map((v, i) => v == null ? null : { x: x(i), y: ya(v) }), '#53cc61', 4);
-    MONTHS.forEach((m, i) => {
-      hits.feature.push({ x: x(i), y: 18, w: 18, h: h - 55, index: i });
-      c.fillStyle = '#7d8885'; c.fillText(m.split(' ')[0], x(i) - 8, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
-    });
-  }
-
   /* -------------------------------------------------------------- tooltips */
   function bindTooltip(canvasId, tooltipId, hitKey, htmlFor) {
     const cv = document.getElementById(canvasId), tip = document.getElementById(tooltipId);
@@ -629,14 +576,6 @@ const REPORT_DATA = __REPORT_DATA__;
       const cfg = D.scoreStability, s = cfg.bySample[document.getElementById('psiSample').value];
       return `<b>${MONTHS[i]} · ${selectedLabel('psiSample')}</b><br>PSI: ${fmt3(s.psi[i])}` +
         `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: first period (baseline month)`;
-    });
-    bindTooltip('featureStabilityChart', 'featureTooltip', 'feature', i => {
-      const cfg = D.featureStability, f = currentStabilityFeature(), s = cfg.bySample[f.name];
-      const auc = s.auc[i], raw = i % 3 === 0 ? 1 - auc : auc;
-      return `<b>${f.name} · ${MONTHS[i]}</b><br>SHAP rank/value: #${D.features.indexOf(f) + 1} / ${fmt3(Math.abs(f.shap))}` +
-        `<br>PSI: ${fmt3(s.psi[i])}<br>AUC: ${fmt3(auc)}<br>Raw AUC / direction: ${fmt3(raw)} / ${raw < .5 ? 'inverse' : 'direct'}` +
-        `<br>Rows: ${num(s.rows[i])}<br>Labeled: ${num(s.labeled[i])}<br>Positive count: ${num(Math.round(s.labeled[i] * D.meta.targetRate))}` +
-        `<br>Coverage: ${pct1(f.coverage)}<br>Missing rate: ${(100 - f.coverage).toFixed(1)}%`;
     });
   }
 
@@ -712,7 +651,7 @@ const REPORT_DATA = __REPORT_DATA__;
     });
   }
 
-  function drawAll() { drawChart(); drawSample(); drawScore(); drawDistribution(); drawPsi(); drawFeatureStability(); }
+  function drawAll() { drawChart(); drawSample(); drawScore(); drawDistribution(); drawPsi(); }
 
   /* ------------------------------------------------------------------ init */
   renderHeader();
@@ -724,7 +663,6 @@ const REPORT_DATA = __REPORT_DATA__;
   renderSearchResults();
   renderFeatures();
   renderShap();
-  renderFeatureSelect();
   bindControls();
   bindAllTooltips();
   bindSampleTooltip();

@@ -134,7 +134,6 @@ def test_generate_html_report_from_assembled_data():
     assert "reference: first period (baseline month)" in html
     assert "Features SHAP" in html
     assert "Search results" in html
-    assert "Feature stability" in html
     assert "f_autofe_ensemble_score_abc123" not in html
     assert data.quality_by_sample[0].metric == "GINI"
     assert data.quality_by_sample[0].enriched == 0.512
