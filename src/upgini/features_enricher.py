@@ -98,7 +98,7 @@ from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
-from upgini.report.assemble import assemble_report_data, autofe_rows_from_description, build_search_results
+from upgini.report.assemble import assemble_report_data, autofe_rows_for_report, build_search_results
 from upgini.report.html import generate_html_report
 from upgini.report.stats import make_report_frame
 from upgini.utils.display_utils import (
@@ -2474,15 +2474,18 @@ class FeaturesEnricher(TransformerMixin):
         if self._search_task is not None:
             features_meta = list(self._search_task.get_all_features_metadata_v2() or [])
         features, sources, model_shap, summary = build_search_results(
-            model_names=self._ensemble_model_feature_names(),
             features_meta=features_meta,
-            base_columns=self._ensemble_base_columns(),
             is_ensemble=self._is_ensemble_feature,
             generated_names=self._column_name_aliases(
                 self.fit_generated_features or [], self.fit_columns_renaming or {}
             ),
         )
-        autofe = autofe_rows_from_description(self.get_autofe_features_description(), self.bundle)
+        autofe = autofe_rows_for_report(
+            self.get_autofe_features_description(features_meta=features_meta),
+            features_meta,
+            self._is_ensemble_feature,
+            self.bundle,
+        )
         return features, sources, model_shap, summary, autofe
 
     def _score_report_html(self) -> str | None:
@@ -2524,25 +2527,6 @@ class FeaturesEnricher(TransformerMixin):
             if meta.alias:
                 names.add(meta.alias)
         return names
-
-    def _ensemble_base_columns(self) -> list[tuple[str, str]]:
-        return [
-            (column.original_name, column.hashed_name)
-            for meta, _ in self._ensemble_generated_metadata()
-            for column in meta.base_columns
-        ]
-
-    def _ensemble_model_feature_names(self) -> list[str]:
-        return sorted(
-            {
-                original
-                for original, hashed in self._ensemble_base_columns()
-                if not self._is_ensemble_feature(original) and not self._is_ensemble_feature(hashed)
-            }
-        )
-
-    def _ensemble_model_feature_count(self) -> int | None:
-        return len(self._ensemble_model_feature_names()) or None
 
     def _psi_exceeds_threshold(self, psi: float | None, threshold: float) -> bool:
         return psi is not None and not pd.isna(psi) and psi > threshold
@@ -5955,12 +5939,12 @@ if response.status_code == 200:
         else:
             self.logger.warning("Empty features info")
 
-    def get_autofe_features_description(self):
+    def get_autofe_features_description(self, features_meta: list[FeaturesMetadataV2] | None = None):
         try:
             autofe_meta = self._search_task.get_autofe_metadata()
             if autofe_meta is None:
                 return None
-            if len(self._internal_features_info) != 0:
+            if features_meta is None and len(self._internal_features_info) != 0:
 
                 def to_feature_meta(row):
                     fm = FeaturesMetadataV2(
@@ -5974,13 +5958,16 @@ if response.status_code == 200:
                     return fm
 
                 features_meta = self._internal_features_info.apply(to_feature_meta, axis=1).to_list()
-            else:
+            elif features_meta is None:
                 features_meta = self._search_task.get_all_features_metadata_v2()
 
             def get_feature_by_name(name: str):
-                for m in features_meta:
-                    if m.name == name:
-                        return m
+                if not name or not features_meta:
+                    return None
+                for candidate in features_meta:
+                    if candidate.name == name:
+                        return candidate
+                return None
 
             descriptions = []
             for m in autofe_meta:
@@ -6001,11 +5988,28 @@ if response.status_code == 200:
 
                 description = {}
 
-                feature_meta = get_feature_by_name(autofe_feature.get_display_name(shorten=True, unhash=True))
-                if feature_meta is None:
+                lookup_names = [autofe_feature.get_display_name(shorten=True, unhash=True)]
+                if m.alias:
+                    lookup_names.extend([m.alias, f"f_autofe_{m.alias}"])
+                feature_meta = None
+                for lookup_name in lookup_names:
+                    feature_meta = get_feature_by_name(lookup_name)
+                    if feature_meta is not None:
+                        break
+                if feature_meta is None and m.alias and features_meta:
+                    prefix = f"f_autofe_{m.alias}"
+                    matches = [
+                        candidate
+                        for candidate in features_meta
+                        if candidate.name == prefix or candidate.name.startswith(prefix + "_")
+                    ]
+                    if len(matches) == 1:
+                        feature_meta = matches[0]
+                if feature_meta is None or not feature_meta.shap_value:
                     continue
                 description["shap"] = feature_meta.shap_value
-                description[self.bundle.get("autofe_descriptions_sources")] = feature_meta.data_source.replace(
+                source = feature_meta.data_source or ""
+                description[self.bundle.get("autofe_descriptions_sources")] = source.replace(
                     "AutoFE: features from ", ""
                 ).replace("AutoFE: feature from ", "")
                 description[self.bundle.get("autofe_descriptions_feature_name")] = feature_meta.name

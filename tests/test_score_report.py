@@ -29,7 +29,16 @@ SearchTask.PROTECT_FROM_RATE_LIMIT = False
 def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
     return ProviderTaskMetadataV2(
         features=[
-            FeaturesMetadataV2(name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=1.0),
+            FeaturesMetadataV2(
+                name=ensemble_col,
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=1.0,
+                commercial_schema="Trial",
+                data_provider="Upgini",
+                data_source="AutoFE: features from Usage Data",
+            ),
             FeaturesMetadataV2(
                 name="f_model1_abc",
                 type="numeric",
@@ -52,6 +61,44 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
                 psi_value=0.22,
                 drift_score=0.11,
             ),
+            FeaturesMetadataV2(
+                name="f_autofe_div",
+                type="numeric",
+                source="generated",
+                hit_rate=97.8,
+                shap_value=0.066,
+                commercial_schema="Trial",
+                data_provider="Upgini",
+                data_source=(
+                    "AutoFE: features from <a href='https://upgini.com/#data_sources' "
+                    "target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
+                ),
+                psi_value=0.0,
+            ),
+            FeaturesMetadataV2(
+                name="children_num_7967cb",
+                type="numeric",
+                source="etalon",
+                hit_rate=100.0,
+                shap_value=0.0,
+            ),
+            FeaturesMetadataV2(
+                name="pd002_6e6a41",
+                type="numeric",
+                source="etalon",
+                hit_rate=100.0,
+                shap_value=0.73,
+                psi_value=0.0,
+            ),
+            FeaturesMetadataV2(
+                name="datetime_day_in_quarter_sin_65d4f7",
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=0.0,
+                data_provider="Upgini",
+                data_source="LLM with external data augmentation",
+            ),
         ],
         generated_features=[
             GeneratedFeatureMetadata(
@@ -59,10 +106,25 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
                 formula="ensemble_score(model1,model2)",
                 display_index="abc123",
                 base_columns=[
-                    BaseColumnMetadata(original_name="model1", hashed_name="f_model1_abc", is_augmented=False),
-                    BaseColumnMetadata(original_name="model2", hashed_name="f_model2_xyz", is_augmented=False),
+                    BaseColumnMetadata(
+                        original_name="children_num", hashed_name="children_num_7967cb", is_augmented=False
+                    ),
+                    BaseColumnMetadata(
+                        original_name="datetime_day_in_quarter_sin",
+                        hashed_name="datetime_day_in_quarter_sin_65d4f7",
+                        is_augmented=False,
+                    ),
                 ],
-            )
+            ),
+            GeneratedFeatureMetadata(
+                alias="div",
+                formula="(a/b)",
+                display_index="",
+                base_columns=[
+                    BaseColumnMetadata(original_name="a", hashed_name="f_location_a", is_augmented=True),
+                    BaseColumnMetadata(original_name="b", hashed_name="f_location_b", is_augmented=True),
+                ],
+            ),
         ],
     )
 
@@ -235,6 +297,7 @@ def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_pat
     enricher = _ensemble_enricher(url)
 
     html = enricher._score_report_html()
+    payload = _parse_report_data(html)
 
     assert html is not None
     assert "search-abc" in html
@@ -242,8 +305,8 @@ def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_pat
     assert "SearchKey" not in html
     assert '"enriched": 0.61' in html
     assert "42 sec" in html
-    assert '"label": "Used in model"' in html
-    assert '"value": "2"' in html
+    assert payload["summaryCards"][1] == {"label": "Used in model", "value": "4", "caption": ""}
+    assert payload["summaryCards"][0]["value"] == "3"
     assert not (tmp_path / "reports").exists()
     assert list(tmp_path.glob("*.html")) == []
 
@@ -455,9 +518,14 @@ def test_assemble_report_data_uses_dataset_and_cached_scores(requests_mock: Mock
     assert data.charts.quality_monthly[0].enriched[0] is not None
     assert data.charts.histograms[0].n_target_0 == 2
     assert data.charts.score_psi[0].rows[0] == 2
-    assert [row.name for row in data.features] == ["model2", "model1"]
-    assert data.summary.model_features == 2
-    assert data.summary.relevant_features == 2
+    assert [row.name for row in data.features] == [
+        "pd002_6e6a41",
+        "f_model2_xyz",
+        "f_model1_abc",
+        "f_autofe_div",
+    ]
+    assert data.summary.model_features == 4
+    assert data.summary.relevant_features == 3
 
 
 def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
@@ -473,33 +541,43 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     html = generate_html_report(data)
     payload = _parse_report_data(html)
     names = [row["name"] for row in payload["features"]]
+    by_name = {row["name"]: row for row in payload["features"]}
 
-    assert names == ["model2", "model1"]
+    assert names == ["pd002_6e6a41", "f_model2_xyz", "f_model1_abc", "f_autofe_div"]
     assert ensemble_col not in names
-    assert "f_model1_abc" not in names
-    assert "f_model2_xyz" not in names
-    assert payload["features"][0]["shap"] == -0.15
-    assert payload["features"][0]["importance"] == 0.15
-    assert payload["features"][0]["status"] == "watch"
-    assert payload["features"][0]["provider"] == "Upgini"
-    assert payload["features"][0]["shapClass"] == "upgini"
-    assert payload["features"][0]["source"] == "Accounts Availability"
-    assert payload["features"][0]["coverage"] == 96.9
-    assert payload["features"][0]["psi"] == 0.22
-    assert payload["features"][1]["shap"] == 0.08
-    assert payload["features"][1]["status"] == "good"
-    assert payload["summaryCards"][0] == {"label": "Features found", "value": "2", "caption": ""}
-    assert payload["summaryCards"][1] == {"label": "Used in model", "value": "2", "caption": ""}
-    assert payload["summaryCards"][2] == {"label": "Data sources", "value": "2", "caption": "2 contributed"}
-    assert payload["summaryCards"][3] == {"label": "Stability", "value": "50%", "caption": "1 of 2 are stable"}
-    assert payload["searchResults"]["autofe"] == []
+    assert "children_num_7967cb" not in names
+    assert "datetime_day_in_quarter_sin_65d4f7" not in names
+    assert "children_num" not in names
+    assert by_name["pd002_6e6a41"]["shap"] == 0.73
+    assert by_name["pd002_6e6a41"]["provider"] == ""
+    assert by_name["pd002_6e6a41"]["shapClass"] == "user"
+    assert by_name["pd002_6e6a41"]["source"] == CLIENT_SOURCE
+    assert by_name["f_model2_xyz"]["shap"] == -0.15
+    assert by_name["f_model2_xyz"]["importance"] == 0.15
+    assert by_name["f_model2_xyz"]["status"] == "watch"
+    assert by_name["f_model2_xyz"]["provider"] == "Upgini"
+    assert by_name["f_model2_xyz"]["shapClass"] == "upgini"
+    assert by_name["f_model2_xyz"]["source"] == "Accounts Availability"
+    assert by_name["f_autofe_div"]["shap"] == 0.066
+    assert by_name["f_autofe_div"]["provider"] == "Upgini"
+    assert by_name["f_autofe_div"]["shapClass"] == "autofe"
+    assert by_name["f_autofe_div"]["source"] == GENERATED_SOURCE
+    assert payload["summaryCards"][0] == {"label": "Features found", "value": "3", "caption": ""}
+    assert payload["summaryCards"][1] == {"label": "Used in model", "value": "4", "caption": ""}
+    assert payload["summaryCards"][2] == {"label": "Data sources", "value": "3", "caption": "3 contributed"}
+    assert payload["summaryCards"][3] == {"label": "Stability", "value": "75%", "caption": "3 of 4 are stable"}
+    assert [row["generatedFeature"] for row in payload["searchResults"]["autofe"]] == ["f_autofe_div"]
+    assert payload["searchResults"]["autofe"][0]["sources"] == (
+        "<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
+    )
     assert {row["source"] for row in payload["searchResults"]["sources"]} == {
         "Accounts Availability",
         "Usage Data",
+        GENERATED_SOURCE,
     }
-    assert data.model_feature_shap[0].feature == "model2"
-    assert data.model_feature_shap[0].mean_abs_shap == 0.15
-    assert data.model_feature_shap[1].feature == "model1"
+    assert data.model_feature_shap[0].feature == "pd002_6e6a41"
+    assert data.model_feature_shap[0].mean_abs_shap == 0.73
+    assert data.model_feature_shap[1].feature == "f_model2_xyz"
     assert "ensemble_score(model1,model2)" not in html
     assert ensemble_col not in html
 
