@@ -355,14 +355,18 @@ const REPORT_DATA = __REPORT_DATA__;
     axes(c, w, h, cfg.monthlyCountMax, labelGutter);
     const axis = cfg.monthlyAxis;
     const plotRight = w - labelGutter - seriesGutter;
-    const x = i => 55 + i * (plotRight - 55) / (axis.length - 1);
+    const x = i => axis.length === 1 ? (55 + plotRight) / 2 : 55 + i * (plotRight - 55) / (axis.length - 1);
     const barBottom = h - 46;
 
     // secondary (right) axis for mean target: min − padding … max + padding
-    const means = cfg.monthlyPoints.map(p => p.mean);
-    const pad = cfg.monthlyMeanAxisPadding;
-    const meanLo = Math.min(...means) * (1 - pad);
-    const meanHi = Math.max(...means) * (1 + pad);
+    const means = cfg.monthlyPoints.map(p => p.mean).filter(v => v != null && !Number.isNaN(v));
+    const pad = cfg.monthlyMeanAxisPadding || 0;
+    let meanLo = 0, meanHi = 1;
+    if (means.length) {
+      meanLo = Math.min(...means) * (1 - pad);
+      meanHi = Math.max(...means) * (1 + pad);
+      if (meanHi === meanLo) { meanLo -= 0.05; meanHi += 0.05; }
+    }
     const yMean = v => 18 + (meanHi - v) / (meanHi - meanLo) * (h - 52);
     c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
     for (let i = 0; i < 5; i++) {
@@ -380,7 +384,8 @@ const REPORT_DATA = __REPORT_DATA__;
       sampleHitAreas.push({ type: 'bar', x: bx, y: by, w: 14, h: bh, index: i });
     });
     SAMPLES.forEach(s => {
-      const pts = cfg.monthlyPoints.map((p, i) => ({ ...p, index: i, mi: axis.indexOf(p.month) })).filter(p => p.sample === s.id);
+      const pts = cfg.monthlyPoints.map((p, i) => ({ ...p, index: i, mi: axis.indexOf(p.month) }))
+        .filter(p => p.sample === s.id && p.mean != null && p.mi >= 0);
       if (!pts.length) return;
       const py = p => yMean(p.mean);
       c.beginPath();

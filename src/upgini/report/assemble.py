@@ -8,6 +8,7 @@ import pandas as pd
 
 from upgini.__about__ import __version__
 from upgini.report.data import QualitySample, ReportData, ReportMetadata, SampleStats, SearchResultsSummary
+from upgini.report.stats import compute_report_charts
 from upgini.resource_bundle import ResourceBundle
 
 UPGINI_REPORT_BRANDING_URL = "UPGINI_REPORT_BRANDING_URL"
@@ -39,10 +40,19 @@ def assemble_report_data(
     metric_name: Optional[str] = None,
     model_features: Optional[int] = None,
     is_binary: bool = False,
+    dataset_samples: Optional[dict[str, pd.DataFrame]] = None,
+    scored_samples: Optional[dict[str, pd.DataFrame]] = None,
     bundle: ResourceBundle,
 ) -> ReportData:
     generated_at = generated_at or datetime.now(timezone.utc)
     sample_names = list(samples or [])
+    chart_stats, charts = compute_report_charts(
+        sample_names=sample_names,
+        dataset_samples=dataset_samples,
+        scored_samples=scored_samples,
+        metric_name=metric_name,
+        is_binary=is_binary,
+    )
     return ReportData(
         metadata=ReportMetadata(
             search_id=search_id,
@@ -56,8 +66,9 @@ def assemble_report_data(
         ),
         quality_by_sample=_quality_samples(metrics_df, metric_name, bundle),
         summary=SearchResultsSummary(model_features=model_features),
-        sample_stats=_sample_stats(sample_names, metrics_df, bundle),
+        sample_stats=chart_stats or _sample_stats(sample_names, metrics_df, bundle),
         is_binary=is_binary,
+        charts=charts,
     )
 
 

@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from upgini.report.data import ReportData, SampleStats, SearchResultsSummary
+from upgini.report.data import ReportCharts, ReportData, SampleStats, SearchResultsSummary
+from upgini.report.stats import MEAN_AXIS_PADDING
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
 _SAMPLE_COLORS = ("#1645ee", "#20aab4", "#53cc61", "#e19132", "#d45b5b")
@@ -21,16 +22,21 @@ def generate_html_report(data: ReportData) -> str:
 
 def _report_payload(data: ReportData) -> dict:
     samples = _samples(data)
+    charts = data.charts or ReportCharts()
     return {
         "meta": _meta(data, samples),
-        "timeline": {"months": [], "periodOptions": [], "defaultPeriod": 0},
+        "timeline": {
+            "months": list(charts.timeline_months),
+            "periodOptions": list(charts.period_options),
+            "defaultPeriod": charts.default_period,
+        },
         "samples": samples,
-        "keyResult": _key_result(data),
+        "keyResult": _key_result(data, charts),
         "summaryCards": _summary_cards(data.summary),
-        "sampleStats": _sample_stats_payload(data, samples),
-        "scoreAnalysis": {"bySample": {}},
-        "scoreDistribution": {"bySample": {}},
-        "scoreStability": {"bySample": {}},
+        "sampleStats": _sample_stats_payload(data, samples, charts),
+        "scoreAnalysis": _score_analysis_payload(charts, samples),
+        "scoreDistribution": _score_distribution_payload(charts, samples),
+        "scoreStability": _score_stability_payload(charts, samples),
         "features": [],
         "featureStability": {"bySample": {}},
         "shap": {"topN": 5},
@@ -80,16 +86,36 @@ def _samples(data: ReportData) -> list[dict]:
     ]
 
 
-def _key_result(data: ReportData) -> dict:
+def _key_result(data: ReportData, charts: ReportCharts) -> dict:
+    series = {
+        (_slug(row.metric or "score"), _slug(row.evaluation_scope)): row for row in charts.quality_monthly
+    }
     metrics: dict[str, dict] = {}
     for sample in data.quality_by_sample:
         key = _slug(sample.metric or "score")
         bucket = metrics.setdefault(key, {"name": sample.metric or "score", "bySample": {}})
+        monthly = series.get((key, _slug(sample.evaluation_scope)))
         bucket["bySample"][_slug(sample.evaluation_scope)] = {
             "baseline": sample.baseline,
             "baselineCi": sample.baseline_std,
             "enriched": sample.enriched,
             "enrichedCi": sample.enriched_std,
+            "baselineSeries": list(monthly.baseline) if monthly else [],
+            "enrichedSeries": list(monthly.enriched) if monthly else [],
+        }
+    for monthly in charts.quality_monthly:
+        key = _slug(monthly.metric or "score")
+        sample_id = _slug(monthly.evaluation_scope)
+        bucket = metrics.setdefault(key, {"name": monthly.metric or "score", "bySample": {}})
+        if sample_id in bucket["bySample"]:
+            continue
+        bucket["bySample"][sample_id] = {
+            "baseline": None,
+            "baselineCi": None,
+            "enriched": None,
+            "enrichedCi": None,
+            "baselineSeries": list(monthly.baseline),
+            "enrichedSeries": list(monthly.enriched),
         }
     default_metric = next(iter(metrics), "")
     has_std = any(
@@ -123,7 +149,7 @@ def _summary_cards(summary: SearchResultsSummary) -> list[dict]:
     ]
 
 
-def _sample_stats_payload(data: ReportData, samples: list[dict]) -> dict:
+def _sample_stats_payload(data: ReportData, samples: list[dict], charts: ReportCharts) -> dict:
     by_id = {_slug(stats.sample): stats for stats in data.sample_stats}
     rows = [
         _stat_row("Date range", samples, by_id, lambda stats: stats.date_range),
@@ -138,7 +164,76 @@ def _sample_stats_payload(data: ReportData, samples: list[dict]) -> dict:
             _stat_row("Count (unlabeled)", samples, by_id, lambda stats: _format_int(stats.unlabeled)),
         ]
     )
-    return {"rows": rows, "monthlyAxis": [], "monthlyPoints": []}
+    return {
+        "rows": rows,
+        "monthlyAxis": list(charts.timeline_months),
+        "monthlyCountMax": charts.monthly_count_max or 1,
+        "monthlyMeanAxisPadding": MEAN_AXIS_PADDING,
+        "monthlyPoints": [
+            {
+                "month": point.month,
+                "sample": _slug(point.sample),
+                "total": point.total,
+                "labeled": point.labeled,
+                "unlabeled": point.unlabeled,
+                "positive": point.positive,
+                "mean": point.mean,
+            }
+            for point in charts.sample_monthly
+        ],
+    }
+
+
+def _score_analysis_payload(charts: ReportCharts, samples: list[dict]) -> dict:
+    by_id = {_slug(row.sample): row for row in charts.score_monthly}
+    return {
+        "countAxisMax": charts.score_count_axis_max or 1,
+        "bySample": {
+            sample["id"]: {
+                "meanScore": list(row.mean_score),
+                "meanTarget": list(row.mean_target),
+                "labeled": list(row.labeled),
+                "unlabeled": list(row.unlabeled),
+            }
+            for sample in samples
+            if (row := by_id.get(sample["id"])) is not None
+        },
+    }
+
+
+def _score_distribution_payload(charts: ReportCharts, samples: list[dict]) -> dict:
+    by_id = {_slug(row.sample): row for row in charts.histograms}
+    train = next((by_id.get(sample["id"]) for sample in samples if sample["id"] in by_id), None)
+    return {
+        "binEdges": list(charts.histogram_bin_edges),
+        "densityAxisMax": charts.histogram_density_max or 1,
+        "countScale": {
+            "target0": train.n_target_0 if train else 0,
+            "target1": train.n_target_1 if train else 0,
+        },
+        "bySample": {
+            sample["id"]: {"target0": list(row.target_0), "target1": list(row.target_1)}
+            for sample in samples
+            if (row := by_id.get(sample["id"])) is not None
+        },
+    }
+
+
+def _score_stability_payload(charts: ReportCharts, samples: list[dict]) -> dict:
+    by_id = {_slug(row.sample): row for row in charts.score_psi}
+    return {
+        "psiAxisMax": charts.psi_axis_max or charts.psi_critical,
+        "thresholds": {"warning": charts.psi_warning, "critical": charts.psi_critical},
+        "bySample": {
+            sample["id"]: {
+                "psi": list(row.psi),
+                "rows": list(row.rows),
+                "scoreCoverage": list(row.coverage),
+            }
+            for sample in samples
+            if (row := by_id.get(sample["id"])) is not None
+        },
+    }
 
 
 def _stat_row(label: str, samples: list[dict], by_id: dict[str, SampleStats], value) -> dict:

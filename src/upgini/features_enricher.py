@@ -100,6 +100,7 @@ from upgini.utils.deduplicate_utils import (
 )
 from upgini.report.assemble import assemble_report_data
 from upgini.report.html import generate_html_report
+from upgini.report.stats import make_report_frame
 from upgini.utils.display_utils import (
     display_html_dataframe,
     do_without_pandas_limits,
@@ -2317,6 +2318,121 @@ class FeaturesEnricher(TransformerMixin):
             samples.append(self.bundle.get("quality_metrics_eval_segment").format(idx + 1))
         return samples
 
+    def _report_dataset_samples(self) -> dict[str, pd.DataFrame]:
+        names = self._report_sample_names()
+        if self.df_with_original_index is not None:
+            return self._report_samples_from_combined(self.df_with_original_index, names, self.fit_search_keys)
+        if self.X is None or self.y is None:
+            return {}
+        date_col = self._get_date_column(self.search_keys)
+        frames = {names[0]: self._report_xy_frame(self.X, self.y, date_col)}
+        for idx, (eval_x, eval_y) in enumerate(self.eval_set or []):
+            if idx + 1 >= len(names):
+                break
+            frames[names[idx + 1]] = self._report_xy_frame(eval_x, eval_y, date_col)
+        return frames
+
+    def _report_samples_from_combined(
+        self, df: pd.DataFrame, names: list[str], search_keys: dict[str, SearchKey] | None
+    ) -> dict[str, pd.DataFrame]:
+        date_col = self._get_date_column(search_keys or {})
+        if EVAL_SET_INDEX not in df.columns:
+            return {names[0]: self._report_df_frame(df, date_col)} if names else {}
+        frames: dict[str, pd.DataFrame] = {}
+        for eval_idx in sorted(pd.unique(df[EVAL_SET_INDEX].dropna())):
+            name_idx = int(eval_idx)
+            if name_idx >= len(names):
+                continue
+            frames[names[name_idx]] = self._report_df_frame(df[df[EVAL_SET_INDEX] == eval_idx], date_col)
+        return frames
+
+    def _report_xy_frame(self, X, y, date_col: str | None) -> pd.DataFrame:
+        date = X[date_col] if isinstance(X, pd.DataFrame) and date_col and date_col in X.columns else None
+        return make_report_frame(y, date=date)
+
+    def _report_df_frame(self, df: pd.DataFrame, date_col: str | None) -> pd.DataFrame:
+        target = df[TARGET] if TARGET in df.columns else pd.Series(np.nan, index=df.index)
+        return self._report_xy_frame(df, target, date_col)
+
+    def _report_scored_samples(self) -> dict[str, pd.DataFrame]:
+        cached = self._peek_cached_sampled()
+        if cached is None:
+            return {}
+        X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, _generated = cached
+        score_col = self._report_score_column(enriched_X)
+        if score_col is None:
+            return {}
+        date_col = self._get_date_column(search_keys or {})
+        names = self._report_sample_names()
+        frames = {
+            names[0]: self._report_scored_frame(
+                X_sampled, y_sampled, enriched_X, score_col, date_col, columns_renaming
+            )
+        }
+        for idx, (eval_X, enriched_eval_X, eval_y) in eval_set_sampled_dict.items():
+            name_idx = idx + 1
+            if name_idx >= len(names):
+                continue
+            frames[names[name_idx]] = self._report_scored_frame(
+                eval_X, eval_y, enriched_eval_X, score_col, date_col, columns_renaming
+            )
+        return frames
+
+    def _report_scored_frame(
+        self,
+        X: pd.DataFrame,
+        y,
+        enriched: pd.DataFrame,
+        score_col: str,
+        date_col: str | None,
+        columns_renaming: dict[str, str] | None,
+    ) -> pd.DataFrame:
+        target = y
+        if target is None and TARGET in enriched.columns:
+            target = enriched[TARGET]
+        date_name = self._report_existing_column(date_col, columns_renaming, X, enriched)
+        baseline_name = self._report_existing_column(self.baseline_score_column, columns_renaming, X, enriched)
+        return make_report_frame(
+            target,
+            date=self._report_column_values(date_name, X, enriched),
+            score=enriched[score_col] if score_col in enriched.columns else None,
+            baseline=self._report_column_values(baseline_name, X, enriched),
+        )
+
+    def _report_score_column(self, enriched_X: pd.DataFrame) -> str | None:
+        name = self._get_single_ensemble_score_name()
+        if name and name in enriched_X.columns:
+            return name
+        return None
+
+    def _report_existing_column(
+        self, name: str | None, renaming: dict[str, str] | None, *frames: pd.DataFrame
+    ) -> str | None:
+        if not name:
+            return None
+        aliases = self._column_name_aliases([name], renaming or {})
+        for frame in frames:
+            if not isinstance(frame, pd.DataFrame):
+                continue
+            for col in frame.columns:
+                if col in aliases:
+                    return col
+        return None
+
+    @staticmethod
+    def _report_column_values(column: str | None, *frames: pd.DataFrame):
+        if not column:
+            return None
+        for frame in frames:
+            if isinstance(frame, pd.DataFrame) and column in frame.columns:
+                return frame[column]
+        return None
+
+    def _peek_cached_sampled(self):
+        if not self.__cached_sampled_datasets:
+            return None
+        return max(self.__cached_sampled_datasets.values(), key=lambda item: len(item[0]) if item[0] is not None else 0)
+
     def _assemble_report_data(self):
         search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
         return assemble_report_data(
@@ -2329,6 +2445,8 @@ class FeaturesEnricher(TransformerMixin):
             metric_name=self.metrics_metric_name,
             model_features=self._ensemble_model_feature_count(),
             is_binary=self.model_task_type == ModelTaskType.BINARY,
+            dataset_samples=self._report_dataset_samples(),
+            scored_samples=self._report_scored_samples(),
             bundle=self.bundle,
         )
 

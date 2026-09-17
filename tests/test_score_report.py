@@ -10,6 +10,7 @@ from upgini.metadata import (
     BaseColumnMetadata,
     FeaturesMetadataV2,
     GeneratedFeatureMetadata,
+    ModelTaskType,
     ProviderTaskMetadataV2,
     SearchKey,
 )
@@ -264,6 +265,69 @@ def test_get_ensemble_score_column_does_not_need_baseline(requests_mock: Mocker)
 
     assert enricher.baseline_score_column is None
     assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
+
+
+def test_assemble_report_data_uses_dataset_and_cached_scores(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE, "date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher._search_task = SearchTask("search-abc")
+    enricher._search_task.provider_metadata_v2 = [_ensemble_metadata(ensemble_col)]
+    enricher.feature_names_ = [ensemble_col]
+    enricher.metrics_metric_name = "GINI"
+    enricher.model_task_type = ModelTaskType.BINARY
+    enricher.fit_search_keys = enricher.search_keys
+    enricher.X = pd.DataFrame(
+        {
+            "phone": [1, 2, 3, 4],
+            "date": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-02-01", "2024-02-02"]),
+        }
+    )
+    enricher.y = pd.Series([0, 1, 0, 1])
+    eval_x = pd.DataFrame(
+        {
+            "phone": [5, 6],
+            "date": pd.to_datetime(["2024-02-01", "2024-02-02"]),
+        }
+    )
+    eval_y = pd.Series([0, 1])
+    enricher.eval_set = [(eval_x, eval_y)]
+    enricher.df_with_original_index = pd.concat(
+        [
+            enricher.X.assign(target=enricher.y.to_numpy(), eval_set_index=0),
+            eval_x.assign(target=eval_y.to_numpy(), eval_set_index=1),
+        ],
+        ignore_index=True,
+    )
+    sampled_x = enricher.X.copy()
+    enriched_x = sampled_x.copy()
+    enriched_x[ensemble_col] = [0.1, 0.9, 0.2, 0.8]
+    eval_enriched = eval_x.copy()
+    eval_enriched[ensemble_col] = [0.15, 0.85]
+    enricher._FeaturesEnricher__cached_sampled_datasets["hash"] = (
+        sampled_x,
+        enricher.y.copy(),
+        enriched_x,
+        {0: (eval_x.copy(), eval_enriched, eval_y.copy())},
+        enricher.search_keys,
+        {},
+        [],
+    )
+
+    data = enricher._assemble_report_data()
+
+    assert [stats.sample for stats in data.sample_stats] == ["Train", "Eval 1"]
+    assert data.sample_stats[0].rows == 4
+    assert data.sample_stats[1].rows == 2
+    assert data.charts.timeline_months == ["Jan 2024", "Feb 2024"]
+    assert data.charts.quality_monthly[0].enriched[0] is not None
+    assert data.charts.histograms[0].n_target_0 == 2
+    assert data.charts.score_psi[0].rows[0] == 2
 
 
 def test_report_button_downloads_html_like_pdf():

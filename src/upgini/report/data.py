@@ -80,6 +80,70 @@ class ModelFeatureShap:
 
 
 @dataclass
+class MonthlySamplePoint:
+    month: str
+    sample: str
+    total: int
+    labeled: int
+    unlabeled: int
+    positive: int
+    mean: Optional[float] = None
+
+
+@dataclass
+class QualityMonthly:
+    evaluation_scope: str
+    metric: str
+    baseline: list[Optional[float]] = field(default_factory=list)
+    enriched: list[Optional[float]] = field(default_factory=list)
+
+
+@dataclass
+class ScoreMonthlyStats:
+    sample: str
+    mean_score: list[Optional[float]] = field(default_factory=list)
+    mean_target: list[Optional[float]] = field(default_factory=list)
+    labeled: list[Optional[int]] = field(default_factory=list)
+    unlabeled: list[Optional[int]] = field(default_factory=list)
+
+
+@dataclass
+class ScoreHistogram:
+    sample: str
+    target_0: list[float] = field(default_factory=list)
+    target_1: list[float] = field(default_factory=list)
+    n_target_0: int = 0
+    n_target_1: int = 0
+
+
+@dataclass
+class ScorePsi:
+    sample: str
+    psi: list[Optional[float]] = field(default_factory=list)
+    rows: list[Optional[int]] = field(default_factory=list)
+    coverage: list[Optional[float]] = field(default_factory=list)
+
+
+@dataclass
+class ReportCharts:
+    timeline_months: list[str] = field(default_factory=list)
+    period_options: list[int] = field(default_factory=list)
+    default_period: int = 0
+    sample_monthly: list[MonthlySamplePoint] = field(default_factory=list)
+    monthly_count_max: int = 0
+    quality_monthly: list[QualityMonthly] = field(default_factory=list)
+    score_monthly: list[ScoreMonthlyStats] = field(default_factory=list)
+    score_count_axis_max: int = 0
+    histogram_bin_edges: list[float] = field(default_factory=list)
+    histograms: list[ScoreHistogram] = field(default_factory=list)
+    histogram_density_max: float = 0.0
+    score_psi: list[ScorePsi] = field(default_factory=list)
+    psi_axis_max: float = 0.32
+    psi_warning: float = 0.1
+    psi_critical: float = 0.25
+
+
+@dataclass
 class ReportData:
     metadata: ReportMetadata
     quality_by_sample: list[QualitySample] = field(default_factory=list)
@@ -90,3 +154,4 @@ class ReportData:
     sources: list[SourceRow] = field(default_factory=list)
     autofe: list[dict[str, str]] = field(default_factory=list)
     model_feature_shap: list[ModelFeatureShap] = field(default_factory=list)
+    charts: ReportCharts = field(default_factory=ReportCharts)
