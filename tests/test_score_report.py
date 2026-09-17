@@ -15,9 +15,11 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.report.assemble import UPGINI_REPORT_BRANDING_URL, assemble_report_data, format_search_duration
+from upgini.report.data import FeatureRow
 from upgini.report.html import generate_html_report
 from upgini.resource_bundle import bundle
 from upgini.search_task import SearchTask
+from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE
 
 from .utils import mock_default_requests
 
@@ -480,6 +482,7 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert payload["features"][0]["importance"] == 0.15
     assert payload["features"][0]["status"] == "watch"
     assert payload["features"][0]["provider"] == "Upgini"
+    assert payload["features"][0]["shapClass"] == "upgini"
     assert payload["features"][0]["source"] == "Accounts Availability"
     assert payload["features"][0]["coverage"] == 96.9
     assert payload["features"][0]["psi"] == 0.22
@@ -499,6 +502,30 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert data.model_feature_shap[1].feature == "model1"
     assert "ensemble_score(model1,model2)" not in html
     assert ensemble_col not in html
+
+
+def test_shap_fill_class_maps_provider_source():
+    data = assemble_report_data(
+        search_id="search-abc",
+        search_keys=["PHONE"],
+        bundle=bundle,
+        features=[
+            FeatureRow(name="client_feat", shap=0.7, provider="", source=CLIENT_SOURCE),
+            FeatureRow(name="autofe_feat", shap=0.2, provider="AutoFE", source=GENERATED_SOURCE),
+            FeatureRow(name="upgini_feat", shap=0.056, provider="Upgini", source="Usage Data"),
+            FeatureRow(name="ext_feat", shap=0.04, provider="Experian", source="Credit Bureau"),
+        ],
+    )
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    by_name = {row["name"]: row for row in payload["features"]}
+
+    assert by_name["client_feat"]["shapClass"] == "user"
+    assert by_name["autofe_feat"]["shapClass"] == "autofe"
+    assert by_name["upgini_feat"]["shapClass"] == "upgini"
+    assert by_name["ext_feat"]["shapClass"] == "external"
+    assert ".shap-fill.external{background:#7b5cff}" in html
+    assert "f.shapClass || 'upgini'" in html
 
 
 def test_report_button_downloads_html_like_pdf():

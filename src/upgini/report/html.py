@@ -6,6 +6,7 @@ from typing import Optional
 
 from upgini.report.data import FeatureRow, ReportCharts, ReportData, SampleStats, SearchResultsSummary, SourceRow
 from upgini.report.stats import MEAN_AXIS_PADDING
+from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
 _SAMPLE_COLORS = ("#1645ee", "#20aab4", "#53cc61", "#e19132", "#d45b5b")
@@ -160,6 +161,7 @@ def _features_payload(features: list[FeatureRow]) -> list[dict]:
             "name": row.name,
             "provider": row.provider,
             "source": row.source,
+            "shapClass": _shap_fill_class(row),
             "importance": abs(row.shap) if row.shap is not None else 0,
             "shap": row.shap,
             "coverage": row.coverage,
@@ -169,6 +171,18 @@ def _features_payload(features: list[FeatureRow]) -> list[dict]:
         }
         for row in features
     ]
+
+
+def _shap_fill_class(row: FeatureRow) -> str:
+    source = (row.source or "").lower()
+    provider = (row.provider or "").lower()
+    if source.startswith("autofe") or provider == "autofe" or source == GENERATED_SOURCE.lower():
+        return "autofe"
+    if source == CLIENT_SOURCE.lower() or provider == "user":
+        return "user"
+    if provider in {"", "upgini"}:
+        return "upgini"
+    return "external"
 
 
 def _sources_payload(sources: list[SourceRow]) -> list[dict]:
