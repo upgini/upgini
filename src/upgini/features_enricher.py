@@ -1462,6 +1462,9 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: bool = True,
         progress_callback: Callable | None = None,
     ):
+        if self._has_single_ensemble_score():
+            self.logger.info("Skip OOT PSI stability check for single ensemble score")
+            return
         search_keys = self.search_keys.copy()
         search_keys.update(self._get_autodetected_search_keys())
         validated_X, _, validated_eval_set = self._validate_train_eval(X, y, eval_set)
