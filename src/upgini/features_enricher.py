@@ -2288,29 +2288,31 @@ class FeaturesEnricher(TransformerMixin):
         return self._get_single_ensemble_score_name() is not None
 
     def _get_single_ensemble_score_name(self) -> str | None:
+        if len(self._ensemble_generated_metadata()) != 1:
+            return None
         selected = list(self.feature_names_ or [])
         ensemble = [name for name in selected if self._is_ensemble_feature(name)]
         if len(ensemble) != 1:
             return None
-        renaming = self.fit_columns_renaming or {}
-        allowed = self._column_name_aliases([ensemble[0]], renaming) | self._etalon_feature_aliases()
-        if any(name not in allowed for name in selected):
+        if any(self._is_extra_enriched_feature(name) for name in selected):
             return None
         return ensemble[0]
 
-    def _etalon_feature_aliases(self) -> set[str]:
+    def _is_extra_enriched_feature(self, name: str) -> bool:
+        if self._is_ensemble_feature(name):
+            return False
         renaming = self.fit_columns_renaming or {}
-        names: set[str] = set()
-        if self._search_task is not None:
-            names.update(
-                meta.name
-                for meta in (self._search_task.get_all_features_metadata_v2() or [])
-                if meta.source == "etalon"
-            )
-        if isinstance(self.X, pd.DataFrame):
-            generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
-            names.update(column for column in self.X.columns if column not in generated)
-        return self._column_name_aliases(names, renaming)
+        aliases = self._column_name_aliases([name], renaming)
+        if aliases & set(self.external_source_feature_names or []):
+            return True
+        if self._search_task is None:
+            return False
+        for meta in self._search_task.get_all_features_metadata_v2() or []:
+            if meta.source == "etalon" or self._is_ensemble_feature(meta.name):
+                continue
+            if aliases & self._column_name_aliases([meta.name], renaming):
+                return True
+        return False
 
     def _reference_rows(self) -> int | None:
         if self.X is None:

@@ -322,6 +322,39 @@ def test_single_ensemble_score_allows_etalon_features(requests_mock: Mocker):
     assert enricher._score_report_html() is not None
 
 
+def test_skip_oot_psi_with_ensemble_and_client_features(requests_mock: Mocker, monkeypatch):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.feature_names_ = [ensemble_col, "client_feature"]
+    enricher.external_source_feature_names = []
+    checked = []
+    monkeypatch.setattr(enricher, "_check_stability", lambda *args, **kwargs: checked.append(True) or set())
+
+    enricher._select_features_by_psi(
+        X=pd.DataFrame({"client_feature": [1, 2], "phone": [3, 4]}),
+        y=pd.Series([0, 1]),
+        eval_set=None,
+        stability_threshold=0.2,
+        stability_agg_func="max",
+    )
+
+    assert enricher._has_single_ensemble_score()
+    assert checked == []
+
+
+def test_oot_psi_not_skipped_with_extra_ads_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.feature_names_ = [ensemble_col, "f_model1_abc"]
+    enricher.external_source_feature_names = ["f_model1_abc"]
+
+    assert enricher._has_single_ensemble_score() is False
+
+
 def test_single_ensemble_score_rejects_extra_ads_features(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
