@@ -272,6 +272,67 @@ def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: 
     assert list(tmp_path.glob("*.pdf")) == []
 
 
+def test_ordinary_report_button_downloads_pdf(requests_mock: Mocker, monkeypatch):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
+    enricher._search_task = SearchTask("search-abc")
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.report_html = "<html>stale ensemble report</html>"
+    pdf_calls = []
+    opened = []
+    monkeypatch.setattr("upgini.features_enricher.ipython_available", lambda: True)
+    monkeypatch.setattr(
+        "upgini.features_enricher.show_button_open_report",
+        lambda source, **kwargs: opened.append(source) or "html",
+    )
+    monkeypatch.setattr(
+        "upgini.features_enricher.prepare_and_show_report",
+        lambda *args, **kwargs: pdf_calls.append(True) or "pdf",
+    )
+
+    assert enricher._has_single_ensemble_score() is False
+    assert enricher._FeaturesEnricher__show_report_button() == "pdf"
+    assert pdf_calls == [True]
+    assert opened == []
+
+
+def test_single_ensemble_score_allows_etalon_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.X = None
+    enricher.fit_columns_renaming = {"client_feature_8ddf40": "client_feature"}
+    enricher.feature_names_ = [ensemble_col, "client_feature"]
+    meta = _ensemble_metadata(ensemble_col)
+    meta.features.append(
+        FeaturesMetadataV2(
+            name="client_feature_8ddf40",
+            type="numeric",
+            source="etalon",
+            hit_rate=100.0,
+            shap_value=0.0,
+        )
+    )
+    enricher._search_task.provider_metadata_v2 = [meta]
+
+    assert enricher._has_single_ensemble_score()
+    assert enricher._get_single_ensemble_score_name() == ensemble_col
+    assert enricher._score_report_html() is not None
+
+
+def test_single_ensemble_score_rejects_extra_ads_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.feature_names_ = [ensemble_col, "f_model1_abc"]
+
+    assert enricher._has_single_ensemble_score() is False
+    assert enricher._score_report_html() is None
+
+
 def test_score_report_skipped_without_ensemble(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)

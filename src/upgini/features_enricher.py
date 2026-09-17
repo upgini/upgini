@@ -2292,17 +2292,25 @@ class FeaturesEnricher(TransformerMixin):
         ensemble = [name for name in selected if self._is_ensemble_feature(name)]
         if len(ensemble) != 1:
             return None
-        etalon_columns = set()
+        renaming = self.fit_columns_renaming or {}
+        allowed = self._column_name_aliases([ensemble[0]], renaming) | self._etalon_feature_aliases()
+        if any(name not in allowed for name in selected):
+            return None
+        return ensemble[0]
+
+    def _etalon_feature_aliases(self) -> set[str]:
+        renaming = self.fit_columns_renaming or {}
+        names: set[str] = set()
         if self._search_task is not None:
-            etalon_columns = {
+            names.update(
                 meta.name
                 for meta in (self._search_task.get_all_features_metadata_v2() or [])
                 if meta.source == "etalon"
-            }
-        extras = [name for name in selected if name != ensemble[0] and name not in etalon_columns]
-        if extras:
-            return None
-        return ensemble[0]
+            )
+        if isinstance(self.X, pd.DataFrame):
+            generated = self._column_name_aliases(self.fit_generated_features or [], renaming)
+            names.update(column for column in self.X.columns if column not in generated)
+        return self._column_name_aliases(names, renaming)
 
     def _reference_rows(self) -> int | None:
         if self.X is None:
@@ -6224,19 +6232,24 @@ if response.status_code == 200:
             print(self._internal_features_info)
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
+        if self._has_single_ensemble_score():
+            try:
+                report_html = self._score_report_html()
+                if report_html:
+                    if not ipython_available():
+                        return
+                    search_id = (
+                        self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
+                    )
+                    return show_button_open_report(
+                        report_html,
+                        download_name=f"upgini-report-{search_id}.html",
+                        display_id=display_id,
+                        display_handle=display_handle,
+                    )
+            except Exception:
+                self.logger.exception("Failed to generate HTML report, falling back to PDF")
         try:
-            report_html = self._score_report_html() or self.report_html
-            if report_html:
-                if not ipython_available():
-                    return
-                search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
-                return show_button_open_report(
-                    report_html,
-                    download_name=f"upgini-report-{search_id}.html",
-                    display_id=display_id,
-                    display_handle=display_handle,
-                )
-
             eval_sets_drift_df = self._get_eval_sets_drift_summary()
 
             return prepare_and_show_report(
