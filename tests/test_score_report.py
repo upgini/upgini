@@ -611,6 +611,27 @@ def test_shap_fill_class_maps_provider_source():
     assert by_name["ext_feat"]["provider"] == "Experian"
     assert ".shap-fill.external{background:#7b5cff}" in html
     assert "f.shapClass || 'upgini'" in html
+    assert "providerBadge" in html
+    assert "replace(/,\\s*/g, '<br>')" in html
+
+
+def test_provider_badge_keeps_comma_separated_providers_in_payload():
+    data = assemble_report_data(
+        search_id="search-abc",
+        search_keys=["PHONE"],
+        bundle=bundle,
+        features=[
+            FeatureRow(
+                name="f_autofe_sim_jw2",
+                shap=0.03,
+                provider="Training dataset, IP2Location",
+                source=GENERATED_SOURCE,
+            ),
+        ],
+    )
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    assert payload["features"][0]["provider"] == "Training dataset, IP2Location"
 
 
 def test_report_button_downloads_html_like_pdf():
