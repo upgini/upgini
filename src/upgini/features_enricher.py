@@ -5864,6 +5864,7 @@ if response.status_code == 200:
 
         selected_features_meta.sort(key=lambda m: (-m.shap_value, m.name))
         psi_keepers = self._psi_stability_keepers() if self.psi_values is not None else set()
+        single_ensemble = len(self._ensemble_generated_metadata()) == 1
 
         for feature_meta in selected_features_meta:
             original_name = original_names_dict.get(feature_meta.name, feature_meta.name)
@@ -5872,6 +5873,10 @@ if response.status_code == 200:
                 file_meta is not None and file_meta.meaningType == FileColumnMeaningType.GENERATED_FEATURE
             ) or original_name in generated_aliases
             is_client_feature = original_name in clients_features_df.columns and not is_generated_feature
+
+            # Model-input ads/AutoFE rows are only for the HTML report; the selected output is the score.
+            if single_ensemble and not is_client_feature and not self._is_ensemble_feature(feature_meta.name):
+                continue
 
             if not is_client_feature and not is_generated_feature:
                 self.external_source_feature_names.append(original_name)
@@ -5886,8 +5891,6 @@ if response.status_code == 200:
 
                 if original_name in self.unstable_features or feature_meta.name in self.unstable_features:
                     continue
-
-            # TODO make a decision about selected features based on special flag from mlb
 
             if original_shaps.get(feature_meta.name, 0.0) == 0.0 and not self._should_show_client_feature_in_report(
                 is_client_feature, feature_meta.name

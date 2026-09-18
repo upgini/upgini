@@ -407,6 +407,9 @@ def test_skip_oot_psi_with_ensemble_and_client_features(requests_mock: Mocker, m
 
     assert enricher._has_single_ensemble_score()
     assert checked == []
+    assert enricher._is_extra_enriched_feature("f_model1_abc")
+    assert enricher._is_extra_enriched_feature("f_autofe_div")
+    assert enricher._is_extra_enriched_feature("pd002_6e6a41") is False
 
 
 def test_oot_psi_not_skipped_with_extra_ads_features(requests_mock: Mocker):
