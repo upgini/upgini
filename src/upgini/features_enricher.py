@@ -99,7 +99,13 @@ from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
-from upgini.report.assemble import assemble_report_data, autofe_rows_from_description, build_search_results
+from upgini.report.assemble import (
+    _generated_feature_names,
+    _parse_generated_feature,
+    assemble_report_data,
+    autofe_rows_from_description,
+    build_search_results,
+)
 from upgini.report.html import generate_html_report
 from upgini.report.stats import make_report_frame
 from upgini.utils.display_utils import (
@@ -2480,6 +2486,11 @@ class FeaturesEnricher(TransformerMixin):
             generated_names=self._column_name_aliases(
                 self.fit_generated_features or [], self.fit_columns_renaming or {}
             ),
+            generated_features=self._search_task.get_all_generated_features() if self._search_task else [],
+            joined_ads_features_count=(
+                self._search_task.get_joined_ads_features_count() if self._search_task else None
+            ),
+            joined_ads_count=self._search_task.get_joined_ads_count() if self._search_task else None,
         )
         autofe = autofe_rows_from_description(
             self.get_autofe_features_description(features_meta=features_meta),
@@ -2504,42 +2515,16 @@ class FeaturesEnricher(TransformerMixin):
 
     def _match_autofe_feature_meta(
         self,
-        autofe_feature: Feature,
         generated_meta: GeneratedFeatureMetadata,
         features_meta: list[FeaturesMetadataV2],
         used_names: set[str],
     ) -> FeaturesMetadataV2 | None:
-        display = autofe_feature.get_display_name(shorten=True, unhash=True, cache=False)
-        candidates = [display]
-        if generated_meta.display_index is not None:
-            suffix = "_" + str(generated_meta.display_index)
-            if display.endswith(suffix) and len(display) > len(suffix):
-                candidates.append(display[: -len(suffix)])
-        if generated_meta.alias:
-            candidates.extend([generated_meta.alias, f"f_autofe_{generated_meta.alias}"])
-        op_name = autofe_feature.get_op_display_name()
-        if op_name:
-            candidates.append(f"f_autofe_{op_name}")
-
         available = [meta for meta in features_meta or [] if meta.name not in used_names]
         by_name = {meta.name: meta for meta in available}
-        for name in candidates:
+        for name in _generated_feature_names(generated_meta):
             matched = by_name.get(name)
             if matched is not None:
                 return matched
-
-        prefixes = []
-        if generated_meta.alias:
-            prefixes.append(f"f_autofe_{generated_meta.alias}")
-        if op_name:
-            prefixes.append(f"f_autofe_{op_name}")
-        matches = [
-            meta
-            for meta in available
-            if any(meta.name == prefix or meta.name.startswith(prefix + "_") for prefix in prefixes)
-        ]
-        if len(matches) == 1:
-            return matches[0]
         return None
 
     def _ensemble_generated_metadata(self):
@@ -2548,9 +2533,9 @@ class FeaturesEnricher(TransformerMixin):
             return []
         matched = []
         for meta in autofe_meta:
-            op = EnsembleModel.from_formula(meta.formula.split("(")[0])
-            if op is not None:
-                matched.append((meta, op))
+            feature = _parse_generated_feature(meta)
+            if feature is not None and isinstance(feature.op, EnsembleModel):
+                matched.append((meta, feature.op))
         return matched
 
     def _ensemble_feature_names_from_metadata(self) -> set[str]:
@@ -6012,7 +5997,7 @@ if response.status_code == 200:
                     }
                     autofe_feature = (
                         Feature.from_formula(m.formula)
-                        .set_display_index(m.display_index)
+                        .set_display_index(m.display_index or None)
                         .set_alias(m.alias)
                         .set_op_params(m.operator_params or {})
                         .rename_columns(orig_to_hashed)
@@ -6026,7 +6011,7 @@ if response.status_code == 200:
                 if autofe_feature.op.is_vector and not is_ts:
                     continue
 
-                feature_meta = self._match_autofe_feature_meta(autofe_feature, m, features_meta, used_names)
+                feature_meta = self._match_autofe_feature_meta(m, features_meta, used_names)
                 if feature_meta is None or not feature_meta.shap_value:
                     continue
 

@@ -66,11 +66,17 @@ class SourceRow:
 @dataclass
 class SearchResultsSummary:
     relevant_features: Optional[int] = None
+    features_found: Optional[int] = None
     model_features: Optional[int] = None
+    external_features: Optional[int] = None
+    original_features: Optional[int] = None
+    autofe_features: Optional[int] = None
     data_sources: Optional[int] = None
+    joined_sources: Optional[int] = None
     stable_features_share: Optional[float] = None
     contributed_sources: Optional[int] = None
     stable_features: Optional[int] = None
+    psi_features: Optional[int] = None
 
 
 @dataclass

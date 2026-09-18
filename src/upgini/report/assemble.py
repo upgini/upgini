@@ -7,7 +7,9 @@ from typing import Callable, Optional
 import pandas as pd
 
 from upgini.__about__ import __version__
-from upgini.metadata import FeaturesMetadataV2
+from upgini.autofe.feature import Feature
+from upgini.autofe.vector import CatboostModel, EnsembleModel, OnnxModel
+from upgini.metadata import BaseColumnMetadata, FeaturesMetadataV2, GeneratedFeatureMetadata
 from upgini.report.data import (
     FeatureRow,
     ModelFeatureShap,
@@ -101,6 +103,9 @@ def build_search_results(
     features_meta: list[FeaturesMetadataV2],
     is_ensemble: Callable[[str], bool],
     generated_names: Optional[set[str]] = None,
+    generated_features: Optional[list[GeneratedFeatureMetadata]] = None,
+    joined_ads_features_count: Optional[int] = None,
+    joined_ads_count: Optional[int] = None,
 ) -> tuple[list[FeatureRow], list[SourceRow], list[ModelFeatureShap], SearchResultsSummary]:
     generated_names = generated_names or set()
     model_rows: list[FeatureRow] = []
@@ -123,15 +128,15 @@ def build_search_results(
         for index, row in enumerate(model_rows, start=1)
     ]
     sources = _source_rows(found_rows)
-    contributed = len({(row.provider, row.source) for row in found_rows if row.provider})
-    stable = sum(1 for row in model_rows if row.psi is not None and row.psi < _STABILITY_PSI)
-    summary = SearchResultsSummary(
-        relevant_features=len(found_rows),
-        model_features=len(model_rows) or None,
-        data_sources=len(sources),
-        stable_features_share=(stable / len(model_rows)) if model_rows else None,
-        contributed_sources=contributed,
-        stable_features=stable if model_rows else None,
+    summary = _overview_summary(
+        features_meta=features_meta,
+        model_rows=model_rows,
+        found_rows=found_rows,
+        sources=sources,
+        is_ensemble=is_ensemble,
+        generated_features=generated_features or [],
+        joined_ads_features_count=joined_ads_features_count,
+        joined_ads_count=joined_ads_count,
     )
     return model_rows, sources, model_shap, summary
 
@@ -295,3 +300,136 @@ def _psi_status(psi: Optional[float]) -> Optional[str]:
 
 def _has_nonzero_shap_value(shap: Optional[float]) -> bool:
     return shap is not None and not pd.isna(shap) and shap != 0
+
+
+def _overview_summary(
+    *,
+    features_meta: list[FeaturesMetadataV2],
+    model_rows: list[FeatureRow],
+    found_rows: list[FeatureRow],
+    sources: list[SourceRow],
+    is_ensemble: Callable[[str], bool],
+    generated_features: list[GeneratedFeatureMetadata],
+    joined_ads_features_count: Optional[int],
+    joined_ads_count: Optional[int],
+) -> SearchResultsSummary:
+    top_level = _unique_fold_model_columns(generated_features)
+    features_by_name = {meta.name: meta for meta in features_meta}
+    autofe_by_name = _autofe_generated_by_name(generated_features, is_ensemble)
+    if top_level:
+        counts = {"external": 0, "original": 0, "autofe": 0}
+        ads_ids: set[str] = set()
+        psis: list[Optional[float]] = []
+        for column in top_level:
+            kind = _top_level_kind(column, features_by_name, autofe_by_name, is_ensemble)
+            counts[kind] += 1
+            ads_ids.update(_leaf_ads_ids(column, autofe_by_name))
+            meta = features_by_name.get(column.hashed_name) or features_by_name.get(column.original_name)
+            psis.append(None if meta is None else meta.psi_value)
+        model_features = len(top_level)
+        external, original, autofe = counts["external"], counts["original"], counts["autofe"]
+        contributed = len(ads_ids)
+    else:
+        model_features = len(model_rows) or None
+        external = original = autofe = None
+        contributed = len({(row.provider, row.source) for row in found_rows if row.provider})
+        psis = [row.psi for row in model_rows]
+    share, stable, psi_count = _stability_from_psi(psis)
+    return SearchResultsSummary(
+        relevant_features=len(found_rows),
+        features_found=joined_ads_features_count if joined_ads_features_count is not None else len(found_rows),
+        model_features=model_features,
+        external_features=external,
+        original_features=original,
+        autofe_features=autofe,
+        data_sources=len(sources),
+        joined_sources=joined_ads_count if joined_ads_count is not None else len(sources),
+        stable_features_share=share,
+        contributed_sources=contributed,
+        stable_features=stable,
+        psi_features=psi_count,
+    )
+
+
+def _unique_fold_model_columns(generated_features: list[GeneratedFeatureMetadata]) -> list[BaseColumnMetadata]:
+    unique: dict[str, BaseColumnMetadata] = {}
+    for meta in generated_features:
+        feature = _parse_generated_feature(meta)
+        if feature is None or not isinstance(feature.op, (CatboostModel, OnnxModel)):
+            continue
+        for column in meta.base_columns:
+            unique.setdefault(column.hashed_name or column.original_name, column)
+    return list(unique.values())
+
+
+def _autofe_generated_by_name(
+    generated_features: list[GeneratedFeatureMetadata], is_ensemble: Callable[[str], bool]
+) -> dict[str, GeneratedFeatureMetadata]:
+    by_name: dict[str, GeneratedFeatureMetadata] = {}
+    for meta in generated_features:
+        feature = _parse_generated_feature(meta)
+        if feature is None or isinstance(feature.op, (CatboostModel, EnsembleModel, OnnxModel)):
+            continue
+        name = feature.get_display_name(shorten=True, unhash=True, cache=False)
+        if name and not is_ensemble(name):
+            by_name.setdefault(name, meta)
+    return by_name
+
+
+def _parse_generated_feature(meta: GeneratedFeatureMetadata) -> Feature | None:
+    try:
+        parsed = Feature.from_formula(meta.formula)
+        if not isinstance(parsed, Feature):
+            return None
+        orig_to_hashed = {column.original_name: column.hashed_name for column in meta.base_columns}
+        return (
+            parsed.set_display_index(meta.display_index or None)
+            .set_alias(meta.alias)
+            .set_op_params(meta.operator_params or {})
+            .rename_columns(orig_to_hashed)
+        )
+    except Exception:
+        return None
+
+
+def _generated_feature_names(meta: GeneratedFeatureMetadata) -> set[str]:
+    feature = _parse_generated_feature(meta)
+    if feature is None:
+        return set()
+    return {feature.get_display_name(shorten=True, unhash=True, cache=False)}
+
+
+def _top_level_kind(
+    column: BaseColumnMetadata,
+    features_by_name: dict[str, FeaturesMetadataV2],
+    autofe_by_name: dict[str, GeneratedFeatureMetadata],
+    is_ensemble: Callable[[str], bool],
+) -> str:
+    names = [column.hashed_name, column.original_name]
+    if any(name in autofe_by_name for name in names if name):
+        return "autofe"
+    meta = next((features_by_name[name] for name in names if name in features_by_name), None)
+    if meta is not None and not is_ensemble(meta.name):
+        if meta.source == "generated":
+            return "autofe"
+        if meta.source == "ads":
+            return "external"
+        if meta.source == "etalon":
+            return "original"
+    if column.ads_definition_id:
+        return "external"
+    return "original"
+
+
+def _leaf_ads_ids(column: BaseColumnMetadata, autofe_by_name: dict[str, GeneratedFeatureMetadata]) -> set[str]:
+    autofe = autofe_by_name.get(column.hashed_name) or autofe_by_name.get(column.original_name)
+    leaves = autofe.base_columns if autofe is not None else [column]
+    return {leaf.ads_definition_id for leaf in leaves if leaf.ads_definition_id}
+
+
+def _stability_from_psi(psis: list[Optional[float]]) -> tuple[Optional[float], Optional[int], Optional[int]]:
+    values = [psi for psi in psis if psi is not None and not pd.isna(psi)]
+    if not values:
+        return None, None, None
+    stable = sum(1 for psi in values if psi < _STABILITY_PSI)
+    return stable / len(values), stable, len(values)

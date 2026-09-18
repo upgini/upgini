@@ -210,6 +210,31 @@ class SearchTask:
             if meta.generated_features is not None:
                 return meta.generated_features
 
+    def get_all_generated_features(self) -> List[GeneratedFeatureMetadata]:
+        if self.provider_metadata_v2 is None:
+            return []
+        generated: List[GeneratedFeatureMetadata] = []
+        for meta in self.provider_metadata_v2:
+            if meta.generated_features:
+                generated.extend(meta.generated_features)
+        return generated
+
+    def get_joined_ads_features_count(self) -> Optional[int]:
+        if self.provider_metadata_v2 is None:
+            return None
+        for meta in self.provider_metadata_v2:
+            if meta.joined_ads_features_count is not None:
+                return meta.joined_ads_features_count
+        return None
+
+    def get_joined_ads_count(self) -> Optional[int]:
+        if self.provider_metadata_v2 is None:
+            return None
+        for meta in self.provider_metadata_v2:
+            if meta.joined_ads_count is not None:
+                return meta.joined_ads_count
+        return None
+
     @staticmethod
     def _get_provider_summaries(summary: SearchTaskSummary) -> List[ProviderTaskSummary]:
         if summary.status in {

@@ -145,14 +145,28 @@ def _summary_cards(summary: SearchResultsSummary) -> list[dict]:
     if summary.contributed_sources is not None:
         sources_caption = f"{summary.contributed_sources} contributed"
     stability_caption = ""
-    if summary.stable_features is not None and summary.model_features is not None:
-        stability_caption = f"{summary.stable_features} of {summary.model_features} are stable"
+    if summary.stable_features is not None and summary.psi_features is not None:
+        stability_caption = f"{summary.stable_features} of {summary.psi_features} are stable"
+    features_found = summary.features_found if summary.features_found is not None else summary.relevant_features
+    data_sources = summary.joined_sources if summary.joined_sources is not None else summary.data_sources
     return [
-        {"label": "Features found", "value": _dash(summary.relevant_features), "caption": ""},
-        {"label": "Used in model", "value": _dash(summary.model_features), "caption": ""},
-        {"label": "Data sources", "value": _dash(summary.data_sources), "caption": sources_caption},
+        {"label": "Features found", "value": _dash(features_found), "caption": ""},
+        {"label": "Used in model", "value": _dash(summary.model_features), "caption": _used_in_model_caption(summary)},
+        {"label": "Data sources", "value": _dash(data_sources), "caption": sources_caption},
         {"label": "Stability", "value": _dash(stability), "caption": stability_caption},
     ]
+
+
+def _used_in_model_caption(summary: SearchResultsSummary) -> str:
+    if summary.external_features is None and summary.original_features is None and summary.autofe_features is None:
+        return ""
+    return " · ".join(
+        [
+            f"{summary.external_features or 0} external",
+            f"{summary.original_features or 0} original",
+            f"{summary.autofe_features or 0} AutoFE",
+        ]
+    )
 
 
 def _features_payload(features: list[FeatureRow]) -> list[dict]:
