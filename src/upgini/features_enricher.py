@@ -2514,6 +2514,39 @@ class FeaturesEnricher(TransformerMixin):
             return False
         return bool(aliases & self._column_name_aliases(list(ensemble_names), renaming))
 
+    def _match_autofe_node_meta(
+        self,
+        autofe_feature: Feature,
+        features_meta: list[FeaturesMetadataV2],
+        used_names: set[str],
+    ) -> FeaturesMetadataV2 | None:
+        name = autofe_feature.get_display_name(shorten=True, unhash=True, cache=False)
+        matched = self._match_autofe_meta_by_names({name} if name else set(), features_meta, used_names)
+        if matched is not None or not name:
+            return matched
+        # Fold formulas omit display_index; FeaturesMetadata still uses the ordinary
+        # get_display_name() with that index. Recover only the remainder after the
+        # Feature-computed base name, then verify with get_display_name().
+        prefix = name + "_"
+        previous = autofe_feature.display_index
+        try:
+            for meta in features_meta or []:
+                if meta.name in used_names or not meta.name.startswith(prefix):
+                    continue
+                index = meta.name[len(prefix) :]
+                if not index:
+                    continue
+                if (
+                    autofe_feature.set_display_index(index).get_display_name(
+                        shorten=True, unhash=True, cache=False
+                    )
+                    == meta.name
+                ):
+                    return meta
+        finally:
+            autofe_feature.set_display_index(previous)
+        return None
+
     @staticmethod
     def _match_autofe_meta_by_names(
         names: set[str],
@@ -6042,6 +6075,7 @@ if response.status_code == 200:
                     for fold in _fold_model_nodes(autofe_feature)
                     for child in fold.children
                     if isinstance(child, Feature)
+                    and (not child.op.is_vector or isinstance(child.op, TimeSeriesBase))
                 ]
                 if fold_autofe:
                     hashed_to_orig = {hashed: orig for orig, hashed in orig_to_hashed.items()}
@@ -6052,11 +6086,10 @@ if response.status_code == 200:
                             for hashed in node.get_columns()
                             if not is_ts or hashed_to_orig.get(hashed, hashed) not in self.fit_search_keys
                         ]
-                        name = node.get_display_name(shorten=True, unhash=True, cache=False)
                         self._add_autofe_description(
                             descriptions,
                             used_names,
-                            self._match_autofe_meta_by_names({name} if name else set(), features_meta, used_names),
+                            self._match_autofe_node_meta(node, features_meta, used_names),
                             source_names,
                             node.get_all_operand_names(),
                         )

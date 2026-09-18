@@ -664,8 +664,12 @@ def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
     ensemble_col = "f_autofe_upgini_score_abc123"
+    hashed_autofe = "f_autofe_div_57e6c58173"
     enricher = _ensemble_enricher(url, ensemble_col)
     meta = _ensemble_metadata(ensemble_col)
+    for feature in meta.features:
+        if feature.name == "f_autofe_div":
+            feature.name = hashed_autofe
     meta.generated_features = [
         GeneratedFeatureMetadata(
             alias="upgini_score",
@@ -711,7 +715,7 @@ def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker
     data = enricher._assemble_report_data()
     payload = _parse_report_data(generate_html_report(data))
 
-    assert [row["generatedFeature"] for row in payload["searchResults"]["autofe"]] == ["f_autofe_div"]
+    assert [row["generatedFeature"] for row in payload["searchResults"]["autofe"]] == [hashed_autofe]
     assert payload["searchResults"]["autofe"][0]["sourceFeatures"] == "f_location_a, f_location_b"
     assert payload["searchResults"]["autofe"][0]["functions"] == "/"
     assert payload["searchResults"]["autofeCount"] == "1"
