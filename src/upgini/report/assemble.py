@@ -7,7 +7,7 @@ from typing import Callable, Optional
 import pandas as pd
 
 from upgini.__about__ import __version__
-from upgini.autofe.feature import Feature
+from upgini.autofe.feature import Column, Feature
 from upgini.autofe.vector import CatboostModel, EnsembleModel, OnnxModel
 from upgini.metadata import BaseColumnMetadata, FeaturesMetadataV2, GeneratedFeatureMetadata
 from upgini.report.data import (
@@ -313,26 +313,30 @@ def _overview_summary(
     joined_ads_features_count: Optional[int],
     joined_ads_count: Optional[int],
 ) -> SearchResultsSummary:
-    top_level = _unique_fold_model_columns(generated_features)
+    top_level = _unique_fold_model_inputs(generated_features)
     features_by_name = {meta.name: meta for meta in features_meta}
     autofe_by_name = _autofe_generated_by_name(generated_features, is_ensemble)
+    columns_by_name = _base_columns_by_name(generated_features)
+    ads_ids = _contributed_ads_ids(generated_features, autofe_by_name)
     if top_level:
         counts = {"external": 0, "original": 0, "autofe": 0}
-        ads_ids: set[str] = set()
         psis: list[Optional[float]] = []
-        for column in top_level:
-            kind = _top_level_kind(column, features_by_name, autofe_by_name, is_ensemble)
+        for node in top_level:
+            kind = _top_level_kind(node, features_by_name, columns_by_name, autofe_by_name, is_ensemble)
             counts[kind] += 1
-            ads_ids.update(_leaf_ads_ids(column, autofe_by_name))
-            meta = features_by_name.get(column.hashed_name) or features_by_name.get(column.original_name)
+            meta = _feature_meta_for_node(node, features_by_name, columns_by_name)
             psis.append(None if meta is None else meta.psi_value)
         model_features = len(top_level)
         external, original, autofe = counts["external"], counts["original"], counts["autofe"]
-        contributed = len(ads_ids)
+        contributed = len(ads_ids or set())
     else:
         model_features = len(model_rows) or None
         external = original = autofe = None
-        contributed = len({(row.provider, row.source) for row in found_rows if row.provider})
+        contributed = (
+            len(ads_ids)
+            if ads_ids is not None
+            else len({(row.provider, row.source) for row in found_rows if row.provider})
+        )
         psis = [row.psi for row in model_rows]
     share, stable, psi_count = _stability_from_psi(psis)
     return SearchResultsSummary(
@@ -351,15 +355,64 @@ def _overview_summary(
     )
 
 
-def _unique_fold_model_columns(generated_features: list[GeneratedFeatureMetadata]) -> list[BaseColumnMetadata]:
-    unique: dict[str, BaseColumnMetadata] = {}
+def _unique_fold_model_inputs(generated_features: list[GeneratedFeatureMetadata]) -> list[Column | Feature]:
+    unique: dict[str, Column | Feature] = {}
     for meta in generated_features:
         feature = _parse_generated_feature(meta)
-        if feature is None or not isinstance(feature.op, (CatboostModel, OnnxModel)):
+        if feature is None:
             continue
-        for column in meta.base_columns:
-            unique.setdefault(column.hashed_name or column.original_name, column)
+        for fold in _fold_model_nodes(feature):
+            for child in fold.children:
+                unique.setdefault(_top_level_key(child), child)
     return list(unique.values())
+
+
+def _fold_model_nodes(feature: Feature) -> list[Feature]:
+    if isinstance(feature.op, (CatboostModel, OnnxModel)):
+        return [feature]
+    nodes: list[Feature] = []
+    for child in feature.children:
+        if isinstance(child, Feature):
+            nodes.extend(_fold_model_nodes(child))
+    return nodes
+
+
+def _top_level_key(node: Column | Feature) -> str:
+    if isinstance(node, Column):
+        return f"col:{node.name}"
+    return f"fe:{node.to_formula()}"
+
+
+def _base_columns_by_name(generated_features: list[GeneratedFeatureMetadata]) -> dict[str, BaseColumnMetadata]:
+    by_name: dict[str, BaseColumnMetadata] = {}
+    for meta in generated_features:
+        for column in meta.base_columns:
+            if column.hashed_name:
+                by_name.setdefault(column.hashed_name, column)
+            if column.original_name:
+                by_name.setdefault(column.original_name, column)
+    return by_name
+
+
+def _column_names(node: Column, columns_by_name: dict[str, BaseColumnMetadata]) -> list[str]:
+    names = [node.name]
+    column = columns_by_name.get(node.name)
+    if column is not None:
+        names.extend([column.hashed_name, column.original_name])
+    return [name for name in names if name]
+
+
+def _feature_meta_for_node(
+    node: Column | Feature,
+    features_by_name: dict[str, FeaturesMetadataV2],
+    columns_by_name: dict[str, BaseColumnMetadata],
+) -> Optional[FeaturesMetadataV2]:
+    if not isinstance(node, Column):
+        return None
+    return next(
+        (features_by_name[name] for name in _column_names(node, columns_by_name) if name in features_by_name),
+        None,
+    )
 
 
 def _autofe_generated_by_name(
@@ -400,13 +453,16 @@ def _generated_feature_names(meta: GeneratedFeatureMetadata) -> set[str]:
 
 
 def _top_level_kind(
-    column: BaseColumnMetadata,
+    node: Column | Feature,
     features_by_name: dict[str, FeaturesMetadataV2],
+    columns_by_name: dict[str, BaseColumnMetadata],
     autofe_by_name: dict[str, GeneratedFeatureMetadata],
     is_ensemble: Callable[[str], bool],
 ) -> str:
-    names = [column.hashed_name, column.original_name]
-    if any(name in autofe_by_name for name in names if name):
+    if isinstance(node, Feature):
+        return "autofe"
+    names = _column_names(node, columns_by_name)
+    if any(name in autofe_by_name for name in names):
         return "autofe"
     meta = next((features_by_name[name] for name in names if name in features_by_name), None)
     if meta is not None and not is_ensemble(meta.name):
@@ -416,9 +472,26 @@ def _top_level_kind(
             return "external"
         if meta.source == "etalon":
             return "original"
-    if column.ads_definition_id:
+    column = next((columns_by_name[name] for name in names if name in columns_by_name), None)
+    if column is not None and column.ads_definition_id:
         return "external"
     return "original"
+
+
+def _contributed_ads_ids(
+    generated_features: list[GeneratedFeatureMetadata],
+    autofe_by_name: dict[str, GeneratedFeatureMetadata],
+) -> Optional[set[str]]:
+    ads_ids: Optional[set[str]] = None
+    for meta in generated_features:
+        feature = _parse_generated_feature(meta)
+        if feature is None or not _fold_model_nodes(feature):
+            continue
+        if ads_ids is None:
+            ads_ids = set()
+        for column in meta.base_columns:
+            ads_ids.update(_leaf_ads_ids(column, autofe_by_name))
+    return ads_ids
 
 
 def _leaf_ads_ids(column: BaseColumnMetadata, autofe_by_name: dict[str, GeneratedFeatureMetadata]) -> set[str]:

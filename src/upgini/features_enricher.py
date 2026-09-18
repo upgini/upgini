@@ -100,6 +100,7 @@ from upgini.utils.deduplicate_utils import (
     remove_fintech_duplicates,
 )
 from upgini.report.assemble import (
+    _fold_model_nodes,
     _generated_feature_names,
     _parse_generated_feature,
     assemble_report_data,
@@ -2513,19 +2514,47 @@ class FeaturesEnricher(TransformerMixin):
             return False
         return bool(aliases & self._column_name_aliases(list(ensemble_names), renaming))
 
-    def _match_autofe_feature_meta(
-        self,
-        generated_meta: GeneratedFeatureMetadata,
+    @staticmethod
+    def _match_autofe_meta_by_names(
+        names: set[str],
         features_meta: list[FeaturesMetadataV2],
         used_names: set[str],
     ) -> FeaturesMetadataV2 | None:
         available = [meta for meta in features_meta or [] if meta.name not in used_names]
         by_name = {meta.name: meta for meta in available}
-        for name in _generated_feature_names(generated_meta):
+        for name in names:
             matched = by_name.get(name)
             if matched is not None:
                 return matched
         return None
+
+    def _add_autofe_description(
+        self,
+        descriptions: list[dict],
+        used_names: set[str],
+        feature_meta: FeaturesMetadataV2 | None,
+        source_names: list[str],
+        operand_names: Iterable[str],
+    ) -> None:
+        if feature_meta is None or not feature_meta.shap_value:
+            return
+        description: dict = {}
+        description["shap"] = feature_meta.shap_value
+        source = feature_meta.data_source or ""
+        description[self.bundle.get("autofe_descriptions_sources")] = source.replace(
+            "AutoFE: features from ", ""
+        ).replace("AutoFE: feature from ", "")
+        description[self.bundle.get("autofe_descriptions_feature_name")] = feature_meta.name
+        feature_idx = 1
+        for hashed in source_names:
+            description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = hashed
+            feature_idx += 1
+        # Don't show features with more than 2 base columns
+        if feature_idx > 3:
+            return
+        description[self.bundle.get("autofe_descriptions_function")] = ",".join(sorted(operand_names))
+        used_names.add(feature_meta.name)
+        descriptions.append(description)
 
     def _ensemble_generated_metadata(self):
         autofe_meta = self._search_task.get_autofe_metadata() if self._search_task else None
@@ -5995,9 +6024,11 @@ if response.status_code == 200:
                     orig_to_hashed = {
                         base_column.original_name: base_column.hashed_name for base_column in m.base_columns
                     }
+                    parsed = Feature.from_formula(m.formula)
+                    if not isinstance(parsed, Feature):
+                        continue
                     autofe_feature = (
-                        Feature.from_formula(m.formula)
-                        .set_display_index(m.display_index or None)
+                        parsed.set_display_index(m.display_index or None)
                         .set_alias(m.alias)
                         .set_op_params(m.operator_params or {})
                         .rename_columns(orig_to_hashed)
@@ -6006,39 +6037,47 @@ if response.status_code == 200:
                     self.logger.exception(f"Failed to parse AutoFE formula: {m.formula}")
                     continue
 
-                is_ts = isinstance(autofe_feature.op, TimeSeriesBase)
+                fold_autofe = [
+                    child
+                    for fold in _fold_model_nodes(autofe_feature)
+                    for child in fold.children
+                    if isinstance(child, Feature)
+                ]
+                if fold_autofe:
+                    hashed_to_orig = {hashed: orig for orig, hashed in orig_to_hashed.items()}
+                    for node in fold_autofe:
+                        is_ts = isinstance(node.op, TimeSeriesBase)
+                        source_names = [
+                            hashed
+                            for hashed in node.get_columns()
+                            if not is_ts or hashed_to_orig.get(hashed, hashed) not in self.fit_search_keys
+                        ]
+                        name = node.get_display_name(shorten=True, unhash=True, cache=False)
+                        self._add_autofe_description(
+                            descriptions,
+                            used_names,
+                            self._match_autofe_meta_by_names({name} if name else set(), features_meta, used_names),
+                            source_names,
+                            node.get_all_operand_names(),
+                        )
+                    continue
 
+                is_ts = isinstance(autofe_feature.op, TimeSeriesBase)
                 if autofe_feature.op.is_vector and not is_ts:
                     continue
 
-                feature_meta = self._match_autofe_feature_meta(m, features_meta, used_names)
-                if feature_meta is None or not feature_meta.shap_value:
-                    continue
-
-                description = {}
-                description["shap"] = feature_meta.shap_value
-                source = feature_meta.data_source or ""
-                description[self.bundle.get("autofe_descriptions_sources")] = source.replace(
-                    "AutoFE: features from ", ""
-                ).replace("AutoFE: feature from ", "")
-                description[self.bundle.get("autofe_descriptions_feature_name")] = feature_meta.name
-
-                feature_idx = 1
-                for bc in m.base_columns:
-                    if not is_ts or bc.original_name not in self.fit_search_keys:
-                        description[self.bundle.get("autofe_descriptions_feature").format(feature_idx)] = bc.hashed_name
-                        feature_idx += 1
-
-                # Don't show features with more than 2 base columns
-                if feature_idx > 3:
-                    continue
-
-                description[self.bundle.get("autofe_descriptions_function")] = ",".join(
-                    sorted(autofe_feature.get_all_operand_names())
+                source_names = [
+                    bc.hashed_name
+                    for bc in m.base_columns
+                    if not is_ts or bc.original_name not in self.fit_search_keys
+                ]
+                self._add_autofe_description(
+                    descriptions,
+                    used_names,
+                    self._match_autofe_meta_by_names(_generated_feature_names(m), features_meta, used_names),
+                    source_names,
+                    autofe_feature.get_all_operand_names(),
                 )
-
-                used_names.add(feature_meta.name)
-                descriptions.append(description)
 
             if len(descriptions) == 0:
                 return None

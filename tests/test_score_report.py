@@ -660,6 +660,176 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert ensemble_col not in html
 
 
+def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    meta = _ensemble_metadata(ensemble_col)
+    meta.generated_features = [
+        GeneratedFeatureMetadata(
+            alias="upgini_score",
+            formula=(
+                "ensemble_score("
+                "catboost_score(f_model1_abc,pd002_6e6a41,(a/b)),"
+                "catboost_score(f_model2_xyz,pd002_6e6a41,(a/b)))"
+            ),
+            display_index="abc123",
+            base_columns=[
+                BaseColumnMetadata(
+                    original_name="a",
+                    hashed_name="f_location_a",
+                    ads_definition_id="ads-osm",
+                    is_augmented=True,
+                ),
+                BaseColumnMetadata(
+                    original_name="b",
+                    hashed_name="f_location_b",
+                    ads_definition_id="ads-osm",
+                    is_augmented=True,
+                ),
+                BaseColumnMetadata(
+                    original_name="f_model1_abc",
+                    hashed_name="f_model1_abc",
+                    ads_definition_id="ads-usage",
+                    is_augmented=False,
+                ),
+                BaseColumnMetadata(
+                    original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
+                ),
+                BaseColumnMetadata(
+                    original_name="f_model2_xyz",
+                    hashed_name="f_model2_xyz",
+                    ads_definition_id="ads-accounts",
+                    is_augmented=False,
+                ),
+            ],
+        )
+    ]
+    enricher._search_task.provider_metadata_v2 = [meta]
+
+    data = enricher._assemble_report_data()
+    payload = _parse_report_data(generate_html_report(data))
+
+    assert [row["generatedFeature"] for row in payload["searchResults"]["autofe"]] == ["f_autofe_div"]
+    assert payload["searchResults"]["autofe"][0]["sourceFeatures"] == "f_location_a, f_location_b"
+    assert payload["searchResults"]["autofe"][0]["functions"] == "/"
+    assert payload["searchResults"]["autofeCount"] == "1"
+
+
+def test_ordinary_autofe_descriptions_match_display_suffix(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher._search_task = SearchTask("search-abc")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="f_autofe_div_18b92d2f5a",
+                    type="numeric",
+                    source="generated",
+                    hit_rate=97.8,
+                    shap_value=0.12,
+                    data_provider="Upgini",
+                    data_source="AutoFE: features from Usage Data",
+                ),
+                FeaturesMetadataV2(
+                    name="client_feat",
+                    type="numeric",
+                    source="etalon",
+                    hit_rate=100.0,
+                    shap_value=0.4,
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    alias="div",
+                    formula="(a/b)",
+                    display_index="18b92d2f5a",
+                    base_columns=[
+                        BaseColumnMetadata(
+                            original_name="a", hashed_name="f_location_a", is_augmented=True
+                        ),
+                        BaseColumnMetadata(
+                            original_name="b", hashed_name="f_location_b", is_augmented=True
+                        ),
+                    ],
+                )
+            ],
+        )
+    ]
+
+    df = enricher.get_autofe_features_description()
+    assert df is not None
+    assert list(df[bundle.get("autofe_descriptions_feature_name")]) == ["f_autofe_div_18b92d2f5a"]
+    assert list(df[bundle.get("autofe_descriptions_feature").format(1)]) == ["f_location_a"]
+    assert list(df[bundle.get("autofe_descriptions_feature").format(2)]) == ["f_location_b"]
+    assert list(df[bundle.get("autofe_descriptions_function")]) == ["/"]
+    assert enricher._has_single_ensemble_score() is False
+
+
+def test_ordinary_autofe_skips_vector_ops_and_more_than_two_base_columns(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(
+        search_keys={"phone": SearchKey.PHONE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher._search_task = SearchTask("search-abc")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="f_autofe_mean_1",
+                    type="numeric",
+                    source="generated",
+                    hit_rate=97.8,
+                    shap_value=0.2,
+                    data_source="AutoFE: features from Usage Data",
+                ),
+                FeaturesMetadataV2(
+                    name="f_autofe_div_wide",
+                    type="numeric",
+                    source="generated",
+                    hit_rate=97.8,
+                    shap_value=0.3,
+                    data_source="AutoFE: features from Usage Data",
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="mean(a,b,c)",
+                    display_index="1",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="a", hashed_name="a", is_augmented=True),
+                        BaseColumnMetadata(original_name="b", hashed_name="b", is_augmented=True),
+                        BaseColumnMetadata(original_name="c", hashed_name="c", is_augmented=True),
+                    ],
+                ),
+                GeneratedFeatureMetadata(
+                    alias="div",
+                    formula="(a/b)",
+                    display_index="wide",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="a", hashed_name="a", is_augmented=True),
+                        BaseColumnMetadata(original_name="b", hashed_name="b", is_augmented=True),
+                        BaseColumnMetadata(original_name="c", hashed_name="c", is_augmented=True),
+                    ],
+                ),
+            ],
+        )
+    ]
+
+    assert enricher.get_autofe_features_description() is None
+    assert enricher._has_single_ensemble_score() is False
+
+
 def test_shap_fill_class_maps_provider_source():
     data = assemble_report_data(
         search_id="search-abc",
@@ -688,6 +858,30 @@ def test_shap_fill_class_maps_provider_source():
     assert "f.shapClass || 'upgini'" in html
     assert "providerBadge" in html
     assert "replace(/,\\s*/g, '<br>')" in html
+
+
+def test_shap_layout_keeps_long_feature_names_visible():
+    long_name = "f_autofe_div_" + "very_long_component_" * 8 + "end"
+    data = assemble_report_data(
+        search_id="search-abc",
+        search_keys=["PHONE"],
+        bundle=bundle,
+        features=[
+            FeatureRow(name=long_name, shap=0.4, provider="Upgini", source=GENERATED_SOURCE),
+            FeatureRow(name="short", shap=0.2, provider="", source=CLIENT_SOURCE),
+        ],
+    )
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+
+    assert payload["features"][0]["name"] == long_name
+    assert 'class="shap-name"' in html
+    assert 'class="shap-value"' in html
+    assert "grid-template-columns:fit-content(55%) minmax(90px,1fr) 64px" in html
+    assert "grid-template-columns:subgrid" in html
+    assert "overflow-wrap:anywhere" in html
+    assert "f.importance / maxImportance * 100" in html
+    assert "minmax(170px,1fr) 2fr 60px" not in html
 
 
 def test_provider_badge_keeps_comma_separated_providers_in_payload():
@@ -785,6 +979,125 @@ def test_overview_stability_dashes_when_psi_missing():
     assert payload["summaryCards"][3] == {"label": "Stability", "value": "—", "caption": ""}
 
 
+def test_overview_contributed_counts_nested_ensemble_leaf_ads():
+    _, _, _, summary = build_search_results(
+        features_meta=[
+            FeaturesMetadataV2(
+                name="ads_a",
+                type="numeric",
+                source="ads",
+                hit_rate=100.0,
+                shap_value=0.2,
+                data_provider="Upgini",
+                data_source="Markets data",
+            ),
+            FeaturesMetadataV2(
+                name="f_autofe_div",
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=0.1,
+                data_provider="Upgini",
+                data_source="AutoFE: features from POI data OpenStreetMap",
+            ),
+            FeaturesMetadataV2(name="client", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.5),
+            FeaturesMetadataV2(
+                name="f_autofe_ensemble",
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=1.0,
+                data_provider="Upgini",
+                data_source="AutoFE: features from Markets data",
+            ),
+        ],
+        is_ensemble=lambda name: name == "f_autofe_ensemble",
+        generated_features=[
+            GeneratedFeatureMetadata(
+                formula="ensemble_score(catboost_score_fold_0(ads_a,(ads_b/ads_c),client),catboost_score_fold_1(ads_a,client))",
+                display_index="ens",
+                base_columns=[
+                    BaseColumnMetadata(
+                        original_name="ads_a",
+                        hashed_name="ads_a",
+                        ads_definition_id="ads-1",
+                        is_augmented=False,
+                    ),
+                    BaseColumnMetadata(
+                        original_name="ads_b",
+                        hashed_name="ads_b",
+                        ads_definition_id="ads-2",
+                        is_augmented=False,
+                    ),
+                    BaseColumnMetadata(
+                        original_name="ads_c",
+                        hashed_name="ads_c",
+                        ads_definition_id="ads-3",
+                        is_augmented=False,
+                    ),
+                    BaseColumnMetadata(original_name="client", hashed_name="client", is_augmented=False),
+                ],
+            )
+        ],
+        joined_ads_count=85,
+    )
+    html = generate_html_report(
+        assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle, summary=summary)
+    )
+    payload = _parse_report_data(html)
+
+    assert summary.contributed_sources == 3
+    assert payload["summaryCards"][2] == {"label": "Data sources", "value": "85", "caption": "3 contributed"}
+
+
+def test_overview_contributed_ignores_wrapper_ensemble_unused_ads():
+    _, _, _, summary = build_search_results(
+        features_meta=[
+            FeaturesMetadataV2(
+                name="ads_feat",
+                type="numeric",
+                source="ads",
+                hit_rate=100.0,
+                shap_value=0.2,
+                data_provider="Upgini",
+                data_source="Usage Data",
+            ),
+            FeaturesMetadataV2(name="client", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.5),
+        ],
+        is_ensemble=lambda name: False,
+        generated_features=[
+            GeneratedFeatureMetadata(
+                formula="ensemble_score(model1,model2)",
+                display_index="ens",
+                base_columns=[
+                    BaseColumnMetadata(
+                        original_name="unused_ads",
+                        hashed_name="unused_ads",
+                        ads_definition_id="ads-unused",
+                        is_augmented=False,
+                    ),
+                ],
+            ),
+            GeneratedFeatureMetadata(
+                formula="catboost_score(client,ads_feat)",
+                display_index="fold1",
+                base_columns=[
+                    BaseColumnMetadata(original_name="client", hashed_name="client", is_augmented=False),
+                    BaseColumnMetadata(
+                        original_name="ads_feat",
+                        hashed_name="ads_feat",
+                        ads_definition_id="ads-1",
+                        is_augmented=False,
+                    ),
+                ],
+            ),
+        ],
+        joined_ads_count=17,
+    )
+
+    assert summary.contributed_sources == 1
+
+
 def test_overview_stability_ignores_empty_psi():
     _, _, _, summary = build_search_results(
         features_meta=[
@@ -830,6 +1143,81 @@ def test_overview_stability_ignores_empty_psi():
     assert summary.stable_features == 1
     assert summary.stable_features_share == 0.5
     assert payload["summaryCards"][3] == {"label": "Stability", "value": "50%", "caption": "1 of 2 are stable"}
+
+
+def test_overview_caption_from_nested_ensemble_formula():
+    _, _, _, summary = build_search_results(
+        features_meta=[
+            FeaturesMetadataV2(
+                name="f_autofe_ensemble_x_abc",
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=1.0,
+            ),
+            FeaturesMetadataV2(
+                name="f_model1_abc",
+                type="numeric",
+                source="ads",
+                hit_rate=100.0,
+                shap_value=0.1,
+                data_provider="Upgini",
+                data_source="Usage Data",
+            ),
+            FeaturesMetadataV2(
+                name="pd002_6e6a41", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.7
+            ),
+        ],
+        is_ensemble=lambda name: "ensemble" in name,
+        generated_features=[
+            GeneratedFeatureMetadata(
+                formula=(
+                    "ensemble_x("
+                    "catboost_x_fold_0(f_model1_abc,pd002_6e6a41,sim_jw1(combined_bio,form_car),"
+                    "sim_jw1(combined_bio,form_children)),"
+                    "catboost_x_fold_1(f_model1_abc,pd002_6e6a41,sim_jw1(combined_bio,form_car),"
+                    "sim_jw1(combined_bio,form_children)))"
+                ),
+                display_index="abc",
+                base_columns=[
+                    BaseColumnMetadata(
+                        original_name="f_model1_abc",
+                        hashed_name="f_model1_abc",
+                        ads_definition_id="ads-1",
+                        is_augmented=False,
+                    ),
+                    BaseColumnMetadata(
+                        original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
+                    ),
+                    BaseColumnMetadata(
+                        original_name="combined_bio", hashed_name="combined_bio", is_augmented=False
+                    ),
+                    BaseColumnMetadata(
+                        original_name="form_car", hashed_name="form_car", is_augmented=False
+                    ),
+                    BaseColumnMetadata(
+                        original_name="form_children", hashed_name="form_children", is_augmented=False
+                    ),
+                ],
+            )
+        ],
+        joined_ads_features_count=10,
+        joined_ads_count=3,
+    )
+    html = generate_html_report(
+        assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle, summary=summary)
+    )
+    payload = _parse_report_data(html)
+
+    assert summary.model_features == 4
+    assert summary.external_features == 1
+    assert summary.original_features == 1
+    assert summary.autofe_features == 2
+    assert payload["summaryCards"][1] == {
+        "label": "Used in model",
+        "value": "4",
+        "caption": "1 external · 1 original · 2 AutoFE",
+    }
 
 
 def test_report_button_downloads_html_like_pdf():
