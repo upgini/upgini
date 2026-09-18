@@ -41,7 +41,7 @@ def _report_payload(data: ReportData) -> dict:
         "features": _features_payload(data.features),
         "shap": {"topN": 5},
         "searchResults": {
-            "relevantFeaturesCount": _dash(data.summary.relevant_features),
+            "relevantFeaturesCount": _dash(len(data.features) if data.features else data.summary.relevant_features),
             "dataSourcesCount": _dash(data.summary.data_sources),
             "autofeCount": _dash(len(data.autofe)),
             "sources": _sources_payload(data.sources),
@@ -170,21 +170,27 @@ def _used_in_model_caption(summary: SearchResultsSummary) -> str:
 
 
 def _features_payload(features: list[FeatureRow]) -> list[dict]:
-    return [
-        {
-            "name": row.name,
-            "provider": row.provider,
-            "source": row.source,
-            "shapClass": _shap_fill_class(row),
-            "importance": abs(row.shap) if row.shap is not None else 0,
-            "shap": row.shap,
-            "coverage": row.coverage,
-            "status": row.stability_status,
-            "psi": row.psi,
-            "drift": row.drift,
-        }
-        for row in features
-    ]
+    rows = []
+    for row in features:
+        shap_class = _shap_fill_class(row)
+        provider = row.provider
+        if not provider and shap_class == "user":
+            provider = CLIENT_SOURCE
+        rows.append(
+            {
+                "name": row.name,
+                "provider": provider,
+                "source": row.source,
+                "shapClass": shap_class,
+                "importance": abs(row.shap) if row.shap is not None else 0,
+                "shap": row.shap,
+                "coverage": row.coverage,
+                "status": row.stability_status,
+                "psi": row.psi,
+                "drift": row.drift,
+            }
+        )
+    return rows
 
 
 def _shap_fill_class(row: FeatureRow) -> str:

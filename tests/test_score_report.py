@@ -610,12 +610,14 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     by_name = {row["name"]: row for row in payload["features"]}
 
     assert names == ["pd002_6e6a41", "f_model2_xyz", "f_model1_abc", "f_autofe_div"]
+    assert payload["searchResults"]["relevantFeaturesCount"] == "4"
+    assert payload["searchResults"]["autofeCount"] == "1"
     assert ensemble_col not in names
     assert "children_num_7967cb" not in names
     assert "datetime_day_in_quarter_sin_65d4f7" not in names
     assert "children_num" not in names
     assert by_name["pd002_6e6a41"]["shap"] == 0.73
-    assert by_name["pd002_6e6a41"]["provider"] == ""
+    assert by_name["pd002_6e6a41"]["provider"] == CLIENT_SOURCE
     assert by_name["pd002_6e6a41"]["shapClass"] == "user"
     assert by_name["pd002_6e6a41"]["source"] == CLIENT_SOURCE
     assert by_name["f_model2_xyz"]["shap"] == -0.15
@@ -851,7 +853,7 @@ def test_shap_fill_class_maps_provider_source():
     by_name = {row["name"]: row for row in payload["features"]}
 
     assert by_name["client_feat"]["shapClass"] == "user"
-    assert by_name["client_feat"]["provider"] == ""
+    assert by_name["client_feat"]["provider"] == CLIENT_SOURCE
     assert by_name["autofe_feat"]["shapClass"] == "autofe"
     assert by_name["autofe_feat"]["provider"] == "Upgini"
     assert by_name["upgini_feat"]["shapClass"] == "upgini"
@@ -1213,14 +1215,14 @@ def test_overview_caption_from_nested_ensemble_formula():
     )
     payload = _parse_report_data(html)
 
-    assert summary.model_features == 4
+    assert summary.model_features == 2
     assert summary.external_features == 1
     assert summary.original_features == 1
-    assert summary.autofe_features == 2
+    assert summary.autofe_features == 0
     assert payload["summaryCards"][1] == {
         "label": "Used in model",
-        "value": "4",
-        "caption": "1 external · 1 original · 2 AutoFE",
+        "value": "2",
+        "caption": "1 external · 1 original · 0 AutoFE",
     }
 
 

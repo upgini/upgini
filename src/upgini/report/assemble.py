@@ -22,7 +22,7 @@ from upgini.report.data import (
 )
 from upgini.report.stats import PSI_CRITICAL, PSI_WARNING, compute_report_charts
 from upgini.resource_bundle import ResourceBundle
-from upgini.utils.feature_info import FeatureInfo
+from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE, FeatureInfo
 
 UPGINI_REPORT_BRANDING_URL = "UPGINI_REPORT_BRANDING_URL"
 _STABILITY_PSI = 0.2
@@ -129,7 +129,6 @@ def build_search_results(
     ]
     sources = _source_rows(found_rows)
     summary = _overview_summary(
-        features_meta=features_meta,
         model_rows=model_rows,
         found_rows=found_rows,
         sources=sources,
@@ -304,7 +303,6 @@ def _has_nonzero_shap_value(shap: Optional[float]) -> bool:
 
 def _overview_summary(
     *,
-    features_meta: list[FeaturesMetadataV2],
     model_rows: list[FeatureRow],
     found_rows: list[FeatureRow],
     sources: list[SourceRow],
@@ -314,21 +312,16 @@ def _overview_summary(
     joined_ads_count: Optional[int],
 ) -> SearchResultsSummary:
     top_level = _unique_fold_model_inputs(generated_features)
-    features_by_name = {meta.name: meta for meta in features_meta}
     autofe_by_name = _autofe_generated_by_name(generated_features, is_ensemble)
-    columns_by_name = _base_columns_by_name(generated_features)
     ads_ids = _contributed_ads_ids(generated_features, autofe_by_name)
     if top_level:
         counts = {"external": 0, "original": 0, "autofe": 0}
-        psis: list[Optional[float]] = []
-        for node in top_level:
-            kind = _top_level_kind(node, features_by_name, columns_by_name, autofe_by_name, is_ensemble)
-            counts[kind] += 1
-            meta = _feature_meta_for_node(node, features_by_name, columns_by_name)
-            psis.append(None if meta is None else meta.psi_value)
-        model_features = len(top_level)
+        for row in model_rows:
+            counts[_model_row_kind(row)] += 1
+        model_features = len(model_rows)
         external, original, autofe = counts["external"], counts["original"], counts["autofe"]
         contributed = len(ads_ids or set())
+        psis = [row.psi for row in model_rows]
     else:
         model_features = len(model_rows) or None
         external = original = autofe = None
@@ -383,38 +376,6 @@ def _top_level_key(node: Column | Feature) -> str:
     return f"fe:{node.to_formula()}"
 
 
-def _base_columns_by_name(generated_features: list[GeneratedFeatureMetadata]) -> dict[str, BaseColumnMetadata]:
-    by_name: dict[str, BaseColumnMetadata] = {}
-    for meta in generated_features:
-        for column in meta.base_columns:
-            if column.hashed_name:
-                by_name.setdefault(column.hashed_name, column)
-            if column.original_name:
-                by_name.setdefault(column.original_name, column)
-    return by_name
-
-
-def _column_names(node: Column, columns_by_name: dict[str, BaseColumnMetadata]) -> list[str]:
-    names = [node.name]
-    column = columns_by_name.get(node.name)
-    if column is not None:
-        names.extend([column.hashed_name, column.original_name])
-    return [name for name in names if name]
-
-
-def _feature_meta_for_node(
-    node: Column | Feature,
-    features_by_name: dict[str, FeaturesMetadataV2],
-    columns_by_name: dict[str, BaseColumnMetadata],
-) -> Optional[FeaturesMetadataV2]:
-    if not isinstance(node, Column):
-        return None
-    return next(
-        (features_by_name[name] for name in _column_names(node, columns_by_name) if name in features_by_name),
-        None,
-    )
-
-
 def _autofe_generated_by_name(
     generated_features: list[GeneratedFeatureMetadata], is_ensemble: Callable[[str], bool]
 ) -> dict[str, GeneratedFeatureMetadata]:
@@ -452,30 +413,13 @@ def _generated_feature_names(meta: GeneratedFeatureMetadata) -> set[str]:
     return {feature.get_display_name(shorten=True, unhash=True, cache=False)}
 
 
-def _top_level_kind(
-    node: Column | Feature,
-    features_by_name: dict[str, FeaturesMetadataV2],
-    columns_by_name: dict[str, BaseColumnMetadata],
-    autofe_by_name: dict[str, GeneratedFeatureMetadata],
-    is_ensemble: Callable[[str], bool],
-) -> str:
-    if isinstance(node, Feature):
+def _model_row_kind(row: FeatureRow) -> str:
+    source = (row.source or "").lower()
+    if source.startswith("autofe") or source == GENERATED_SOURCE.lower():
         return "autofe"
-    names = _column_names(node, columns_by_name)
-    if any(name in autofe_by_name for name in names):
-        return "autofe"
-    meta = next((features_by_name[name] for name in names if name in features_by_name), None)
-    if meta is not None and not is_ensemble(meta.name):
-        if meta.source == "generated":
-            return "autofe"
-        if meta.source == "ads":
-            return "external"
-        if meta.source == "etalon":
-            return "original"
-    column = next((columns_by_name[name] for name in names if name in columns_by_name), None)
-    if column is not None and column.ads_definition_id:
-        return "external"
-    return "original"
+    if source == CLIENT_SOURCE.lower():
+        return "original"
+    return "external"
 
 
 def _contributed_ads_ids(
