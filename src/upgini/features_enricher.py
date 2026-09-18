@@ -64,6 +64,7 @@ from upgini.metadata import (
     FeaturesMetadataV2,
     FileColumnMeaningType,
     FileColumnMetadata,
+    GeneratedFeatureMetadata,
     ModelTaskType,
     RuntimeParameters,
     SearchKey,
@@ -98,7 +99,7 @@ from upgini.utils.deduplicate_utils import (
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
-from upgini.report.assemble import assemble_report_data, autofe_rows_for_report, build_search_results
+from upgini.report.assemble import assemble_report_data, autofe_rows_from_description, build_search_results
 from upgini.report.html import generate_html_report
 from upgini.report.stats import make_report_frame
 from upgini.utils.display_utils import (
@@ -2480,10 +2481,8 @@ class FeaturesEnricher(TransformerMixin):
                 self.fit_generated_features or [], self.fit_columns_renaming or {}
             ),
         )
-        autofe = autofe_rows_for_report(
+        autofe = autofe_rows_from_description(
             self.get_autofe_features_description(features_meta=features_meta),
-            features_meta,
-            self._is_ensemble_feature,
             self.bundle,
         )
         return features, sources, model_shap, summary, autofe
@@ -2502,6 +2501,46 @@ class FeaturesEnricher(TransformerMixin):
         if not ensemble_names:
             return False
         return bool(aliases & self._column_name_aliases(list(ensemble_names), renaming))
+
+    def _match_autofe_feature_meta(
+        self,
+        autofe_feature: Feature,
+        generated_meta: GeneratedFeatureMetadata,
+        features_meta: list[FeaturesMetadataV2],
+        used_names: set[str],
+    ) -> FeaturesMetadataV2 | None:
+        display = autofe_feature.get_display_name(shorten=True, unhash=True, cache=False)
+        candidates = [display]
+        if generated_meta.display_index is not None:
+            suffix = "_" + str(generated_meta.display_index)
+            if display.endswith(suffix) and len(display) > len(suffix):
+                candidates.append(display[: -len(suffix)])
+        if generated_meta.alias:
+            candidates.extend([generated_meta.alias, f"f_autofe_{generated_meta.alias}"])
+        op_name = autofe_feature.get_op_display_name()
+        if op_name:
+            candidates.append(f"f_autofe_{op_name}")
+
+        available = [meta for meta in features_meta or [] if meta.name not in used_names]
+        by_name = {meta.name: meta for meta in available}
+        for name in candidates:
+            matched = by_name.get(name)
+            if matched is not None:
+                return matched
+
+        prefixes = []
+        if generated_meta.alias:
+            prefixes.append(f"f_autofe_{generated_meta.alias}")
+        if op_name:
+            prefixes.append(f"f_autofe_{op_name}")
+        matches = [
+            meta
+            for meta in available
+            if any(meta.name == prefix or meta.name.startswith(prefix + "_") for prefix in prefixes)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
     def _ensemble_generated_metadata(self):
         autofe_meta = self._search_task.get_autofe_metadata() if self._search_task else None
@@ -5964,52 +6003,34 @@ if response.status_code == 200:
             elif features_meta is None:
                 features_meta = self._search_task.get_all_features_metadata_v2()
 
-            def get_feature_by_name(name: str):
-                if not name or not features_meta:
-                    return None
-                for candidate in features_meta:
-                    if candidate.name == name:
-                        return candidate
-                return None
-
             descriptions = []
+            used_names: set[str] = set()
             for m in autofe_meta:
-                orig_to_hashed = {base_column.original_name: base_column.hashed_name for base_column in m.base_columns}
-
-                autofe_feature = (
-                    Feature.from_formula(m.formula)
-                    .set_display_index(m.display_index)
-                    .set_alias(m.alias)
-                    .set_op_params(m.operator_params or {})
-                    .rename_columns(orig_to_hashed)
-                )
+                try:
+                    orig_to_hashed = {
+                        base_column.original_name: base_column.hashed_name for base_column in m.base_columns
+                    }
+                    autofe_feature = (
+                        Feature.from_formula(m.formula)
+                        .set_display_index(m.display_index)
+                        .set_alias(m.alias)
+                        .set_op_params(m.operator_params or {})
+                        .rename_columns(orig_to_hashed)
+                    )
+                except Exception:
+                    self.logger.exception(f"Failed to parse AutoFE formula: {m.formula}")
+                    continue
 
                 is_ts = isinstance(autofe_feature.op, TimeSeriesBase)
 
                 if autofe_feature.op.is_vector and not is_ts:
                     continue
 
-                description = {}
-
-                lookup_names = [autofe_feature.get_display_name(shorten=True, unhash=True)]
-                if m.alias:
-                    lookup_names.extend([m.alias, f"f_autofe_{m.alias}"])
-                feature_meta = None
-                for lookup_name in lookup_names:
-                    feature_meta = get_feature_by_name(lookup_name)
-                    if feature_meta is not None:
-                        break
-                if feature_meta is None and m.alias and features_meta:
-                    prefix = f"f_autofe_{m.alias}"
-                    matches = [
-                        candidate
-                        for candidate in features_meta
-                        if candidate.name == prefix or candidate.name.startswith(prefix + "_")
-                    ]
-                    if len(matches) == 1:
-                        feature_meta = matches[0]
+                feature_meta = self._match_autofe_feature_meta(autofe_feature, m, features_meta, used_names)
                 if feature_meta is None or not feature_meta.shap_value:
                     continue
+
+                description = {}
                 description["shap"] = feature_meta.shap_value
                 source = feature_meta.data_source or ""
                 description[self.bundle.get("autofe_descriptions_sources")] = source.replace(
@@ -6031,6 +6052,7 @@ if response.status_code == 200:
                     sorted(autofe_feature.get_all_operand_names())
                 )
 
+                used_names.add(feature_meta.name)
                 descriptions.append(description)
 
             if len(descriptions) == 0:

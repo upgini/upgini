@@ -136,31 +136,6 @@ def build_search_results(
     return model_rows, sources, model_shap, summary
 
 
-def autofe_rows_for_report(
-    df: Optional[pd.DataFrame],
-    features_meta: list[FeaturesMetadataV2],
-    is_ensemble: Callable[[str], bool],
-    bundle: ResourceBundle,
-) -> list[dict[str, str]]:
-    rows = autofe_rows_from_description(df, bundle)
-    listed = {row["generatedFeature"] for row in rows if row.get("generatedFeature")}
-    for meta in features_meta:
-        if is_ensemble(meta.name) or meta.source != "generated":
-            continue
-        if not _has_nonzero_shap_value(meta.shap_value) or meta.name in listed:
-            continue
-        row = _feature_row(meta.name, meta)
-        rows.append(
-            {
-                "sources": row.source,
-                "generatedFeature": row.name,
-                "sourceFeatures": "",
-                "functions": "",
-            }
-        )
-    return rows
-
-
 def autofe_rows_from_description(df: Optional[pd.DataFrame], bundle: ResourceBundle) -> list[dict[str, str]]:
     if df is None or df.empty:
         return []

@@ -581,6 +581,8 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert payload["searchResults"]["autofe"][0]["sources"] == (
         "<a href='https://upgini.com/#data_sources' target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
     )
+    assert payload["searchResults"]["autofe"][0]["sourceFeatures"] == "f_location_a, f_location_b"
+    assert payload["searchResults"]["autofe"][0]["functions"] == "/"
     assert {row["source"] for row in payload["searchResults"]["sources"]} == {
         "Accounts Availability",
         "Usage Data",
