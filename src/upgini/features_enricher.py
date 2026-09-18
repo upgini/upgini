@@ -6216,6 +6216,8 @@ if response.status_code == 200:
             display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self):
+        if self._has_single_ensemble_score():
+            return
         try:
             _ = get_ipython()  # type: ignore
 
