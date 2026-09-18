@@ -275,9 +275,18 @@ def _feature_row(
         drift=meta.drift_score,
         coverage=meta.hit_rate,
         provider=info.internal_provider,
-        source=info.internal_source,
+        source=_feature_source(meta, is_generated, info.internal_source),
         stability_status=_psi_status(meta.psi_value),
     )
+
+
+def _feature_source(meta: FeaturesMetadataV2, is_generated: bool, fallback: str) -> str:
+    if is_generated:
+        if meta.data_source:
+            return meta.data_source
+        if meta.data_sources:
+            return ", ".join(meta.data_sources)
+    return fallback
 
 
 def _source_rows(rows: list[FeatureRow]) -> list[SourceRow]:

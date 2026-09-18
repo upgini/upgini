@@ -14,7 +14,12 @@ from upgini.metadata import (
     ProviderTaskMetadataV2,
     SearchKey,
 )
-from upgini.report.assemble import UPGINI_REPORT_BRANDING_URL, assemble_report_data, format_search_duration
+from upgini.report.assemble import (
+    UPGINI_REPORT_BRANDING_URL,
+    assemble_report_data,
+    build_search_results,
+    format_search_duration,
+)
 from upgini.report.data import FeatureRow
 from upgini.report.html import generate_html_report
 from upgini.resource_bundle import bundle
@@ -564,7 +569,10 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert by_name["f_autofe_div"]["shap"] == 0.066
     assert by_name["f_autofe_div"]["provider"] == "Upgini"
     assert by_name["f_autofe_div"]["shapClass"] == "autofe"
-    assert by_name["f_autofe_div"]["source"] == GENERATED_SOURCE
+    assert by_name["f_autofe_div"]["source"] == (
+        "AutoFE: features from <a href='https://upgini.com/#data_sources' "
+        "target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
+    )
     assert payload["summaryCards"][0] == {"label": "Features found", "value": "3", "caption": ""}
     assert payload["summaryCards"][1] == {"label": "Used in model", "value": "4", "caption": ""}
     assert payload["summaryCards"][2] == {"label": "Data sources", "value": "3", "caption": "3 contributed"}
@@ -576,7 +584,10 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
     assert {row["source"] for row in payload["searchResults"]["sources"]} == {
         "Accounts Availability",
         "Usage Data",
-        GENERATED_SOURCE,
+        (
+            "AutoFE: features from <a href='https://upgini.com/#data_sources' "
+            "target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
+        ),
     }
     assert data.model_feature_shap[0].feature == "pd002_6e6a41"
     assert data.model_feature_shap[0].mean_abs_shap == 0.73
@@ -632,6 +643,33 @@ def test_provider_badge_keeps_comma_separated_providers_in_payload():
     html = generate_html_report(data)
     payload = _parse_report_data(html)
     assert payload["features"][0]["provider"] == "Training dataset, IP2Location"
+
+
+def test_generated_source_keeps_text_after_comma():
+    source = "AutoFE: features from Training dataset,Company IP Address Data"
+    features, sources, _, _ = build_search_results(
+        features_meta=[
+            FeaturesMetadataV2(
+                name="f_autofe_sim_jw2",
+                type="numeric",
+                source="generated",
+                hit_rate=85.0,
+                shap_value=0.062,
+                data_provider="Training dataset",
+                data_source=source,
+            )
+        ],
+        is_ensemble=lambda name: False,
+    )
+    html = generate_html_report(
+        assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle, features=features, sources=sources)
+    )
+    payload = _parse_report_data(html)
+
+    assert features[0].source == source
+    assert payload["features"][0]["source"] == source
+    assert payload["features"][0]["shapClass"] == "autofe"
+    assert payload["searchResults"]["sources"][0]["source"] == source
 
 
 def test_report_button_downloads_html_like_pdf():
