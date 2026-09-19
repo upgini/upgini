@@ -17,6 +17,15 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.utils.datetime_utils import DateTimeConverter
 from upgini.utils.target_utils import define_task
 
+_INDEX_SAMPLE = 3
+
+
+def _format_index_sample(indexes) -> str:
+    values = list(indexes)
+    if len(values) <= _INDEX_SAMPLE:
+        return str(values)
+    return str(values[:_INDEX_SAMPLE])[:-1] + ", ...]"
+
 
 def remove_fintech_duplicates(
     df: pd.DataFrame,
@@ -117,11 +126,11 @@ def remove_fintech_duplicates(
             perc = len(rows_to_remove) * 100 / len(segment_df)
             if eval_index == 0:
                 msg = bundle.get("dataset_train_diff_target_duplicates_fintech").format(
-                    perc, len(rows_to_remove), rows_to_remove.index.to_list()
+                    perc, len(rows_to_remove), _format_index_sample(rows_to_remove.index)
                 )
             else:
                 msg = bundle.get("dataset_eval_diff_target_duplicates_fintech").format(
-                    perc, len(rows_to_remove), eval_index, rows_to_remove.index.to_list()
+                    perc, len(rows_to_remove), eval_index, _format_index_sample(rows_to_remove.index)
                 )
             return segment_df[~segment_df.index.isin(rows_to_remove.index)], msg
         return segment_df, None
@@ -227,7 +236,7 @@ def clean_full_duplicates(
 
         marked_duplicates = df_for_dedup.duplicated(subset=unique_columns, keep=False)
         if marked_duplicates.sum() > 0:
-            dups_indices = df_for_dedup[marked_duplicates].index.to_list()[:100]
+            dups_indices = _format_index_sample(df_for_dedup[marked_duplicates].index)
             nrows_after_tgt_dedup = len(df_for_dedup.drop_duplicates(subset=unique_columns, keep=False))
             num_dup_rows = len(df_for_dedup) - nrows_after_tgt_dedup
             share_tgt_dedup = 100 * num_dup_rows / len(df_for_dedup)
@@ -240,7 +249,7 @@ def clean_full_duplicates(
             df = pd.concat([df_for_dedup, oot_df], ignore_index=False)
             marked_duplicates = df.duplicated(subset=unique_columns, keep=False)
             if marked_duplicates.sum() > 0:
-                dups_indices = df[marked_duplicates].index.to_list()[:100]
+                dups_indices = _format_index_sample(df[marked_duplicates].index)
                 nrows_after_tgt_dedup = len(df.drop_duplicates(subset=unique_columns, keep=False))
                 num_dup_rows = len(df) - nrows_after_tgt_dedup
                 share_tgt_dedup = 100 * num_dup_rows / len(df)
