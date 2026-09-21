@@ -710,7 +710,26 @@ def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker
                     is_augmented=False,
                 ),
             ],
-        )
+        ),
+        GeneratedFeatureMetadata(
+            alias="div",
+            formula="(a/b)",
+            display_index="57e6c58173",
+            base_columns=[
+                BaseColumnMetadata(
+                    original_name="a",
+                    hashed_name="f_location_a",
+                    ads_definition_id="ads-osm",
+                    is_augmented=True,
+                ),
+                BaseColumnMetadata(
+                    original_name="b",
+                    hashed_name="f_location_b",
+                    ads_definition_id="ads-osm",
+                    is_augmented=True,
+                ),
+            ],
+        ),
     ]
     enricher._search_task.provider_metadata_v2 = [meta]
 
