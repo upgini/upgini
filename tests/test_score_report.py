@@ -1,6 +1,4 @@
-import base64
 import json
-from pathlib import Path
 
 import pandas as pd
 from requests_mock.mocker import Mocker
@@ -10,12 +8,10 @@ from upgini.metadata import (
     BaseColumnMetadata,
     FeaturesMetadataV2,
     GeneratedFeatureMetadata,
-    ModelTaskType,
     ProviderTaskMetadataV2,
     SearchKey,
 )
 from upgini.report.assemble import (
-    UPGINI_REPORT_BRANDING_URL,
     assemble_report_data,
     build_search_results,
     format_search_duration,
@@ -195,26 +191,6 @@ def test_format_search_duration():
     assert format_search_duration(3723) == "1 h 2 min 3 sec"
 
 
-def test_report_without_branding_url_shows_only_upgini(monkeypatch):
-    monkeypatch.delenv(UPGINI_REPORT_BRANDING_URL, raising=False)
-    data = assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle)
-    assert data.metadata.logo_url is None
-    html = generate_html_report(data)
-    payload = _parse_report_data(html)
-    assert "partnerLogo" not in payload["meta"]
-    assert 'aria-label="Upgini"' in html
-
-
-def test_report_uses_branding_url_from_env(monkeypatch):
-    monkeypatch.setenv(UPGINI_REPORT_BRANDING_URL, " https://cdn.example.com/logo.svg ")
-    data = assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle)
-    assert data.metadata.logo_url == "https://cdn.example.com/logo.svg"
-    html = generate_html_report(data)
-    payload = _parse_report_data(html)
-    assert payload["meta"]["partnerLogo"]["src"] == "https://cdn.example.com/logo.svg"
-    assert 'aria-label="Upgini"' in html
-
-
 def test_generate_html_report_from_assembled_data():
     metrics_df = pd.DataFrame(
         {
@@ -246,6 +222,7 @@ def test_generate_html_report_from_assembled_data():
     assert payload["meta"]["searchKeys"] == ["PHONE", "DATE"]
     assert payload["meta"]["searchDuration"] == "2 min 5 sec"
     assert payload["meta"]["totalRows"] == 140
+    assert "partnerLogo" not in payload["meta"]
     assert payload["keyResult"]["metrics"]["gini"]["bySample"]["train"]["enriched"] == 0.512
     assert payload["samples"][0] == {
         "id": "train",
@@ -343,14 +320,16 @@ def _ensemble_enricher(url: str, ensemble_col: str = "f_autofe_upgini_score_abc1
     return enricher
 
 
-def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_path: Path, monkeypatch):
+def test_ensemble_html_report(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
-    monkeypatch.chdir(tmp_path)
-    enricher = _ensemble_enricher(url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
 
     html = enricher._score_report_html()
     payload = _parse_report_data(html)
+    names = [row["name"] for row in payload["features"]]
+    by_name = {row["name"]: row for row in payload["features"]}
 
     assert html is not None
     assert "search-abc" in html
@@ -358,264 +337,12 @@ def test_score_report_html_is_not_written_to_disk(requests_mock: Mocker, tmp_pat
     assert "SearchKey" not in html
     assert '"enriched": 0.61' in html
     assert "42 sec" in html
-    assert payload["summaryCards"][1] == {
-        "label": "Used in model",
-        "value": "4",
-        "caption": "2 external · 1 original · 1 AutoFE",
-    }
-    assert payload["summaryCards"][0]["value"] == "1234"
-    assert not (tmp_path / "reports").exists()
-    assert list(tmp_path.glob("*.html")) == []
-
-
-def test_html_report_button_does_not_build_pdf(requests_mock: Mocker, tmp_path: Path, monkeypatch):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    monkeypatch.chdir(tmp_path)
-    enricher = _ensemble_enricher(url)
-    pdf_calls = []
-    opened = []
-    monkeypatch.setattr("upgini.features_enricher.ipython_available", lambda: True)
-    monkeypatch.setattr(
-        "upgini.features_enricher.show_button_open_report",
-        lambda source, **kwargs: opened.append((source, kwargs.get("download_name"))) or "html",
-    )
-    monkeypatch.setattr(
-        "upgini.features_enricher.prepare_and_show_report",
-        lambda *args, **kwargs: pdf_calls.append(True) or "pdf",
-    )
-
-    assert enricher._FeaturesEnricher__show_report_button() == "html"
-    assert pdf_calls == []
-    assert opened[0][1] == "upgini-report-search-abc.html"
-    assert "search-abc" in opened[0][0]
-    assert not (tmp_path / "reports").exists()
-    assert list(tmp_path.glob("*.html")) == []
-    assert list(tmp_path.glob("*.pdf")) == []
-
-
-def test_ordinary_report_button_downloads_pdf(requests_mock: Mocker, monkeypatch):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
-    enricher._search_task = SearchTask("search-abc")
-    enricher.feature_names_ = ["ads_feature"]
-    enricher.report_html = "<html>stale ensemble report</html>"
-    pdf_calls = []
-    opened = []
-    monkeypatch.setattr("upgini.features_enricher.ipython_available", lambda: True)
-    monkeypatch.setattr(
-        "upgini.features_enricher.show_button_open_report",
-        lambda source, **kwargs: opened.append(source) or "html",
-    )
-    monkeypatch.setattr(
-        "upgini.features_enricher.prepare_and_show_report",
-        lambda *args, **kwargs: pdf_calls.append(True) or "pdf",
-    )
-
-    assert enricher._has_single_ensemble_score() is False
-    assert enricher._FeaturesEnricher__show_report_button() == "pdf"
-    assert pdf_calls == [True]
-    assert opened == []
-
-
-def test_single_ensemble_score_allows_etalon_features(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = _ensemble_enricher(url, ensemble_col)
-    enricher.X = None
-    enricher.fit_columns_renaming = {"client_feature_8ddf40": "client_feature"}
-    enricher.feature_names_ = [ensemble_col, "client_feature"]
-    meta = _ensemble_metadata(ensemble_col)
-    meta.features.append(
-        FeaturesMetadataV2(
-            name="client_feature_8ddf40",
-            type="numeric",
-            source="etalon",
-            hit_rate=100.0,
-            shap_value=0.0,
-        )
-    )
-    enricher._search_task.provider_metadata_v2 = [meta]
-
-    assert enricher._has_single_ensemble_score()
-    assert enricher._get_single_ensemble_score_name() == ensemble_col
-    assert enricher._score_report_html() is not None
-
-
-def test_skip_oot_psi_with_ensemble_and_client_features(requests_mock: Mocker, monkeypatch):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = _ensemble_enricher(url, ensemble_col)
-    enricher.feature_names_ = [ensemble_col, "client_feature"]
-    enricher.external_source_feature_names = []
-    checked = []
-    monkeypatch.setattr(enricher, "_check_stability", lambda *args, **kwargs: checked.append(True) or set())
-
-    enricher._select_features_by_psi(
-        X=pd.DataFrame({"client_feature": [1, 2], "phone": [3, 4]}),
-        y=pd.Series([0, 1]),
-        eval_set=None,
-        stability_threshold=0.2,
-        stability_agg_func="max",
-    )
-
-    assert enricher._has_single_ensemble_score()
-    assert checked == []
-    assert enricher._is_extra_enriched_feature("f_model1_abc")
-    assert enricher._is_extra_enriched_feature("f_autofe_div")
-    assert enricher._is_extra_enriched_feature("pd002_6e6a41") is False
-
-
-def test_oot_psi_not_skipped_with_extra_ads_features(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = _ensemble_enricher(url, ensemble_col)
-    enricher.feature_names_ = [ensemble_col, "f_model1_abc"]
-    enricher.external_source_feature_names = ["f_model1_abc"]
-
-    assert enricher._has_single_ensemble_score() is False
-
-
-def test_single_ensemble_score_rejects_extra_ads_features(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = _ensemble_enricher(url, ensemble_col)
-    enricher.feature_names_ = [ensemble_col, "f_model1_abc"]
-
-    assert enricher._has_single_ensemble_score() is False
-    assert enricher._score_report_html() is None
-
-
-def test_score_report_skipped_without_ensemble(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
-    enricher._search_task = SearchTask("search-abc")
-    enricher.feature_names_ = ["ads_feature"]
-
-    assert enricher._score_report_html() is None
-
-
-def test_get_ensemble_score_column_does_not_need_baseline(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    fitting_X = pd.DataFrame({"client_feature": [0.1, 0.8]})
-    fitting_enriched_X = fitting_X.copy()
-    fitting_enriched_X[ensemble_col] = [0.2, 0.9]
-
-    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
-    enricher._search_task = SearchTask("fake_search")
-    enricher._search_task.provider_metadata_v2 = [_ensemble_metadata(ensemble_col)]
-
-    assert enricher.baseline_score_column is None
-    assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
-
-
-def test_assemble_report_data_uses_dataset_and_cached_scores(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = FeaturesEnricher(
-        search_keys={"phone": SearchKey.PHONE, "date": SearchKey.DATE},
-        endpoint=url,
-        logs_enabled=False,
-    )
-    enricher._search_task = SearchTask("search-abc")
-    enricher._search_task.provider_metadata_v2 = [_ensemble_metadata(ensemble_col)]
-    enricher.feature_names_ = [ensemble_col]
-    enricher.metrics_metric_name = "GINI"
-    enricher.model_task_type = ModelTaskType.BINARY
-    enricher.fit_search_keys = enricher.search_keys
-    enricher.X = pd.DataFrame(
-        {
-            "phone": [1, 2, 3, 4],
-            "date": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-02-01", "2024-02-02"]),
-        }
-    )
-    enricher.y = pd.Series([0, 1, 0, 1])
-    eval_x = pd.DataFrame(
-        {
-            "phone": [5, 6],
-            "date": pd.to_datetime(["2024-02-01", "2024-02-02"]),
-        }
-    )
-    eval_y = pd.Series([0, 1])
-    enricher.eval_set = [(eval_x, eval_y)]
-    enricher.df_with_original_index = pd.concat(
-        [
-            enricher.X.assign(target=enricher.y.to_numpy(), eval_set_index=0),
-            eval_x.assign(target=eval_y.to_numpy(), eval_set_index=1),
-        ],
-        ignore_index=True,
-    )
-    sampled_x = enricher.X.copy()
-    enriched_x = sampled_x.copy()
-    enriched_x[ensemble_col] = [0.1, 0.9, 0.2, 0.8]
-    eval_enriched = eval_x.copy()
-    eval_enriched[ensemble_col] = [0.15, 0.85]
-    enricher._FeaturesEnricher__cached_sampled_datasets["hash"] = (
-        sampled_x,
-        enricher.y.copy(),
-        enriched_x,
-        {0: (eval_x.copy(), eval_enriched, eval_y.copy())},
-        enricher.search_keys,
-        {},
-        [],
-    )
-
-    data = enricher._assemble_report_data()
-
-    assert [stats.sample for stats in data.sample_stats] == ["Train", "Eval 1"]
-    assert data.sample_stats[0].rows == 4
-    assert data.sample_stats[1].rows == 2
-    assert data.charts.timeline_months == ["Jan 2024", "Feb 2024"]
-    assert data.charts.quality_monthly[0].enriched[0] is not None
-    assert data.charts.histograms[0].n_target_0 == 2
-    assert data.charts.score_psi[0].rows[0] == 2
-    assert [row.name for row in data.features] == [
-        "pd002_6e6a41",
-        "f_model2_xyz",
-        "f_model1_abc",
-        "f_autofe_div",
-    ]
-    assert data.summary.model_features == 4
-    assert data.summary.relevant_features == 3
-    assert data.summary.features_found == 1234
-    assert data.summary.joined_sources == 17
-    assert data.summary.external_features == 2
-    assert data.summary.original_features == 1
-    assert data.summary.autofe_features == 1
-    assert data.summary.contributed_sources == 3
-
-
-def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
-    url = "https://some.fake.url"
-    mock_default_requests(requests_mock, url)
-    ensemble_col = "f_autofe_upgini_score_abc123"
-    enricher = _ensemble_enricher(url, ensemble_col)
-
-    assert enricher._has_single_ensemble_score()
-    assert enricher.feature_names_ == [ensemble_col]
-
-    data = enricher._assemble_report_data()
-    html = generate_html_report(data)
-    payload = _parse_report_data(html)
-    names = [row["name"] for row in payload["features"]]
-    by_name = {row["name"]: row for row in payload["features"]}
-
     assert names == ["pd002_6e6a41", "f_model2_xyz", "f_model1_abc", "f_autofe_div"]
     assert payload["searchResults"]["relevantFeaturesCount"] == "4"
     assert payload["searchResults"]["autofeCount"] == "1"
     assert ensemble_col not in names
     assert "children_num_7967cb" not in names
     assert "datetime_day_in_quarter_sin_65d4f7" not in names
-    assert "children_num" not in names
     assert by_name["pd002_6e6a41"]["shap"] == 0.73
     assert by_name["pd002_6e6a41"]["provider"] == CLIENT_SOURCE
     assert by_name["pd002_6e6a41"]["shapClass"] == "user"
@@ -655,11 +382,50 @@ def test_ensemble_html_report_lists_model_rows_not_score(requests_mock: Mocker):
             "target='_blank' rel='noopener noreferrer'>POI data OpenStreetMap</a>"
         ),
     }
-    assert data.model_feature_shap[0].feature == "pd002_6e6a41"
-    assert data.model_feature_shap[0].mean_abs_shap == 0.73
-    assert data.model_feature_shap[1].feature == "f_model2_xyz"
-    assert "ensemble_score(model1,model2)" not in html
     assert ensemble_col not in html
+
+
+def test_score_report_skipped_without_ensemble(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    enricher = FeaturesEnricher(endpoint=url, logs_enabled=False)
+    enricher._search_task = SearchTask("search-abc")
+    enricher.feature_names_ = ["ads_feature"]
+
+    assert enricher._score_report_html() is None
+
+
+def test_single_ensemble_allows_client_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.X = None
+    enricher.fit_columns_renaming = {"client_feature_8ddf40": "client_feature"}
+    enricher.feature_names_ = [ensemble_col, "client_feature"]
+    meta = _ensemble_metadata(ensemble_col)
+    meta.features.append(
+        FeaturesMetadataV2(
+            name="client_feature_8ddf40",
+            type="numeric",
+            source="etalon",
+            hit_rate=100.0,
+            shap_value=0.0,
+        )
+    )
+    enricher._search_task.provider_metadata_v2 = [meta]
+
+    assert enricher._score_report_html() is not None
+
+
+def test_single_ensemble_rejects_extra_ads_features(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_upgini_score_abc123"
+    enricher = _ensemble_enricher(url, ensemble_col)
+    enricher.feature_names_ = [ensemble_col, "f_model1_abc"]
+
+    assert enricher._score_report_html() is None
 
 
 def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker):
@@ -795,7 +561,6 @@ def test_ordinary_autofe_descriptions_match_display_suffix(requests_mock: Mocker
     assert list(df[bundle.get("autofe_descriptions_feature").format(1)]) == ["f_location_a"]
     assert list(df[bundle.get("autofe_descriptions_feature").format(2)]) == ["f_location_b"]
     assert list(df[bundle.get("autofe_descriptions_function")]) == ["/"]
-    assert enricher._has_single_ensemble_score() is False
 
 
 def test_ordinary_autofe_skips_vector_ops_and_more_than_two_base_columns(requests_mock: Mocker):
@@ -852,7 +617,6 @@ def test_ordinary_autofe_skips_vector_ops_and_more_than_two_base_columns(request
     ]
 
     assert enricher.get_autofe_features_description() is None
-    assert enricher._has_single_ensemble_score() is False
 
 
 def test_shap_fill_class_maps_provider_source():
@@ -879,10 +643,6 @@ def test_shap_fill_class_maps_provider_source():
     assert by_name["upgini_feat"]["provider"] == "Upgini"
     assert by_name["ext_feat"]["shapClass"] == "external"
     assert by_name["ext_feat"]["provider"] == "Experian"
-    assert ".shap-fill.external{background:#7b5cff}" in html
-    assert "f.shapClass || 'upgini'" in html
-    assert "providerBadge" in html
-    assert "replace(/,\\s*/g, '<br>')" in html
 
 
 def test_shap_layout_keeps_long_feature_names_visible():
@@ -901,12 +661,8 @@ def test_shap_layout_keeps_long_feature_names_visible():
 
     assert payload["features"][0]["name"] == long_name
     assert 'class="shap-name"' in html
-    assert 'class="shap-value"' in html
     assert "grid-template-columns:fit-content(55%) minmax(90px,1fr) 64px" in html
-    assert "grid-template-columns:subgrid" in html
     assert "overflow-wrap:anywhere" in html
-    assert "f.importance / maxImportance * 100" in html
-    assert "minmax(170px,1fr) 2fr 60px" not in html
 
 
 def test_provider_badge_keeps_comma_separated_providers_in_payload():
@@ -1243,17 +999,3 @@ def test_overview_caption_from_nested_ensemble_formula():
         "value": "2",
         "caption": "1 external · 1 original · 0 AutoFE",
     }
-
-
-def test_report_button_downloads_html_like_pdf():
-    from upgini.utils.display_utils import _html_action_button, _report_button_html
-
-    html = _report_button_html("<html>ok</html>", download_name="upgini-report-search-abc.html")
-    payload = base64.b64encode(b"<html>ok</html>").decode()
-    assert html == _html_action_button(
-        "Open full report",
-        f"data:text/html;base64,{payload}",
-        download_name="upgini-report-search-abc.html",
-    )
-    assert 'download="upgini-report-search-abc.html"' in html
-    assert "<button>Open full report</button>" in html

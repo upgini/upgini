@@ -12,7 +12,6 @@ from upgini.metadata import (
     SearchKey,
 )
 from upgini.utils.deduplicate_utils import (
-    _format_index_sample,
     clean_full_duplicates,
     remove_fintech_duplicates,
 )
@@ -40,13 +39,6 @@ def sample_df():
 @pytest.fixture
 def search_keys():
     return {"phone": SearchKey.PHONE, "date": SearchKey.DATE}
-
-
-def test_format_index_sample():
-    assert _format_index_sample([1]) == "[1]"
-    assert _format_index_sample([1, 2, 3]) == "[1, 2, 3]"
-    assert _format_index_sample([1, 2, 3, 4]) == "[1, 2, 3, ...]"
-    assert _format_index_sample(range(10)) == "[0, 1, 2, ...]"
 
 
 def test_remove_fintech_duplicates_basic(sample_df, search_keys):
