@@ -1,10 +1,12 @@
 import base64
 import math
+import tempfile
 import textwrap
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
 from io import StringIO
+from pathlib import Path
 from typing import Callable, List, Optional
 
 import pandas as pd
@@ -327,12 +329,60 @@ def prepare_and_show_report(
         return show_button_download_pdf(report, display_id=display_id, display_handle=display_handle)
 
 
+def show_button_open_report(
+    source: str,
+    title="Open full report",
+    download_name: Optional[str] = None,
+    display_id: Optional[str] = None,
+    display_handle=None,
+):
+    if not ipython_available():
+        return
+    try:
+        return _display_html_button(
+            _report_button_html(source, title, download_name),
+            display_id=display_id,
+            display_handle=display_handle,
+        )
+    except Exception:
+        pass
+
+
+def _report_button_html(source: str, title: str = "Open full report", download_name: Optional[str] = None) -> str:
+    download_name = download_name or f"upgini-report-{uuid.uuid4()}.html"
+    payload = _base64_from_tempfile(".html", lambda path: path.write_text(source, encoding="utf-8"))
+    return _html_action_button(title, f"data:text/html;base64,{payload}", download_name=download_name)
+
+
+def _base64_from_tempfile(suffix: str, write) -> str:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        write(tmp_path)
+        return base64.b64encode(tmp_path.read_bytes()).decode()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _html_action_button(title: str, href: str, download_name: Optional[str] = None) -> str:
+    download_attr = f' download="{download_name}"' if download_name else ""
+    return f"""<a{download_attr} href="{href}" target="_blank">
+            <button>{title}</button></a>"""
+
+
+def _display_html_button(html: str, display_id: Optional[str] = None, display_handle=None):
+    from IPython.display import HTML, display
+
+    if display_handle is not None:
+        display_handle.update(HTML(html))
+        return
+    return display(HTML(html), display_id=display_id)
+
+
 def show_button_download_pdf(
     source: str, title="\U0001f4ca Download PDF report", display_id: Optional[str] = None, display_handle=None
 ):
-    from IPython.display import HTML, display
-
-    file_name = f"upgini-report-{uuid.uuid4()}.pdf"
+    download_name = f"upgini-report-{uuid.uuid4()}.pdf"
 
     # from weasyprint import HTML
 
@@ -341,18 +391,16 @@ def show_button_download_pdf(
     try:
         from xhtml2pdf import pisa
 
-        with open(file_name, "wb") as output:
-            pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
+        def write_pdf(path: Path):
+            with path.open("wb") as output:
+                pisa.CreatePDF(src=StringIO(source), dest=output, encoding="UTF-8")
 
-        with open(file_name, "rb") as f:
-            b64 = base64.b64encode(f.read())
-            payload = b64.decode()
-            html = f"""<a download="{file_name}" href="data:application/pdf;base64,{payload}" target="_blank">
-            <button>{title}</button></a>"""
-            if display_handle is not None:
-                display_handle.update(HTML(html))
-            else:
-                return display(HTML(html), display_id=display_id)
+        payload = _base64_from_tempfile(".pdf", write_pdf)
+        return _display_html_button(
+            _html_action_button(title, f"data:application/pdf;base64,{payload}", download_name=download_name),
+            display_id=display_id,
+            display_handle=display_handle,
+        )
     except Exception:
         pass
 

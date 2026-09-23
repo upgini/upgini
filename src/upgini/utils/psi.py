@@ -287,7 +287,26 @@ def _get_bin_edges(data: pd.Series, n_bins: int) -> np.ndarray:
     bins = np.nanquantile(data, np.linspace(0, 1, n_bins + 1))
     bins[0] = -np.inf
     bins[-1] = np.inf
-    return bins
+    return np.unique(bins)
+
+
+def calculate_numeric_psi(
+    reference: pd.Series,
+    current: pd.Series,
+    n_bins: int = 10,
+    bins: np.ndarray | None = None,
+) -> float | None:
+    reference = pd.to_numeric(reference, errors="coerce").dropna()
+    current = pd.to_numeric(current, errors="coerce").dropna()
+    if reference.empty or current.empty:
+        return None
+    if bins is None:
+        bins = _get_bin_edges(reference, n_bins)
+    ref_counts, _ = np.histogram(reference.to_numpy(), bins=bins)
+    cur_counts, _ = np.histogram(current.to_numpy(), bins=bins)
+    if ref_counts.sum() == 0 or cur_counts.sum() == 0:
+        return None
+    return float(_psi(_fill_zeroes(ref_counts / ref_counts.sum()), _fill_zeroes(cur_counts / cur_counts.sum())))
 
 
 def _get_unique_not_nan_values_list_from_series(series: list[pd.Series]) -> list:

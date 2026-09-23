@@ -1,6 +1,7 @@
 import pytest
 
-from upgini.metadata import ModelTaskType
+from upgini.autofe.utils import pydantic_parse_method
+from upgini.metadata import ModelTaskType, ProviderTaskMetadataV2
 
 
 class TestModelTaskTypeParse:
@@ -110,3 +111,16 @@ class TestModelTaskTypeParse:
                 assert parsed_type.is_classification() is True
             else:
                 assert parsed_type.is_classification() is False
+
+
+def test_provider_task_metadata_v2_parses_joined_ads_counts():
+    metadata = pydantic_parse_method(ProviderTaskMetadataV2)(
+        {
+            "features": [],
+            "joined_ads_features_count": 1234,
+            "joined_ads_count": 17,
+        }
+    )
+
+    assert metadata.joined_ads_features_count == 1234
+    assert metadata.joined_ads_count == 17

@@ -54,6 +54,24 @@ def test_remove_fintech_duplicates_basic(sample_df, search_keys):
     # Checks
     assert_frame_equal(result_df, expected_df)
     assert len(warnings) == 1  # should be one warning for train set
+    assert "Removed row indexes: [0, 1]" in warnings[0]
+
+
+def test_remove_fintech_duplicates_truncates_removed_indexes(search_keys):
+    df = pd.DataFrame(
+        {
+            "phone": ["1", "1", "2", "2", "3", "3", "4", "4"],
+            "date": ["2023-01-01"] * 8,
+            TARGET: [1, 0, 1, 0, 1, 0, 1, 0],
+            EVAL_SET_INDEX: [0] * 8,
+        }
+    )
+
+    result_df, warnings = remove_fintech_duplicates(df=df, search_keys=search_keys)
+
+    assert result_df.empty
+    assert len(warnings) == 1
+    assert "Removed row indexes: [0, 1, 2, ...]" in warnings[0]
 
 
 def test_remove_fintech_duplicates_no_duplicates():
@@ -171,6 +189,22 @@ def test_clean_full_duplicates_with_different_targets():
     result_df, warning = clean_full_duplicates(df)
     assert_frame_equal(result_df.reset_index(drop=True), expected.reset_index(drop=True))
     assert isinstance(warning, str)  # Should have warning about duplicates with different targets
+    assert "Sample of incorrect row indexes: [0, 1]" in warning
+
+
+def test_clean_full_duplicates_truncates_incorrect_indexes():
+    df = pd.DataFrame(
+        {
+            "col1": [1, 1, 2, 2, 3, 3, 4, 4],
+            "col2": ["a", "a", "b", "b", "c", "c", "d", "d"],
+            TARGET: [0, 1, 0, 1, 0, 1, 0, 1],
+        }
+    )
+
+    result_df, warning = clean_full_duplicates(df)
+
+    assert result_df.empty
+    assert "Sample of incorrect row indexes: [0, 1, 2, ...]" in warning
 
 
 def test_clean_full_duplicates_keep_first():

@@ -346,6 +346,8 @@ class ProviderTaskMetadataV2(BaseModel):
     zero_hit_rate_search_keys: Optional[List[str]] = None
     features_used_for_embeddings: Optional[List[str]] = None
     shuffle_kfold: Optional[bool] = None
+    joined_ads_features_count: Optional[int] = None
+    joined_ads_count: Optional[int] = None
     generated_features: Optional[List[GeneratedFeatureMetadata]] = None
 
 
