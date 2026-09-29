@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Covers both pyproject.toml and requirements-dev.txt in the repo root
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Library: only touch version ranges when a new release falls outside them
+    versioning-strategy: "increase-if-necessary"
+    open-pull-requests-limit: 10
+    groups:
+      dev-tools:
+        patterns:
+          - "black"
+          - "flake8*"
+          - "pytest*"
+          - "coverage"
+          - "requests-mock"
+          - "unittest-xml-reporting"
+          - "py"
+          - "build"
+          - "twine"
+
+  - package-ecosystem: "pip"
+    directory: "/binder"
+    schedule:
+      interval: "monthly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
