@@ -4260,9 +4260,24 @@ if response.status_code == 200:
                 ads_cols = [c for c in unmatched_part.columns if c not in base_cols]
                 pos = np.flatnonzero(unmatched_mask)
                 for col in ads_cols:
+                    if col in combined_df.columns:
+                        target_dtype = combined_df[col].dtype
+                    elif lookup is not None and col in lookup.columns:
+                        target_dtype = lookup[col].dtype
+                    else:
+                        target_dtype = unmatched_part[col].dtype
                     if col not in combined_df.columns:
-                        combined_df[col] = np.nan
-                    combined_df.iloc[pos, combined_df.columns.get_loc(col)] = unmatched_part[col].to_numpy()
+                        combined_df[col] = pd.Series(index=combined_df.index, dtype=target_dtype)
+                    values = unmatched_part[col]
+                    if values.dtype != combined_df[col].dtype:
+                        try:
+                            values = values.astype(combined_df[col].dtype)
+                        except (TypeError, ValueError):
+                            if is_numeric_dtype(combined_df[col].dtype):
+                                values = pd.to_numeric(values, errors="coerce").astype(combined_df[col].dtype)
+                            else:
+                                values = values.astype(object)
+                    combined_df.iloc[pos, combined_df.columns.get_loc(col)] = values.to_numpy()
             result = combined_df
         result.index = validated_Xy.index
         result.index.name = validated_Xy.index.name

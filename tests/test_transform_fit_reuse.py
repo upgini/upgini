@@ -1,5 +1,7 @@
 """Tests for transform reusing fit enrichment (identity + key-based ads lookup)."""
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from requests_mock.mocker import Mocker
@@ -162,7 +164,12 @@ def _make_reuse_enricher(
     return enricher, search_task
 
 
-def _stub_validation(search_task: MagicMock, ads_value: float = 99.0) -> dict:
+def _stub_validation(
+    search_task: MagicMock,
+    ads_value: float | str = 99.0,
+    *,
+    ads_dtype: np.dtype | None = None,
+) -> dict:
     captured: dict = {}
 
     def fake_validation(trace_id, dataset, *args, **kwargs):
@@ -172,10 +179,12 @@ def _stub_validation(search_task: MagicMock, ads_value: float = 99.0) -> dict:
         task.get_progress.return_value = SearchProgress(97.0, ProgressStage.DOWNLOADING)
         task.poll_result.return_value = None
         entity_ids = captured["df"][ENTITY_SYSTEM_RECORD_ID].drop_duplicates()
+        ads_values = [ads_value] * len(entity_ids)
+        ads_series = pd.Series(ads_values, dtype=ads_dtype) if ads_dtype is not None else pd.Series(ads_values)
         task.get_all_validation_raw_features.return_value = pd.DataFrame(
             {
                 ENTITY_SYSTEM_RECORD_ID: entity_ids.to_numpy(),
-                "ads_feature": [ads_value] * len(entity_ids),
+                "ads_feature": ads_series,
             }
         )
         return task
@@ -246,6 +255,39 @@ def test_transform_sends_only_new_rows_to_validation(requests_mock: Mocker):
     assert result is not None
     assert len(result) == 3
     assert captured["df"][ENTITY_SYSTEM_RECORD_ID].nunique() == 1
+    assert list(result["ads_feature"]) == [10.0, 20.0, 99.0]
+
+
+def test_transform_unmatched_ads_cast_to_lookup_dtype(requests_mock: Mocker):
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    phone_h = add_hash_suffix("phone")
+    f_h = add_hash_suffix("f")
+    df_fit = pd.DataFrame(
+        {
+            phone_h: _converted_phones(["+10000000001", "+10000000002"]),
+            f_h: [1.0, 2.0],
+            TARGET: [0.0, 1.0],
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0],
+        }
+    )
+    fit_features = pd.DataFrame({ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0], "ads_feature": [10.0, 20.0]})
+    enricher, search_task = _make_reuse_enricher(
+        requests_mock,
+        search_keys={"phone": SearchKey.PHONE},
+        train_X=train_X,
+        df_fit=df_fit,
+        fit_features=fit_features,
+        file_columns=[_file_col("phone", phone_h), _file_col("f", f_h)],
+    )
+    _stub_validation(search_task, ads_value="99.0", ads_dtype=np.dtype("O"))
+
+    mixed = pd.DataFrame({"phone": ["+10000000001", "+10000000002", "+10000000009"], "f": [1.0, 2.0, 9.0]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        result = enricher.transform(mixed, keep_input=True)
+
+    assert result is not None
+    assert result["ads_feature"].dtype == np.float64
     assert list(result["ads_feature"]) == [10.0, 20.0, 99.0]
 
 
