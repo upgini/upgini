@@ -1,0 +1,48 @@
+name: "Dependency audit"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  # New CVEs are published without any code change, so re-check weekly
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install package and dev requirements
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          python -m venv /tmp/audit-env
+          /tmp/audit-env/bin/pip install --upgrade pip
+          /tmp/audit-env/bin/pip install . -r requirements-dev.txt
+
+      - name: Audit installed dependencies
+        run: pip-audit --path "$(/tmp/audit-env/bin/python -c 'import site; print(site.getsitepackages()[0])')" --desc --skip-editable
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
