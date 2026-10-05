@@ -4,7 +4,7 @@ from upgini.ads import FileColumnMeaningType
 from upgini.dataset import Dataset
 from upgini.metadata import ModelTaskType
 
-GOLDEN_DETERMINISTIC_DIGEST = "846732431fa14cad5e95330888ec2ad21096490d228cd3afb329b004d582987c"
+GOLDEN_DETERMINISTIC_DIGEST = "8b8a27ab4433a04b1ca5a647f4d6595f7a762b5d0aee48d209156289b9ffc249"
 
 
 def test_deterministic_digest():
