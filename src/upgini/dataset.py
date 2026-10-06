@@ -42,7 +42,7 @@ from upgini.resource_bundle import ResourceBundle, get_custom_bundle
 from upgini.search_task import SearchTask
 from upgini.utils.config import SampleConfig
 from upgini.utils.email_utils import EmailSearchKeyConverter
-from upgini.utils.hash_utils import file_hash
+from upgini.utils.hash_utils import dataframe_digest
 from upgini.utils.sample_utils import SampleColumns, sample
 
 try:
@@ -478,33 +478,15 @@ class Dataset:
             columns.append(column_meta)
 
         current_date = int(pd.Timestamp(pd.Timestamp.now().date(), tz="UTC").timestamp() * 1000)
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            if (
-                self.date_column is not None
-                and self.data[self.date_column].nunique() == 1
-                and self.data[self.date_column].iloc[0] == current_date
-            ):
-                df_without_fake_date = self.data.drop(columns=[self.date_column])
-            else:
-                df_without_fake_date = self.data
-            parquet_file_path = f"{tmp_dir}/{self.dataset_name}.parquet"
-
-            # calculate deterministic digest for any environment
-            import pyarrow as pa
-            import pyarrow.parquet as pq
-
-            table = pa.Table.from_pandas(df_without_fake_date, preserve_index=False)
-            table = table.replace_schema_metadata({})  # remove all metadata
-            pq.write_table(
-                table,
-                parquet_file_path,
-                compression=None,  # any compression will make it non-deterministic
-                data_page_size=0,  # optional, to remove page layout variations
-                use_deprecated_int96_timestamps=False,  # fix timestamp format
-                write_statistics=False,  # remove statistics to make it deterministic
-            )
-
-            deterministic_digest = file_hash(parquet_file_path)
+        if (
+            self.date_column is not None
+            and self.data[self.date_column].nunique() == 1
+            and self.data[self.date_column].iloc[0] == current_date
+        ):
+            df_without_fake_date = self.data.drop(columns=[self.date_column])
+        else:
+            df_without_fake_date = self.data
+        deterministic_digest = dataframe_digest(df_without_fake_date)
 
         autodetected_search_keys = (
             {k: v.name for k, v in self.autodetected_search_keys.items()} if self.autodetected_search_keys else None

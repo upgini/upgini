@@ -157,3 +157,26 @@ def hash_input(X: pd.DataFrame, y: Optional[pd.Series] = None, eval_set: Optiona
         return common_hash
     except Exception:
         return ""
+
+
+def dataframe_digest(df: pd.DataFrame) -> str:
+    """
+    Returns sha256 of dataframe content that doesn't depend on pyarrow/pandas versions or environment.
+
+    Hashes the Arrow IPC stream (fixed metadata version, no schema metadata, no compression,
+    single record batch) instead of a parquet file, because parquet footer and writer defaults
+    change between pyarrow versions. Large string/binary types (pandas>=3) are normalized.
+    """
+    import pyarrow as pa
+
+    table = pa.Table.from_pandas(df, preserve_index=False).replace_schema_metadata({})
+    normalized_types = {pa.large_string(): pa.string(), pa.large_binary(): pa.binary()}
+    schema = pa.schema([pa.field(f.name, normalized_types.get(f.type, f.type), f.nullable) for f in table.schema])
+    table = table.cast(schema).combine_chunks()
+
+    sink = pa.BufferOutputStream()
+    options = pa.ipc.IpcWriteOptions(metadata_version=pa.ipc.MetadataVersion.V5, compression=None)
+    with pa.ipc.new_stream(sink, schema, options=options) as writer:
+        for batch in table.to_batches():
+            writer.write_batch(batch)
+    return hashlib.sha256(sink.getvalue().to_pybytes()).hexdigest()
