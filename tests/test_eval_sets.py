@@ -603,14 +603,25 @@ def test_metrics_cache_key_isolates_outliers_and_exclude(requests_mock: Mocker):
     key_exclude = enricher._get_metrics_cache_key(X, y, None, exclude_features_sources=["ads_a"])
     key_exclude_other_order = enricher._get_metrics_cache_key(X, y, None, exclude_features_sources=["ads_b", "ads_a"])
     key_exclude_sorted = enricher._get_metrics_cache_key(X, y, None, exclude_features_sources=["ads_a", "ads_b"])
+    key_exclude_features = enricher._get_metrics_cache_key(X, y, None, exclude_features=["ads_a"])
+    key_exclude_features_other_order = enricher._get_metrics_cache_key(X, y, None, exclude_features=["ads_b", "ads_a"])
+    key_exclude_features_sorted = enricher._get_metrics_cache_key(X, y, None, exclude_features=["ads_a", "ads_b"])
+    key_both = enricher._get_metrics_cache_key(
+        X, y, None, exclude_features_sources=["ads_a"], exclude_features=["ads_b"]
+    )
 
     assert key_default != key_keep_outliers
     assert key_default != key_exclude
     assert key_keep_outliers != key_exclude
     assert key_exclude_other_order == key_exclude_sorted
+    assert key_exclude != key_exclude_features
+    assert key_exclude_features_other_order == key_exclude_features_sorted
+    assert key_both != key_exclude
+    assert key_both != key_exclude_features
     assert "outliers_removed=True" in key_default
     assert "outliers_removed=False" in key_keep_outliers
     assert "exclude=ads_a" in key_exclude
+    assert "exclude_features=ads_a" in key_exclude_features
     assert "exclude_oot=False" in key_default
 
     key_exclude_oot = enricher._get_metrics_cache_key(X, y, None, exclude_oot=True)

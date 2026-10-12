@@ -33,3 +33,13 @@ def test_deterministic_digest():
     metadata = dataset._Dataset__construct_metadata()
 
     assert metadata.deterministicDigest == GOLDEN_DETERMINISTIC_DIGEST
+    assert metadata.excludeFeaturesSources is None
+    assert metadata.excludeFeatures is None
+
+    metadata_with_exclusions = dataset._Dataset__construct_metadata(
+        exclude_features_sources=["source_feature"],
+        exclude_features=["specific_feature"],
+    )
+    assert metadata_with_exclusions.excludeFeaturesSources == ["source_feature"]
+    assert metadata_with_exclusions.excludeFeatures == ["specific_feature"]
+    assert metadata_with_exclusions.deterministicDigest == GOLDEN_DETERMINISTIC_DIGEST

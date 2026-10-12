@@ -257,6 +257,7 @@ class FileMetadata(BaseModel):
     columns: List[FileColumnMetadata]
     searchKeys: List[List[str]]
     excludeFeaturesSources: Optional[List[str]] = None
+    excludeFeatures: Optional[List[str]] = None
     hierarchicalGroupKeys: Optional[List[str]] = None
     hierarchicalSubgroupKeys: Optional[List[str]] = None
     taskType: Optional[ModelTaskType] = None
