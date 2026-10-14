@@ -129,12 +129,8 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
                         ads_definition_id="ads-usage",
                         is_augmented=False,
                     ),
-                    BaseColumnMetadata(
-                        original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
-                    ),
-                    BaseColumnMetadata(
-                        original_name="f_autofe_div", hashed_name="f_autofe_div", is_augmented=False
-                    ),
+                    BaseColumnMetadata(original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False),
+                    BaseColumnMetadata(original_name="f_autofe_div", hashed_name="f_autofe_div", is_augmented=False),
                 ],
             ),
             GeneratedFeatureMetadata(
@@ -147,12 +143,8 @@ def _ensemble_metadata(ensemble_col: str) -> ProviderTaskMetadataV2:
                         ads_definition_id="ads-accounts",
                         is_augmented=False,
                     ),
-                    BaseColumnMetadata(
-                        original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
-                    ),
-                    BaseColumnMetadata(
-                        original_name="f_autofe_div", hashed_name="f_autofe_div", is_augmented=False
-                    ),
+                    BaseColumnMetadata(original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False),
+                    BaseColumnMetadata(original_name="f_autofe_div", hashed_name="f_autofe_div", is_augmented=False),
                 ],
             ),
             GeneratedFeatureMetadata(
@@ -249,6 +241,7 @@ def test_generate_html_report_from_assembled_data():
     assert "Score analysis" in html
     assert "Score distribution" in html
     assert "Score stability (PSI)" in html
+    assert "Feature stability" in html
     assert "reference: first period (baseline month)" in html
     assert "Features SHAP" in html
     assert "Search results" in html
@@ -466,9 +459,7 @@ def test_ensemble_autofe_tab_lists_nested_formula_features(requests_mock: Mocker
                     ads_definition_id="ads-usage",
                     is_augmented=False,
                 ),
-                BaseColumnMetadata(
-                    original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
-                ),
+                BaseColumnMetadata(original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False),
                 BaseColumnMetadata(
                     original_name="f_model2_xyz",
                     hashed_name="f_model2_xyz",
@@ -543,12 +534,8 @@ def test_ordinary_autofe_descriptions_match_display_suffix(requests_mock: Mocker
                     formula="(a/b)",
                     display_index="18b92d2f5a",
                     base_columns=[
-                        BaseColumnMetadata(
-                            original_name="a", hashed_name="f_location_a", is_augmented=True
-                        ),
-                        BaseColumnMetadata(
-                            original_name="b", hashed_name="f_location_b", is_augmented=True
-                        ),
+                        BaseColumnMetadata(original_name="a", hashed_name="f_location_a", is_augmented=True),
+                        BaseColumnMetadata(original_name="b", hashed_name="f_location_b", is_augmented=True),
                     ],
                 )
             ],
@@ -686,7 +673,7 @@ def test_provider_badge_keeps_comma_separated_providers_in_payload():
 
 def test_generated_source_keeps_text_after_comma():
     source = "AutoFE: features from Training dataset,Company IP Address Data"
-    features, sources, _, _ = build_search_results(
+    features, sources, _, _, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(
                 name="f_autofe_sim_jw2",
@@ -701,7 +688,9 @@ def test_generated_source_keeps_text_after_comma():
         is_ensemble=lambda name: False,
     )
     html = generate_html_report(
-        assemble_report_data(search_id="search-abc", search_keys=["PHONE"], bundle=bundle, features=features, sources=sources)
+        assemble_report_data(
+            search_id="search-abc", search_keys=["PHONE"], bundle=bundle, features=features, sources=sources
+        )
     )
     payload = _parse_report_data(html)
 
@@ -712,7 +701,7 @@ def test_generated_source_keeps_text_after_comma():
 
 
 def test_overview_stability_dashes_when_psi_missing():
-    _, _, _, summary = build_search_results(
+    _, _, _, summary, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(name="client", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.5),
             FeaturesMetadataV2(
@@ -761,7 +750,7 @@ def test_overview_stability_dashes_when_psi_missing():
 
 
 def test_overview_contributed_counts_nested_ensemble_leaf_ads():
-    _, _, _, summary = build_search_results(
+    _, _, _, summary, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(
                 name="ads_a",
@@ -832,7 +821,7 @@ def test_overview_contributed_counts_nested_ensemble_leaf_ads():
 
 
 def test_overview_contributed_ignores_wrapper_ensemble_unused_ads():
-    _, _, _, summary = build_search_results(
+    _, _, _, summary, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(
                 name="ads_feat",
@@ -880,7 +869,7 @@ def test_overview_contributed_ignores_wrapper_ensemble_unused_ads():
 
 
 def test_overview_stability_ignores_empty_psi():
-    _, _, _, summary = build_search_results(
+    _, _, _, summary, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(
                 name="stable", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4, psi_value=0.0
@@ -927,7 +916,7 @@ def test_overview_stability_ignores_empty_psi():
 
 
 def test_overview_caption_from_nested_ensemble_formula():
-    _, _, _, summary = build_search_results(
+    _, _, _, summary, _, _ = build_search_results(
         features_meta=[
             FeaturesMetadataV2(
                 name="f_autofe_ensemble_x_abc",
@@ -945,9 +934,7 @@ def test_overview_caption_from_nested_ensemble_formula():
                 data_provider="Upgini",
                 data_source="Usage Data",
             ),
-            FeaturesMetadataV2(
-                name="pd002_6e6a41", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.7
-            ),
+            FeaturesMetadataV2(name="pd002_6e6a41", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.7),
         ],
         is_ensemble=lambda name: "ensemble" in name,
         generated_features=[
@@ -967,18 +954,10 @@ def test_overview_caption_from_nested_ensemble_formula():
                         ads_definition_id="ads-1",
                         is_augmented=False,
                     ),
-                    BaseColumnMetadata(
-                        original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False
-                    ),
-                    BaseColumnMetadata(
-                        original_name="combined_bio", hashed_name="combined_bio", is_augmented=False
-                    ),
-                    BaseColumnMetadata(
-                        original_name="form_car", hashed_name="form_car", is_augmented=False
-                    ),
-                    BaseColumnMetadata(
-                        original_name="form_children", hashed_name="form_children", is_augmented=False
-                    ),
+                    BaseColumnMetadata(original_name="pd002_6e6a41", hashed_name="pd002_6e6a41", is_augmented=False),
+                    BaseColumnMetadata(original_name="combined_bio", hashed_name="combined_bio", is_augmented=False),
+                    BaseColumnMetadata(original_name="form_car", hashed_name="form_car", is_augmented=False),
+                    BaseColumnMetadata(original_name="form_children", hashed_name="form_children", is_augmented=False),
                 ],
             )
         ],
@@ -999,3 +978,81 @@ def test_overview_caption_from_nested_ensemble_formula():
         "value": "2",
         "caption": "1 external · 1 original · 0 AutoFE",
     }
+
+
+def test_feature_stability_series_and_tooltip_fields():
+    features, _, model_shap, _, monthly_psi, monthly_auc = build_search_results(
+        features_meta=[
+            FeaturesMetadataV2(
+                name="ensemble_score",
+                type="numeric",
+                source="generated",
+                hit_rate=100.0,
+                shap_value=1.0,
+                monthly_psi={"2024-01": 0.4},
+                monthly_roc_auc={"2024-01": 0.9},
+            ),
+            FeaturesMetadataV2(
+                name="f_stable",
+                type="numeric",
+                source="ads",
+                hit_rate=98.5,
+                shap_value=0.2,
+                data_provider="Upgini",
+                monthly_psi={"2024-01": 0.0, "2024-02": 0.08, "2024-03": 0.31},
+                monthly_roc_auc={"2024-01": 0.71, "2024-03": 0.64},
+            ),
+            FeaturesMetadataV2(
+                name="f_plain",
+                type="numeric",
+                source="ads",
+                hit_rate=80.0,
+                shap_value=0.05,
+                data_provider="Upgini",
+            ),
+        ],
+        is_ensemble=lambda name: name == "ensemble_score",
+    )
+    dataset = {
+        "Train": pd.DataFrame(
+            {
+                "target": [0, 1, 0],
+                "date": ["2024-01-10", "2024-02-10", "2024-04-10"],
+            }
+        )
+    }
+    data = assemble_report_data(
+        search_id="search-abc",
+        search_keys=["DATE"],
+        samples=["Train"],
+        is_binary=True,
+        dataset_samples=dataset,
+        bundle=bundle,
+        features=features,
+        model_feature_shap=model_shap,
+        feature_monthly_psi=monthly_psi,
+        feature_monthly_auc=monthly_auc,
+    )
+    html = generate_html_report(data)
+    payload = _parse_report_data(html)
+    stability = payload["featureStability"]
+    by_name = {row["name"]: row for row in payload["features"]}
+
+    assert [row["feature"] for row in stability["features"]] == ["f_stable", "f_plain"]
+    assert stability["features"][0]["feature"] == model_shap[0].feature
+    assert stability["months"] == ["Jan 2024", "Feb 2024", "Mar 2024", "Apr 2024"]
+    assert stability["psi"] == [
+        {"feature": "f_stable", "values": [0.0, 0.08, 0.31, None]},
+    ]
+    assert stability["auc"] == [
+        {"feature": "f_stable", "values": [0.71, None, 0.64, None]},
+    ]
+    assert "ensemble_score" not in {row["feature"] for row in stability["psi"]}
+    assert by_name["f_stable"]["coverage"] == 98.5
+    assert by_name["f_stable"]["missingRate"] == 1.5
+    assert by_name["f_stable"]["rows"] is None
+    assert by_name["f_stable"]["labeled"] is None
+    assert "Feature stability" in html
+    assert 'id="featureStabilitySelect"' in html
+    assert 'id="featurePsiChart"' in html
+    assert 'id="featureAucChart"' in html

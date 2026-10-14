@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from upgini.report.data import FeatureRow, ReportCharts, ReportData, SampleStats, SearchResultsSummary, SourceRow
-from upgini.report.stats import MEAN_AXIS_PADDING
+from upgini.report.stats import MEAN_AXIS_PADDING, psi_axis_max, sorted_month_labels
 from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
@@ -38,6 +38,7 @@ def _report_payload(data: ReportData) -> dict:
         "scoreAnalysis": _score_analysis_payload(charts, samples),
         "scoreDistribution": _score_distribution_payload(charts, samples),
         "scoreStability": _score_stability_payload(charts, samples),
+        "featureStability": _feature_stability_payload(data, charts),
         "features": _features_payload(data.features),
         "shap": {"topN": 5},
         "searchResults": {
@@ -185,6 +186,9 @@ def _features_payload(features: list[FeatureRow]) -> list[dict]:
                 "importance": abs(row.shap) if row.shap is not None else 0,
                 "shap": row.shap,
                 "coverage": row.coverage,
+                "rows": row.rows,
+                "labeled": row.labeled,
+                "missingRate": row.missing_rate,
                 "status": row.stability_status,
                 "psi": row.psi,
                 "drift": row.drift,
@@ -302,6 +306,26 @@ def _score_stability_payload(charts: ReportCharts, samples: list[dict]) -> dict:
             if (row := by_id.get(sample["id"])) is not None
         },
     }
+
+
+def _feature_stability_payload(data: ReportData, charts: ReportCharts) -> dict:
+    psi_rows = data.feature_monthly_psi
+    auc_rows = data.feature_monthly_auc
+    series_months = [month for row in psi_rows for month in row.psi] + [month for row in auc_rows for month in row.auc]
+    months = sorted_month_labels([*charts.timeline_months, *series_months])
+    psi_values = [value for row in psi_rows for value in row.psi.values()]
+    return {
+        "months": months,
+        "psiAxisMax": psi_axis_max(psi_values, charts.psi_critical),
+        "thresholds": {"warning": charts.psi_warning, "critical": charts.psi_critical},
+        "features": [{"feature": row.feature, "provider": row.provider} for row in data.model_feature_shap],
+        "psi": [_aligned_feature_series(row.feature, row.psi, months) for row in psi_rows],
+        "auc": [_aligned_feature_series(row.feature, row.auc, months) for row in auc_rows],
+    }
+
+
+def _aligned_feature_series(feature: str, values: dict[str, float], months: list[str]) -> dict:
+    return {"feature": feature, "values": [values.get(month) for month in months]}
 
 
 def _stat_row(label: str, samples: list[dict], by_id: dict[str, SampleStats], value) -> dict:
