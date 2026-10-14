@@ -2454,7 +2454,9 @@ class FeaturesEnricher(TransformerMixin):
         return max(self.__cached_sampled_datasets.values(), key=lambda item: len(item[0]) if item[0] is not None else 0)
 
     def _assemble_report_data(self):
-        features, sources, model_shap, summary, autofe = self._report_search_results()
+        features, sources, model_shap, summary, autofe, feature_monthly_psi, feature_monthly_auc = (
+            self._report_search_results()
+        )
         search_id = self._search_task.search_task_id if self._search_task is not None else (self.search_id or "")
         return assemble_report_data(
             search_id=search_id,
@@ -2474,13 +2476,15 @@ class FeaturesEnricher(TransformerMixin):
             sources=sources,
             autofe=autofe,
             model_feature_shap=model_shap,
+            feature_monthly_psi=feature_monthly_psi,
+            feature_monthly_auc=feature_monthly_auc,
         )
 
     def _report_search_results(self):
         features_meta = []
         if self._search_task is not None:
             features_meta = list(self._search_task.get_all_features_metadata_v2() or [])
-        features, sources, model_shap, summary = build_search_results(
+        features, sources, model_shap, summary, feature_monthly_psi, feature_monthly_auc = build_search_results(
             features_meta=features_meta,
             is_ensemble=self._is_ensemble_feature,
             generated_names=self._column_name_aliases(
@@ -2496,7 +2500,7 @@ class FeaturesEnricher(TransformerMixin):
             self.get_autofe_features_description(features_meta=features_meta),
             self.bundle,
         )
-        return features, sources, model_shap, summary, autofe
+        return features, sources, model_shap, summary, autofe, feature_monthly_psi, feature_monthly_auc
 
     def _score_report_html(self) -> str | None:
         if self._search_task is None or not self._has_single_ensemble_score():

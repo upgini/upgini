@@ -11,6 +11,7 @@
     .metric-sample-table{position:relative;z-index:1;margin-top:26px}.metric-sample-head,.metric-sample-row{display:grid;grid-template-columns:minmax(140px,.9fr) 1fr 1fr .8fr .8fr;gap:18px;align-items:center}.metric-sample-ci{display:block;margin-top:6px;color:#8fa09b;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}.metric-note{color:#8fa09b;font-size:11px;margin-top:6px}.partner-logo{height:30px;width:auto;display:block}.metric-sample-head{padding:0 14px 8px;color:#8fa09b;text-transform:uppercase;letter-spacing:.11em;font-size:10px;font-weight:800}.metric-sample-row{padding:15px 14px;border-top:1px solid rgba(255,255,255,.12)}.metric-sample-name{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:760}.metric-sample-name i{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px rgba(22,69,238,.18)}.metric-sample-row[data-sample="eval_1"] .metric-sample-name i{background:var(--cyan);box-shadow:0 0 0 4px rgba(32,170,180,.18)}.metric-sample-row[data-sample="eval_2"] .metric-sample-name i{background:var(--green);box-shadow:0 0 0 4px rgba(83,204,97,.18)}.metric-sample-name small{display:block;color:#8fa09b;font-size:10px;font-weight:650;margin-top:2px}.metric-sample-value{font-size:27px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.035em}.metric-sample-uplift .metric-sample-value{color:#73e57b}.metric-sample-uplift p{margin:5px 0 0;color:#aebcb8;font-size:11px}.tall-chart{height:340px}.chart-tooltip b{font-size:11px}.chart-tooltip .tip-label{color:#aebbb7}.canvas-wrap canvas{cursor:crosshair}.search-id-chip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     @supports (grid-template-columns:subgrid){.shap-panel{display:grid;grid-template-columns:fit-content(55%) minmax(90px,1fr) 64px;column-gap:12px}.shap-row{grid-template-columns:subgrid;grid-column:1/-1;padding-left:0;padding-right:0}}
     @media(max-width:980px){.layout{grid-template-columns:1fr}.sidenav{display:none}.main{padding:28px 22px 70px}.topbar{padding:0 22px}.scores{grid-template-columns:1fr 1fr}.uplift{grid-column:1/-1}.summary-grid{grid-template-columns:1fr 1fr}.stability-grid,.sample-grid{grid-template-columns:1fr}.source-cards{grid-template-columns:1fr 1fr}}
+    .feature-select{max-width:min(520px,72vw)}
     @media(max-width:650px){.top-meta .chip,.brand-divider,.brand-label{display:none}.topbar{gap:10px}.button{padding:9px 10px}.hero-title{display:block}.run-stamp{text-align:left;margin-top:16px}.hero-title h1{font-size:30px}.metric-head{display:block}.metric-tabs{margin-top:15px;width:max-content}.summary-grid,.source-cards{grid-template-columns:1fr}.scores{gap:14px}.score-value{font-size:32px}.metric-sample-head{display:none}.metric-sample-row{grid-template-columns:1fr 1fr;gap:14px;padding:16px 2px}.metric-sample-name{grid-column:1/-1}.metric-sample-value{font-size:24px}.metric-sample-row>div:not(.metric-sample-name):before{display:block;color:#8fa09b;text-transform:uppercase;letter-spacing:.08em;font-size:8px;font-weight:800;margin-bottom:6px}.metric-sample-row>div:nth-child(2):before{content:"Baseline"}.metric-sample-row>div:nth-child(3):before{content:"Enriched"}.metric-sample-row>div:nth-child(4):before{content:"Uplift, abs"}.metric-sample-row>div:nth-child(5):before{content:"Uplift, %"}.main{padding-left:15px;padding-right:15px}.cell-output{gap:14px}}
   </style>
 </head>
@@ -29,6 +30,7 @@
       <a class="nav-link" href="#score-analysis"><span class="nav-dot"></span>Score analysis</a>
       <a class="nav-link" href="#score-distribution"><span class="nav-dot"></span>Score distribution</a>
       <a class="nav-link" href="#score-stability"><span class="nav-dot"></span>Score stability</a>
+      <a class="nav-link" href="#feature-stability"><span class="nav-dot"></span>Feature stability</a>
       <a class="nav-link" href="#features-shap"><span class="nav-dot"></span>Features SHAP</a>
       <a class="nav-link" href="#search-results"><span class="nav-dot"></span>Search results</a>
     </aside>
@@ -85,6 +87,12 @@
         <div class="result-pane active" id="result-features"><div class="table-actions"><input id="featureSearch" class="search" type="search" placeholder="Find a feature or source" aria-label="Feature search"><select id="statusFilter" class="control" aria-label="Stability filter"><option value="all">All statuses</option><option value="good">Stable</option><option value="watch">Watch</option><option value="risk">At risk</option></select><button class="button ghost copy-table" data-copy="featureBody">Copy</button><button class="button ghost csv-table" data-table="featureBody">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Feature</th><th>Provider</th><th>Source</th><th>SHAP</th><th>PSI</th><th>Drift</th><th>Coverage</th></tr></thead><tbody id="featureBody"></tbody></table><div id="emptyState" class="empty">No features match the selected filters.</div></div></div>
         <div class="result-pane" id="result-sources"><div class="table-actions"><button class="button ghost copy-table" data-copy="sourceTable">Copy</button><button class="button ghost csv-table" data-table="sourceTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Provider</th><th>Source</th><th>Aggregate SHAP</th><th>Relevant features</th><th>Action</th></tr></thead><tbody id="sourceTable"></tbody></table></div></div>
         <div class="result-pane" id="result-autofe"><div class="table-actions"><button class="button ghost copy-table" data-copy="autofeTable">Copy</button><button class="button ghost csv-table" data-table="autofeTable">Download CSV</button></div><div class="panel table-wrap"><table class="data-table"><thead><tr><th>Sources</th><th>Generated feature</th><th>Source features</th><th>Functions</th></tr></thead><tbody id="autofeTable"></tbody></table></div></div>
+      </section>
+
+      <section id="feature-stability" class="section">
+        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and univariate ROC AUC for the selected model feature. PSI reference: earliest train month.</p></div><select id="featureStabilitySelect" class="control feature-select" aria-label="Feature"></select></div>
+        <div class="panel chart-panel"><div class="chart-head"><div><strong>Monthly PSI</strong><div class="source-name">Reference distribution is the earliest train month</div></div><button class="button ghost chart-export" data-chart="featurePsiChart">Save PNG</button></div><div class="threshold-legend" id="featurePsiThresholdLegend"></div><div class="canvas-wrap"><canvas id="featurePsiChart" aria-label="Monthly feature PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="featurePsiTooltip"></div></div></div>
+        <div class="panel chart-panel" style="margin-top:14px"><div class="chart-head"><div><strong>Monthly ROC AUC</strong><div class="source-name">Univariate ROC AUC of the feature against the target</div></div><button class="button ghost chart-export" data-chart="featureAucChart">Save PNG</button></div><div class="canvas-wrap"><canvas id="featureAucChart" aria-label="Monthly feature ROC AUC" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureAucTooltip"></div></div></div>
       </section>
     </main>
   </div>
@@ -489,13 +497,107 @@ const REPORT_DATA = __REPORT_DATA__;
       c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
     });
   }
-  function renderPsiLegend() {
-    const th = D.scoreStability && D.scoreStability.thresholds;
-    if (!th) return;
-    document.getElementById('psiThresholdLegend').innerHTML =
-      `<span class="tag good">&lt; ${th.warning.toFixed(2)} stable</span>` +
+  function thresholdTags(th) {
+    if (!th) return '';
+    return `<span class="tag good">&lt; ${th.warning.toFixed(2)} stable</span>` +
       `<span class="tag watch">${th.warning.toFixed(2)}–${th.critical.toFixed(2)} warning</span>` +
       `<span class="tag risk">&gt; ${th.critical.toFixed(2)} critical</span>`;
+  }
+  function renderPsiLegend() {
+    const el = document.getElementById('psiThresholdLegend');
+    if (el) el.innerHTML = thresholdTags(D.scoreStability && D.scoreStability.thresholds);
+    const featureEl = document.getElementById('featurePsiThresholdLegend');
+    if (featureEl) featureEl.innerHTML = thresholdTags(D.featureStability && D.featureStability.thresholds);
+  }
+
+  /* ----------------------------------------------------- feature stability */
+  const esc = value => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  function fillFeatureSelect() {
+    const el = document.getElementById('featureStabilitySelect');
+    if (!el) return;
+    const features = (D.featureStability && D.featureStability.features) || [];
+    el.innerHTML = features.map(f => `<option value="${esc(f.feature)}">${esc(f.feature)}</option>`).join('');
+  }
+  function featureMonths() {
+    const cfg = D.featureStability || {};
+    return cfg.months || [];
+  }
+  function selectedFeature() {
+    const el = document.getElementById('featureStabilitySelect');
+    return el ? el.value : '';
+  }
+  function featureSeries(kind) {
+    const cfg = D.featureStability || {};
+    const name = selectedFeature();
+    const row = (cfg[kind] || []).find(item => item.feature === name);
+    return (row && row.values) || [];
+  }
+  function featureRecord(name) {
+    return (D.features || []).find(f => f.name === name) || {};
+  }
+  function featureTooltip(month, name, metric, value) {
+    const f = featureRecord(name);
+    return `<b>${esc(month)} · ${esc(name)}</b><br>${metric}: ${fmt3(value)}` +
+      `<br>Rows: ${f.rows == null ? '—' : num(f.rows)}` +
+      `<br>Labeled: ${f.labeled == null ? '—' : num(f.labeled)}` +
+      `<br>Coverage: ${pct1(f.coverage)}` +
+      `<br>Missing rate: ${pct1(f.missingRate)}`;
+  }
+  function drawFeatureLine(c, w, h, hitKey, values, color, yFor, dotColor) {
+    const months = featureMonths();
+    hits[hitKey] = [];
+    if (!months.length) return;
+    const count = months.length;
+    const x = i => 48 + (count === 1 ? (w - 70) / 2 : i * (w - 70) / (count - 1));
+    strokeSeries(c, values.map((val, i) => val == null ? null : { x: x(i), y: yFor(val) }), color, 4, dotColor);
+    c.font = '10px Inter, sans-serif';
+    months.forEach((m, i) => {
+      if (values[i] != null) hits[hitKey].push({ x: x(i), y: yFor(values[i]), r: 12, index: i });
+      const parts = String(m).split(' ');
+      c.fillStyle = '#7d8885';
+      c.fillText(parts[0], x(i) - 8, h - 22);
+      c.fillText(parts[1] || '', x(i) - 12, h - 9);
+    });
+  }
+  function drawFeaturePsi() {
+    const cfg = D.featureStability || {};
+    const months = featureMonths();
+    const { c, w, h } = setupCanvas('featurePsiChart');
+    if (!months.length) return;
+    const values = featureSeries('psi');
+    const max = cfg.psiAxisMax || 1;
+    const th = cfg.thresholds || { warning: 0.1, critical: 0.25 };
+    const y = val => 18 + (max - val) / max * (h - 62);
+    c.fillStyle = 'rgba(83,204,97,.08)'; c.fillRect(40, y(th.warning), w - 55, y(0) - y(th.warning));
+    c.fillStyle = 'rgba(225,145,50,.08)'; c.fillRect(40, y(th.critical), w - 55, y(th.warning) - y(th.critical));
+    c.fillStyle = 'rgba(212,91,91,.08)'; c.fillRect(40, 18, w - 55, y(th.critical) - 18);
+    [th.warning, th.critical].forEach(t => {
+      c.strokeStyle = t === th.warning ? '#53cc61' : '#d45b5b';
+      c.setLineDash([4, 4]); c.beginPath(); c.moveTo(40, y(t)); c.lineTo(w - 15, y(t)); c.stroke();
+    });
+    c.setLineDash([]);
+    c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      const yy = 18 + i * (h - 62) / 4;
+      c.fillText((max - i * max / 4).toFixed(2), 4, yy + 3);
+    }
+    drawFeatureLine(c, w, h, 'featurePsi', values, '#1645ee', y,
+      i => values[i] > th.critical ? '#d45b5b' : values[i] >= th.warning ? '#e19132' : '#53cc61');
+  }
+  function drawFeatureAuc() {
+    const months = featureMonths();
+    const { c, w, h } = setupCanvas('featureAucChart');
+    if (!months.length) return;
+    const max = 1;
+    const y = val => 18 + (max - val) / max * (h - 62);
+    c.strokeStyle = '#e8eeec'; c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
+    for (let i = 0; i < 5; i++) {
+      const yy = 18 + i * (h - 62) / 4;
+      c.beginPath(); c.moveTo(40, yy); c.lineTo(w - 15, yy); c.stroke();
+      c.fillText((max - i * max / 4).toFixed(2), 4, yy + 3);
+    }
+    drawFeatureLine(c, w, h, 'featureAuc', featureSeries('auc'), '#53cc61', y);
   }
 
   /* ------------------------------------------------------------ SHAP list */
@@ -581,6 +683,16 @@ const REPORT_DATA = __REPORT_DATA__;
       return `<b>${MONTHS[i]} · ${selectedLabel('psiSample')}</b><br>PSI: ${fmt3(s.psi[i])}` +
         `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: first period (baseline month)`;
     });
+    bindTooltip('featurePsiChart', 'featurePsiTooltip', 'featurePsi', i => {
+      const months = featureMonths();
+      const values = featureSeries('psi');
+      return featureTooltip(months[i], selectedFeature(), 'PSI', values[i]);
+    });
+    bindTooltip('featureAucChart', 'featureAucTooltip', 'featureAuc', i => {
+      const months = featureMonths();
+      const values = featureSeries('auc');
+      return featureTooltip(months[i], selectedFeature(), 'ROC AUC', values[i]);
+    });
   }
 
   /* -------------------------------------------------------- sample tooltip */
@@ -613,6 +725,8 @@ const REPORT_DATA = __REPORT_DATA__;
     document.getElementById('scoreSample').addEventListener('change', drawScore);
     document.getElementById('distributionSample').addEventListener('change', drawDistribution);
     document.getElementById('psiSample').addEventListener('change', drawPsi);
+    const featureSelect = document.getElementById('featureStabilitySelect');
+    if (featureSelect) featureSelect.addEventListener('change', () => { drawFeaturePsi(); drawFeatureAuc(); });
     document.getElementById('featureSearch').addEventListener('input', renderFeatures);
     document.getElementById('statusFilter').addEventListener('change', renderFeatures);
     document.getElementById('showAllShap').addEventListener('click', () => { shapAll = !shapAll; renderShap(); });
@@ -655,7 +769,7 @@ const REPORT_DATA = __REPORT_DATA__;
     });
   }
 
-  function drawAll() { drawChart(); drawSample(); drawScore(); drawDistribution(); drawPsi(); }
+  function drawAll() { drawChart(); drawSample(); drawScore(); drawDistribution(); drawPsi(); drawFeaturePsi(); drawFeatureAuc(); }
 
   /* ------------------------------------------------------------------ init */
   renderHeader();
@@ -663,6 +777,7 @@ const REPORT_DATA = __REPORT_DATA__;
   renderSummary();
   renderSampleStats();
   fillSampleSelects();
+  fillFeatureSelect();
   renderPsiLegend();
   renderSearchResults();
   renderFeatures();
