@@ -57,23 +57,23 @@
       </section>
 
       <section id="performance" class="section">
-        <div class="section-head"><div><h2>Performance</h2><p>Baseline and enriched quality dynamics for the selected sample. 5-fold validation · comparable labeled rows · 95% CI.</p></div><div class="toolbar"><select id="performanceSample" class="control" aria-label="Performance sample"></select><select id="periodSelect" class="control" aria-label="Chart period"></select></div></div>
-        <div class="panel chart-panel"><div class="chart-head"><div class="legend"><span><i style="background:#9ba8a4"></i>Baseline</span><span><i style="background:#1645ee"></i>Enriched</span><span><i style="background:#53cc61"></i>Uplift</span></div><div id="chartHint" style="font-size:11px;color:var(--muted)"></div></div><div class="canvas-wrap"><canvas id="qualityChart" role="img" aria-label="Baseline and enriched quality dynamics" width="1596" height="560"></canvas><div class="chart-tooltip" id="qualityTooltip"></div></div></div>
+        <div class="section-head"><div><h2>Performance</h2><p>Baseline and enriched quality dynamics for all samples. 5-fold validation · comparable labeled rows · 95% CI.</p></div><div class="toolbar"><select id="periodSelect" class="control" aria-label="Chart period"></select></div></div>
+        <div class="panel chart-panel"><div class="chart-head"><div class="legend" id="performanceLegend"></div><div id="chartHint" style="font-size:11px;color:var(--muted)"></div></div><div class="canvas-wrap"><canvas id="qualityChart" role="img" aria-label="Baseline and enriched quality dynamics" width="1596" height="560"></canvas><div class="chart-tooltip" id="qualityTooltip"></div></div></div>
       </section>
 
       <section id="score-analysis" class="section">
-        <div class="section-head"><div><h2>Score analysis</h2><p>Mean score and mean target on the 0–1 scale; labeled and unlabeled counts on the secondary axis.</p></div><div class="toolbar"><select id="scoreSample" class="control" aria-label="Score analysis sample"></select><button class="button ghost chart-export" data-chart="scoreChart">Save PNG</button></div></div>
-        <div class="panel chart-panel"><div class="legend toggle-legend"><button data-series="score" class="series-toggle active"><i style="background:#1645ee"></i>Mean score</button><button data-series="target" class="series-toggle active"><i style="background:#53cc61"></i>Mean target</button><button data-series="labeled" class="series-toggle active"><i style="background:#b6c1be"></i>Labeled</button><button data-series="unlabeled" class="series-toggle active"><i style="background:#f0bb66"></i>Unlabeled</button></div><div class="canvas-wrap"><canvas id="scoreChart" aria-label="Monthly score and target with labeled and unlabeled counts" width="1596" height="560"></canvas><div class="chart-tooltip" id="scoreTooltip"></div></div></div>
+        <div class="section-head"><div><h2>Score analysis</h2><p>Mean score and mean target on the 0–1 scale; labeled and unlabeled counts on the secondary axis.</p></div><div class="toolbar"><button class="button ghost chart-export" data-chart="scoreChart">Save PNG</button></div></div>
+        <div class="panel chart-panel"><div class="legend toggle-legend"><button data-series="score" class="series-toggle active"><i style="background:#1645ee"></i>Mean score</button><button data-series="target" class="series-toggle active"><i style="background:#53cc61"></i>Mean target</button><button data-series="labeled" class="series-toggle active"><i style="background:#b6c1be"></i>Labeled</button><button data-series="unlabeled" class="series-toggle active"><i style="background:#f0bb66"></i>Unlabeled</button></div><div class="legend" id="scoreSampleLegend" style="margin-bottom:10px"></div><div class="canvas-wrap"><canvas id="scoreChart" aria-label="Monthly score and target with labeled and unlabeled counts" width="1596" height="560"></canvas><div class="chart-tooltip" id="scoreTooltip"></div></div></div>
       </section>
 
       <section id="score-distribution" class="section">
-        <div class="section-head"><div><h2>Score distribution by target</h2><p>Normalized probability of scores by common bins. Unlabeled rows are excluded.</p></div><select id="distributionSample" class="control" aria-label="Distribution sample"></select></div>
-        <div class="panel chart-panel"><div class="legend"><span><i style="background:#8da0ff"></i>target = 0</span><span><i style="background:#53cc61"></i>target = 1</span></div><div class="canvas-wrap"><canvas id="distributionChart" aria-label="Score distribution for target zero and one" width="1596" height="560"></canvas><div class="chart-tooltip" id="distributionTooltip"></div></div></div>
+        <div class="section-head"><div><h2>Score distribution by target</h2><p>Normalized probability of scores by common bins for all samples. Unlabeled rows are excluded.</p></div></div>
+        <div class="panel chart-panel"><div class="legend" id="distributionLegend"></div><div class="canvas-wrap"><canvas id="distributionChart" aria-label="Score distribution for target zero and one" width="1596" height="560"></canvas><div class="chart-tooltip" id="distributionTooltip"></div></div></div>
       </section>
 
       <section id="score-stability" class="section">
-        <div class="section-head"><div><h2>Score stability (PSI)</h2><p>Monthly PSI of scores · reference: first period (baseline month) · fixed reference bins.</p></div><div class="toolbar"><select id="psiSample" class="control" aria-label="Score stability sample"></select><button class="button ghost chart-export" data-chart="scorePsiChart">Save PNG</button></div></div>
-        <div class="panel chart-panel"><div class="threshold-legend" id="psiThresholdLegend"></div><div class="canvas-wrap"><canvas id="scorePsiChart" aria-label="Monthly score PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="psiTooltip"></div></div></div>
+        <div class="section-head"><div><h2>Score stability (PSI)</h2><p>Monthly PSI of scores for all samples · reference: first period (baseline month) · fixed reference bins.</p></div><div class="toolbar"><button class="button ghost chart-export" data-chart="scorePsiChart">Save PNG</button></div></div>
+        <div class="panel chart-panel"><div class="threshold-legend" id="psiThresholdLegend"></div><div class="legend" id="psiSampleLegend" style="margin-bottom:10px"></div><div class="canvas-wrap"><canvas id="scorePsiChart" aria-label="Monthly score PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="psiTooltip"></div></div></div>
       </section>
 
       <section id="features-shap" class="section">
@@ -90,9 +90,9 @@
       </section>
 
       <section id="feature-stability" class="section">
-        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and univariate ROC AUC for the selected model feature. PSI reference: earliest train month.</p></div><select id="featureStabilitySample" class="control" aria-label="Feature stability sample"></select><select id="featureStabilitySelect" class="control feature-select" aria-label="Feature"></select></div>
-        <div class="panel chart-panel"><div class="chart-head"><div><strong>Monthly PSI</strong><div class="source-name">Reference distribution is the earliest train month</div></div><button class="button ghost chart-export" data-chart="featurePsiChart">Save PNG</button></div><div class="threshold-legend" id="featurePsiThresholdLegend"></div><div class="canvas-wrap"><canvas id="featurePsiChart" aria-label="Monthly feature PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="featurePsiTooltip"></div></div></div>
-        <div class="panel chart-panel" style="margin-top:14px"><div class="chart-head"><div><strong>Monthly ROC AUC</strong><div class="source-name">Univariate ROC AUC of the feature against the target</div></div><button class="button ghost chart-export" data-chart="featureAucChart">Save PNG</button></div><div class="canvas-wrap"><canvas id="featureAucChart" aria-label="Monthly feature ROC AUC" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureAucTooltip"></div></div></div>
+        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and univariate ROC AUC for the selected model feature, for all samples. PSI reference: earliest train month.</p></div><select id="featureStabilitySelect" class="control feature-select" aria-label="Feature"></select></div>
+        <div class="panel chart-panel"><div class="chart-head"><div><strong>Monthly PSI</strong><div class="source-name">Reference distribution is the earliest train month</div></div><button class="button ghost chart-export" data-chart="featurePsiChart">Save PNG</button></div><div class="threshold-legend" id="featurePsiThresholdLegend"></div><div class="legend" id="featurePsiSampleLegend" style="margin-bottom:10px"></div><div class="canvas-wrap"><canvas id="featurePsiChart" aria-label="Monthly feature PSI for all samples" width="1596" height="560"></canvas><div class="chart-tooltip" id="featurePsiTooltip"></div></div></div>
+        <div class="panel chart-panel" style="margin-top:14px"><div class="chart-head"><div><strong>Monthly ROC AUC</strong><div class="source-name">Univariate ROC AUC of the feature against the target</div></div><button class="button ghost chart-export" data-chart="featureAucChart">Save PNG</button></div><div class="legend" id="featureAucSampleLegend" style="margin-bottom:10px"></div><div class="canvas-wrap"><canvas id="featureAucChart" aria-label="Monthly feature ROC AUC for all samples" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureAucTooltip"></div></div></div>
       </section>
     </main>
   </div>
@@ -133,6 +133,7 @@ const REPORT_DATA = __REPORT_DATA__;
   const fmt3 = v => (v == null ? '—' : Number(v).toFixed(3));
   const fmt2 = v => (v == null ? '—' : Number(v).toFixed(2));
   const num = v => Number(v).toLocaleString('en-US');
+  const numOrDash = v => (v == null ? '—' : num(v));
   const pct1 = v => (v == null ? '—' : Number(v).toFixed(1) + '%');
   const signed3 = v => (v >= 0 ? '+' : '') + Number(v).toFixed(3);
   const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -144,6 +145,7 @@ const REPORT_DATA = __REPORT_DATA__;
     const n = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   }
+  const availableSamples = bySample => SAMPLES.filter(s => bySample && bySample[s.id]);
 
   /* ---------------------------------------------------------------- header */
   function renderHeader() {
@@ -242,14 +244,27 @@ const REPORT_DATA = __REPORT_DATA__;
     document.getElementById('sampleLegend').innerHTML = SAMPLES.map(s =>
       `<span><i style="background:${s.color}"></i>${s.label}</span>`).join('') +
       '<span style="margin-left:auto">Bars: count</span><span>Lines: mean target</span>';
+    const sampleLegend = SAMPLES.map(s => `<span><i style="background:${s.color}"></i>${s.label}</span>`).join('');
+    const performanceLegend = document.getElementById('performanceLegend');
+    if (performanceLegend) performanceLegend.innerHTML = sampleLegend +
+      '<span style="margin-left:auto"><i style="background:#9ba8a4"></i>Baseline</span><span>Colored line: enriched</span>';
+    const scoreSampleLegend = document.getElementById('scoreSampleLegend');
+    if (scoreSampleLegend) scoreSampleLegend.innerHTML = sampleLegend +
+      '<span style="margin-left:auto">Solid: mean score</span><span>Dashed: mean target</span>';
+    const distributionLegend = document.getElementById('distributionLegend');
+    if (distributionLegend) distributionLegend.innerHTML = SAMPLES.map(s =>
+      `<span><i style="background:${rgba(s.color, .38)}"></i>${s.label} target = 0</span>` +
+      `<span><i style="background:${s.color}"></i>${s.label} target = 1</span>`).join('');
+    const psiSampleLegend = document.getElementById('psiSampleLegend');
+    if (psiSampleLegend) psiSampleLegend.innerHTML = sampleLegend;
+    ['featurePsiSampleLegend', 'featureAucSampleLegend'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = sampleLegend;
+    });
   }
 
   /* --------------------------------------------------------------- selects */
   function fillSampleSelects() {
-    ['performanceSample', 'scoreSample', 'distributionSample', 'psiSample', 'featureStabilitySample'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = SAMPLES.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
-    });
     const period = document.getElementById('periodSelect');
     const timeline = D.timeline || {};
     const options = [...new Set([MONTH_COUNT, ...(timeline.periodOptions || [])])]
@@ -272,19 +287,23 @@ const REPORT_DATA = __REPORT_DATA__;
     const w = box.width, h = box.height, p = { l: 48, r: 18, t: 18, b: 44 };
     c.clearRect(0, 0, w, h);
     const metric = D.keyResult && D.keyResult.metrics ? D.keyResult.metrics[activeMetric] : null;
-    const sampleId = document.getElementById('performanceSample').value;
-    const sample = sampleById[sampleId];
-    const series = metric && metric.bySample ? metric.bySample[sampleId] : null;
-    if (!MONTH_COUNT || !metric || !series || !sample) return;
     const count = Math.min(+document.getElementById('periodSelect').value || MONTH_COUNT, MONTH_COUNT);
-    const base = align(series.baselineSeries).slice(-count);
-    const enr = align(series.enrichedSeries).slice(-count);
     const labs = MONTHS.slice(-count);
+    const sampleSeries = metric ? availableSamples(metric.bySample).map(sample => {
+      const series = metric.bySample[sample.id] || {};
+      return {
+        sample,
+        base: align(series.baselineSeries).slice(-count),
+        enriched: align(series.enrichedSeries).slice(-count)
+      };
+    }) : [];
     document.getElementById('chartHint').textContent =
-      metric.name + ' · ' + sample.label + (sample.caption ? ' · ' + sample.caption : '');
-    const all = base.concat(enr).filter(v => v != null);
+      metric ? metric.name + ' · all samples' : '';
+    const all = sampleSeries.flatMap(row => row.base.concat(row.enriched)).filter(v => v != null);
     if (!all.length) return;
-    const min = Math.min(...all) - .015, max = Math.max(...all) + .015;
+    const span = Math.max(...all) - Math.min(...all);
+    const padY = Math.max(span * .12, .015);
+    const min = Math.min(...all) - padY, max = Math.max(...all) + padY;
     const x = i => p.l + (count === 1 ? (w - p.l - p.r) / 2 : i * (w - p.l - p.r) / (count - 1));
     const y = v => p.t + (max - v) * (h - p.t - p.b) / (max - min);
     hits.quality = [];
@@ -296,21 +315,25 @@ const REPORT_DATA = __REPORT_DATA__;
       c.fillText((max - i * (max - min) / 4).toFixed(2), 5, yy + 4);
     }
     labs.forEach((m, i) => { c.fillText(m.split(' ')[0], x(i) - 10, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9); });
-    function line(vals, color, seriesName) {
-      strokeSeries(c, vals.map((v, i) => v == null ? null : { x: x(i), y: y(v) }), color, 4);
+    function line(row, vals, color, seriesName, dash) {
+      strokeSeries(c, vals.map((v, i) => v == null ? null : { x: x(i), y: y(v) }), color, 4, null, dash);
       vals.forEach((v, i) => {
         if (v == null) return;
+        let html = `<b>${labs[i]} · ${row.sample.label} · ${seriesName}</b><br>${metric.name}: ${fmt3(v)}`;
+        if (seriesName === 'Enriched' && row.base[i] != null) {
+          html += `<br>Absolute uplift: ${fmt3(v - row.base[i])}`;
+          if (row.base[i]) html += `<br>Relative uplift: ${((v / row.base[i] - 1) * 100).toFixed(1)}%`;
+        }
         hits.quality.push({
           x: x(i), y: y(v), r: 10,
-          html: `<b>${labs[i]} · ${sample.label} · ${seriesName}</b><br>${metric.name}: ${fmt3(v)}` +
-            (seriesName === 'Enriched' && base[i] != null
-              ? `<br>Absolute uplift: ${fmt3(v - base[i])}<br>Relative uplift: ${((v / base[i] - 1) * 100).toFixed(1)}%`
-              : '')
+          html
         });
       });
     }
-    line(base, '#9ba8a4', 'Baseline');
-    line(enr, '#1645ee', 'Enriched');
+    sampleSeries.forEach(row => {
+      line(row, row.base, rgba(row.sample.color, .55), 'Baseline', [5, 4]);
+      line(row, row.enriched, row.sample.color, 'Enriched');
+    });
   }
 
   /* ------------------------------------------------------ canvas utilities */
@@ -322,11 +345,14 @@ const REPORT_DATA = __REPORT_DATA__;
     return { cv, c, w: b.width, h: b.height };
   }
   /* Draws a polyline whose points may contain nulls (missing months are skipped). */
-  function strokeSeries(c, pts, color, radius, dotColor) {
+  function strokeSeries(c, pts, color, radius, dotColor, dash) {
+    c.save();
+    if (dash) c.setLineDash(dash);
     c.beginPath();
     let pen = false;
     pts.forEach(p => { if (!p) { pen = false; return; } pen ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); pen = true; });
     c.strokeStyle = color; c.lineWidth = 2.5; c.lineJoin = 'round'; c.stroke();
+    c.restore();
     if (!radius) return;
     pts.forEach((p, i) => {
       if (!p) return;
@@ -410,73 +436,108 @@ const REPORT_DATA = __REPORT_DATA__;
   function drawScore() {
     const cfg = D.scoreAnalysis || {};
     const { c, w, h } = setupCanvas('scoreChart');
-    const sampleId = document.getElementById('scoreSample').value;
-    const s = cfg.bySample && cfg.bySample[sampleId];
-    if (!s || !MONTH_COUNT) return;
-    const meanScore = align(s.meanScore), meanTarget = align(s.meanTarget);
-    const labeled = align(s.labeled), unlabeled = align(s.unlabeled);
-    scoreRows = MONTHS.map((month, i) => ({
-      month, score: meanScore[i], target: meanTarget[i],
-      labeled: labeled[i], unlabeled: unlabeled[i], total: (labeled[i] || 0) + (unlabeled[i] || 0)
-    }));
+    const scoreSamples = availableSamples(cfg.bySample);
+    if (!scoreSamples.length || !MONTH_COUNT) return;
     hits.score = [];
+    scoreRows = [];
     axes(c, w, h, 1);
     const x = i => 48 + (MONTH_COUNT === 1 ? (w - 70) / 2 : i * (w - 70) / (MONTH_COUNT - 1));
-    if (chartState.labeled || chartState.unlabeled) {
+    const countMax = cfg.countAxisMax || Math.max(1, ...scoreSamples.flatMap(sample => {
+      const s = cfg.bySample[sample.id] || {};
+      const labeled = align(s.labeled), unlabeled = align(s.unlabeled);
+      return labeled.map((v, i) => (v || 0) + (unlabeled[i] || 0));
+    }));
+    const barWidth = Math.max(5, Math.min(14, 24 / scoreSamples.length));
+    scoreSamples.forEach((sample, sampleIndex) => {
+      const s = cfg.bySample[sample.id] || {};
+      const meanScore = align(s.meanScore), meanTarget = align(s.meanTarget);
+      const labeled = align(s.labeled), unlabeled = align(s.unlabeled);
+      const offset = (sampleIndex - (scoreSamples.length - 1) / 2) * (barWidth + 4);
       labeled.forEach((v, i) => {
+        const hasData = [meanScore[i], meanTarget[i], labeled[i], unlabeled[i]].some(value => value != null);
+        if (!hasData) return;
         const base = h - 42;
+        const rowIndex = scoreRows.push({
+          month: MONTHS[i],
+          sample,
+          score: meanScore[i],
+          target: meanTarget[i],
+          labeled: labeled[i],
+          unlabeled: unlabeled[i],
+          total: (labeled[i] || 0) + (unlabeled[i] || 0)
+        }) - 1;
         if (chartState.labeled && v != null) {
-          const bh = v / cfg.countAxisMax * (h - 80);
-          c.fillStyle = 'rgba(135,150,146,.34)'; c.fillRect(x(i) - 8, base - bh, 16, bh);
+          const bh = v / countMax * (h - 80);
+          c.fillStyle = rgba(sample.color, .24); c.fillRect(x(i) + offset - barWidth / 2, base - bh, barWidth, bh);
         }
         if (chartState.unlabeled && unlabeled[i] != null) {
-          const bh = unlabeled[i] / cfg.countAxisMax * (h - 80);
-          const off = chartState.labeled && v != null ? v / cfg.countAxisMax * (h - 80) : 0;
-          c.fillStyle = 'rgba(240,187,102,.65)'; c.fillRect(x(i) - 8, base - off - bh, 16, bh);
+          const bh = unlabeled[i] / countMax * (h - 80);
+          const off = chartState.labeled && v != null ? v / countMax * (h - 80) : 0;
+          c.fillStyle = rgba(sample.color, .55); c.fillRect(x(i) + offset - barWidth / 2, base - off - bh, barWidth, bh);
         }
-        hits.score.push({ x: x(i), y: 18, w: 18, h: h - 55, index: i });
+        hits.score.push({ x: x(i) + offset - barWidth / 2, y: 18, w: barWidth, h: h - 55, index: rowIndex });
+        if (meanScore[i] != null) hits.score.push({ x: x(i) + offset, y: 18 + (1 - meanScore[i]) * (h - 62), r: 10, index: rowIndex });
+        if (meanTarget[i] != null) hits.score.push({ x: x(i) + offset, y: 18 + (1 - meanTarget[i]) * (h - 62), r: 10, index: rowIndex });
       });
-    }
-    const line = (vals, col) =>
-      strokeSeries(c, vals.map((v, i) => v == null ? null : { x: x(i), y: 18 + (1 - v) * (h - 62) }), col, 4);
-    if (chartState.score) line(meanScore, '#1645ee');
-    if (chartState.target) line(meanTarget, '#53cc61');
+      const lineX = i => x(i) + offset;
+      if (chartState.score) {
+        strokeSeries(c, meanScore.map((v, i) => v == null ? null : { x: lineX(i), y: 18 + (1 - v) * (h - 62) }), sample.color, 4);
+      }
+      if (chartState.target) {
+        strokeSeries(c, meanTarget.map((v, i) => v == null ? null : { x: lineX(i), y: 18 + (1 - v) * (h - 62) }), sample.color, 4, null, [5, 4]);
+      }
+    });
     MONTHS.forEach((m, i) => {
       c.fillStyle = '#7d8885'; c.fillText(m.split(' ')[0], x(i) - 9, h - 22); c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
     });
   }
 
   /* --------------------------------------------------- score distribution */
+  let distributionRows = [];
   function drawDistribution() {
     const cfg = D.scoreDistribution || {};
     const { c, w, h } = setupCanvas('distributionChart');
-    const sampleId = document.getElementById('distributionSample').value;
-    const s = cfg.bySample && cfg.bySample[sampleId];
-    if (!s || !s.target0 || !s.target0.length) return;
+    const distSamples = availableSamples(cfg.bySample);
+    if (!distSamples.length) return;
     hits.distribution = [];
+    distributionRows = [];
     axes(c, w, h, cfg.densityAxisMax);
-    const bins = s.target0.length;
+    const first = cfg.bySample[distSamples[0].id] || {};
+    const bins = first.target0 ? first.target0.length : 0;
+    if (!bins) return;
     const gap = (w - 65) / bins;
-    s.target0.forEach((v, i) => {
+    const groupWidth = gap * .82;
+    const barW = Math.max(3, groupWidth / (distSamples.length * 2) * .86);
+    for (let i = 0; i < bins; i++) {
       const x = 45 + i * gap;
-      const y = h - 32 - v / cfg.densityAxisMax * (h - 60);
-      c.fillStyle = 'rgba(141,160,255,.72)'; c.fillRect(x, y, gap * .35, h - 32 - y);
-      const y2 = h - 32 - s.target1[i] / cfg.densityAxisMax * (h - 60);
-      c.fillStyle = 'rgba(83,204,97,.72)'; c.fillRect(x + gap * .38, y2, gap * .35, h - 32 - y2);
+      distSamples.forEach((sample, si) => {
+        const s = cfg.bySample[sample.id] || {};
+        const values = [
+          { target: 0, value: s.target0 && s.target0[i], color: rgba(sample.color, .38) },
+          { target: 1, value: s.target1 && s.target1[i], color: sample.color }
+        ];
+        values.forEach((item, ti) => {
+          if (item.value == null) return;
+          const bx = x + (si * 2 + ti) * barW + (groupWidth - barW * distSamples.length * 2) / 2;
+          const y = h - 32 - item.value / cfg.densityAxisMax * (h - 60);
+          c.fillStyle = item.color; c.fillRect(bx, y, barW, h - 32 - y);
+          const rowIndex = distributionRows.push({ sample, bin: i, target: item.target, density: item.value }) - 1;
+          hits.distribution.push({ x: bx, y: 10, w: barW, h: h - 40, index: rowIndex });
+        });
+      });
       c.fillStyle = '#7d8885'; c.fillText(cfg.binEdges[i].toFixed(1), x, h - 10);
-      hits.distribution.push({ x, y: 10, w: gap * .78, h: h - 40, index: i });
-    });
+    }
   }
 
   /* -------------------------------------------------------- score stability */
+  let psiRows = [];
   function drawPsi() {
     const cfg = D.scoreStability || {};
     const { c, w, h } = setupCanvas('scorePsiChart');
-    const sampleId = document.getElementById('psiSample').value;
-    const samplePsi = cfg.bySample && cfg.bySample[sampleId];
-    if (!samplePsi || !MONTH_COUNT) return;
-    const v = align(samplePsi.psi);
+    const psiSamples = availableSamples(cfg.bySample);
+    if (!psiSamples.length || !MONTH_COUNT) return;
     hits.psi = [];
+    psiRows = [];
     const max = cfg.psiAxisMax, th = cfg.thresholds;
     const x = i => 48 + (MONTH_COUNT === 1 ? (w - 70) / 2 : i * (w - 70) / (MONTH_COUNT - 1));
     const y = val => 18 + (max - val) / max * (h - 62);
@@ -488,10 +549,21 @@ const REPORT_DATA = __REPORT_DATA__;
       c.setLineDash([4, 4]); c.beginPath(); c.moveTo(40, y(t)); c.lineTo(w - 15, y(t)); c.stroke();
     });
     c.setLineDash([]);
-    strokeSeries(c, v.map((val, i) => val == null ? null : { x: x(i), y: y(val) }), '#1645ee', 4,
-      i => v[i] > th.critical ? '#d45b5b' : v[i] >= th.warning ? '#e19132' : '#53cc61');
+    psiSamples.forEach((sample, sampleIndex) => {
+      const samplePsi = cfg.bySample[sample.id] || {};
+      const v = align(samplePsi.psi);
+      const rows = align(samplePsi.rows);
+      const coverage = align(samplePsi.scoreCoverage);
+      const offset = (sampleIndex - (psiSamples.length - 1) / 2) * 10;
+      strokeSeries(c, v.map((val, i) => val == null ? null : { x: x(i) + offset, y: y(val) }), sample.color, 4,
+        i => v[i] > th.critical ? '#d45b5b' : v[i] >= th.warning ? '#e19132' : '#53cc61');
+      MONTHS.forEach((month, i) => {
+        if (v[i] == null) return;
+        const rowIndex = psiRows.push({ month, sample, psi: v[i], rows: rows[i], scoreCoverage: coverage[i] }) - 1;
+        hits.psi.push({ x: x(i) + offset, y: y(v[i]), r: 12, index: rowIndex });
+      });
+    });
     MONTHS.forEach((m, i) => {
-      if (v[i] != null) hits.psi.push({ x: x(i), y: y(v[i]), r: 12, index: i });
       c.fillStyle = '#7d8885';
       c.fillText(m.split(' ')[0], x(i) - 8, h - 22);
       c.fillText(m.split(' ')[1], x(i) - 12, h - 9);
@@ -532,35 +604,56 @@ const REPORT_DATA = __REPORT_DATA__;
   }
   function featureSeries(kind) {
     const cfg = D.featureStability || {};
-    const sampleEl = document.getElementById('featureStabilitySample');
-    const sampleId = sampleEl ? sampleEl.value : '';
-    const sample = cfg.bySample && cfg.bySample[sampleId];
     const name = selectedFeature();
-    const row = ((sample && sample[kind]) || []).find(item => item.feature === name);
-    const byMonth = (row && row.values) || {};
-    const months = Object.keys(byMonth).sort();
-    return { months, values: months.map(month => byMonth[month]) };
+    const rows = availableSamples(cfg.bySample).map(sample => {
+      const bucket = (cfg.bySample && cfg.bySample[sample.id]) || {};
+      const row = (bucket[kind] || []).find(item => item.feature === name);
+      return { sample, byMonth: (row && row.values) || {} };
+    });
+    const months = [...new Set(rows.flatMap(row => Object.keys(row.byMonth)))].sort();
+    return {
+      months,
+      series: rows.map(row => ({
+        sample: row.sample,
+        values: months.map(month => month in row.byMonth ? row.byMonth[month] : null)
+      }))
+    };
   }
   function featureRecord(name) {
     return (D.features || []).find(f => f.name === name) || {};
   }
-  function featureTooltip(month, name, metric, value) {
+  function featureTooltip(month, sample, name, metric, value) {
     const f = featureRecord(name);
-    return `<b>${esc(month)} · ${esc(name)}</b><br>${metric}: ${fmt3(value)}` +
+    return `<b>${esc(month)} · ${esc(sample.label)} · ${esc(name)}</b><br>${metric}: ${fmt3(value)}` +
       `<br>Rows: ${f.rows == null ? '—' : num(f.rows)}` +
       `<br>Labeled: ${f.labeled == null ? '—' : num(f.labeled)}` +
       `<br>Coverage: ${pct1(f.coverage)}` +
       `<br>Missing rate: ${pct1(f.missingRate)}`;
   }
-  function drawFeatureLine(c, w, h, hitKey, months, values, color, yFor, dotColor) {
+  function drawFeatureLine(c, w, h, hitKey, months, series, yFor, metric) {
     hits[hitKey] = [];
     if (!months.length) return;
     const count = months.length;
+    const name = selectedFeature();
     const x = i => 48 + (count === 1 ? (w - 70) / 2 : i * (w - 70) / (count - 1));
-    strokeSeries(c, values.map((val, i) => val == null ? null : { x: x(i), y: yFor(val) }), color, 4, dotColor);
+    series.forEach((row, sampleIndex) => {
+      const offset = (sampleIndex - (series.length - 1) / 2) * 10;
+      strokeSeries(
+        c,
+        row.values.map((val, i) => val == null ? null : { x: x(i) + offset, y: yFor(val) }),
+        row.sample.color,
+        4
+      );
+      row.values.forEach((val, i) => {
+        if (val == null) return;
+        hits[hitKey].push({
+          x: x(i) + offset, y: yFor(val), r: 12,
+          html: featureTooltip(monthLabel(months[i]), row.sample, name, metric, val)
+        });
+      });
+    });
     c.font = '10px Inter, sans-serif';
     months.forEach((m, i) => {
-      if (values[i] != null) hits[hitKey].push({ x: x(i), y: yFor(values[i]), r: 12, index: i });
       const parts = monthLabel(m).split(' ');
       c.fillStyle = '#7d8885';
       c.fillText(parts[0], x(i) - 8, h - 22);
@@ -571,7 +664,6 @@ const REPORT_DATA = __REPORT_DATA__;
     const cfg = D.featureStability || {};
     const series = featureSeries('psi');
     const months = series.months;
-    const values = series.values;
     const { c, w, h } = setupCanvas('featurePsiChart');
     if (!months.length) return;
     const max = cfg.psiAxisMax || 1;
@@ -590,16 +682,14 @@ const REPORT_DATA = __REPORT_DATA__;
       const yy = 18 + i * (h - 62) / 4;
       c.fillText((max - i * max / 4).toFixed(2), 4, yy + 3);
     }
-    drawFeatureLine(c, w, h, 'featurePsi', months, values, '#1645ee', y,
-      i => values[i] > th.critical ? '#d45b5b' : values[i] >= th.warning ? '#e19132' : '#53cc61');
+    drawFeatureLine(c, w, h, 'featurePsi', months, series.series, y, 'PSI');
   }
   function drawFeatureAuc() {
     const series = featureSeries('auc');
     const months = series.months;
-    const values = series.values;
     const { c, w, h } = setupCanvas('featureAucChart');
     if (!months.length) return;
-    const present = values.filter(v => v != null && !Number.isNaN(Number(v))).map(Number);
+    const present = series.series.flatMap(row => row.values).filter(v => v != null && !Number.isNaN(Number(v))).map(Number);
     let lo = 0, hi = 1;
     if (present.length) {
       const minAuc = Math.min(...present);
@@ -615,7 +705,7 @@ const REPORT_DATA = __REPORT_DATA__;
       c.beginPath(); c.moveTo(40, yy); c.lineTo(w - 15, yy); c.stroke();
       c.fillText((hi - i * span / 4).toFixed(2), 4, yy + 3);
     }
-    drawFeatureLine(c, w, h, 'featureAuc', months, values, '#53cc61', y);
+    drawFeatureLine(c, w, h, 'featureAuc', months, series.series, y, 'ROC AUC');
   }
 
   /* ------------------------------------------------------------ SHAP list */
@@ -680,35 +770,30 @@ const REPORT_DATA = __REPORT_DATA__;
     });
     cv.addEventListener('mouseleave', () => tip.style.display = 'none');
   }
-  const selectedLabel = id => document.getElementById(id).selectedOptions[0].text;
-
   function bindAllTooltips() {
     bindTooltip('qualityChart', 'qualityTooltip', 'quality', (_, hit) => hit.html);
     bindTooltip('scoreChart', 'scoreTooltip', 'score', i => {
       const p = scoreRows[i];
-      return `<b>${p.month} · ${selectedLabel('scoreSample')}</b><br>Mean score: ${fmt3(p.score)}<br>Mean target: ${fmt3(p.target)}` +
-        `<br>Total: ${num(p.total)}<br>Labeled: ${num(p.labeled)}<br>Unlabeled: ${num(p.unlabeled)}` +
-        `<br>Label share: ${(p.labeled / p.total * 100).toFixed(1)}%`;
+      if (!p) return '';
+      const share = p.total ? (p.labeled / p.total * 100).toFixed(1) + '%' : '—';
+      return `<b>${p.month} · ${p.sample.label}</b><br>Mean score: ${fmt3(p.score)}<br>Mean target: ${fmt3(p.target)}` +
+        `<br>Total: ${numOrDash(p.total)}<br>Labeled: ${numOrDash(p.labeled)}<br>Unlabeled: ${numOrDash(p.unlabeled)}` +
+        `<br>Label share: ${share}`;
     });
     bindTooltip('distributionChart', 'distributionTooltip', 'distribution', i => {
-      const cfg = D.scoreDistribution, s = cfg.bySample[document.getElementById('distributionSample').value];
-      return `<b>${selectedLabel('distributionSample')}</b><br>Score bin: ${cfg.binEdges[i].toFixed(1)}–${cfg.binEdges[i + 1].toFixed(1)}` +
-        `<br>target = 0 density: ${fmt3(s.target0[i])}<br>target = 1 density: ${fmt3(s.target1[i])}` +
-        `<br>Counts: ${Math.round(s.target0[i] * cfg.countScale.target0)} / ${Math.round(s.target1[i] * cfg.countScale.target1)}`;
+      const cfg = D.scoreDistribution, p = distributionRows[i];
+      if (!p) return '';
+      return `<b>${p.sample.label} · target = ${p.target}</b><br>Score bin: ${cfg.binEdges[p.bin].toFixed(1)}–${cfg.binEdges[p.bin + 1].toFixed(1)}` +
+        `<br>Density: ${fmt3(p.density)}`;
     });
     bindTooltip('scorePsiChart', 'psiTooltip', 'psi', i => {
-      const cfg = D.scoreStability, s = cfg.bySample[document.getElementById('psiSample').value];
-      return `<b>${MONTHS[i]} · ${selectedLabel('psiSample')}</b><br>PSI: ${fmt3(s.psi[i])}` +
-        `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: first period (baseline month)`;
+      const p = psiRows[i];
+      if (!p) return '';
+      return `<b>${p.month} · ${p.sample.label}</b><br>PSI: ${fmt3(p.psi)}` +
+        `<br>Rows: ${numOrDash(p.rows)}<br>Score coverage: ${pct1(p.scoreCoverage)}<br>Reference: first period (baseline month)`;
     });
-    bindTooltip('featurePsiChart', 'featurePsiTooltip', 'featurePsi', i => {
-      const series = featureSeries('psi');
-      return featureTooltip(monthLabel(series.months[i]), selectedFeature(), 'PSI', series.values[i]);
-    });
-    bindTooltip('featureAucChart', 'featureAucTooltip', 'featureAuc', i => {
-      const series = featureSeries('auc');
-      return featureTooltip(monthLabel(series.months[i]), selectedFeature(), 'ROC AUC', series.values[i]);
-    });
+    bindTooltip('featurePsiChart', 'featurePsiTooltip', 'featurePsi', (_, hit) => hit.html);
+    bindTooltip('featureAucChart', 'featureAucTooltip', 'featureAuc', (_, hit) => hit.html);
   }
 
   /* -------------------------------------------------------- sample tooltip */
@@ -737,14 +822,8 @@ const REPORT_DATA = __REPORT_DATA__;
 
   function bindControls() {
     document.getElementById('periodSelect').addEventListener('change', drawChart);
-    document.getElementById('performanceSample').addEventListener('change', drawChart);
-    document.getElementById('scoreSample').addEventListener('change', drawScore);
-    document.getElementById('distributionSample').addEventListener('change', drawDistribution);
-    document.getElementById('psiSample').addEventListener('change', drawPsi);
     const featureSelect = document.getElementById('featureStabilitySelect');
     if (featureSelect) featureSelect.addEventListener('change', () => { drawFeaturePsi(); drawFeatureAuc(); });
-    const featureSample = document.getElementById('featureStabilitySample');
-    if (featureSample) featureSample.addEventListener('change', () => { drawFeaturePsi(); drawFeatureAuc(); });
     document.getElementById('featureSearch').addEventListener('input', renderFeatures);
     document.getElementById('statusFilter').addEventListener('change', renderFeatures);
     document.getElementById('showAllShap').addEventListener('click', () => { shapAll = !shapAll; renderShap(); });

@@ -1065,6 +1065,8 @@ def test_feature_stability_series_and_tooltip_fields():
     assert by_name["f_stable"]["labeled"] is None
     assert "Feature stability" in html
     assert 'id="featureStabilitySelect"' in html
-    assert 'id="featureStabilitySample"' in html
+    assert 'id="featureStabilitySample"' not in html
+    assert 'id="featurePsiSampleLegend"' in html
+    assert 'id="featureAucSampleLegend"' in html
     assert 'id="featurePsiChart"' in html
     assert 'id="featureAucChart"' in html
