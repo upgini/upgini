@@ -37,6 +37,10 @@ def test_email_one_domain_meaning_type_maps_to_email_search_key():
     assert SearchKey.from_meaning_type(FileColumnMeaningType.EMAIL_ONE_DOMAIN) == SearchKey.EMAIL
 
 
+def test_surrogate_key_meaning_type_maps_to_surrogate_search_key():
+    assert SearchKey.from_meaning_type(FileColumnMeaningType.SURROGATE_KEY) == SearchKey.SURROGATE_KEY
+
+
 def test_derived_ip_columns_are_dropped_from_features_for_transform():
     ip_column = "ip_bb9af5"
     features_for_transform = [f"{ip_column}_prefix", f"{ip_column}_binary", "client_feature"]

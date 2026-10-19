@@ -58,6 +58,7 @@ class FileColumnMeaningType(Enum):
     IP_PREFIX = "IP_PREFIX"
     IP_RANGE_FROM_BINARY = "IP_RANGE_FROM_BINARY"
     IP_RANGE_TO_BINARY = "IP_RANGE_TO_BINARY"
+    SURROGATE_KEY = "SURROGATE_KEY"
 
 
 class SearchKey(Enum):
@@ -70,6 +71,7 @@ class SearchKey(Enum):
     CUSTOM_KEY = FileColumnMeaningType.CUSTOM_KEY
     COUNTRY = FileColumnMeaningType.COUNTRY
     POSTAL_CODE = FileColumnMeaningType.POSTAL_CODE
+    SURROGATE_KEY = FileColumnMeaningType.SURROGATE_KEY
 
     # For data source registration. Don't use it for FeaturesEnricher
     IPV6_ADDRESS = FileColumnMeaningType.IPV6_ADDRESS
@@ -115,6 +117,8 @@ class SearchKey(Enum):
             return SearchKey.COUNTRY
         if meaning_type == FileColumnMeaningType.POSTAL_CODE:
             return SearchKey.POSTAL_CODE
+        if meaning_type == FileColumnMeaningType.SURROGATE_KEY:
+            return SearchKey.SURROGATE_KEY
         if meaning_type == FileColumnMeaningType.IPV6_ADDRESS:
             return SearchKey.IP
         # if meaning_type == FileColumnMeaningType.IPV6_RANGE_FROM:
