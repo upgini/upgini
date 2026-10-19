@@ -50,7 +50,7 @@ dependencies = [
     "scipy>=1.10.0",
     "xhtml2pdf>=0.2.11,<0.3.0",
     "jarowinkler>=2.0.0",
-    "levenshtein>=0.25.1",
+    "rapidfuzz>=3.0.0",
     "category-encoders>=2.8.1",
     "pyarrow>=23.0.1,<26",
 ]

@@ -1,10 +1,10 @@
 import abc
 from typing import Optional
 
-import Levenshtein
 import numpy as np
 import pandas as pd
 from jarowinkler import jarowinkler_similarity
+from rapidfuzz.distance import Levenshtein
 
 from upgini.autofe.operand import OperandKind, OperandValue
 from upgini.autofe.operator import PandasOperator, VectorizableMixin
