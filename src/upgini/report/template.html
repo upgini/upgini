@@ -589,15 +589,24 @@ const REPORT_DATA = __REPORT_DATA__;
     const months = featureMonths();
     const { c, w, h } = setupCanvas('featureAucChart');
     if (!months.length) return;
-    const max = 1;
-    const y = val => 18 + (max - val) / max * (h - 62);
+    const values = featureSeries('auc');
+    const present = values.filter(v => v != null && !Number.isNaN(Number(v))).map(Number);
+    let lo = 0, hi = 1;
+    if (present.length) {
+      const minAuc = Math.min(...present);
+      lo = 0.8 * minAuc;
+      hi = 1.2 * minAuc;
+      if (!(hi > lo)) { lo = minAuc - 0.05; hi = minAuc + 0.05; }
+    }
+    const span = hi - lo;
+    const y = val => 18 + (hi - val) / span * (h - 62);
     c.strokeStyle = '#e8eeec'; c.fillStyle = '#7d8885'; c.font = '10px Inter, sans-serif';
     for (let i = 0; i < 5; i++) {
       const yy = 18 + i * (h - 62) / 4;
       c.beginPath(); c.moveTo(40, yy); c.lineTo(w - 15, yy); c.stroke();
-      c.fillText((max - i * max / 4).toFixed(2), 4, yy + 3);
+      c.fillText((hi - i * span / 4).toFixed(2), 4, yy + 3);
     }
-    drawFeatureLine(c, w, h, 'featureAuc', featureSeries('auc'), '#53cc61', y);
+    drawFeatureLine(c, w, h, 'featureAuc', values, '#53cc61', y);
   }
 
   /* ------------------------------------------------------------ SHAP list */
