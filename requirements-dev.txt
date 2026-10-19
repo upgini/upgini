@@ -12,7 +12,7 @@ xhtml2pdf>=0.2.11,<0.3.0
 ipywidgets>=8.1.0
 # autofe
 jarowinkler>=2.0.0
-levenshtein>=0.25.1
+rapidfuzz>=3.0.0
 category-encoders>=2.8.1
 catboost>=1.2.8
 pyarrow>=23.0.1,<26

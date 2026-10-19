@@ -100,3 +100,20 @@ def test_levenshtein_sim_parse_obj():
     assert parsed_lev_sim.name == "sim_lv"
     assert parsed_lev_sim.is_binary is True
     assert parsed_lev_sim.to_formula() == "sim_lv"
+
+
+def test_levenshtein_sim_unicode_and_empty():
+    data = pd.DataFrame(
+        [
+            ["café", "cafe"],
+            ["中文字", "中文"],
+            ["😀ab", "ab😀"],
+            ["", "abc"],
+            ["", ""],
+        ],
+        columns=["a", "b"],
+    )
+    expected_lv = pd.Series([0.75, 2 / 3, 1 / 3, None, None])
+
+    result = LevenshteinSim().calculate(left=data["a"], right=data["b"]).as_series()
+    assert_series_equal(result, expected_lv, atol=10**-6)
