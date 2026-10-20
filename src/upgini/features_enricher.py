@@ -493,6 +493,7 @@ class FeaturesEnricher(TransformerMixin):
         eval_set: list[tuple] | tuple | None = None,
         *args,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         calculate_metrics: bool | None = None,
         estimator: Any | None = None,
         scoring: Callable | str | None = None,
@@ -519,6 +520,12 @@ class FeaturesEnricher(TransformerMixin):
 
         eval_set: list[tuple], optional (default=None)
             list of pairs (X, y) for validation.
+
+        exclude_features_sources: list of str, optional (default=None)
+            Feature names whose data sources should be excluded.
+
+        exclude_features: list of str, optional (default=None)
+            Feature names to exclude. Can be combined with exclude_features_sources.
 
         calculate_metrics: bool, optional (default=None)
             Whether to calculate and show metrics.
@@ -590,6 +597,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     calculate_metrics=calculate_metrics,
                     estimator=estimator,
                     scoring=scoring,
@@ -642,7 +650,8 @@ class FeaturesEnricher(TransformerMixin):
         y: pd.DataFrame | pd.Series | np.ndarray | list,
         eval_set: list[tuple] | tuple | None = None,
         *args,
-        exclude_features_sources: list[str] | None | None = None,
+        exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         keep_input: bool = True,
         calculate_metrics: bool | None = None,
         scoring: Callable | str | None = None,
@@ -669,6 +678,12 @@ class FeaturesEnricher(TransformerMixin):
 
         eval_set: list[tuple], optional (default=None)
             list of pairs (X, y) for validation.
+
+        exclude_features_sources: list of str, optional (default=None)
+            Feature names whose data sources should be excluded.
+
+        exclude_features: list of str, optional (default=None)
+            Feature names to exclude. Can be combined with exclude_features_sources.
 
         keep_input: bool, optional (default=True)
             keep_input: bool, optional (default=True)
@@ -745,6 +760,7 @@ class FeaturesEnricher(TransformerMixin):
                     progress_bar,
                     start_time=start_time,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     calculate_metrics=calculate_metrics,
                     scoring=scoring,
                     estimator=estimator,
@@ -792,6 +808,7 @@ class FeaturesEnricher(TransformerMixin):
                 X,
                 y,
                 exclude_features_sources=exclude_features_sources,
+                exclude_features=exclude_features,
                 keep_input=keep_input,
                 silent_mode=True,
                 progress_bar=progress_bar,
@@ -806,6 +823,7 @@ class FeaturesEnricher(TransformerMixin):
         y: pd.Series | None = None,
         *args,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         keep_input: bool = True,
         silent_mode=False,
         progress_bar: ProgressBar | None = None,
@@ -820,6 +838,12 @@ class FeaturesEnricher(TransformerMixin):
         ----------
         X: pandas.DataFrame of shape (n_samples, n_features)
             Input samples.
+
+        exclude_features_sources: list of str, optional (default=None)
+            Feature names whose data sources should be excluded.
+
+        exclude_features: list of str, optional (default=None)
+            Feature names to exclude. Can be combined with exclude_features_sources.
 
         keep_input: bool, optional (default=True)
             keep_input: bool, optional (default=True)
@@ -865,6 +889,7 @@ class FeaturesEnricher(TransformerMixin):
                     X,
                     y=y,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     silent_mode=silent_mode,
                     progress_bar=progress_bar,
                     keep_input=keep_input,
@@ -924,6 +949,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: BaseCrossValidator | CVType | str | None = None,
         estimator=None,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         remove_outliers_calc_metrics: bool | None = None,
         internal_call: bool = False,
         progress_bar: ProgressBar | None = None,
@@ -952,6 +978,12 @@ class FeaturesEnricher(TransformerMixin):
 
         estimator: sklearn-compatible estimator, optional (default=None)
             Custom estimator for metrics calculation. If not passed then CatBoost will be used.
+
+        exclude_features_sources: list of str, optional (default=None)
+            Feature names whose data sources should be excluded.
+
+        exclude_features: list of str, optional (default=None)
+            Feature names to exclude. Can be combined with exclude_features_sources.
 
         remove_outliers_calc_metrics, optional (default=True)
             If True then rows with target ouliers will be dropped on metrics calculation
@@ -1015,6 +1047,7 @@ class FeaturesEnricher(TransformerMixin):
                     validated_y,
                     validated_eval_set,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     cv=cv if cv is not None else self.cv,
                     scoring=scoring,
                     estimator=estimator,
@@ -1025,7 +1058,7 @@ class FeaturesEnricher(TransformerMixin):
 
                 self._validate_baseline_score(validated_X, validated_eval_set)
 
-                if self._has_paid_features(exclude_features_sources):
+                if self._has_paid_features(exclude_features_sources, exclude_features):
                     msg = self.bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
                     self.__display_support_link(msg)
@@ -1062,6 +1095,7 @@ class FeaturesEnricher(TransformerMixin):
                     y=y,
                     eval_set=eval_set,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     remove_outliers_calc_metrics=remove_outliers_calc_metrics,
                     cv_override=cv,
                     search_keys_for_metrics=search_keys_for_metrics,
@@ -1175,9 +1209,7 @@ class FeaturesEnricher(TransformerMixin):
                             text_features=text_features,
                             has_time=has_time,
                         )
-                        cv_result = wrapper.cross_val_predict(
-                            fitting_enriched_X, enriched_y_sorted, score_column
-                        )
+                        cv_result = wrapper.cross_val_predict(fitting_enriched_X, enriched_y_sorted, score_column)
                         if cv_result.metric is None:
                             self.logger.warning(f"Enriched {metric} {description} is None")
                             return None, cv_result, None, None
@@ -1466,6 +1498,7 @@ class FeaturesEnricher(TransformerMixin):
         cv: BaseCrossValidator | CVType | str | None = None,
         estimator=None,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         progress_bar: bool = True,
         progress_callback: Callable | None = None,
     ):
@@ -1515,6 +1548,7 @@ class FeaturesEnricher(TransformerMixin):
             y=y,
             eval_set=eval_set,
             exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
             remove_outliers_calc_metrics=False,
             cv_override=cv,
             search_keys_for_metrics=search_keys_for_metrics,
@@ -1760,16 +1794,28 @@ class FeaturesEnricher(TransformerMixin):
             self.logger.warning(msg)
 
     def _has_features_with_commercial_schema(
-        self, commercial_schema: str, exclude_features_sources: list[str] | None
+        self,
+        commercial_schema: str,
+        exclude_features_sources: list[str] | None,
+        exclude_features: list[str] | None = None,
     ) -> bool:
-        return len(self._get_features_with_commercial_schema(commercial_schema, exclude_features_sources)) > 0
+        return (
+            len(
+                self._get_features_with_commercial_schema(commercial_schema, exclude_features_sources, exclude_features)
+            )
+            > 0
+        )
 
     def _get_features_with_commercial_schema(
-        self, commercial_schema: str, exclude_features_sources: list[str] | None
+        self,
+        commercial_schema: str,
+        exclude_features_sources: list[str] | None,
+        exclude_features: list[str] | None = None,
     ) -> list[str]:
-        if exclude_features_sources:
+        excluded = self._columns_to_exclude(exclude_features_sources, exclude_features)
+        if excluded:
             filtered_features_info = self._internal_features_info[
-                ~self._internal_features_info[self.bundle.get("features_info_name")].isin(exclude_features_sources)
+                ~self._internal_features_info[self.bundle.get("features_info_name")].isin(excluded)
             ]
         else:
             filtered_features_info = self._internal_features_info
@@ -1780,8 +1826,14 @@ class FeaturesEnricher(TransformerMixin):
             ].values
         )
 
-    def _has_paid_features(self, exclude_features_sources: list[str] | None) -> bool:
-        return self._has_features_with_commercial_schema(CommercialSchema.PAID.value, exclude_features_sources)
+    def _has_paid_features(
+        self,
+        exclude_features_sources: list[str] | None,
+        exclude_features: list[str] | None = None,
+    ) -> bool:
+        return self._has_features_with_commercial_schema(
+            CommercialSchema.PAID.value, exclude_features_sources, exclude_features
+        )
 
     def _is_input_same_as_fit(
         self,
@@ -2035,13 +2087,15 @@ class FeaturesEnricher(TransformerMixin):
         dest: pd.DataFrame,
         lookup: pd.DataFrame,
         exclude_features_sources: list[str] | None,
+        exclude_features: list[str] | None = None,
     ) -> pd.DataFrame:
         feature_lookup = lookup.set_index(MATCH_HASH)
         overlap = [c for c in feature_lookup.columns if c in dest.columns]
         if overlap:
             feature_lookup = feature_lookup.drop(columns=overlap)
-        if exclude_features_sources:
-            feature_lookup = feature_lookup.drop(columns=exclude_features_sources, errors="ignore")
+        columns_to_exclude = self._columns_to_exclude(exclude_features_sources, exclude_features)
+        if columns_to_exclude:
+            feature_lookup = feature_lookup.drop(columns=columns_to_exclude, errors="ignore")
         keys = dest[ENTITY_SYSTEM_RECORD_ID]
         for col in feature_lookup.columns:
             dest[col] = keys.map(feature_lookup[col])
@@ -2124,6 +2178,7 @@ class FeaturesEnricher(TransformerMixin):
         validated_y: pd.Series | None,
         fit_dataset_index: int,
         exclude_features_sources: list[str] | None,
+        exclude_features: list[str] | None,
         keep_input: bool,
         add_fit_system_record_id: bool,
         metrics_calculation: bool = False,
@@ -2170,8 +2225,9 @@ class FeaturesEnricher(TransformerMixin):
 
         # Preserve input row order/index; coverage check above ensures 1:1 index alignment.
         result = validated_X.join(features_to_join, how="left")
-        if exclude_features_sources:
-            result = result.drop(columns=exclude_features_sources, errors="ignore")
+        columns_to_exclude = self._columns_to_exclude(exclude_features_sources, exclude_features)
+        if columns_to_exclude:
+            result = result.drop(columns=columns_to_exclude, errors="ignore")
 
         validated_Xy = validated_X.copy()
         if validated_y is not None:
@@ -2385,9 +2441,7 @@ class FeaturesEnricher(TransformerMixin):
         date_col = self._get_date_column(search_keys or {})
         names = self._report_sample_names()
         frames = {
-            names[0]: self._report_scored_frame(
-                X_sampled, y_sampled, enriched_X, score_col, date_col, columns_renaming
-            )
+            names[0]: self._report_scored_frame(X_sampled, y_sampled, enriched_X, score_col, date_col, columns_renaming)
         }
         for idx, (eval_X, enriched_eval_X, eval_y) in eval_set_sampled_dict.items():
             name_idx = idx + 1
@@ -2718,12 +2772,20 @@ class FeaturesEnricher(TransformerMixin):
             aliases.add(original_to_hashed.get(name, name))
         return aliases
 
+    @staticmethod
+    def _columns_to_exclude(
+        exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
+    ) -> list[str]:
+        return sorted(list(set(exclude_features_sources or []) | set(exclude_features or [])))
+
     def _get_cached_enriched_data(
         self,
         X: pd.DataFrame | pd.Series | np.ndarray | None = None,
         y: pd.DataFrame | pd.Series | np.ndarray | list | None = None,
         eval_set: list[tuple] | tuple | None = None,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         remove_outliers_calc_metrics: bool | None = None,
         cv_override: BaseCrossValidator | CVType | str | None = None,
         search_keys_for_metrics: list[str] | None = None,
@@ -2742,6 +2804,7 @@ class FeaturesEnricher(TransformerMixin):
             validated_y=validated_y,
             validated_eval_set=validated_eval_set,
             exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
             is_input_same_as_fit=is_input_same_as_fit,
             is_demo_dataset=is_demo_dataset,
             remove_outliers_calc_metrics=remove_outliers_calc_metrics,
@@ -2987,6 +3050,7 @@ class FeaturesEnricher(TransformerMixin):
     @dataclass(frozen=True)
     class _MetricsCacheOptions:
         outliers_removed: bool
+        exclude_features_sources: tuple[str, ...]
         exclude_features: tuple[str, ...]
         exclude_oot: bool
 
@@ -3000,10 +3064,12 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: bool | None = None,
         exclude_features_sources: list[str] | None = None,
         exclude_oot: bool = False,
+        exclude_features: list[str] | None = None,
     ) -> _MetricsCacheOptions:
         return self._MetricsCacheOptions(
             outliers_removed=self._effective_remove_outliers_for_metrics(remove_outliers_calc_metrics),
-            exclude_features=tuple(sorted(exclude_features_sources or [])),
+            exclude_features_sources=tuple(sorted(exclude_features_sources or [])),
+            exclude_features=tuple(sorted(exclude_features or [])),
             exclude_oot=bool(exclude_oot),
         )
 
@@ -3015,9 +3081,11 @@ class FeaturesEnricher(TransformerMixin):
         opts: _MetricsCacheOptions,
     ) -> str:
         base = hash_input(validated_X, validated_y, validated_eval_set)
-        exclude_key = ",".join(opts.exclude_features)
+        exclude_sources_key = ",".join(opts.exclude_features_sources)
+        exclude_features_key = ",".join(opts.exclude_features)
         return (
-            f"{base}|outliers_removed={opts.outliers_removed}" f"|exclude={exclude_key}|exclude_oot={opts.exclude_oot}"
+            f"{base}|outliers_removed={opts.outliers_removed}"
+            f"|exclude={exclude_sources_key}|exclude_features={exclude_features_key}|exclude_oot={opts.exclude_oot}"
         )
 
     def _get_metrics_cache_key(
@@ -3028,13 +3096,16 @@ class FeaturesEnricher(TransformerMixin):
         remove_outliers_calc_metrics: bool | None = None,
         exclude_features_sources: list[str] | None = None,
         exclude_oot: bool = False,
+        exclude_features: list[str] | None = None,
     ) -> str:
         """Cache key for enriched metrics datasets (convenience wrapper for tests/callers)."""
         return self._metrics_cache_key(
             validated_X,
             validated_y,
             validated_eval_set,
-            self._metrics_cache_options(remove_outliers_calc_metrics, exclude_features_sources, exclude_oot),
+            self._metrics_cache_options(
+                remove_outliers_calc_metrics, exclude_features_sources, exclude_oot, exclude_features
+            ),
         )
 
     def __try_reuse_metrics_cache(
@@ -3055,13 +3126,20 @@ class FeaturesEnricher(TransformerMixin):
 
         # Prefer single-dimension siblings, then the maximally full entry (PSI-style).
         candidates: list[FeaturesEnricher._MetricsCacheOptions] = []
+        if wanted.exclude_features_sources:
+            candidates.append(dataclasses.replace(wanted, exclude_features_sources=()))
         if wanted.exclude_features:
             candidates.append(dataclasses.replace(wanted, exclude_features=()))
         if wanted.outliers_removed:
             candidates.append(dataclasses.replace(wanted, outliers_removed=False))
         if wanted.exclude_oot:
             candidates.append(dataclasses.replace(wanted, exclude_oot=False))
-        fullest = self._MetricsCacheOptions(outliers_removed=False, exclude_features=(), exclude_oot=False)
+        fullest = self._MetricsCacheOptions(
+            outliers_removed=False,
+            exclude_features_sources=(),
+            exclude_features=(),
+            exclude_oot=False,
+        )
         if fullest != wanted and fullest not in candidates:
             candidates.append(fullest)
 
@@ -3080,14 +3158,16 @@ class FeaturesEnricher(TransformerMixin):
                 if drop_ids and ENTITY_SYSTEM_RECORD_ID not in enriched_peek.columns:
                     continue
 
-            exclude_to_drop = [f for f in wanted.exclude_features if f not in source.exclude_features]
+            sources_to_drop = [f for f in wanted.exclude_features_sources if f not in source.exclude_features_sources]
+            features_to_drop = [f for f in wanted.exclude_features if f not in source.exclude_features]
             self.logger.info(f"Cached fuller dataset found ({source}) - derive wanted view ({wanted})")
             return self.__get_sampled_cached_enriched(
                 source_hash,
-                exclude_features_sources=exclude_to_drop or None,
+                exclude_features_sources=sources_to_drop or None,
                 write_hash=wanted_hash,
                 drop_entity_ids=drop_ids,
                 drop_oot_evals=wanted.exclude_oot and not source.exclude_oot,
+                exclude_features=features_to_drop or None,
             )
 
         return None
@@ -3100,6 +3180,8 @@ class FeaturesEnricher(TransformerMixin):
         if source.outliers_removed and not wanted.outliers_removed:
             return False
         if source.exclude_oot and not wanted.exclude_oot:
+            return False
+        if not set(source.exclude_features_sources).issubset(wanted.exclude_features_sources):
             return False
         if not set(source.exclude_features).issubset(wanted.exclude_features):
             return False
@@ -3117,8 +3199,11 @@ class FeaturesEnricher(TransformerMixin):
         progress_bar: ProgressBar | None,
         progress_callback: Callable[[SearchProgress], Any] | None,
         exclude_oot: bool = False,
+        exclude_features: list[str] | None = None,
     ) -> _EnrichedDataForMetrics:
-        wanted = self._metrics_cache_options(remove_outliers_calc_metrics, exclude_features_sources, exclude_oot)
+        wanted = self._metrics_cache_options(
+            remove_outliers_calc_metrics, exclude_features_sources, exclude_oot, exclude_features
+        )
         reused = self.__try_reuse_metrics_cache(
             validated_X, validated_y, validated_eval_set, wanted, is_input_same_as_fit
         )
@@ -3135,15 +3220,19 @@ class FeaturesEnricher(TransformerMixin):
                 validated_X, validated_y, validated_eval_set, is_demo_dataset, write_hash
             )
         # TODO save and check if dataset was deduplicated - use imbalance branch for such case
-        elif not exclude_features_sources and is_input_same_as_fit and self.df_with_original_index is not None:
+        elif (
+            not exclude_features_sources
+            and not exclude_features
+            and is_input_same_as_fit
+            and self.df_with_original_index is not None
+        ):
             self.logger.info("Dataset is not imbalanced, so use enriched_X from fit")
             return self.__get_enriched_from_fit(
                 validated_X, validated_y, validated_eval_set, remove_outliers_calc_metrics, write_hash
             )
         else:
             self.logger.info(
-                "Dataset is imbalanced or exclude_features_sources or X was passed or this is saved search."
-                " Run transform"
+                "Dataset is imbalanced or features are excluded or X was passed or this is saved search. Run transform"
             )
             print(self.bundle.get("prepare_data_for_metrics"))
             # Transform payload matches exclude_oot → write under wanted key
@@ -3157,6 +3246,7 @@ class FeaturesEnricher(TransformerMixin):
                 progress_callback,
                 exclude_oot=exclude_oot,
                 datasets_hash=write_hash,
+                exclude_features=exclude_features,
             )
 
     def __resolve_target_outlier_rows(self) -> pd.DataFrame | None:
@@ -3187,18 +3277,20 @@ class FeaturesEnricher(TransformerMixin):
         write_hash: str | None = None,
         drop_entity_ids: set | None = None,
         drop_oot_evals: bool = False,
+        exclude_features: list[str] | None = None,
     ) -> _EnrichedDataForMetrics:
         X_sampled, y_sampled, enriched_X, eval_set_sampled_dict, search_keys, columns_renaming, generated_features = (
             self.__cached_sampled_datasets[datasets_hash]
         )
-        if exclude_features_sources:
-            enriched_X = enriched_X.drop(columns=exclude_features_sources, errors="ignore")
+        columns_to_exclude = self._columns_to_exclude(exclude_features_sources, exclude_features)
+        if columns_to_exclude:
+            enriched_X = enriched_X.drop(columns=columns_to_exclude, errors="ignore")
             # Keep eval enriched frames consistent with train exclusions.
             updated_eval_set = {}
             for idx, (eval_X_sampled, enriched_eval_X, eval_y_sampled) in eval_set_sampled_dict.items():
                 updated_eval_set[idx] = (
                     eval_X_sampled,
-                    enriched_eval_X.drop(columns=exclude_features_sources, errors="ignore"),
+                    enriched_eval_X.drop(columns=columns_to_exclude, errors="ignore"),
                     eval_y_sampled,
                 )
             eval_set_sampled_dict = updated_eval_set
@@ -3227,7 +3319,7 @@ class FeaturesEnricher(TransformerMixin):
 
         cache_hash = write_hash or datasets_hash
         # Never overwrite a fuller cache entry with an excluded view of the same key.
-        if cache_hash == datasets_hash and exclude_features_sources:
+        if cache_hash == datasets_hash and columns_to_exclude:
             return self.__mk_sampled_data_tuple(
                 X_sampled,
                 y_sampled,
@@ -3472,6 +3564,7 @@ class FeaturesEnricher(TransformerMixin):
         progress_callback: Callable[[SearchProgress], Any] | None,
         exclude_oot: bool,
         datasets_hash: str,
+        exclude_features: list[str] | None = None,
     ) -> _EnrichedDataForMetrics:
         has_eval_set = eval_set is not None
 
@@ -3496,6 +3589,7 @@ class FeaturesEnricher(TransformerMixin):
             X=df.drop(columns=[TARGET]),
             y=df[TARGET],
             exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
             silent_mode=True,
             metrics_calculation=True,
             progress_bar=progress_bar,
@@ -3792,6 +3886,7 @@ if response.status_code == 200:
         *,
         y: pd.Series | None = None,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
         progress_bar: ProgressBar | None = None,
@@ -3817,7 +3912,12 @@ if response.status_code == 200:
 
         validated_Xy = df.copy()
 
-        self.__log_debug_information(validated_X, validated_y, exclude_features_sources=exclude_features_sources)
+        self.__log_debug_information(
+            validated_X,
+            validated_y,
+            exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
+        )
 
         # If there are no important features, return original dataframe
         if len(self.feature_names_) == 0:
@@ -3825,7 +3925,7 @@ if response.status_code == 200:
             self.__log_warning(msg, show_support_link=True)
             return None, {}, [], search_keys
 
-        if self._has_paid_features(exclude_features_sources):
+        if self._has_paid_features(exclude_features_sources, exclude_features):
             msg = self.bundle.get("transform_with_paid_features")
             self.logger.warning(msg)
             self.__display_support_link(msg)
@@ -3849,6 +3949,7 @@ if response.status_code == 200:
                 validated_y,
                 fit_dataset_index,
                 exclude_features_sources,
+                exclude_features,
                 keep_input,
                 add_fit_system_record_id,
                 metrics_calculation=metrics_calculation,
@@ -4159,6 +4260,7 @@ if response.status_code == 200:
                     extract_features=True,
                     runtime_parameters=runtime_parameters,
                     exclude_features_sources=exclude_features_sources,
+                    exclude_features=exclude_features,
                     metrics_calculation=metrics_calculation,
                     silent_mode=silent_mode,
                     progress_bar=progress_bar,
@@ -4255,7 +4357,7 @@ if response.status_code == 200:
         else:
             base_cols = set(combined_df.columns)
             if reused_count > 0 and lookup is not None:
-                self.__attach_fit_lookup(combined_df, lookup, exclude_features_sources)
+                self.__attach_fit_lookup(combined_df, lookup, exclude_features_sources, exclude_features)
             if unmatched_part is not None:
                 ads_cols = [c for c in unmatched_part.columns if c not in base_cols]
                 pos = np.flatnonzero(unmatched_mask)
@@ -4453,6 +4555,7 @@ if response.status_code == 200:
         start_time: int,
         *,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         calculate_metrics: bool | None,
         scoring: Callable | str | None,
         estimator: Any | None,
@@ -4521,6 +4624,7 @@ if response.status_code == 200:
             validated_y,
             validated_eval_set,
             exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
             calculate_metrics=calculate_metrics,
             scoring=scoring,
             estimator=estimator,
@@ -4832,6 +4936,7 @@ if response.status_code == 200:
             extract_features=True,
             runtime_parameters=runtime_parameters,
             exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
             force_downsampling=force_downsampling,
             auto_fe_parameters=auto_fe_parameters,
         )
@@ -4922,6 +5027,7 @@ if response.status_code == 200:
                 cv=self.cv,
                 estimator=estimator,
                 exclude_features_sources=exclude_features_sources,
+                exclude_features=exclude_features,
                 progress_bar=progress_bar,
                 progress_callback=progress_callback,
             )
@@ -4930,7 +5036,7 @@ if response.status_code == 200:
 
             self.__show_selected_features()
 
-            if self._has_paid_features(exclude_features_sources):
+            if self._has_paid_features(exclude_features_sources, exclude_features):
                 if calculate_metrics is not None and calculate_metrics:
                     msg = self.bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
@@ -5419,6 +5525,7 @@ if response.status_code == 200:
         y: pd.Series | np.ndarray | list | None = None,
         eval_set: list[tuple] | None = None,
         exclude_features_sources: list[str] | None = None,
+        exclude_features: list[str] | None = None,
         calculate_metrics: bool | None = None,
         cv: Any | None = None,
         scoring: Any | None = None,
@@ -5443,6 +5550,7 @@ if response.status_code == 200:
                 f"Detect missing search keys: {self.autodetect_search_keys}\n"
                 f"Exclude columns: {self.exclude_columns}\n"
                 f"Exclude features sources: {exclude_features_sources}\n"
+                f"Exclude features: {exclude_features}\n"
                 f"Calculate metrics: {calculate_metrics}\n"
                 f"Scoring: {scoring}\n"
                 f"Estimator: {estimator}\n"
@@ -6056,9 +6164,7 @@ if response.status_code == 200:
                     continue
 
                 source_names = [
-                    bc.hashed_name
-                    for bc in m.base_columns
-                    if not is_ts or bc.original_name not in self.fit_search_keys
+                    bc.hashed_name for bc in m.base_columns if not is_ts or bc.original_name not in self.fit_search_keys
                 ]
                 self._add_autofe_description(
                     descriptions,

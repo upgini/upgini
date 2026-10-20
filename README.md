@@ -769,6 +769,19 @@ enricher.calculate_metrics(exclude_features_sources=(trial_features + paid_featu
 enricher.transform(X, exclude_features_sources=(trial_features + paid_features))
 ```
 
+### Exclude specific features from fit, transform and metrics calculation
+
+The same methods accept `exclude_features` to drop individual features by name. It can be used on its own or together with `exclude_features_sources`:
+
+```python
+enricher.calculate_metrics(exclude_features=["feature_a", "feature_b"])
+enricher.transform(
+    X,
+    exclude_features=["feature_a"],
+    exclude_features_sources=paid_features,
+)
+```
+
 ### Turn off autodetection for search key columns
 Upgini has autodetection of search keys enabled by default.
 To turn off use `autodetect_search_keys=False`:

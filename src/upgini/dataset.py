@@ -439,7 +439,11 @@ class Dataset:
 
         self.data = self.data.sort_values(by=SYSTEM_RECORD_ID).reset_index(drop=True)
 
-    def __construct_metadata(self, exclude_features_sources: Optional[List[str]] = None) -> FileMetadata:
+    def __construct_metadata(
+        self,
+        exclude_features_sources: Optional[List[str]] = None,
+        exclude_features: Optional[List[str]] = None,
+    ) -> FileMetadata:
         # self.logger.info("Constructing dataset metadata")
         columns = []
         for index, (column_name, column_type) in enumerate(zip(self.data.columns, self.data.dtypes)):
@@ -498,6 +502,7 @@ class Dataset:
             columns=columns,
             searchKeys=self.search_keys,
             excludeFeaturesSources=exclude_features_sources,
+            excludeFeatures=exclude_features,
             hierarchicalGroupKeys=self.hierarchical_group_keys,
             hierarchicalSubgroupKeys=self.hierarchical_subgroup_keys,
             taskType=self.task_type,
@@ -599,6 +604,7 @@ class Dataset:
         extract_features: bool = False,
         accurate_model: bool = False,
         exclude_features_sources: Optional[List[str]] = None,
+        exclude_features: Optional[List[str]] = None,
         runtime_parameters: Optional[RuntimeParameters] = None,
         auto_fe_parameters: Optional[AutoFEParameters] = None,
         force_downsampling: bool = False,
@@ -610,7 +616,10 @@ class Dataset:
         runtime_parameters = self._rename_generate_features(runtime_parameters)
         runtime_parameters = self._set_sample_size(runtime_parameters)
 
-        file_metadata = self.__construct_metadata(exclude_features_sources)
+        file_metadata = self.__construct_metadata(
+            exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
+        )
         search_customization = self.__construct_search_customization(
             return_scores=return_scores,
             extract_features=extract_features,
@@ -665,6 +674,7 @@ class Dataset:
         extract_features: bool = False,
         runtime_parameters: Optional[RuntimeParameters] = None,
         exclude_features_sources: Optional[List[str]] = None,
+        exclude_features: Optional[List[str]] = None,
         metrics_calculation: bool = False,
         silent_mode: bool = False,
         progress_bar: Optional[ProgressBar] = None,
@@ -676,7 +686,10 @@ class Dataset:
 
         runtime_parameters = self._clean_generate_features(runtime_parameters)
 
-        file_metadata = self.__construct_metadata(exclude_features_sources=exclude_features_sources)
+        file_metadata = self.__construct_metadata(
+            exclude_features_sources=exclude_features_sources,
+            exclude_features=exclude_features,
+        )
         search_customization = self.__construct_search_customization(
             return_scores,
             extract_features,

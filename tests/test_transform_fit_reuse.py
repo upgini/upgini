@@ -548,6 +548,53 @@ def test_transform_exclude_features_sources_drops_reused_columns(requests_mock: 
     assert "ads_feature" not in result.columns
 
 
+def test_transform_exclude_features_drops_reused_columns(requests_mock: Mocker):
+    train_X = pd.DataFrame({"phone": ["+10000000001", "+10000000002"], "f": [1.0, 2.0]})
+    phone_h = add_hash_suffix("phone")
+    f_h = add_hash_suffix("f")
+    df_fit = pd.DataFrame(
+        {
+            phone_h: _converted_phones(["+10000000001", "+10000000002"]),
+            f_h: [1.0, 2.0],
+            TARGET: [0.0, 1.0],
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0],
+        }
+    )
+    fit_features = pd.DataFrame(
+        {
+            ENTITY_SYSTEM_RECORD_ID: [101.0, 102.0],
+            "ads_feature": [10.0, 20.0],
+            "other_feature": [30.0, 40.0],
+        }
+    )
+    enricher, search_task = _make_reuse_enricher(
+        requests_mock,
+        search_keys={"phone": SearchKey.PHONE},
+        train_X=train_X,
+        df_fit=df_fit,
+        fit_features=fit_features,
+        file_columns=[_file_col("phone", phone_h), _file_col("f", f_h)],
+    )
+    enricher.feature_names_ = ["ads_feature", "other_feature"]
+    enricher.external_source_feature_names = ["ads_feature", "other_feature"]
+    search_task.validation.side_effect = AssertionError("excluded reuse should not validate")
+
+    result = enricher.transform(train_X.copy(), keep_input=True, exclude_features=["other_feature"])
+    assert result is not None
+    assert "other_feature" not in result.columns
+    assert list(result["ads_feature"]) == [10.0, 20.0]
+
+    both = enricher.transform(
+        train_X.copy(),
+        keep_input=True,
+        exclude_features_sources=["ads_feature"],
+        exclude_features=["other_feature"],
+    )
+    assert both is not None
+    assert "ads_feature" not in both.columns
+    assert "other_feature" not in both.columns
+
+
 def test_transform_two_email_columns_does_not_duplicate_rows(requests_mock: Mocker):
     train_X = pd.DataFrame(
         {
