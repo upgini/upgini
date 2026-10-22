@@ -2682,6 +2682,93 @@ def test_get_renamed_baseline_score_column(requests_mock: Mocker):
     assert enricher_no_baseline._get_renamed_baseline_score_column() is None
 
 
+def test_has_no_important_features_with_baseline_score(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    # Empty / zero-SHAP selection must not fall back to baseline + key features
+    enricher.feature_names_ = []
+    enricher.feature_importances_ = []
+    assert enricher._has_no_important_features()
+
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.0, 0.0]
+    assert enricher._has_no_important_features()
+
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.feature_importances_ = [0.5]
+    assert not enricher._has_no_important_features()
+
+    enricher_no_baseline = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher_no_baseline.feature_names_ = []
+    enricher_no_baseline.feature_importances_ = []
+    assert enricher_no_baseline._has_no_important_features()
+
+    # select_features=False may keep zero-SHAP client features in the report when no baseline score
+    enricher_no_baseline.feature_names_ = ["client_feature"]
+    enricher_no_baseline.feature_importances_ = [0.0]
+    assert not enricher_no_baseline._has_no_important_features()
+
+
+def test_calculate_metrics_skips_when_zero_important_features_with_baseline(requests_mock: Mocker):
+    from unittest.mock import MagicMock
+
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    n = 40
+    rng = np.random.RandomState(42)
+    y = pd.Series(np.array([0, 1] * (n // 2)), name="target")
+    X = pd.DataFrame(
+        {
+            "postal_code": [f"{10000 + (i % 5)}" for i in range(n)],
+            "baseline_score": y.to_numpy() + rng.normal(0, 0.5, n),
+        }
+    )
+
+    enricher = FeaturesEnricher(
+        search_keys={"postal_code": SearchKey.POSTAL_CODE},
+        country_code="US",
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+        model_task_type=ModelTaskType.BINARY,
+    )
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.feature_names_ = []
+    enricher.feature_importances_ = []
+    enricher.fit_select_features = True
+    enricher._search_task = MagicMock()
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=n, max_hit_count=n, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+        )
+    ]
+
+    assert enricher._has_no_important_features()
+    assert enricher.calculate_metrics() is None
+
+
 def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)

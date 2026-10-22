@@ -341,6 +341,7 @@ class FeaturesEnricher(TransformerMixin):
         self.add_info: AddInfo | None = None
         self.search_duration_seconds: float | None = None
         self.report_html: str | None = None
+        self.baseline_score_column = baseline_score_column
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -421,7 +422,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
-        self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
         self.generate_search_key_features = generate_search_key_features
 
@@ -1057,6 +1057,10 @@ class FeaturesEnricher(TransformerMixin):
                 validate_scoring_argument(scoring)
 
                 self._validate_baseline_score(validated_X, validated_eval_set)
+
+                if self._has_no_important_features():
+                    self.__log_warning(self.bundle.get("metrics_no_important_features"))
+                    return None
 
                 if self._has_paid_features(exclude_features_sources, exclude_features):
                     msg = self.bundle.get("metrics_with_paid_features")
@@ -2349,6 +2353,13 @@ class FeaturesEnricher(TransformerMixin):
 
     def _has_single_ensemble_score(self) -> bool:
         return self._get_single_ensemble_score_name() is not None
+
+    def _has_no_important_features(self) -> bool:
+        if any(imp > 0 for imp in (self.feature_importances_ or [])):
+            return False
+        if self.baseline_score_column is not None:
+            return True
+        return len(self.feature_names_ or []) == 0
 
     def _get_single_ensemble_score_name(self) -> str | None:
         if len(self._ensemble_generated_metadata()) != 1:
@@ -6090,6 +6101,18 @@ if response.status_code == 200:
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
             internal_features_info.append(feature_info.to_internal_row(self.bundle))
 
+        # With baseline_score_column, do not fall back to baseline/search-key columns when
+        # nothing has positive SHAP — treat as a real zero-important-features result.
+        if self.baseline_score_column is not None and self._has_no_important_features() and self.feature_names_:
+            self.logger.info(
+                "No positive-SHAP features with baseline_score_column; treating as zero important features"
+            )
+            self.feature_names_ = []
+            self.feature_importances_ = []
+            features_info = []
+            features_info_without_links = []
+            internal_features_info = []
+
         if update_selected_features:
             self._search_task.update_selected_features(self._get_trace_id(), self.feature_names_)
 
@@ -6115,6 +6138,11 @@ if response.status_code == 200:
                     lambda: self.logger.info(f"Relevant data sources:\n{self._relevant_data_sources_wo_links}")
                 )
         else:
+            self.features_info = self.EMPTY_FEATURES_INFO
+            self._features_info_without_links = self.EMPTY_FEATURES_INFO
+            self._internal_features_info = self.EMPTY_INTERNAL_FEATURES_INFO
+            self.relevant_data_sources = self.EMPTY_DATA_SOURCES
+            self._relevant_data_sources_wo_links = self.EMPTY_DATA_SOURCES
             self.logger.warning("Empty features info")
 
     def get_autofe_features_description(self, features_meta: list[FeaturesMetadataV2] | None = None):
@@ -6355,7 +6383,10 @@ if response.status_code == 200:
         try:
             _ = get_ipython()  # type: ignore
 
-            if len(self.feature_names_) > 0:
+            if self._has_no_important_features():
+                msg = self.bundle.get("features_info_zero_important_features")
+                self.__log_warning(msg, show_support_link=True)
+            elif len(self.feature_names_) > 0:
                 self.features_info_display_handle = display_html_dataframe(
                     self.features_info,
                     self._features_info_without_links,
@@ -6380,13 +6411,12 @@ if response.status_code == 200:
                         header=self.bundle.get("autofe_descriptions_header"),
                         display_id=f"autofe_descriptions_{uuid.uuid4()}",
                     )
-            else:
-                msg = self.bundle.get("features_info_zero_important_features")
-                self.__log_warning(msg, show_support_link=True)
         except (ImportError, NameError):
             print(self._internal_features_info)
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
+        if self._has_no_important_features():
+            return
         if self._has_single_ensemble_score():
             try:
                 report_html = self._score_report_html()
