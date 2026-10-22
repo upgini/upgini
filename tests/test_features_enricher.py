@@ -2692,6 +2692,7 @@ def test_has_no_important_features_with_baseline_score(requests_mock: Mocker):
         logs_enabled=False,
         baseline_score_column="baseline_score",
     )
+    enricher.fit_search_keys = {"date": SearchKey.DATE, "country": SearchKey.COUNTRY}
     # Empty / zero-SHAP selection must not fall back to baseline + key features
     enricher.feature_names_ = []
     enricher.feature_importances_ = []
@@ -2699,6 +2700,11 @@ def test_has_no_important_features_with_baseline_score(requests_mock: Mocker):
 
     enricher.feature_names_ = ["baseline_score", "country"]
     enricher.feature_importances_ = [0.0, 0.0]
+    assert enricher._has_no_important_features()
+
+    # Positive SHAP on baseline/keys alone is still not real enrichment
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.4, 0.1]
     assert enricher._has_no_important_features()
 
     enricher.feature_names_ = ["ads_feature"]
@@ -2720,9 +2726,62 @@ def test_has_no_important_features_with_baseline_score(requests_mock: Mocker):
     assert not enricher_no_baseline._has_no_important_features()
 
 
-def test_calculate_metrics_skips_when_zero_important_features_with_baseline(requests_mock: Mocker):
-    from unittest.mock import MagicMock
+def test_has_no_important_features_ensemble_without_selected_score(requests_mock: Mocker):
+    """Ensemble search that only kept baseline/keys must be treated as zero features."""
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_ensemble_score_abc123"
 
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    enricher.fit_search_keys = {"date": SearchKey.DATE, "country": SearchKey.COUNTRY}
+    enricher._search_task = SearchTask("fake_search")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                ),
+                FeaturesMetadataV2(
+                    name="country", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.1
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=40, max_hit_count=40, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+        )
+    ]
+    # Ensemble not selected — only baseline + key leftovers
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.4, 0.1]
+    assert enricher._has_no_important_features()
+    assert not enricher._has_single_ensemble_score()
+
+    # Real ensemble score selected — not a zero-features result
+    enricher.feature_names_ = [ensemble_col]
+    enricher.feature_importances_ = [1.5]
+    assert not enricher._has_no_important_features()
+    assert enricher._has_single_ensemble_score()
+
+
+def test_calculate_metrics_skips_when_zero_important_features_with_baseline(requests_mock: Mocker):
     url = "http://fake_url2"
     mock_default_requests(requests_mock, url)
 
@@ -2748,15 +2807,29 @@ def test_calculate_metrics_skips_when_zero_important_features_with_baseline(requ
     enricher.X = X
     enricher.y = y
     enricher.eval_set = []
-    enricher.feature_names_ = []
-    enricher.feature_importances_ = []
+    enricher.fit_search_keys = {"postal_code": SearchKey.POSTAL_CODE}
+    enricher.feature_names_ = ["baseline_score", "postal_code"]
+    enricher.feature_importances_ = [0.4, 0.1]
     enricher.fit_select_features = True
-    enricher._search_task = MagicMock()
+    enricher._search_task = SearchTask("fake_search")
     enricher._search_task.provider_metadata_v2 = [
         ProviderTaskMetadataV2(
             features=[
                 FeaturesMetadataV2(
-                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.0
+                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                ),
+                FeaturesMetadataV2(
+                    name="postal_code", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.1
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
                 )
             ],
             hit_rate_metrics=HitRateMetrics(

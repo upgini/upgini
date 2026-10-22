@@ -2354,10 +2354,26 @@ class FeaturesEnricher(TransformerMixin):
     def _has_single_ensemble_score(self) -> bool:
         return self._get_single_ensemble_score_name() is not None
 
+    def _baseline_and_key_feature_aliases(self) -> set[str]:
+        renaming = self.fit_columns_renaming or {}
+        names: set[str] = set()
+        if self.baseline_score_column:
+            names |= self._column_name_aliases([self.baseline_score_column], renaming)
+        for keys in (self.search_keys, self.fit_search_keys):
+            for col, key_type in (keys or {}).items():
+                if key_type in self._FEATURE_SEARCH_KEY_TYPES:
+                    names |= self._column_name_aliases([col], renaming)
+        return names
+
     def _has_no_important_features(self) -> bool:
-        if any(imp > 0 for imp in (self.feature_importances_ or [])):
+        ignorable = self._baseline_and_key_feature_aliases()
+        has_real_positive = any(
+            name not in ignorable and imp > 0
+            for name, imp in zip(self.feature_names_ or [], self.feature_importances_ or [])
+        )
+        if has_real_positive:
             return False
-        if self.baseline_score_column is not None:
+        if self.baseline_score_column is not None or len(self._ensemble_generated_metadata()) == 1:
             return True
         return len(self.feature_names_ or []) == 0
 
@@ -6101,12 +6117,10 @@ if response.status_code == 200:
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
             internal_features_info.append(feature_info.to_internal_row(self.bundle))
 
-        # With baseline_score_column, do not fall back to baseline/search-key columns when
-        # nothing has positive SHAP — treat as a real zero-important-features result.
-        if self.baseline_score_column is not None and self._has_no_important_features() and self.feature_names_:
-            self.logger.info(
-                "No positive-SHAP features with baseline_score_column; treating as zero important features"
-            )
+        # Do not fall back to baseline/search-key columns when nothing real was selected
+        # (common for ensemble + baseline_score searches) — treat as zero important features.
+        if self._has_no_important_features() and self.feature_names_:
+            self.logger.info("No important enrichment features; treating as zero important features")
             self.feature_names_ = []
             self.feature_importances_ = []
             features_info = []
@@ -6378,15 +6392,16 @@ if response.status_code == 200:
             display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self):
-        if self._has_single_ensemble_score():
-            return
         try:
             _ = get_ipython()  # type: ignore
 
             if self._has_no_important_features():
                 msg = self.bundle.get("features_info_zero_important_features")
                 self.__log_warning(msg, show_support_link=True)
-            elif len(self.feature_names_) > 0:
+                return
+            if self._has_single_ensemble_score():
+                return
+            if len(self.feature_names_) > 0:
                 self.features_info_display_handle = display_html_dataframe(
                     self.features_info,
                     self._features_info_without_links,
