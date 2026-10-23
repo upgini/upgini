@@ -2880,6 +2880,35 @@ def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
     assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
 
 
+def test_drop_rows_missing_ensemble_score(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    score_X = pd.DataFrame({"ensemble_score": [0.1, np.nan, 0.9, np.nan], "f": [1, 2, 3, 4]})
+    y = pd.Series([0, 1, 1, 0], name="target")
+    baseline_X = pd.DataFrame({"baseline": [0.2, 0.3, 0.8, 0.4]})
+    groups = np.array([0, 0, 1, 1])
+
+    filtered_score_X, filtered_y, filtered_baseline_X, filtered_groups = enricher._drop_rows_missing_score(
+        "ensemble_score", score_X, y, baseline_X, groups
+    )
+    assert len(filtered_score_X) == 2
+    assert filtered_score_X["ensemble_score"].tolist() == [0.1, 0.9]
+    assert filtered_y.tolist() == [0, 1]
+    assert filtered_baseline_X["baseline"].tolist() == [0.2, 0.8]
+    assert filtered_groups.tolist() == [0, 1]
+
+    # No-op when there are no NaNs
+    clean_X = pd.DataFrame({"ensemble_score": [0.1, 0.9]})
+    out_X, = enricher._drop_rows_missing_score("ensemble_score", clean_X)
+    assert out_X is clean_X
+
+
 def test_columns_renaming_maps_hashed_to_original_for_client_features():
     columns_renaming = {"feat_hash": "feature", "phone_num_a54a33": "phone_num"}
     renamed_to_original = dict(columns_renaming)

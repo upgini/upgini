@@ -1154,6 +1154,45 @@ class FeaturesEnricher(TransformerMixin):
 
                     _, metric, multiplier = define_scorer(model_task_type, scoring)
 
+                    # Ensemble scores may contain NaNs; drop those rows from train/eval before
+                    # baseline and enriched metrics so uplift is computed on the same sample.
+                    ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
+                    if ensemble_score_column is not None:
+                        (
+                            fitting_enriched_X,
+                            enriched_y_sorted,
+                            fitting_X,
+                            y_sorted,
+                            groups,
+                        ) = self._drop_rows_missing_score(
+                            ensemble_score_column,
+                            fitting_enriched_X,
+                            enriched_y_sorted,
+                            fitting_X,
+                            y_sorted,
+                            groups,
+                        )
+                        for idx, eval_tuple in list(fitting_eval_set_dict.items()):
+                            eval_X_sorted, eval_y_sorted, enriched_eval_X_sorted, enriched_eval_y_sorted = eval_tuple
+                            (
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                                eval_X_sorted,
+                                eval_y_sorted,
+                            ) = self._drop_rows_missing_score(
+                                ensemble_score_column,
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                                eval_X_sorted,
+                                eval_y_sorted,
+                            )
+                            fitting_eval_set_dict[idx] = (
+                                eval_X_sorted,
+                                eval_y_sorted,
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                            )
+
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
                     baseline_estimator = None
@@ -1198,7 +1237,6 @@ class FeaturesEnricher(TransformerMixin):
                     uplift_perc = None
                     enriched_estimator = None
                     enriched_cv_result = None
-                    ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
 
                     def evaluate_enriched(score_column, description: str):
                         wrapper = EstimatorWrapper.create(
@@ -2350,6 +2388,23 @@ class FeaturesEnricher(TransformerMixin):
             return None
         column = new_external[0]
         return column if self._is_ensemble_feature(column) else None
+
+    def _drop_rows_missing_score(self, score_column: str, *aligned) -> tuple:
+        mask = aligned[0][score_column].notna().to_numpy()
+        if mask.all():
+            return aligned
+        self.logger.info(
+            f"Dropping {int((~mask).sum())} rows with NaN in ensemble score '{score_column}' before metrics calculation"
+        )
+        filtered = []
+        for item in aligned:
+            if item is None:
+                filtered.append(None)
+            elif isinstance(item, (pd.DataFrame, pd.Series)):
+                filtered.append(item.iloc[mask])
+            else:
+                filtered.append(np.asarray(item)[mask])
+        return tuple(filtered)
 
     def _has_single_ensemble_score(self) -> bool:
         return self._get_single_ensemble_score_name() is not None
