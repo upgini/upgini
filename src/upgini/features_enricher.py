@@ -341,6 +341,7 @@ class FeaturesEnricher(TransformerMixin):
         self.add_info: AddInfo | None = None
         self.search_duration_seconds: float | None = None
         self.report_html: str | None = None
+        self.baseline_score_column = baseline_score_column
 
         if search_id:
             search_task = SearchTask(search_id, rest_client=self.rest_client, logger=self.logger)
@@ -421,7 +422,6 @@ class FeaturesEnricher(TransformerMixin):
 
         self.raise_validation_error = raise_validation_error
         self.exclude_columns = exclude_columns
-        self.baseline_score_column = baseline_score_column
         self.add_date_if_missing = add_date_if_missing
         self.generate_search_key_features = generate_search_key_features
 
@@ -1058,6 +1058,10 @@ class FeaturesEnricher(TransformerMixin):
 
                 self._validate_baseline_score(validated_X, validated_eval_set)
 
+                if self._has_no_important_features():
+                    self.__log_warning(self.bundle.get("metrics_no_important_features"))
+                    return None
+
                 if self._has_paid_features(exclude_features_sources, exclude_features):
                     msg = self.bundle.get("metrics_with_paid_features")
                     self.logger.warning(msg)
@@ -1150,6 +1154,45 @@ class FeaturesEnricher(TransformerMixin):
 
                     _, metric, multiplier = define_scorer(model_task_type, scoring)
 
+                    # Ensemble scores may contain NaNs; drop those rows from train/eval before
+                    # baseline and enriched metrics so uplift is computed on the same sample.
+                    ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
+                    if ensemble_score_column is not None:
+                        (
+                            fitting_enriched_X,
+                            enriched_y_sorted,
+                            fitting_X,
+                            y_sorted,
+                            groups,
+                        ) = self._drop_rows_missing_score(
+                            ensemble_score_column,
+                            fitting_enriched_X,
+                            enriched_y_sorted,
+                            fitting_X,
+                            y_sorted,
+                            groups,
+                        )
+                        for idx, eval_tuple in list(fitting_eval_set_dict.items()):
+                            eval_X_sorted, eval_y_sorted, enriched_eval_X_sorted, enriched_eval_y_sorted = eval_tuple
+                            (
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                                eval_X_sorted,
+                                eval_y_sorted,
+                            ) = self._drop_rows_missing_score(
+                                ensemble_score_column,
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                                eval_X_sorted,
+                                eval_y_sorted,
+                            )
+                            fitting_eval_set_dict[idx] = (
+                                eval_X_sorted,
+                                eval_y_sorted,
+                                enriched_eval_X_sorted,
+                                enriched_eval_y_sorted,
+                            )
+
                     # 1 If client features are presented - fit and predict with KFold estimator
                     # on etalon features and calculate baseline metric
                     baseline_estimator = None
@@ -1194,7 +1237,6 @@ class FeaturesEnricher(TransformerMixin):
                     uplift_perc = None
                     enriched_estimator = None
                     enriched_cv_result = None
-                    ensemble_score_column = self._get_ensemble_score_column(fitting_X, fitting_enriched_X)
 
                     def evaluate_enriched(score_column, description: str):
                         wrapper = EstimatorWrapper.create(
@@ -2347,8 +2389,48 @@ class FeaturesEnricher(TransformerMixin):
         column = new_external[0]
         return column if self._is_ensemble_feature(column) else None
 
+    def _drop_rows_missing_score(self, score_column: str, *aligned) -> tuple:
+        mask = aligned[0][score_column].notna().to_numpy()
+        if mask.all():
+            return aligned
+        self.logger.info(
+            f"Dropping {int((~mask).sum())} rows with NaN in ensemble score '{score_column}' before metrics calculation"
+        )
+        filtered = []
+        for item in aligned:
+            if item is None:
+                filtered.append(None)
+            elif isinstance(item, (pd.DataFrame, pd.Series)):
+                filtered.append(item.iloc[mask])
+            else:
+                filtered.append(np.asarray(item)[mask])
+        return tuple(filtered)
+
     def _has_single_ensemble_score(self) -> bool:
         return self._get_single_ensemble_score_name() is not None
+
+    def _baseline_and_key_feature_aliases(self) -> set[str]:
+        renaming = self.fit_columns_renaming or {}
+        names: set[str] = set()
+        if self.baseline_score_column:
+            names |= self._column_name_aliases([self.baseline_score_column], renaming)
+        for keys in (self.search_keys, self.fit_search_keys):
+            for col, key_type in (keys or {}).items():
+                if key_type in self._FEATURE_SEARCH_KEY_TYPES:
+                    names |= self._column_name_aliases([col], renaming)
+        return names
+
+    def _has_no_important_features(self) -> bool:
+        ignorable = self._baseline_and_key_feature_aliases()
+        has_real_positive = any(
+            name not in ignorable and imp > 0
+            for name, imp in zip(self.feature_names_ or [], self.feature_importances_ or [])
+        )
+        if has_real_positive:
+            return False
+        if self.baseline_score_column is not None or len(self._ensemble_generated_metadata()) == 1:
+            return True
+        return len(self.feature_names_ or []) == 0
 
     def _get_single_ensemble_score_name(self) -> str | None:
         if len(self._ensemble_generated_metadata()) != 1:
@@ -6090,6 +6172,16 @@ if response.status_code == 200:
             features_info_without_links.append(feature_info.to_row_without_links(self.bundle))
             internal_features_info.append(feature_info.to_internal_row(self.bundle))
 
+        # Do not fall back to baseline/search-key columns when nothing real was selected
+        # (common for ensemble + baseline_score searches) — treat as zero important features.
+        if self._has_no_important_features() and self.feature_names_:
+            self.logger.info("No important enrichment features; treating as zero important features")
+            self.feature_names_ = []
+            self.feature_importances_ = []
+            features_info = []
+            features_info_without_links = []
+            internal_features_info = []
+
         if update_selected_features:
             self._search_task.update_selected_features(self._get_trace_id(), self.feature_names_)
 
@@ -6115,6 +6207,11 @@ if response.status_code == 200:
                     lambda: self.logger.info(f"Relevant data sources:\n{self._relevant_data_sources_wo_links}")
                 )
         else:
+            self.features_info = self.EMPTY_FEATURES_INFO
+            self._features_info_without_links = self.EMPTY_FEATURES_INFO
+            self._internal_features_info = self.EMPTY_INTERNAL_FEATURES_INFO
+            self.relevant_data_sources = self.EMPTY_DATA_SOURCES
+            self._relevant_data_sources_wo_links = self.EMPTY_DATA_SOURCES
             self.logger.warning("Empty features info")
 
     def get_autofe_features_description(self, features_meta: list[FeaturesMetadataV2] | None = None):
@@ -6350,11 +6447,15 @@ if response.status_code == 200:
             display_html_dataframe(self.metrics, self.metrics, msg)
 
     def __show_selected_features(self):
-        if self._has_single_ensemble_score():
-            return
         try:
             _ = get_ipython()  # type: ignore
 
+            if self._has_no_important_features():
+                msg = self.bundle.get("features_info_zero_important_features")
+                self.__log_warning(msg, show_support_link=True)
+                return
+            if self._has_single_ensemble_score():
+                return
             if len(self.feature_names_) > 0:
                 self.features_info_display_handle = display_html_dataframe(
                     self.features_info,
@@ -6380,13 +6481,12 @@ if response.status_code == 200:
                         header=self.bundle.get("autofe_descriptions_header"),
                         display_id=f"autofe_descriptions_{uuid.uuid4()}",
                     )
-            else:
-                msg = self.bundle.get("features_info_zero_important_features")
-                self.__log_warning(msg, show_support_link=True)
         except (ImportError, NameError):
             print(self._internal_features_info)
 
     def __show_report_button(self, display_id: str | None = None, display_handle=None):
+        if self._has_no_important_features():
+            return
         if self._has_single_ensemble_score():
             try:
                 report_html = self._score_report_html()

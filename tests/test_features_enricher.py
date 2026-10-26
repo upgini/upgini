@@ -2682,6 +2682,166 @@ def test_get_renamed_baseline_score_column(requests_mock: Mocker):
     assert enricher_no_baseline._get_renamed_baseline_score_column() is None
 
 
+def test_has_no_important_features_with_baseline_score(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    enricher.fit_search_keys = {"date": SearchKey.DATE, "country": SearchKey.COUNTRY}
+    # Empty / zero-SHAP selection must not fall back to baseline + key features
+    enricher.feature_names_ = []
+    enricher.feature_importances_ = []
+    assert enricher._has_no_important_features()
+
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.0, 0.0]
+    assert enricher._has_no_important_features()
+
+    # Positive SHAP on baseline/keys alone is still not real enrichment
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.4, 0.1]
+    assert enricher._has_no_important_features()
+
+    enricher.feature_names_ = ["ads_feature"]
+    enricher.feature_importances_ = [0.5]
+    assert not enricher._has_no_important_features()
+
+    enricher_no_baseline = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    enricher_no_baseline.feature_names_ = []
+    enricher_no_baseline.feature_importances_ = []
+    assert enricher_no_baseline._has_no_important_features()
+
+    # select_features=False may keep zero-SHAP client features in the report when no baseline score
+    enricher_no_baseline.feature_names_ = ["client_feature"]
+    enricher_no_baseline.feature_importances_ = [0.0]
+    assert not enricher_no_baseline._has_no_important_features()
+
+
+def test_has_no_important_features_ensemble_without_selected_score(requests_mock: Mocker):
+    """Ensemble search that only kept baseline/keys must be treated as zero features."""
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+    ensemble_col = "f_autofe_ensemble_score_abc123"
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE, "country": SearchKey.COUNTRY},
+        endpoint=url,
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+    )
+    enricher.fit_search_keys = {"date": SearchKey.DATE, "country": SearchKey.COUNTRY}
+    enricher._search_task = SearchTask("fake_search")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name=ensemble_col, type="numeric", source="ads", hit_rate=100.0, shap_value=0.0
+                ),
+                FeaturesMetadataV2(
+                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                ),
+                FeaturesMetadataV2(
+                    name="country", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.1
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=40, max_hit_count=40, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+        )
+    ]
+    # Ensemble not selected — only baseline + key leftovers
+    enricher.feature_names_ = ["baseline_score", "country"]
+    enricher.feature_importances_ = [0.4, 0.1]
+    assert enricher._has_no_important_features()
+    assert not enricher._has_single_ensemble_score()
+
+    # Real ensemble score selected — not a zero-features result
+    enricher.feature_names_ = [ensemble_col]
+    enricher.feature_importances_ = [1.5]
+    assert not enricher._has_no_important_features()
+    assert enricher._has_single_ensemble_score()
+
+
+def test_calculate_metrics_skips_when_zero_important_features_with_baseline(requests_mock: Mocker):
+    url = "http://fake_url2"
+    mock_default_requests(requests_mock, url)
+
+    n = 40
+    rng = np.random.RandomState(42)
+    y = pd.Series(np.array([0, 1] * (n // 2)), name="target")
+    X = pd.DataFrame(
+        {
+            "postal_code": [f"{10000 + (i % 5)}" for i in range(n)],
+            "baseline_score": y.to_numpy() + rng.normal(0, 0.5, n),
+        }
+    )
+
+    enricher = FeaturesEnricher(
+        search_keys={"postal_code": SearchKey.POSTAL_CODE},
+        country_code="US",
+        endpoint=url,
+        api_key="fake_api_key",
+        logs_enabled=False,
+        baseline_score_column="baseline_score",
+        model_task_type=ModelTaskType.BINARY,
+    )
+    enricher.X = X
+    enricher.y = y
+    enricher.eval_set = []
+    enricher.fit_search_keys = {"postal_code": SearchKey.POSTAL_CODE}
+    enricher.feature_names_ = ["baseline_score", "postal_code"]
+    enricher.feature_importances_ = [0.4, 0.1]
+    enricher.fit_select_features = True
+    enricher._search_task = SearchTask("fake_search")
+    enricher._search_task.provider_metadata_v2 = [
+        ProviderTaskMetadataV2(
+            features=[
+                FeaturesMetadataV2(
+                    name="baseline_score", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.4
+                ),
+                FeaturesMetadataV2(
+                    name="postal_code", type="numeric", source="etalon", hit_rate=100.0, shap_value=0.1
+                ),
+            ],
+            generated_features=[
+                GeneratedFeatureMetadata(
+                    formula="ensemble_score(model1,model2)",
+                    display_index="abc123",
+                    base_columns=[
+                        BaseColumnMetadata(original_name="model1", hashed_name="model1", is_augmented=False),
+                        BaseColumnMetadata(original_name="model2", hashed_name="model2", is_augmented=False),
+                    ],
+                )
+            ],
+            hit_rate_metrics=HitRateMetrics(
+                etalon_row_count=n, max_hit_count=n, hit_rate=1.0, hit_rate_percent=100.0
+            ),
+        )
+    ]
+
+    assert enricher._has_no_important_features()
+    assert enricher.calculate_metrics() is None
+
+
 def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
     url = "https://some.fake.url"
     mock_default_requests(requests_mock, url)
@@ -2718,6 +2878,35 @@ def test_get_ensemble_score_column_from_autofe_alias(requests_mock: Mocker):
 
     assert "ensemble" not in ensemble_col
     assert enricher._get_ensemble_score_column(fitting_X, fitting_enriched_X) == ensemble_col
+
+
+def test_drop_rows_missing_ensemble_score(requests_mock: Mocker):
+    url = "https://some.fake.url"
+    mock_default_requests(requests_mock, url)
+
+    enricher = FeaturesEnricher(
+        search_keys={"date": SearchKey.DATE},
+        endpoint=url,
+        logs_enabled=False,
+    )
+    score_X = pd.DataFrame({"ensemble_score": [0.1, np.nan, 0.9, np.nan], "f": [1, 2, 3, 4]})
+    y = pd.Series([0, 1, 1, 0], name="target")
+    baseline_X = pd.DataFrame({"baseline": [0.2, 0.3, 0.8, 0.4]})
+    groups = np.array([0, 0, 1, 1])
+
+    filtered_score_X, filtered_y, filtered_baseline_X, filtered_groups = enricher._drop_rows_missing_score(
+        "ensemble_score", score_X, y, baseline_X, groups
+    )
+    assert len(filtered_score_X) == 2
+    assert filtered_score_X["ensemble_score"].tolist() == [0.1, 0.9]
+    assert filtered_y.tolist() == [0, 1]
+    assert filtered_baseline_X["baseline"].tolist() == [0.2, 0.8]
+    assert filtered_groups.tolist() == [0, 1]
+
+    # No-op when there are no NaNs
+    clean_X = pd.DataFrame({"ensemble_score": [0.1, 0.9]})
+    out_X, = enricher._drop_rows_missing_score("ensemble_score", clean_X)
+    assert out_X is clean_X
 
 
 def test_columns_renaming_maps_hashed_to_original_for_client_features():
