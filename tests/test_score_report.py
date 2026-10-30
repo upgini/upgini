@@ -989,8 +989,8 @@ def test_feature_stability_series_and_tooltip_fields():
                 source="generated",
                 hit_rate=100.0,
                 shap_value=1.0,
-                monthly_psi={"2024-01": 0.4},
-                monthly_roc_auc={"2024-01": 0.9},
+                monthly_psi={"train": {"2024-01": 0.4}},
+                monthly_roc_auc={"train": {"2024-01": 0.9}},
             ),
             FeaturesMetadataV2(
                 name="f_stable",
@@ -999,8 +999,14 @@ def test_feature_stability_series_and_tooltip_fields():
                 hit_rate=98.5,
                 shap_value=0.2,
                 data_provider="Upgini",
-                monthly_psi={"2024-01": 0.0, "2024-02": 0.08, "2024-03": 0.31},
-                monthly_roc_auc={"2024-01": 0.71, "2024-03": 0.64},
+                monthly_psi={
+                    "train": {"2024-01": 0.0, "2024-02": 0.08, "2024-03": 0.31},
+                    "eval_1": {"2024-03": 0.12, "2024-04": 0.4},
+                },
+                monthly_roc_auc={
+                    "train": {"2024-01": 0.71, "2024-03": 0.64},
+                    "eval_1": {"2024-04": 0.55},
+                },
             ),
             FeaturesMetadataV2(
                 name="f_plain",
@@ -1024,7 +1030,7 @@ def test_feature_stability_series_and_tooltip_fields():
     data = assemble_report_data(
         search_id="search-abc",
         search_keys=["DATE"],
-        samples=["Train"],
+        samples=["Train", "Eval 1"],
         is_binary=True,
         dataset_samples=dataset,
         bundle=bundle,
@@ -1040,19 +1046,25 @@ def test_feature_stability_series_and_tooltip_fields():
 
     assert [row["feature"] for row in stability["features"]] == ["f_stable", "f_plain"]
     assert stability["features"][0]["feature"] == model_shap[0].feature
-    assert stability["months"] == ["Jan 2024", "Feb 2024", "Mar 2024", "Apr 2024"]
-    assert stability["psi"] == [
-        {"feature": "f_stable", "values": [0.0, 0.08, 0.31, None]},
+    assert stability["bySample"]["train"]["psi"] == [
+        {"feature": "f_stable", "values": {"2024-01": 0.0, "2024-02": 0.08, "2024-03": 0.31}},
     ]
-    assert stability["auc"] == [
-        {"feature": "f_stable", "values": [0.71, None, 0.64, None]},
+    assert stability["bySample"]["train"]["auc"] == [
+        {"feature": "f_stable", "values": {"2024-01": 0.71, "2024-03": 0.64}},
     ]
-    assert "ensemble_score" not in {row["feature"] for row in stability["psi"]}
+    assert stability["bySample"]["eval_1"]["psi"] == [
+        {"feature": "f_stable", "values": {"2024-03": 0.12, "2024-04": 0.4}},
+    ]
+    assert stability["bySample"]["eval_1"]["auc"] == [
+        {"feature": "f_stable", "values": {"2024-04": 0.55}},
+    ]
+    assert "ensemble_score" not in {row["feature"] for row in stability["bySample"]["train"]["psi"]}
     assert by_name["f_stable"]["coverage"] == 98.5
     assert by_name["f_stable"]["missingRate"] == 1.5
     assert by_name["f_stable"]["rows"] is None
     assert by_name["f_stable"]["labeled"] is None
     assert "Feature stability" in html
     assert 'id="featureStabilitySelect"' in html
+    assert 'id="featureStabilitySample"' in html
     assert 'id="featurePsiChart"' in html
     assert 'id="featureAucChart"' in html

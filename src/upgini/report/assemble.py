@@ -22,7 +22,7 @@ from upgini.report.data import (
     SearchResultsSummary,
     SourceRow,
 )
-from upgini.report.stats import PSI_CRITICAL, PSI_WARNING, compute_report_charts, normalize_month_label
+from upgini.report.stats import PSI_CRITICAL, PSI_WARNING, compute_report_charts
 from upgini.resource_bundle import ResourceBundle
 from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE, FeatureInfo
 
@@ -154,8 +154,8 @@ def build_search_results(
     feature_monthly_psi: list[FeatureMonthlyPsi] = []
     feature_monthly_auc: list[FeatureMonthlyAuc] = []
     for row, meta in paired:
-        psi = _month_value_map(meta.monthly_psi)
-        auc = _month_value_map(meta.monthly_roc_auc)
+        psi = meta.monthly_psi or {}
+        auc = meta.monthly_roc_auc or {}
         if psi:
             feature_monthly_psi.append(FeatureMonthlyPsi(feature=row.name, psi=psi))
         if auc:
@@ -319,16 +319,6 @@ def _psi_status(psi: Optional[float]) -> Optional[str]:
     if psi >= PSI_WARNING:
         return "watch"
     return "good"
-
-
-def _month_value_map(values: Optional[dict]) -> dict[str, float]:
-    mapped: dict[str, float] = {}
-    for key, value in (values or {}).items():
-        label = normalize_month_label(key)
-        if label is None or value is None or pd.isna(value):
-            continue
-        mapped[label] = float(value)
-    return mapped
 
 
 def _has_nonzero_shap_value(shap: Optional[float]) -> bool:

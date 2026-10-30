@@ -138,15 +138,15 @@ class ScorePsi:
 @dataclass
 class FeatureMonthlyPsi:
     feature: str
-    # Report month label ("Jan 2024") -> PSI.
-    psi: dict[str, float] = field(default_factory=dict)
+    # Sample id ("train", "eval_1") -> calendar month ("2024-01") -> PSI.
+    psi: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 @dataclass
 class FeatureMonthlyAuc:
     feature: str
-    # Report month label ("Jan 2024") -> ROC AUC.
-    auc: dict[str, float] = field(default_factory=dict)
+    # Sample id ("train", "eval_1") -> calendar month ("2024-01") -> ROC AUC.
+    auc: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 @dataclass

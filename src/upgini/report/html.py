@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from upgini.report.data import FeatureRow, ReportCharts, ReportData, SampleStats, SearchResultsSummary, SourceRow
-from upgini.report.stats import MEAN_AXIS_PADDING, psi_axis_max, sorted_month_labels
+from upgini.report.stats import MEAN_AXIS_PADDING, psi_axis_max
 from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
@@ -311,21 +311,37 @@ def _score_stability_payload(charts: ReportCharts, samples: list[dict]) -> dict:
 def _feature_stability_payload(data: ReportData, charts: ReportCharts) -> dict:
     psi_rows = data.feature_monthly_psi
     auc_rows = data.feature_monthly_auc
-    series_months = [month for row in psi_rows for month in row.psi] + [month for row in auc_rows for month in row.auc]
-    months = sorted_month_labels([*charts.timeline_months, *series_months])
-    psi_values = [value for row in psi_rows for value in row.psi.values()]
+    psi_values = [value for row in psi_rows for months in row.psi.values() for value in months.values()]
+    sample_ids: list[str] = []
+    for row in psi_rows:
+        for sample_id in row.psi:
+            if sample_id not in sample_ids:
+                sample_ids.append(sample_id)
+    for row in auc_rows:
+        for sample_id in row.auc:
+            if sample_id not in sample_ids:
+                sample_ids.append(sample_id)
     return {
-        "months": months,
         "psiAxisMax": psi_axis_max(psi_values, charts.psi_critical),
         "thresholds": {"warning": charts.psi_warning, "critical": charts.psi_critical},
         "features": [{"feature": row.feature, "provider": row.provider} for row in data.model_feature_shap],
-        "psi": [_aligned_feature_series(row.feature, row.psi, months) for row in psi_rows],
-        "auc": [_aligned_feature_series(row.feature, row.auc, months) for row in auc_rows],
+        "bySample": {
+            sample_id: {
+                "psi": _feature_series(psi_rows, "psi", sample_id),
+                "auc": _feature_series(auc_rows, "auc", sample_id),
+            }
+            for sample_id in sample_ids
+        },
     }
 
 
-def _aligned_feature_series(feature: str, values: dict[str, float], months: list[str]) -> dict:
-    return {"feature": feature, "values": [values.get(month) for month in months]}
+def _feature_series(rows, field: str, sample_id: str) -> list[dict]:
+    series = []
+    for row in rows:
+        values = getattr(row, field).get(sample_id)
+        if values:
+            series.append({"feature": row.feature, "values": values})
+    return series
 
 
 def _stat_row(label: str, samples: list[dict], by_id: dict[str, SampleStats], value) -> dict:

@@ -90,7 +90,7 @@
       </section>
 
       <section id="feature-stability" class="section">
-        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and univariate ROC AUC for the selected model feature. PSI reference: earliest train month.</p></div><select id="featureStabilitySelect" class="control feature-select" aria-label="Feature"></select></div>
+        <div class="section-head"><div><h2>Feature stability</h2><p>Monthly PSI and univariate ROC AUC for the selected model feature. PSI reference: earliest train month.</p></div><select id="featureStabilitySample" class="control" aria-label="Feature stability sample"></select><select id="featureStabilitySelect" class="control feature-select" aria-label="Feature"></select></div>
         <div class="panel chart-panel"><div class="chart-head"><div><strong>Monthly PSI</strong><div class="source-name">Reference distribution is the earliest train month</div></div><button class="button ghost chart-export" data-chart="featurePsiChart">Save PNG</button></div><div class="threshold-legend" id="featurePsiThresholdLegend"></div><div class="canvas-wrap"><canvas id="featurePsiChart" aria-label="Monthly feature PSI" width="1596" height="560"></canvas><div class="chart-tooltip" id="featurePsiTooltip"></div></div></div>
         <div class="panel chart-panel" style="margin-top:14px"><div class="chart-head"><div><strong>Monthly ROC AUC</strong><div class="source-name">Univariate ROC AUC of the feature against the target</div></div><button class="button ghost chart-export" data-chart="featureAucChart">Save PNG</button></div><div class="canvas-wrap"><canvas id="featureAucChart" aria-label="Monthly feature ROC AUC" width="1596" height="560"></canvas><div class="chart-tooltip" id="featureAucTooltip"></div></div></div>
       </section>
@@ -246,7 +246,7 @@ const REPORT_DATA = __REPORT_DATA__;
 
   /* --------------------------------------------------------------- selects */
   function fillSampleSelects() {
-    ['performanceSample', 'scoreSample', 'distributionSample', 'psiSample'].forEach(id => {
+    ['performanceSample', 'scoreSample', 'distributionSample', 'psiSample', 'featureStabilitySample'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = SAMPLES.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
     });
@@ -519,9 +519,12 @@ const REPORT_DATA = __REPORT_DATA__;
     const features = (D.featureStability && D.featureStability.features) || [];
     el.innerHTML = features.map(f => `<option value="${esc(f.feature)}">${esc(f.feature)}</option>`).join('');
   }
-  function featureMonths() {
-    const cfg = D.featureStability || {};
-    return cfg.months || [];
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function monthLabel(key) {
+    const match = /^(\d{4})-(\d{2})$/.exec(String(key));
+    if (!match) return String(key);
+    const name = MONTH_NAMES[Number(match[2]) - 1];
+    return name ? `${name} ${match[1]}` : String(key);
   }
   function selectedFeature() {
     const el = document.getElementById('featureStabilitySelect');
@@ -529,9 +532,14 @@ const REPORT_DATA = __REPORT_DATA__;
   }
   function featureSeries(kind) {
     const cfg = D.featureStability || {};
+    const sampleEl = document.getElementById('featureStabilitySample');
+    const sampleId = sampleEl ? sampleEl.value : '';
+    const sample = cfg.bySample && cfg.bySample[sampleId];
     const name = selectedFeature();
-    const row = (cfg[kind] || []).find(item => item.feature === name);
-    return (row && row.values) || [];
+    const row = ((sample && sample[kind]) || []).find(item => item.feature === name);
+    const byMonth = (row && row.values) || {};
+    const months = Object.keys(byMonth).sort();
+    return { months, values: months.map(month => byMonth[month]) };
   }
   function featureRecord(name) {
     return (D.features || []).find(f => f.name === name) || {};
@@ -544,8 +552,7 @@ const REPORT_DATA = __REPORT_DATA__;
       `<br>Coverage: ${pct1(f.coverage)}` +
       `<br>Missing rate: ${pct1(f.missingRate)}`;
   }
-  function drawFeatureLine(c, w, h, hitKey, values, color, yFor, dotColor) {
-    const months = featureMonths();
+  function drawFeatureLine(c, w, h, hitKey, months, values, color, yFor, dotColor) {
     hits[hitKey] = [];
     if (!months.length) return;
     const count = months.length;
@@ -554,7 +561,7 @@ const REPORT_DATA = __REPORT_DATA__;
     c.font = '10px Inter, sans-serif';
     months.forEach((m, i) => {
       if (values[i] != null) hits[hitKey].push({ x: x(i), y: yFor(values[i]), r: 12, index: i });
-      const parts = String(m).split(' ');
+      const parts = monthLabel(m).split(' ');
       c.fillStyle = '#7d8885';
       c.fillText(parts[0], x(i) - 8, h - 22);
       c.fillText(parts[1] || '', x(i) - 12, h - 9);
@@ -562,10 +569,11 @@ const REPORT_DATA = __REPORT_DATA__;
   }
   function drawFeaturePsi() {
     const cfg = D.featureStability || {};
-    const months = featureMonths();
+    const series = featureSeries('psi');
+    const months = series.months;
+    const values = series.values;
     const { c, w, h } = setupCanvas('featurePsiChart');
     if (!months.length) return;
-    const values = featureSeries('psi');
     const max = cfg.psiAxisMax || 1;
     const th = cfg.thresholds || { warning: 0.1, critical: 0.25 };
     const y = val => 18 + (max - val) / max * (h - 62);
@@ -582,14 +590,15 @@ const REPORT_DATA = __REPORT_DATA__;
       const yy = 18 + i * (h - 62) / 4;
       c.fillText((max - i * max / 4).toFixed(2), 4, yy + 3);
     }
-    drawFeatureLine(c, w, h, 'featurePsi', values, '#1645ee', y,
+    drawFeatureLine(c, w, h, 'featurePsi', months, values, '#1645ee', y,
       i => values[i] > th.critical ? '#d45b5b' : values[i] >= th.warning ? '#e19132' : '#53cc61');
   }
   function drawFeatureAuc() {
-    const months = featureMonths();
+    const series = featureSeries('auc');
+    const months = series.months;
+    const values = series.values;
     const { c, w, h } = setupCanvas('featureAucChart');
     if (!months.length) return;
-    const values = featureSeries('auc');
     const present = values.filter(v => v != null && !Number.isNaN(Number(v))).map(Number);
     let lo = 0, hi = 1;
     if (present.length) {
@@ -606,7 +615,7 @@ const REPORT_DATA = __REPORT_DATA__;
       c.beginPath(); c.moveTo(40, yy); c.lineTo(w - 15, yy); c.stroke();
       c.fillText((hi - i * span / 4).toFixed(2), 4, yy + 3);
     }
-    drawFeatureLine(c, w, h, 'featureAuc', values, '#53cc61', y);
+    drawFeatureLine(c, w, h, 'featureAuc', months, values, '#53cc61', y);
   }
 
   /* ------------------------------------------------------------ SHAP list */
@@ -693,14 +702,12 @@ const REPORT_DATA = __REPORT_DATA__;
         `<br>Rows: ${num(s.rows[i])}<br>Score coverage: ${s.scoreCoverage[i].toFixed(1)}%<br>Reference: first period (baseline month)`;
     });
     bindTooltip('featurePsiChart', 'featurePsiTooltip', 'featurePsi', i => {
-      const months = featureMonths();
-      const values = featureSeries('psi');
-      return featureTooltip(months[i], selectedFeature(), 'PSI', values[i]);
+      const series = featureSeries('psi');
+      return featureTooltip(monthLabel(series.months[i]), selectedFeature(), 'PSI', series.values[i]);
     });
     bindTooltip('featureAucChart', 'featureAucTooltip', 'featureAuc', i => {
-      const months = featureMonths();
-      const values = featureSeries('auc');
-      return featureTooltip(months[i], selectedFeature(), 'ROC AUC', values[i]);
+      const series = featureSeries('auc');
+      return featureTooltip(monthLabel(series.months[i]), selectedFeature(), 'ROC AUC', series.values[i]);
     });
   }
 
@@ -736,6 +743,8 @@ const REPORT_DATA = __REPORT_DATA__;
     document.getElementById('psiSample').addEventListener('change', drawPsi);
     const featureSelect = document.getElementById('featureStabilitySelect');
     if (featureSelect) featureSelect.addEventListener('change', () => { drawFeaturePsi(); drawFeatureAuc(); });
+    const featureSample = document.getElementById('featureStabilitySample');
+    if (featureSample) featureSample.addEventListener('change', () => { drawFeaturePsi(); drawFeatureAuc(); });
     document.getElementById('featureSearch').addEventListener('input', renderFeatures);
     document.getElementById('statusFilter').addEventListener('change', renderFeatures);
     document.getElementById('showAllShap').addEventListener('click', () => { shapAll = !shapAll; renderShap(); });

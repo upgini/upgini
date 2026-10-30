@@ -310,10 +310,11 @@ class FeaturesMetadataV2(BaseModel):
     from_online_api: Optional[bool] = None
     psi_value: Optional[float] = None
     drift_score: Optional[float] = None
-    # Calendar month ("2024-01") -> PSI. The earliest month is the reference and is 0.
-    monthly_psi: Optional[Dict[str, float]] = None
-    # Calendar month ("2024-01") -> univariate ROC AUC.
-    monthly_roc_auc: Optional[Dict[str, float]] = None
+    # Sample id ("train", "eval_1") -> calendar month ("2024-01") -> PSI.
+    # The earliest train month is the reference and is 0.
+    monthly_psi: Optional[Dict[str, Dict[str, float]]] = None
+    # Sample id ("train", "eval_1") -> calendar month -> univariate ROC AUC.
+    monthly_roc_auc: Optional[Dict[str, Dict[str, float]]] = None
 
 
 class HitRateMetrics(BaseModel):
