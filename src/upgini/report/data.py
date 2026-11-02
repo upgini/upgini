@@ -53,6 +53,9 @@ class FeatureRow:
     provider: str = ""
     source: str = ""
     stability_status: Optional[str] = None
+    rows: Optional[int] = None
+    labeled: Optional[int] = None
+    missing_rate: Optional[float] = None
 
 
 @dataclass
@@ -133,6 +136,20 @@ class ScorePsi:
 
 
 @dataclass
+class FeatureMonthlyPsi:
+    feature: str
+    # Sample id ("train", "eval_1") -> calendar month ("2024-01") -> PSI.
+    psi: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
+@dataclass
+class FeatureMonthlyAuc:
+    feature: str
+    # Sample id ("train", "eval_1") -> calendar month ("2024-01") -> ROC AUC.
+    auc: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
+@dataclass
 class ReportCharts:
     timeline_months: list[str] = field(default_factory=list)
     period_options: list[int] = field(default_factory=list)
@@ -162,4 +179,6 @@ class ReportData:
     sources: list[SourceRow] = field(default_factory=list)
     autofe: list[dict[str, str]] = field(default_factory=list)
     model_feature_shap: list[ModelFeatureShap] = field(default_factory=list)
+    feature_monthly_psi: list[FeatureMonthlyPsi] = field(default_factory=list)
+    feature_monthly_auc: list[FeatureMonthlyAuc] = field(default_factory=list)
     charts: ReportCharts = field(default_factory=ReportCharts)

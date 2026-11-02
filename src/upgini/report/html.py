@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from upgini.report.data import FeatureRow, ReportCharts, ReportData, SampleStats, SearchResultsSummary, SourceRow
-from upgini.report.stats import MEAN_AXIS_PADDING
+from upgini.report.stats import MEAN_AXIS_PADDING, psi_axis_max
 from upgini.utils.feature_info import CLIENT_SOURCE, GENERATED_SOURCE
 
 _TEMPLATE_PATH = Path(__file__).with_name("template.html")
@@ -38,6 +38,7 @@ def _report_payload(data: ReportData) -> dict:
         "scoreAnalysis": _score_analysis_payload(charts, samples),
         "scoreDistribution": _score_distribution_payload(charts, samples),
         "scoreStability": _score_stability_payload(charts, samples),
+        "featureStability": _feature_stability_payload(data, charts),
         "features": _features_payload(data.features),
         "shap": {"topN": 5},
         "searchResults": {
@@ -185,6 +186,9 @@ def _features_payload(features: list[FeatureRow]) -> list[dict]:
                 "importance": abs(row.shap) if row.shap is not None else 0,
                 "shap": row.shap,
                 "coverage": row.coverage,
+                "rows": row.rows,
+                "labeled": row.labeled,
+                "missingRate": row.missing_rate,
                 "status": row.stability_status,
                 "psi": row.psi,
                 "drift": row.drift,
@@ -302,6 +306,42 @@ def _score_stability_payload(charts: ReportCharts, samples: list[dict]) -> dict:
             if (row := by_id.get(sample["id"])) is not None
         },
     }
+
+
+def _feature_stability_payload(data: ReportData, charts: ReportCharts) -> dict:
+    psi_rows = data.feature_monthly_psi
+    auc_rows = data.feature_monthly_auc
+    psi_values = [value for row in psi_rows for months in row.psi.values() for value in months.values()]
+    sample_ids: list[str] = []
+    for row in psi_rows:
+        for sample_id in row.psi:
+            if sample_id not in sample_ids:
+                sample_ids.append(sample_id)
+    for row in auc_rows:
+        for sample_id in row.auc:
+            if sample_id not in sample_ids:
+                sample_ids.append(sample_id)
+    return {
+        "psiAxisMax": psi_axis_max(psi_values, charts.psi_critical),
+        "thresholds": {"warning": charts.psi_warning, "critical": charts.psi_critical},
+        "features": [{"feature": row.feature, "provider": row.provider} for row in data.model_feature_shap],
+        "bySample": {
+            sample_id: {
+                "psi": _feature_series(psi_rows, "psi", sample_id),
+                "auc": _feature_series(auc_rows, "auc", sample_id),
+            }
+            for sample_id in sample_ids
+        },
+    }
+
+
+def _feature_series(rows, field: str, sample_id: str) -> list[dict]:
+    series = []
+    for row in rows:
+        values = getattr(row, field).get(sample_id)
+        if values:
+            series.append({"feature": row.feature, "values": values})
+    return series
 
 
 def _stat_row(label: str, samples: list[dict], by_id: dict[str, SampleStats], value) -> dict:

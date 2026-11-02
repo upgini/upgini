@@ -87,10 +87,41 @@ def compute_report_charts(
     densities = [value for hist in charts.histograms for value in hist.target_0 + hist.target_1]
     charts.histogram_density_max = max(densities, default=0.0)
     psis = [value for row in charts.score_psi for value in row.psi if value is not None]
-    charts.psi_axis_max = max([PSI_CRITICAL, *psis], default=PSI_CRITICAL)
-    if charts.psi_axis_max == PSI_CRITICAL and psis:
-        charts.psi_axis_max = max(PSI_CRITICAL, max(psis) * 1.15)
+    charts.psi_axis_max = psi_axis_max(psis)
     return sample_stats, charts
+
+
+def psi_axis_max(values: list[Optional[float]], critical: float = PSI_CRITICAL) -> float:
+    finite = [float(value) for value in values if value is not None and not pd.isna(value)]
+    axis = max([critical, *finite])
+    if axis == critical and finite:
+        axis = max(critical, max(finite) * 1.15)
+    return axis
+
+
+def normalize_month_label(value) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() == "nat":
+        return None
+    parts = text.split()
+    if len(parts) == 2 and parts[0] in _MONTHS and parts[1].isdigit():
+        return f"{parts[0]} {int(parts[1])}"
+    parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return _month_label(parsed.to_period("M"))
+
+
+def sorted_month_labels(months) -> list[str]:
+    unique = list(dict.fromkeys(month for month in months if month))
+
+    def sort_key(label: str):
+        parsed = pd.to_datetime(label, errors="coerce")
+        return (bool(pd.isna(parsed)), parsed)
+
+    return sorted(unique, key=sort_key)
 
 
 def _timeline_months(

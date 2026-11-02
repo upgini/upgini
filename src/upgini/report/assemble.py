@@ -11,6 +11,8 @@ from upgini.autofe.feature import Column, Feature
 from upgini.autofe.vector import CatboostModel, EnsembleModel, OnnxModel
 from upgini.metadata import BaseColumnMetadata, FeaturesMetadataV2, GeneratedFeatureMetadata
 from upgini.report.data import (
+    FeatureMonthlyAuc,
+    FeatureMonthlyPsi,
     FeatureRow,
     ModelFeatureShap,
     QualitySample,
@@ -62,6 +64,8 @@ def assemble_report_data(
     sources: Optional[list[SourceRow]] = None,
     autofe: Optional[list[dict[str, str]]] = None,
     model_feature_shap: Optional[list[ModelFeatureShap]] = None,
+    feature_monthly_psi: Optional[list[FeatureMonthlyPsi]] = None,
+    feature_monthly_auc: Optional[list[FeatureMonthlyAuc]] = None,
 ) -> ReportData:
     generated_at = generated_at or datetime.now(timezone.utc)
     sample_names = list(samples or [])
@@ -94,6 +98,8 @@ def assemble_report_data(
         sources=list(sources or []),
         autofe=list(autofe or []),
         model_feature_shap=list(model_feature_shap or []),
+        feature_monthly_psi=list(feature_monthly_psi or []),
+        feature_monthly_auc=list(feature_monthly_auc or []),
         charts=charts,
     )
 
@@ -106,18 +112,26 @@ def build_search_results(
     generated_features: Optional[list[GeneratedFeatureMetadata]] = None,
     joined_ads_features_count: Optional[int] = None,
     joined_ads_count: Optional[int] = None,
-) -> tuple[list[FeatureRow], list[SourceRow], list[ModelFeatureShap], SearchResultsSummary]:
+) -> tuple[
+    list[FeatureRow],
+    list[SourceRow],
+    list[ModelFeatureShap],
+    SearchResultsSummary,
+    list[FeatureMonthlyPsi],
+    list[FeatureMonthlyAuc],
+]:
     generated_names = generated_names or set()
-    model_rows: list[FeatureRow] = []
+    paired: list[tuple[FeatureRow, FeaturesMetadataV2]] = []
     found_rows: list[FeatureRow] = []
     for meta in features_meta:
         if is_ensemble(meta.name) or not _has_nonzero_shap_value(meta.shap_value):
             continue
         row = _feature_row(meta.name, meta, generated_names)
-        model_rows.append(row)
+        paired.append((row, meta))
         if meta.source != "etalon":
             found_rows.append(row)
-    model_rows.sort(key=lambda row: (row.shap is None, -abs(row.shap or 0.0), row.name))
+    paired.sort(key=lambda item: (item[0].shap is None, -abs(item[0].shap or 0.0), item[0].name))
+    model_rows = [row for row, _meta in paired]
     model_shap = [
         ModelFeatureShap(
             rank=index,
@@ -137,7 +151,16 @@ def build_search_results(
         joined_ads_features_count=joined_ads_features_count,
         joined_ads_count=joined_ads_count,
     )
-    return model_rows, sources, model_shap, summary
+    feature_monthly_psi: list[FeatureMonthlyPsi] = []
+    feature_monthly_auc: list[FeatureMonthlyAuc] = []
+    for row, meta in paired:
+        psi = meta.monthly_psi or {}
+        auc = meta.monthly_roc_auc or {}
+        if psi:
+            feature_monthly_psi.append(FeatureMonthlyPsi(feature=row.name, psi=psi))
+        if auc:
+            feature_monthly_auc.append(FeatureMonthlyAuc(feature=row.name, auc=auc))
+    return model_rows, sources, model_shap, summary, feature_monthly_psi, feature_monthly_auc
 
 
 def autofe_rows_from_description(df: Optional[pd.DataFrame], bundle: ResourceBundle) -> list[dict[str, str]]:
@@ -256,6 +279,7 @@ def _feature_row(
         provider=info.internal_provider,
         source=_feature_source(meta, is_generated, info.internal_source),
         stability_status=_psi_status(meta.psi_value),
+        missing_rate=None if meta.hit_rate is None else 100.0 - meta.hit_rate,
     )
 
 
