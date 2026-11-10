@@ -37,6 +37,8 @@ class DataSourcePublisher:
     FINAL_STATUSES = ["COMPLETED", "FAILED", "TIMED_OUT"]
     ACCEPTABLE_UPDATE_FREQUENCIES = ["Daily", "Weekly", "Monthly", "Quarterly", "Annually"]
     DEFAULT_GENERATE_EMBEDDINGS = dict()
+    SEARCH_AVG_DATE_FIELD = "search_avg_date"
+    AVAILABLE_ONLY_FROM_RUSSIA_FIELD = "available_only_from_russia"
 
     def __init__(self, api_key: Optional[str] = None, endpoint: Optional[str] = None, logs_enabled=True):
         self._rest_client = get_rest_client(endpoint, api_key)
@@ -448,6 +450,8 @@ class DataSourcePublisher:
         target_user_email: str,
         selected_features: Optional[List[str]] = None,
         exclude_features: Optional[List[str]] = None,
+        search_avg_date: Optional[str] = None,
+        available_only_from_russia: Optional[bool] = None,
     ) -> str:
         if not search_ids:
             raise Exception("Empty search ids list")
@@ -463,6 +467,10 @@ class DataSourcePublisher:
             request["selected_features"] = selected_features
         if exclude_features:
             request["exclude_features"] = exclude_features
+        if isinstance(search_avg_date, str) and search_avg_date.strip():
+            request[self.SEARCH_AVG_DATE_FIELD] = search_avg_date.strip()
+        if isinstance(available_only_from_russia, bool):
+            request[self.AVAILABLE_ONLY_FROM_RUSSIA_FIELD] = available_only_from_russia
 
         response = self._rest_client.union_search_tasks(request, "trace_id")
         print(response)

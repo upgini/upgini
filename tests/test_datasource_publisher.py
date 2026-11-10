@@ -5,6 +5,83 @@ from upgini.data_source.data_source_publisher import DataSourcePublisher
 from upgini.metadata import AdsHint, AdsHintType
 
 
+class _UnionClient:
+    def __init__(self):
+        self.request = None
+
+    def union_search_tasks(self, request, trace_id):
+        self.request = request
+        return "merged-search-id"
+
+
+def _publisher() -> DataSourcePublisher:
+    publisher = DataSourcePublisher.__new__(DataSourcePublisher)
+    publisher._rest_client = _UnionClient()
+    return publisher
+
+
+def test_union_search_tasks_sends_search_avg_date():
+    publisher = _publisher()
+
+    search_id = publisher.union_search_tasks(
+        ["search-a", "search-b"],
+        "user@example.com",
+        search_avg_date=" 2024-06-15 ",
+    )
+
+    assert search_id == "merged-search-id"
+    assert publisher._rest_client.request == {
+        "search_task_ids": ["search-a", "search-b"],
+        "target_user_email": "user@example.com",
+        "search_avg_date": "2024-06-15",
+    }
+
+
+def test_union_search_tasks_omits_blank_search_avg_date():
+    publisher = _publisher()
+
+    publisher.union_search_tasks(["search-a"], "user@example.com", search_avg_date="  ")
+
+    assert "search_avg_date" not in publisher._rest_client.request
+
+
+def test_union_search_tasks_sends_available_only_from_russia():
+    publisher = _publisher()
+
+    search_id = publisher.union_search_tasks(
+        ["search-a", "search-b"],
+        "user@example.com",
+        available_only_from_russia=True,
+    )
+
+    assert search_id == "merged-search-id"
+    assert publisher._rest_client.request == {
+        "search_task_ids": ["search-a", "search-b"],
+        "target_user_email": "user@example.com",
+        "available_only_from_russia": True,
+    }
+
+
+def test_union_search_tasks_sends_available_only_from_russia_false():
+    publisher = _publisher()
+
+    publisher.union_search_tasks(
+        ["search-a"],
+        "user@example.com",
+        available_only_from_russia=False,
+    )
+
+    assert publisher._rest_client.request["available_only_from_russia"] is False
+
+
+def test_union_search_tasks_omits_available_only_from_russia_when_unset():
+    publisher = _publisher()
+
+    publisher.union_search_tasks(["search-a"], "user@example.com")
+
+    assert "available_only_from_russia" not in publisher._rest_client.request
+
+
 def test_build_place_request_with_ads_hints():
     ads_hints: list[AdsHint] = [
         AdsHint(
